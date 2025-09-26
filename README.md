@@ -8,6 +8,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 
 - Information about TASing N v1.4: this file + [meaningful_data.md](meaningful_data.md)
 - [python script to convert N demos into libTAS inputs](converter.py)
+- [libTAS inputs for each part of the TAS](tas/)
 - [Other tools and informations from external sources](external/)
 
 ## Links
