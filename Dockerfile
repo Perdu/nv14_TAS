@@ -27,6 +27,8 @@ FROM debian:12
     RUN apt-get -y install git wget
     RUN mkdir /root/src
     RUN cd /root/src && git clone https://github.com/clementgallet/libTAS.git
+    # pin version (this version works)
+    RUN cd /root/src/libTAS && git checkout 226d4456cfce09905a89ca1b13cea8d9be0e3825
     RUN cd /root/src/libTAS && ./build.sh --with-i386
     RUN cd /root/src/libTAS/build && make install
 
@@ -39,6 +41,8 @@ FROM debian:12
   RUN apt-get install -y curl
   RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
   RUN cd /root/src/ && git clone https://github.com/ruffle-rs/ruffle.git
+  # pin version
+  RUN cd /root/src/ruffle && git checkout fa9c6627bd86511de1b710dcf42708dc55c44e3e
   # RUN apt-get install -y cargo
   ENV PATH="/root/.cargo/bin:${PATH}"
   RUN cd /root/src/ruffle && cargo build --release --package=ruffle_desktop
