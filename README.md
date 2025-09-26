@@ -112,7 +112,7 @@ b74b9c92471ee86b05e6ddaf9199bb2fca50cc34  n_v14.exe
 ```
 Matches the metanet-found one.
 
-Extracted one:
+[Extracted one](external/n_v14.swf):
 ```
 $ sha1sum 3.swf
 75a82ce33cda9770e773a64c585c14bb5a8f8478  3.swf

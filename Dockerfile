@@ -45,7 +45,7 @@ FROM debian:12
   # RUN cd /root/src/ruffle && make install
 
 # n-related commands
-  COPY n_v14.swf /home/
+  COPY external/n_v14.swf /home/
 
 # run
   CMD bash
