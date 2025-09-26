@@ -4,6 +4,12 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 
 ![Screenshot of N running in libTAS](screenshot.png)
 
+## What this repository contains
+
+- Information about TASing N v1.4: this file + [meaningful_data.md]
+- [python script to convert N demos into libTAS inputs](converter.py)
+- [Other tools and informations from external sources](external/)
+
 ## Links
 ### Instruction pages
 - https://tasvideos.org/EmulatorResources/LibTAS
