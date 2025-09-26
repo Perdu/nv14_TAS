@@ -2,6 +2,8 @@
 
 Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 version of [Metanet N - the way of the Ninja](https://www.metanetsoftware.com/game/n).
 
+![Screenshot of N running in libTAS](screenshot.png)
+
 ## Links
 ### Instruction pages
 - https://tasvideos.org/EmulatorResources/LibTAS
