@@ -23,7 +23,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 
 ## Run
 
-After building the container (`docker build --tag libtas .`):
+After building the container (`docker build --tag libtas .`) using the [Dockerfile](Dockerfile):
 ```
 docker run -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/docker:/home/ libtas
 ```
@@ -35,6 +35,7 @@ Inside container:
 
 ## Usage
 https://github.com/clementgallet/libTAS?tab=readme-ov-file#run
+
 https://tasvideos.org/EmulatorResources/LibTAS/Usage
 - frame advancing, using the V key
 - pause/play, using the pause key
