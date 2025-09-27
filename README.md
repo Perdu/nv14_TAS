@@ -27,7 +27,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
 
 ## Todo
-- save libTAS config
 - audio unmute crashes
 
 ## Run
