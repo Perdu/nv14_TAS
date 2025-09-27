@@ -136,6 +136,7 @@ cf3d9ef6eb5762cbfca362bc72b6ff0c03455c31  n_v14.swf
 
 ## libTAS config
 libTAS configs that have to be set for the TAS to run properly (done in [ruffle_desktop.ini](docker/ruffle_desktop.ini)):
+- Frames per second: 40
 - Settings → Runtime → clock_gettime() monotonic
 - Settings → Audio → Audio Control → Disable (to avoid savestates crashes, see below)
 
