@@ -51,6 +51,8 @@ FROM debian:12
 # n-related commands
   COPY external/n_v14.swf /home/
   RUN echo "/root/src/libTAS/build/AppDir/usr/bin/libTAS /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &" > /root/.bash_history
+  COPY docker/ruffle_desktop.ini /root/.config/libTAS/
+  COPY docker/libTAS.ini /root/.config/libTAS/
 
 # run
   CMD bash
