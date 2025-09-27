@@ -134,6 +134,11 @@ $ sha1sum n_v14.swf
 cf3d9ef6eb5762cbfca362bc72b6ff0c03455c31  n_v14.swf
 ```
 
+## libTAS config
+libTAS configs that have to be set for the TAS to run properly (done in [ruffle_desktop.ini](docker/ruffle_desktop.ini)):
+- Settings → Runtime → clock_gettime() monotonic
+- Settings → Audio → Audio Control → Disable (to avoid savestates crashes, see below)
+
 ## Tutorials
 - Undertale https://www.youtube.com/watch?v=EFCnTeTdD2k&t=712s
 - HK https://www.youtube.com/watch?v=qQAJk5_LUvg
