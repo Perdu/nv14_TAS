@@ -41,6 +41,7 @@ Inside container:
 ```
 /root/src/libTAS/build/AppDir/usr/bin/libTAS /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &
 ```
+(Or just press up arrow, as this command is saved as previous command in bash history)
 
 ## Usage
 https://github.com/clementgallet/libTAS?tab=readme-ov-file#run
