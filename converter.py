@@ -71,8 +71,28 @@ def convert_demo_to_libtas(demo_numbers, debug=False):
                 print("|")
 
 
+def extract_chunks(demo_str):
+    """
+    Extract only the chunk part from a demo string.
+    Flexible: works whether the demo has multiple '#' sections
+    or is just a single '#chunks#' block.
+    """
+    parts = demo_str.split('#')
+    if len(parts) < 2:
+        raise ValueError("Invalid demo format: missing '#' separators")
+    # The last '#' section should contain the chunks
+    chunk_section = parts[-2] if parts[-1] == '' else parts[-1]
+
+    if ':' not in chunk_section:
+        raise ValueError("Invalid chunk section: missing ':' separator")
+
+    number_of_frames, chunks_str = chunk_section.split(':', 1)
+    chunks = [int(x) for x in chunks_str.split('|') if x.strip()]
+    return chunks
+
+
 if __name__ == "__main__":
     demo_str = sys.stdin.read().strip()
-    demo_numbers = [int(x) for x in demo_str.strip('|').split('|') if x]
+    demo_numbers = extract_chunks(demo_str)
 
     convert_demo_to_libtas(demo_numbers, debug=False)
