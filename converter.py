@@ -49,7 +49,7 @@ def decode_demo_number(num, debug=False):
     return frames
 
 
-def convert_demo_to_libtas(demo_numbers, debug=False):
+def convert_chunks(demo_numbers, debug=False):
     """
     demo_numbers: list of integers (each encodes 7 frames)
     output_path: path to save libtas input file
@@ -61,14 +61,16 @@ def convert_demo_to_libtas(demo_numbers, debug=False):
         'jump': 'ffe1',  # XK_Shift_L
     }
 
+    res = ""
     for num in demo_numbers:
         frames = decode_demo_number(num, debug)
         for frame in frames:
             if frame:
                 pressed = ":".join(keysym_map[key] for key in frame)
-                print(f"|K{pressed}|")
+                res += f"|K{pressed}|\n"
             else:
-                print("|")
+                res += "|\n"
+    return res
 
 
 def extract_chunks(demo_str):
@@ -91,8 +93,13 @@ def extract_chunks(demo_str):
     return chunks
 
 
+def convert_demo_to_libtas(demo_str):
+    demo_numbers = extract_chunks(demo_str)
+    return convert_chunks(demo_numbers)
+
+
 if __name__ == "__main__":
     demo_str = sys.stdin.read().strip()
     demo_numbers = extract_chunks(demo_str)
 
-    convert_demo_to_libtas(demo_numbers, debug=False)
+    print(convert_chunks(demo_numbers, debug=False))
