@@ -6,8 +6,16 @@ import yaml
 from converter import convert_demo_to_libtas
 
 
-def click(x, y):
-    print("|K6e|M%s:%s:A:.....:0|\n|M%s:%s:A:1....:0|" % (x, y, x, y))
+def start_episode(col, row):
+    with open("tas/episode_click_coordinates.yml", "r",
+              encoding="utf-8") as f:
+        coord = yaml.safe_load(f)
+    # On the first frame, press n ("K6e") while moving the mouse to
+    # the right coordinates. On the second frame, click on right
+    # coordinates
+    print("|K6e|M%s:%s:A:.....:0|\n|M%s:%s:A:1....:0|" %
+          (coord["column"][col], coord["row"][row],
+           coord["column"][col], coord["row"][row]))
 
 
 if __name__ == "__main__":
@@ -17,7 +25,7 @@ if __name__ == "__main__":
     initial_wait_frames = 15
     for i in range(initial_wait_frames):
         print("|")
-    click(310, 103)
+    start_episode(0, 0)
     with open("tas/level_data.yml", "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
