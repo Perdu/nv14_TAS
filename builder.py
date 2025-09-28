@@ -13,7 +13,7 @@ def start_episode(col, row):
     # On the first frame, press n ("K6e") while moving the mouse to
     # the right coordinates. On the second frame, click on right
     # coordinates
-    return f"|K6e|M{coord["column"][col]}:{coord["row"][row]}:A:.....:0|\n|M{coord["column"][col]}:{coord["row"][row]}:A:1....:0|"
+    return f"|K6e|M{coord["column"][col]}:{coord["row"][row]}:A:.....:0|\n|M{coord["column"][col]}:{coord["row"][row]}:A:1....:0|\n"
 
 
 def build_libtas_input():
