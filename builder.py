@@ -42,6 +42,8 @@ def build_libtas_input():
             libtas_input, nb_frames_demo = convert_demo_to_libtas(demo_str)
             res += libtas_input
             nb_frames += nb_frames_demo
+            res += "|K20|\n"  # space
+            nb_frames += 1
     return res, nb_frames
 
 
