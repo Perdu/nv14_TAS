@@ -28,6 +28,10 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
 
 ## Todo
+- finish builder
+- handle markers in builder
+- converter adds additional frames
+- add a .sol file to unlock all levels and be able to work episode-per-episode
 - audio unmute crashes
 
 ## Run
