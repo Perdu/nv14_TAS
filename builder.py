@@ -13,26 +13,39 @@ def start_episode(col, row):
     # On the first frame, press n ("K6e") while moving the mouse to
     # the right coordinates. On the second frame, click on right
     # coordinates
-    print("|K6e|M%s:%s:A:.....:0|\n|M%s:%s:A:1....:0|" %
-          (coord["column"][col], coord["row"][row],
-           coord["column"][col], coord["row"][row]))
+    return f"|K6e|M{coord["column"][col]}:{coord["row"][row]}:A:.....:0|\n|M{coord["column"][col]}:{coord["row"][row]}:A:1....:0|"
 
 
-if __name__ == "__main__":
+def build_libtas_input():
+    nb_frames = 0
+    res = ""
     # initial_wait_frames = 7
     # We need to add additional lag frames because ruffle in libTAS is
     # currently broken
     initial_wait_frames = 15
     for i in range(initial_wait_frames):
-        print("|")
-    start_episode(0, 0)
+        res += "|\n"
+        nb_frames += 1
+    res += start_episode(0, 0)
+    nb_frames += 2
     with open("tas/level_data.yml", "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     for level_name, level_data in data.items():
         for i in range(level_data["loading_time"]):
-            print("|")
-        print("|K20|")  # space
+            res += "|\n"
+            nb_frames += 1
+        res += "|K20|\n"  # space
+        nb_frames += 1
         if "Speedrun" in level_data and "demo" in level_data["Speedrun"]:
             demo_str = level_data["Speedrun"]["demo"]
-            print(convert_demo_to_libtas(demo_str))
+            libtas_input, nb_frames_demo = convert_demo_to_libtas(demo_str)
+            res += libtas_input
+            nb_frames += nb_frames_demo
+    return res, nb_frames
+
+
+if __name__ == "__main__":
+    libtas_input, nb_frames = build_libtas_input()
+    print(libtas_input)
+    # print("nb_frames: %s" % nb_frames)

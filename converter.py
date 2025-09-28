@@ -62,6 +62,7 @@ def convert_chunks(demo_numbers, debug=False):
     }
 
     res = ""
+    nb_frames = 0
     for num in demo_numbers:
         frames = decode_demo_number(num, debug)
         for frame in frames:
@@ -70,7 +71,8 @@ def convert_chunks(demo_numbers, debug=False):
                 res += f"|K{pressed}|\n"
             else:
                 res += "|\n"
-    return res
+        nb_frames += len(frames)
+    return res, nb_frames
 
 
 def extract_chunks(demo_str):
@@ -102,4 +104,5 @@ if __name__ == "__main__":
     demo_str = sys.stdin.read().strip()
     demo_numbers = extract_chunks(demo_str)
 
-    print(convert_chunks(demo_numbers, debug=False))
+    libtas_input, nb_frames = convert_chunks(demo_numbers, debug=False)
+    print(libtas_input)
