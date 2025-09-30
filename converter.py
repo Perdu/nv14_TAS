@@ -49,7 +49,7 @@ def decode_demo_number(num, debug=False):
     return frames
 
 
-def convert_chunks(demo_numbers, debug=False):
+def convert_chunks(demo_numbers, advertised_nb_frames, debug=False):
     """
     demo_numbers: list of integers (each encodes 7 frames)
     output_path: path to save libtas input file
@@ -69,9 +69,10 @@ def convert_chunks(demo_numbers, debug=False):
             if frame:
                 pressed = ":".join(keysym_map[key] for key in frame)
                 res += f"|K{pressed}|\n"
-            else:
+            # Avoid adding additional frames at the end
+            elif nb_frames < advertised_nb_frames:
                 res += "|\n"
-        nb_frames += len(frames)
+            nb_frames += 1
     return res, nb_frames
 
 
@@ -91,18 +92,19 @@ def extract_chunks(demo_str):
         raise ValueError("Invalid chunk section: missing ':' separator")
 
     number_of_frames, chunks_str = chunk_section.split(':', 1)
+    number_of_frames = int(number_of_frames)
     chunks = [int(x) for x in chunks_str.split('|') if x.strip()]
-    return chunks
+    return chunks, number_of_frames
 
 
 def convert_demo_to_libtas(demo_str):
-    demo_numbers = extract_chunks(demo_str)
-    return convert_chunks(demo_numbers)
+    demo_numbers, advertised_nb_frames = extract_chunks(demo_str)
+    return convert_chunks(demo_numbers, advertised_nb_frames)
 
 
 if __name__ == "__main__":
     demo_str = sys.stdin.read().strip()
-    demo_numbers = extract_chunks(demo_str)
+    demo_numbers, nb_frames = extract_chunks(demo_str)
 
-    libtas_input, nb_frames = convert_chunks(demo_numbers, debug=False)
+    libtas_input, nb_frames = convert_chunks(demo_numbers, nb_frames, debug=False)
     print(libtas_input, end="")
