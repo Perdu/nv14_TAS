@@ -8,7 +8,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 
 - Information about TASing N v1.4 (this file)
 - [python script to convert N demos into libTAS inputs](converter.py)
-- [python script creating the libTAS file](builder.py) from [level demo data](tas/level_data.yml)
+- [bash/python script recreating the libTAS file](build_demo.sh) from [level demo data](tas/level_data.yml)
 - [libTAS inputs for each part of the TAS](tas/)
 - [Other tools and informations from external sources](external/)
 
@@ -28,7 +28,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
 
 ## Todo
-- finish builder
 - handle markers in builder
 - add a .sol file to unlock all levels and be able to work episode-per-episode
 - automatically calculate loading times
