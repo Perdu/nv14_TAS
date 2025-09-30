@@ -16,7 +16,7 @@ def start_episode(col, row):
     return f"|K6e|M{coord["column"][col]}:{coord["row"][row]}:A:.....:0|\n|M{coord["column"][col]}:{coord["row"][row]}:A:1....:0|\n"
 
 
-def build_libtas_input():
+def build_libtas_input(begin_episode=0, end_episode=99):
     nb_frames = 0
     res = ""
     # initial_wait_frames = 7
@@ -26,12 +26,20 @@ def build_libtas_input():
     for i in range(initial_wait_frames):
         res += "|\n"
         nb_frames += 1
-    res += start_episode(0, 0)
+    start_col = int(begin_episode/10)
+    start_row = begin_episode % 10
+    res += start_episode(start_col, start_row)
     nb_frames += 2
     with open("tas/level_data.yml", "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     for level_name, level_data in data.items():
+        if int(level_name.split("-")[0]) < begin_episode:
+            # skip to the beginning
+            continue
+        elif int(level_name.split("-")[0]) > end_episode:
+            # we reached the end
+            break
         for i in range(level_data["loading_time"]):
             res += "|\n"
             nb_frames += 1
@@ -48,5 +56,5 @@ def build_libtas_input():
 
 
 if __name__ == "__main__":
-    libtas_input, nb_frames = build_libtas_input()
+    libtas_input, nb_frames = build_libtas_input(0, 0)
     print(libtas_input)
