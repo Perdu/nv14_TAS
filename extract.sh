@@ -4,4 +4,4 @@
 
 mkdir -p extract
 
-tar xzf n_recomp.ltm -C extract
+tar xzf docker_volume/n_recomp.ltm -C extract
