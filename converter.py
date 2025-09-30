@@ -105,4 +105,4 @@ if __name__ == "__main__":
     demo_numbers = extract_chunks(demo_str)
 
     libtas_input, nb_frames = convert_chunks(demo_numbers, debug=False)
-    print(libtas_input)
+    print(libtas_input, end="")
