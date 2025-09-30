@@ -50,4 +50,3 @@ def build_libtas_input():
 if __name__ == "__main__":
     libtas_input, nb_frames = build_libtas_input()
     print(libtas_input)
-    # print("nb_frames: %s" % nb_frames)
