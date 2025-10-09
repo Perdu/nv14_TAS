@@ -31,13 +31,12 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - handle markers in builder
 - add a .sol file to unlock all levels and be able to work episode-per-episode
 - automatically calculate loading times
-- audio unmute crashes
 
 ## Run
 
 After building the container (`docker build --tag libtas .`) using the [Dockerfile](Dockerfile):
 ```
-docker run -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/docker:/home/ libtas
+docker run -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/docker_volume:/home/ libtas
 ```
 
 Inside container:
@@ -142,6 +141,15 @@ libTAS configs that have to be set for the TAS to run properly (done in [ruffle_
 - Frames per second: 40
 - Settings → Runtime → clock_gettime() monotonic
 - Settings → Audio → Audio Control → Disable (to avoid savestates crashes, see below)
+
+## Sound
+To get sound, you can use the [Dockerfile_sound](Dockerfile_sound) I made and run it with:
+
+```
+docker run -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/docker_volume:/home/taser/tas/ -v /run/user/$UID/pulse:/run/user/$UID/pulse -e PULSE_SERVER=unix:/run/user/$UID/pulse/native -v /etc/machine-id:/etc/machine-id:ro --group-add audio --cap-add=cap_checkpoint_restore libtas_sound
+```
+
+This is not really useful though, as you don't need sound during the TASing process (it breaks savestates) and sound in encoding will work regardless.
 
 ## Tutorials
 - Undertale https://www.youtube.com/watch?v=EFCnTeTdD2k&t=712s
