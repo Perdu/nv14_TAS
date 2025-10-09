@@ -164,6 +164,8 @@ This is not really useful though, as you don't need sound during the TASing proc
 ## Known issues
 ### Broken determinism
 On one of my machine, there is a random number of lag frames at startup, and the loaded background level at startup is different on each playback. In other words, determinism is broken. [This is a known issue with monotonic](https://discord.com/channels/726811446498820198/726811447262183477/1352571040684969988).
+
+Fix: launch ruffle with a game once before opening libTAS so it downloads libopenh264.
 ### Texture problem
 Reported [here](https://github.com/ruffle-rs/ruffle/issues/21776)
 Ruffle does not properly display all textures
