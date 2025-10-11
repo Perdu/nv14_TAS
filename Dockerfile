@@ -28,7 +28,7 @@ FROM debian:12
     RUN mkdir /root/src
     RUN cd /root/src && git clone https://github.com/clementgallet/libTAS.git
     # pin version (this version works)
-    RUN cd /root/src/libTAS && git checkout 226d4456cfce09905a89ca1b13cea8d9be0e3825
+    RUN cd /root/src/libTAS && git checkout v1.4.7
     RUN cd /root/src/libTAS && ./build.sh --with-i386
     RUN cd /root/src/libTAS/build && make install
 
