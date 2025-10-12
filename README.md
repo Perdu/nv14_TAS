@@ -105,6 +105,8 @@ Then see the Usage section
 ## Framerate
 While the game displays a framerate of 120 (in `exiftool` or ruffle for instance), it's actually *40* since `1/0.025 = 40`.
 
+Using the `Runtime -> Debug -> Uncontrolled time` option in libTAS does give a framerate of around 40, not 120.
+
 Framerate seems to be 60 for Nv2.
 
 
