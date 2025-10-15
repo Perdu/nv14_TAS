@@ -56,6 +56,9 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
             nb_frames += nb_frames_demo
             res += "|K20|\n"  # space
             nb_frames += 1
+        if int(level_name.split("-")[1]) == 4:
+            # pass end of episode screen
+            res += "|\n|K20|\n"
     return res, nb_frames
 
 
