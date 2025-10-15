@@ -16,7 +16,7 @@ def start_episode(col, row):
     return f"|K6e|M{coord["column"][col]}:{coord["row"][row]}:A:.....:0|\n|M{coord["column"][col]}:{coord["row"][row]}:A:1....:0|\n"
 
 
-def build_libtas_input(begin_episode=0, end_episode=99):
+def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="Speedrun"):
     nb_frames = 0
     res = ""
     # initial_wait_frames = 7
@@ -30,7 +30,11 @@ def build_libtas_input(begin_episode=0, end_episode=99):
     start_row = begin_episode % 10
     res += start_episode(start_col, start_row)
     nb_frames += 2
-    with open("tas/level_data.yml", "r", encoding="utf-8") as f:
+    if rta:
+        level_data_file="tas/level_data_rta.yml"
+    else:
+        level_data_file="tas/level_data.yml"
+    with open(level_data_file, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     for level_name, level_data in data.items():
@@ -45,8 +49,8 @@ def build_libtas_input(begin_episode=0, end_episode=99):
             nb_frames += 1
         res += "|K20|\n"  # space
         nb_frames += 1
-        if "Speedrun" in level_data and "demo" in level_data["Speedrun"]:
-            demo_str = level_data["Speedrun"]["demo"]
+        if score_type in level_data and "demo" in level_data[score_type]:
+            demo_str = level_data[score_type]["demo"]
             libtas_input, nb_frames_demo = convert_demo_to_libtas(demo_str)
             res += libtas_input
             nb_frames += nb_frames_demo
@@ -56,5 +60,5 @@ def build_libtas_input(begin_episode=0, end_episode=99):
 
 
 if __name__ == "__main__":
-    libtas_input, nb_frames = build_libtas_input(0, 0)
+    libtas_input, nb_frames = build_libtas_input(0, 99, rta=True, score_type="Highscore")
     print(libtas_input)
