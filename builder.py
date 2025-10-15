@@ -38,10 +38,12 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
         data = yaml.safe_load(f)
 
     for level_name, level_data in data.items():
-        if int(level_name.split("-")[0]) < begin_episode:
+        episode = int(level_name.split("-")[0])
+        level = int(level_name.split("-")[1])
+        if episode < begin_episode:
             # skip to the beginning
             continue
-        elif int(level_name.split("-")[0]) > end_episode:
+        elif episode > end_episode:
             # we reached the end
             break
         for i in range(level_data["loading_time"]):
@@ -59,6 +61,9 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
         if int(level_name.split("-")[1]) == 4:
             # pass end of episode screen
             res += "|\n|K20|\n"
+            if episode % 10 == 9 and episode < end_episode:
+                res += "|\n"
+                res += start_episode(int((episode + 1) / 10), 0)
     return res, nb_frames
 
 
