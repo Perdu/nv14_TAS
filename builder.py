@@ -80,7 +80,8 @@ if __name__ == "__main__":
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     config.read("extract/editor.ini")
     libtas_input, nb_frames, markers = build_libtas_input(0, 99, rta=True, score_type="Highscore")
-    print(libtas_input)
+    with open("extract/inputs", "w") as f:
+        print(libtas_input, file=f)
     with open("extract/editor.ini", "w") as f:
         config["markers"] = markers
         config.write(f, space_around_delimiters=False)
