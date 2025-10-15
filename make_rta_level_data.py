@@ -23,7 +23,7 @@ def fetch_level(row, col):
     data[f"{row:02d}-{col}"] = {
         "loading_time": 50,
         "Highscore": {
-            "time": rows[0]["score"],
+            "time": f"{float(rows[0]['score']) * 0.025:.3f}",
             "authors": rows[0]["pseudo"],
             "type": "rta",
             "timestamp": rows[0]["timestamp"],
