@@ -20,7 +20,7 @@ def fetch_level(row, col):
     rows = cursor.fetchall()
 
     data = {}
-    data[f"{row}-{col}"] = {
+    data[f"{row:02d}-{col}"] = {
         "loading_time": 50,
         "Highscore": {
             "time": rows[0]["score"],
