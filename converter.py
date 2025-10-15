@@ -69,10 +69,11 @@ def convert_chunks(demo_numbers, advertised_nb_frames, debug=False):
             if frame:
                 pressed = ":".join(keysym_map[key] for key in frame)
                 res += f"|K{pressed}|\n"
+                nb_frames += 1
             # Avoid adding additional frames at the end
             elif nb_frames < advertised_nb_frames:
                 res += "|\n"
-            nb_frames += 1
+                nb_frames += 1
     return res, nb_frames
 
 
