@@ -41,6 +41,8 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
         level_data_file="tas/level_data.yml"
     with open(level_data_file, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
+    with open("tas/loading_times.yml", "r", encoding="utf-8") as f:
+        loading_times = yaml.safe_load(f)
 
     for level_name, level_data in data.items():
         episode = int(level_name.split("-")[0])
@@ -51,7 +53,11 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
         elif episode > end_episode:
             # we reached the end
             break
-        for i in range(level_data["loading_time"]):
+        if loading_times[level_name] is None:
+            loading_time = 58  # fill missing ones so as to be able to calculate them with script
+        else:
+            loading_time = int(loading_times[level_name])
+        for i in range(loading_time):
             res += "|\n"
             nb_frames += 1
         res += "|K20|\n"  # space
