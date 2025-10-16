@@ -3,6 +3,7 @@
 
 import yaml
 import configparser
+from string import Template
 
 from converter import convert_demo_to_libtas
 
@@ -22,6 +23,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
     res = ""
     markers = {}
     nb_markers = 0
+    lua_infos = ""
     # initial_wait_frames = 7
     # We need to add additional lag frames because ruffle in libTAS is
     # currently broken
@@ -60,6 +62,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
             markers[f"{nb_markers}\\text"] = level_name
             demo_str = level_data[score_type]["demo"]
             libtas_input, nb_frames_demo = convert_demo_to_libtas(demo_str)
+            lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"{level_data[score_type]['authors']} on {level_data[score_type]['timestamp']}\"}},\n"
             res += libtas_input
             nb_frames += nb_frames_demo
             res += "|K20|\n"  # space
@@ -73,15 +76,19 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
                 res += start_episode(int((episode + 1) / 10), 0)
                 nb_frames += 3
     markers["size"] = nb_markers
-    return res, nb_frames, markers
+    return res, nb_frames, markers, lua_infos
 
 
 if __name__ == "__main__":
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     config.read("extract/editor.ini")
-    libtas_input, nb_frames, markers = build_libtas_input(0, 99, rta=True, score_type="Highscore")
+    libtas_input, nb_frames, markers, lua_infos = build_libtas_input(0, 99, rta=True, score_type="Highscore")
     with open("extract/inputs", "w") as f:
         print(libtas_input, file=f)
-    with open("extract/editor.ini", "w") as f:
         config["markers"] = markers
         config.write(f, space_around_delimiters=False)
+    with open("display_infos.lua.template") as f:
+        template = Template(f.read())
+    lua_script_filled = template.substitute(infos=lua_infos)
+    with open("docker_volume/display_infos.lua", "w") as f:
+        print(lua_script_filled, file=f)
