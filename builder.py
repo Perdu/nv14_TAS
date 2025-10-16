@@ -62,7 +62,8 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
             markers[f"{nb_markers}\\text"] = level_name
             demo_str = level_data[score_type]["demo"]
             libtas_input, nb_frames_demo = convert_demo_to_libtas(demo_str)
-            lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"{level_data[score_type]['authors']} on {level_data[score_type]['timestamp']}\"}},\n"
+            date = level_data[score_type]['timestamp'].strftime("%Y-%m-%d")
+            lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"{level_data[score_type]['authors']}, {date}\"}},\n"
             res += libtas_input
             nb_frames += nb_frames_demo
             res += "|K20|\n"  # space
