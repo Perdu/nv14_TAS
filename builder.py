@@ -122,6 +122,7 @@ if __name__ == "__main__":
     libtas_input, nb_frames, markers, lua_infos = build_libtas_input(starting_episode, end_episode, rta=rta, score_type="Highscore")
     with open("extract/inputs", "w") as f:
         print(libtas_input, file=f)
+    with open("extract/editor.ini", "w") as f:
         config["markers"] = markers
         config.write(f, space_around_delimiters=False)
     with open("display_infos.lua.template") as f:
