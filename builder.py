@@ -96,8 +96,9 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
 def parse_args():
     starting_episode = 0
     end_episode = 99
+    rta = False
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'e:hs:')
+        opts, args = getopt.getopt(sys.argv[1:], 'e:hrs:')
     except getopt.GetoptError as err:
         print("Error: ", str(err))
         sys.exit(1)
@@ -105,18 +106,20 @@ def parse_args():
     for o, arg in opts:
         if o == '-e':
             end_episode = int(arg)
+        if o == '-r':
+            rta = True
         if o == '-s':
             starting_episode = int(arg)
         if o == '-h':
             usage()
-    return starting_episode, end_episode
+    return starting_episode, end_episode, rta
 
 
 if __name__ == "__main__":
-    starting_episode, end_episode = parse_args()
+    starting_episode, end_episode, rta = parse_args()
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     config.read("extract/editor.ini")
-    libtas_input, nb_frames, markers, lua_infos = build_libtas_input(starting_episode, end_episode, rta=True, score_type="Highscore")
+    libtas_input, nb_frames, markers, lua_infos = build_libtas_input(starting_episode, end_episode, rta=rta, score_type="Highscore")
     with open("extract/inputs", "w") as f:
         print(libtas_input, file=f)
         config["markers"] = markers
