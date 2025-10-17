@@ -22,7 +22,7 @@ def start_episode(col, row):
     # On the first frame, press n ("K6e") while moving the mouse to
     # the right coordinates. On the second frame, click on right
     # coordinates
-    return f"|K6e|M{coord["column"][col]}:{coord["row"][row]}:A:.....:0|\n|M{coord["column"][col]}:{coord["row"][row]}:A:1....:0|\n"
+    return f"|K6e|M{coord["column"][col]}:{coord["row"][row]}:A:.....:0|\n|M{coord["column"][col]}:{coord["row"][row]}:A:1....:0|\n|\n"
 
 
 def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="Speedrun"):
@@ -41,7 +41,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
     start_col = int(begin_episode/10)
     start_row = begin_episode % 10
     res += start_episode(start_col, start_row)
-    nb_frames += 2
+    nb_frames += 3
     if rta:
         level_data_file="tas/level_data_rta.yml"
     else:
