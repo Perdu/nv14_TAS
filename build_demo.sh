@@ -13,5 +13,5 @@ LTM_FILE="n_recomp_rta.ltm"
 mkdir -p $EXTRACT_FOLDER
 
 tar xzf $DOCKER_VOLUME_PATH/$LTM_FILE -C $EXTRACT_FOLDER
-python builder.py
+python builder.py $@
 tar czf $DOCKER_VOLUME_PATH/$LTM_FILE -C $EXTRACT_FOLDER .

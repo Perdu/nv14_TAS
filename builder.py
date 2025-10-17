@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys
+import getopt
 import yaml
 import configparser
 from string import Template
 
 from converter import convert_demo_to_libtas
+
+
+def usage():
+    print(f"Usage: {sys.argv[0]} [-e END_EPISODE|-s START_EPISODE|-h]")
+    print("-h: print this help")
 
 
 def start_episode(col, row):
@@ -86,10 +93,30 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
     return res, nb_frames, markers, lua_infos
 
 
+def parse_args():
+    starting_episode = 0
+    end_episode = 99
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'e:hs:')
+    except getopt.GetoptError as err:
+        print("Error: ", str(err))
+        sys.exit(1)
+
+    for o, arg in opts:
+        if o == '-e':
+            end_episode = int(arg)
+        if o == '-s':
+            starting_episode = int(arg)
+        if o == '-h':
+            usage()
+    return starting_episode, end_episode
+
+
 if __name__ == "__main__":
+    starting_episode, end_episode = parse_args()
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     config.read("extract/editor.ini")
-    libtas_input, nb_frames, markers, lua_infos = build_libtas_input(0, 99, rta=True, score_type="Highscore")
+    libtas_input, nb_frames, markers, lua_infos = build_libtas_input(starting_episode, end_episode, rta=True, score_type="Highscore")
     with open("extract/inputs", "w") as f:
         print(libtas_input, file=f)
         config["markers"] = markers
