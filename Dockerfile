@@ -48,9 +48,11 @@ FROM debian:12
     # RUN cd /root/src/ruffle && make install
 
   # libTAS
-    RUN cd /root/src && git clone https://github.com/clementgallet/libTAS.git
-    # pin version (this version works)
-    RUN cd /root/src/libTAS && git checkout v1.4.7
+    # RUN cd /root/src && git clone https://github.com/clementgallet/libTAS.git
+    RUN cd /root/src && git clone https://github.com/Perdu/libTAS.git
+    RUN cd /root/src/libTAS
+    # RUN cd /root/src/libTAS && git fetch origin pull/667/head:pr-667 && git checkout pr-667
+    # RUN cd /root/src/libTAS && git checkout v1.4.7
     RUN cd /root/src/libTAS && ./build.sh --with-i386
     RUN cd /root/src/libTAS/build && make install
 
