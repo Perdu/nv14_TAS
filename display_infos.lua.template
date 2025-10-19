@@ -8,7 +8,7 @@ function foo()
         local start_frame, end_frame, msg = table.unpack(range)
         if f >= start_frame and f <= end_frame then
             -- Draw text at top-left
-            gui.text(100, 580, msg)
+            gui.text(150, 580, msg)
             break  -- stop after first matching range
         end
     end
