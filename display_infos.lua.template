@@ -12,6 +12,27 @@ function foo()
             break  -- stop after first matching range
         end
     end
+
+    if input.getKey(65505) == 1 then
+       color = 0xffffffff
+    else
+       color = 0xff000000
+    end
+    gui.text(700, 580, "J", color)
+
+    if input.getKey(65361) == 1 then
+       color = 0xffffffff
+    else
+       color = 0xff000000
+    end
+    gui.text(715, 580, "<-", color)
+
+    if input.getKey(65363) == 1 then
+       color = 0xffffffff
+    else
+       color = 0xff000000
+    end
+    gui.text(730, 580, "->", color)
 end
 
 callback.onPaint(foo)
