@@ -88,7 +88,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
             if episode % 10 == 9 and episode < end_episode:
                 res += "|\n"
                 res += start_episode(int((episode + 1) / 10), 0)
-                nb_frames += 3
+                nb_frames += 4
     markers["size"] = nb_markers
     return res, nb_frames, markers, lua_infos
 
