@@ -128,5 +128,5 @@ if __name__ == "__main__":
     with open("display_infos.lua.template") as f:
         template = Template(f.read())
     lua_script_filled = template.substitute(infos=lua_infos)
-    with open("docker_volume/display_infos.lua", "w") as f:
+    with open("docker_volume/lua/display_infos.lua", "w") as f:
         print(lua_script_filled, file=f)
