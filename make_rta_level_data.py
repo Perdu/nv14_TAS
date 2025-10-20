@@ -14,7 +14,7 @@ cursor = None
 
 def fetch_level(row, col):
     level_id = row * 10 + col
-    query = f"select pseudo, timestamp, score, demo from score_unique where place = 0 and level_id={level_id} and score in (select max(score) from score_unique where place = 0 and level_id={level_id});"
+    query = f"select pseudo, timestamp, score, demo from score_unique where level_id={level_id} and score in (select max(score) from score_unique where level_id={level_id}) order by timestamp ASC, place ASC limit 1;"
 
     cursor.execute(query)
     rows = cursor.fetchall()
