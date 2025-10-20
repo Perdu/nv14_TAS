@@ -49,6 +49,7 @@ FROM debian:12
 
   # libTAS
     # RUN cd /root/src && git clone https://github.com/clementgallet/libTAS.git
+    ARG CACHEBREAK=0
     RUN cd /root/src && git clone https://github.com/Perdu/libTAS.git
     RUN cd /root/src/libTAS
     # RUN cd /root/src/libTAS && git fetch origin pull/667/head:pr-667 && git checkout pr-667
