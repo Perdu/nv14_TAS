@@ -20,10 +20,13 @@ def fetch_level(row, col):
     rows = cursor.fetchall()
 
     data = {}
+    authors = rows[0]["pseudo"]
+    if authors == 'van_come_to_irc':
+        authors = 'vankusss'
     data[f"{row:02d}-{col}"] = {
         "Highscore": {
             "time": f"{float(rows[0]['score']) * 0.025:.3f}",
-            "authors": rows[0]["pseudo"],
+            "authors": authors,
             "type": "rta",
             "timestamp": rows[0]["timestamp"],
             "demo": "##" + str(rows[0]["demo"]) + "#"
