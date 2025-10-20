@@ -21,7 +21,6 @@ def fetch_level(row, col):
 
     data = {}
     data[f"{row:02d}-{col}"] = {
-        "loading_time": 50,
         "Highscore": {
             "time": f"{float(rows[0]['score']) * 0.025:.3f}",
             "authors": rows[0]["pseudo"],
