@@ -40,7 +40,6 @@ FROM debian:12
     RUN mkdir /root/src
     RUN cd /root/src && git clone https://github.com/clementgallet/libTAS.git
     # pin version (this version works)
-    RUN cd /root/src/libTAS && git fetch origin pull/658/head:pr-658 && git checkout pr-658
     RUN cd /root/src/libTAS && ./build.sh --with-i386 --enable-pulseaudio
     RUN cd /root/src/libTAS/build && make install
 
