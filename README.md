@@ -30,6 +30,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 ## Todo
 - add a generic .sol file to unlock all levels and be able to work episode-per-episode
 - make a script to extract a demo from the .sol file, or write backwards script to transform libTAS input into demo
+- make lua scripts to get information such as x;y positions, speed etc.
 - TAS the remaining 450 levels ;)
 
 ## Run
