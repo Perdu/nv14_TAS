@@ -8,9 +8,9 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 
 - Information about TASing N v1.4 (this file)
 - [python script to convert N demos into libTAS inputs](converter.py)
-- [bash](build_demo.sh) and [python](builder.py) scripts working together to recreate the libTAS file from [level demo data](tas/level_data.yml)
+- [bash](build_demo.sh) and [python](builder.py) scripts working together to recreate the libTAS demo from [level demo data](tas/level_data.yml)
 - [Data to build the TAS](tas/): info for each level (including demos), loading times, click coordinates
-- [Script to create level data from a local database](make_rta_level_data.py) (used to create RTA data)
+- [Script to create level data from a local database](make_rta_level_data.py) (used to create [RTA data](tas/level_data_rta.yml))
 - [Lua script to display overlay information](display_infos.lua.template) (demo information, real-time inputs)
 - [Other Lua scripts to help TASing](docker_volume/lua)
 - [Other tools and informations from external sources](external/)
