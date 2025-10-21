@@ -146,6 +146,18 @@ libTAS configs that have to be set for the TAS to run properly (done in [ruffle_
 - Settings → Runtime → clock_gettime() monotonic
 - Settings → Audio → Audio Control → Disable (to avoid savestates crashes, see below)
 
+## Video encoding
+
+I used default settings for encoding.
+
+Since youtube will downgrade videos smaller than 720p to 30fps, I upscaled the video to ensure it stays in 60fps:
+
+```
+ffmpeg -i 'n_rta_hs.mkv' -vf scale=-1:720 'n_rta_hs_upscaled.mkv'
+```
+
+This significantly *reduced* the size of the video because the fixed bitrate is removed.
+
 ## Sound
 Getting sound to work in libTAS is not really useful, as you don't need sound during the TASing process (it breaks savestates) and sound in encoding will work regardless.
 
