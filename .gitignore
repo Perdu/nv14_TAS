@@ -1,3 +1,4 @@
 docker_volume/
 extract/
 db_config.py
+__pycache__/
