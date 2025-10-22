@@ -13,6 +13,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [Script to create level data from a local database](make_rta_level_data.py) (used to create [RTA data](tas/level_data_rta.yml))
 - [Lua script to display overlay information](display_infos.lua.template) (demo information, real-time inputs)
 - [Other Lua scripts to help TASing](docker_volume/lua)
+- [Python script to get demo data from .sol file](sol_to_demo.py)
 - [Other tools and informations from external sources](external/)
 
 ## Links
@@ -32,7 +33,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 
 ## Todo
 - add a generic .sol file to unlock all levels and be able to work episode-per-episode
-- make a script to extract a demo from the .sol file, or write backwards script to transform libTAS input into demo
 - make lua scripts to get information such as x;y positions, speed etc.
 - TAS the remaining 450 levels ;)
 
