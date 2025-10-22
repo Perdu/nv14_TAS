@@ -23,11 +23,15 @@ def fetch_level(row, col):
     authors = rows[0]["pseudo"]
     if authors == 'van_come_to_irc':
         authors = 'vankusss'
+    timestamp = rows[0]["timestamp"]
+    if row == 25 and col == 2:
+        # we don't know that timestamp for sure
+        timestamp = '~2009-12-01'
     highscore = {
         "time": f"{float(rows[0]['score']) * 0.025:.3f}",
         "authors": authors,
         "type": "rta",
-        "timestamp": rows[0]["timestamp"],
+        "timestamp": timestamp,
         "demo": "##" + str(rows[0]["demo"]) + "#"
     }
 
