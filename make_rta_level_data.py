@@ -23,14 +23,30 @@ def fetch_level(row, col):
     authors = rows[0]["pseudo"]
     if authors == 'van_come_to_irc':
         authors = 'vankusss'
+    highscore = {
+        "time": f"{float(rows[0]['score']) * 0.025:.3f}",
+        "authors": authors,
+        "type": "rta",
+        "timestamp": rows[0]["timestamp"],
+        "demo": "##" + str(rows[0]["demo"]) + "#"
+    }
+
+    query = f"select pseudo, timestamp, score, demo from speedruns where level_id={level_id} and score in (select max(score) from speedruns where level_id={level_id}) order by timestamp ASC, place ASC limit 1;"
+
+    cursor.execute(query)
+    rows = cursor.fetchall()
+
+    speedrun = {
+        "time": rows[0]['score'],
+        "authors": rows[0]['pseudo'],
+        "type": "rta",
+        "timestamp": rows[0]["timestamp"],
+        "demo": "##" + str(rows[0]["demo"]) + "#"
+    }
+
     data[f"{row:02d}-{col}"] = {
-        "Highscore": {
-            "time": f"{float(rows[0]['score']) * 0.025:.3f}",
-            "authors": authors,
-            "type": "rta",
-            "timestamp": rows[0]["timestamp"],
-            "demo": "##" + str(rows[0]["demo"]) + "#"
-        }
+        "Highscore": highscore,
+        "Speedrun": speedrun
     }
 
     # --- Dump to YAML file ---
