@@ -32,7 +32,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
 
 ## Todo
-- add a generic .sol file to unlock all levels and be able to work episode-per-episode
 - make lua scripts to get information such as x;y positions, speed etc.
 - TAS the remaining 450 levels ;)
 
