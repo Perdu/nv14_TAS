@@ -208,11 +208,14 @@ def save_demo(demo, episode, level, score_type="Speedrun"):
     level_id = f"{episode}-{level}"
     demo_full = f"##{demo}"
     chunks, number_of_frames = extract_chunks(demo_full)
+    score = f"{number_of_frames} f"
+    if score_type != "Speedrun":
+        print("Please manually enter score")
     if level_id in data and score_type in data[level_id]:
         data[level_id][score_type]["demo"] = demo_full
-        data[level_id][score_type]["time"] = f"{number_of_frames} f"
+        data[level_id][score_type]["time"] = score
     else:
-        data[level_id] = {score_type: {'time': f"{number_of_frames} f", 'authors': 'zapkt', 'type': 'tas', 'demo': demo_full}}
+        data[level_id] = {score_type: {'time': score, 'authors': 'zapkt', 'type': 'tas', 'demo': demo_full}}
 
     with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(data, f)
