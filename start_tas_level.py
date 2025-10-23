@@ -39,6 +39,7 @@ def build_libtas_input(episode, level, score_type="Speedrun"):
     nb_markers = 0
     lua_infos = ""
     initial_wait_frames = 7
+    # Insert all input frames
     for i in range(initial_wait_frames):
         res += "|\n"
         nb_frames += 1
@@ -51,6 +52,18 @@ def build_libtas_input(episode, level, score_type="Speedrun"):
             nb_frames += 1
     res += "|K20|\n"  # space
     nb_frames += 1
+
+    # Now extract meaningful information from the rta run
+    with open("tas/level_data_rta.yml", "r", encoding="utf-8") as f:
+        rta_data = yaml.safe_load(f)
+    rta_time = rta_data[f"{episode}-{level}"][score_type]['time']
+    for i in range(rta_time):
+        res += "|\n"
+        nb_frames += 1
+    nb_markers += 1
+    markers[f"{nb_markers}\\frame"] = nb_frames - 1
+    markers[f"{nb_markers}\\text"] = "RTA score"
+    markers["size"] = nb_markers
     return res, nb_frames, markers
 
 
@@ -71,4 +84,7 @@ if __name__ == "__main__":
     config.read("extract/config.ini")
     with open("extract/config.ini", "w") as f:
         config["General"]["rerecord_count"] = "0"
+        config.write(f, space_around_delimiters=False)
+    with open("extract/editor.ini", "w") as f:
+        config["markers"] = markers
         config.write(f, space_around_delimiters=False)
