@@ -43,7 +43,7 @@ def build_libtas_input(episode, level, score_type="Speedrun"):
         res += "|\n"
         nb_frames += 1
     res += start_level(episode, level)
-    nb_frames += 3
+    nb_frames += 6
     with open("tas/loading_times.yml", "r", encoding="utf-8") as f:
         loading_times = yaml.safe_load(f)
         for i in range(loading_times[f"{episode}-{level}"]):
