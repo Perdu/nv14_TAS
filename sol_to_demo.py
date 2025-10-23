@@ -13,6 +13,8 @@ import struct
 import getopt
 from ruamel.yaml import YAML
 
+from converter import extract_chunks
+
 
 SOL_FILE_LOCATION = 'docker_volume/n_tas.sol'
 DEMO_DATA_FILE = 'tas/level_data.yml'
@@ -203,17 +205,18 @@ def save_demo(demo, episode, level, score_type="Speedrun"):
     yaml.width = 8192  # prevent line wrapping
     with open(DEMO_DATA_FILE, 'r', encoding='utf-8') as f:
         data = yaml.load(f)
-
     level_id = f"{episode}-{level}"
+    demo_full = f"##{demo}"
+    chunks, number_of_frames = extract_chunks(demo_full)
     if level_id in data and score_type in data[level_id]:
-        data[level_id][score_type]["demo"] = f"##{demo}"
-        print(f"Updated {DEMO_DATA_FILE}")
+        data[level_id][score_type]["demo"] = demo_full
+        data[level_id][score_type]["time"] = f"{number_of_frames} f"
     else:
-        print("Record not found, skipping update.")
-        return
+        data[level_id] = {score_type: {'time': f"{number_of_frames} f", 'authors': 'zapkt', 'type': 'tas', 'demo': demo_full}}
 
     with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(data, f)
+    print(f"Updated {DEMO_DATA_FILE}")
 
 
 if __name__ == "__main__":
