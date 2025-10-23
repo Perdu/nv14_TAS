@@ -21,9 +21,11 @@ DEMO_DATA_FILE = 'tas/level_data.yml'
 
 
 def usage(ret_code):
-    print(f"Usage: python {sys.argv[0]} [-h|-s|--save] LEVEL")
+    print(f"Usage: python {sys.argv[0]} [-h|-s|--save|-g|--highscore|-a|--authors] LEVEL")
     print("-h: print this help")
     print("-s|--save: save extracted demo data to tas/level_data.yml")
+    print("-g|--highscore: save as highscore instead of speedrun")
+    print("-a|--authors AUTHORS: change authors")
     sys.exit(ret_code)
 
 
@@ -199,7 +201,7 @@ def findUnsubmittedTop20(solData, hsTable):
         raise NHighError('.sol data is incomplete')
 
 
-def save_demo(demo, episode, level, score_type="Speedrun"):
+def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
     yaml = YAML()
     yaml.preserve_quotes = True  # keep existing quoting
     yaml.width = 8192  # prevent line wrapping
@@ -214,8 +216,9 @@ def save_demo(demo, episode, level, score_type="Speedrun"):
     if level_id in data and score_type in data[level_id]:
         data[level_id][score_type]["demo"] = demo_full
         data[level_id][score_type]["time"] = score
+        data[level_id][score_type]["authors"] = authors
     else:
-        data[level_id] = {score_type: {'time': score, 'authors': 'zapkt', 'type': 'tas', 'demo': demo_full}}
+        data[level_id] = {score_type: {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo_full}}
 
     with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(data, f)
@@ -224,8 +227,10 @@ def save_demo(demo, episode, level, score_type="Speedrun"):
 
 if __name__ == "__main__":
     save = False
+    score_type = "Speedrun"
+    authors = 'zapkt'
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'hs', ["save"])
+        opts, args = getopt.getopt(sys.argv[1:], 'a:ghs', ["save", "highscore", 'author=', 'authors='])
     except getopt.GetoptError as err:
         print("Error: ", str(err))
         sys.exit(1)
@@ -234,6 +239,10 @@ if __name__ == "__main__":
             usage(0)
         elif o == '-s' or o == '--save':
            save = True
+        elif o == '-g' or o =='--highscore':
+            score_type = "Highscore"
+        elif o == '-a' or o =='--author' or o == '--authors':
+            authors = arg
     if not args:
         usage(1)
     episode = args[0].split("-")[0]
@@ -242,4 +251,4 @@ if __name__ == "__main__":
     demo = solData['persBest'][int(episode)]['lev'][int(level)]['demo']
     print(demo)
     if save:
-        save_demo(demo, episode, level, score_type="Speedrun")
+        save_demo(demo, episode, level, score_type=score_type, authors=authors)
