@@ -10,8 +10,19 @@
 
 import sys
 import struct
+import getopt
+from ruamel.yaml import YAML
+
 
 SOL_FILE_LOCATION = 'docker_volume/n_tas.sol'
+DEMO_DATA_FILE = 'tas/level_data.yml'
+
+
+def usage(ret_code):
+    print(f"Usage: python {sys.argv[0]} [-h|-s|--save] LEVEL")
+    print("-h: print this help")
+    print("-s|--save: save extracted demo data to tas/level_data.yml")
+    sys.exit(ret_code)
 
 
 class SolReader(object):
@@ -186,11 +197,43 @@ def findUnsubmittedTop20(solData, hsTable):
         raise NHighError('.sol data is incomplete')
 
 
+def save_demo(demo, episode, level, score_type="Speedrun"):
+    yaml = YAML()
+    yaml.preserve_quotes = True  # keep existing quoting
+    yaml.width = 8192  # prevent line wrapping
+    with open(DEMO_DATA_FILE, 'r', encoding='utf-8') as f:
+        data = yaml.load(f)
+
+    level_id = f"{episode}-{level}"
+    if level_id in data and score_type in data[level_id]:
+        data[level_id][score_type]["demo"] = f"##{demo}"
+        print(f"Updated {DEMO_DATA_FILE}")
+    else:
+        print("Record not found, skipping update.")
+        return
+
+    with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
+        yaml.dump(data, f)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print(f"Usage: python {sys.argv[0]} LEVEL")
+    save = False
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'hs', ["save"])
+    except getopt.GetoptError as err:
+        print("Error: ", str(err))
         sys.exit(1)
-    episode = int(sys.argv[1].split("-")[0])
-    level = int(sys.argv[1].split("-")[1])
+    for o, arg in opts:
+        if o == '-h':
+            usage(0)
+        elif o == '-s' or o == '--save':
+           save = True
+    if not args:
+        usage(1)
+    episode = args[0].split("-")[0]
+    level = args[0].split("-")[1]
     solData = readSolFile()
-    print(solData['persBest'][episode]['lev'][level]['demo'])
+    demo = solData['persBest'][int(episode)]['lev'][int(level)]['demo']
+    print(demo)
+    if save:
+        save_demo(demo, episode, level, score_type="Speedrun")
