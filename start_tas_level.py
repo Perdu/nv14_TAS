@@ -79,7 +79,10 @@ if __name__ == "__main__":
         sys.exit(1)
     episode = sys.argv[1].split('-')[0]
     level = sys.argv[1].split('-')[1]
-    libtas_input, nb_frames, markers = build_libtas_input(episode, level, "Speedrun")
+    rta_run = False
+    if len(sys.argv) > 2 and sys.argv[2] == 'rta':
+        rta_run = True
+    libtas_input, nb_frames, markers = build_libtas_input(episode, level, "Speedrun", rta_run)
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     with open("extract/inputs", "w") as f:
         print(libtas_input, file=f)
