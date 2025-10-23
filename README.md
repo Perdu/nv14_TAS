@@ -33,7 +33,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 
 ## Todo
 - Make a script to create .ltm file for individual levels
-- Make a script to display full demos including level data
 - Make lua scripts to get information such as x;y positions, speed etc.
 - Perhaps make a lua script to display hitboxes
 - TAS the remaining 450 levels ;)
