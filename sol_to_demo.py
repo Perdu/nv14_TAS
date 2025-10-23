@@ -215,6 +215,10 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
         print("Please manually enter score")
     if level_id in data and score_type in data[level_id]:
         data[level_id][score_type]["demo"] = demo
+        saved_score = int(data[level_id][score_type]["time"].split()[0])
+        if score_type == "Speedrun" and saved_score < number_of_frames:
+            print(f"Error: saved level already has a better score ({saved_score}). Not saving.")
+            return
         data[level_id][score_type]["time"] = score
         data[level_id][score_type]["authors"] = authors
     else:
