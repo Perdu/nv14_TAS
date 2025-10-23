@@ -18,6 +18,7 @@ from converter import extract_chunks
 
 SOL_FILE_LOCATION = 'docker_volume/n_tas.sol'
 DEMO_DATA_FILE = 'tas/level_data.yml'
+LEVEL_DATA_FILE = 'external/level_build_data.yml'
 
 
 def usage(ret_code):
@@ -208,22 +209,26 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
     with open(DEMO_DATA_FILE, 'r', encoding='utf-8') as f:
         data = yaml.load(f)
     level_id = f"{episode}-{level}"
-    demo_full = f"##{demo}"
-    chunks, number_of_frames = extract_chunks(demo_full)
+    chunks, number_of_frames = extract_chunks(demo)
     score = f"{number_of_frames} f"
     if score_type != "Speedrun":
         print("Please manually enter score")
     if level_id in data and score_type in data[level_id]:
-        data[level_id][score_type]["demo"] = demo_full
+        data[level_id][score_type]["demo"] = demo
         data[level_id][score_type]["time"] = score
         data[level_id][score_type]["authors"] = authors
     else:
-        data[level_id] = {score_type: {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo_full}}
+        data[level_id] = {score_type: {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo}}
 
     with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(data, f)
     print(f"Updated {DEMO_DATA_FILE}")
 
+def get_level_data(episode, level):
+    yaml = YAML()
+    with open(LEVEL_DATA_FILE, 'r', encoding='utf-8') as f:
+        data = yaml.load(f)
+    return data[f"{episode}-{level}"]
 
 if __name__ == "__main__":
     save = False
@@ -250,5 +255,9 @@ if __name__ == "__main__":
     solData = readSolFile()
     demo = solData['persBest'][int(episode)]['lev'][int(level)]['demo']
     print(demo)
+    level_data = get_level_data(episode, level)
+    demo_full = f"{level_data}{demo}#"
+    print()
+    print(demo_full)
     if save:
-        save_demo(demo, episode, level, score_type=score_type, authors=authors)
+        save_demo(demo_full, episode, level, score_type=score_type, authors=authors)
