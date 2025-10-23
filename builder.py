@@ -31,10 +31,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
     markers = {}
     nb_markers = 0
     lua_infos = ""
-    # initial_wait_frames = 7
-    # We need to add additional lag frames because ruffle in libTAS is
-    # currently broken
-    initial_wait_frames = 15
+    initial_wait_frames = 7
     for i in range(initial_wait_frames):
         res += "|\n"
         nb_frames += 1
