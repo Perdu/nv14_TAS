@@ -147,60 +147,6 @@ def readSolFile():
     except (IOError,OSError):
         raise NHighError('Error reading .sol file')
 
-##############
-
-
-def calcTotalScores(solData):
-    totalEpisodeScore = 0
-    totalLevelScore = 0
-    try:
-        for ep in xrange(100, NUM_EPISODES+100):
-            epData = solData['persBest'][ep]
-            totalEpisodeScore += int(epData['ep']['score'])
-            for lvl in xrange(5):
-                totalLevelScore += int(epData['lev'][lvl]['score'])
-    except (KeyError,TypeError):
-        raise NHighError('.sol data is incomplete')
-    return (totalLevelScore, totalEpisodeScore)
-
-def findUnsubmittedTop20(solData, hsTable):
-    '''Returns: (player, results)
-    where results is a list of tuples (ep_num, lvl_num, rank, unsubmitted_score, old_rank, old_entry)
-    '''
-    ret = []
-    player = unicode2str(solData['username'])
-    pllower = player.lower()
-    try:
-        for ep in xrange(100, 100+NUM_EPISODES):
-            epSolData = solData['persBest'][ep]
-            solScores = [0]*6
-            for lvl in xrange(5):
-                solScores[lvl] = int(epSolData['lev'][lvl]['score'])
-            solScores[5] = int(epSolData['ep']['score'])
-            
-            epHSData = hsTable.table[ep]
-            for lvl in xrange(6):
-                solScore = solScores[lvl]
-                lvlHSData = epHSData[lvl]
-                for rank,entry in enumerate(lvlHSData):
-                    if entry.score == 0:
-                        break
-                    if entry.score < solScore:
-                        oldEntry = None
-                        oldRank = None
-                        for r, en in enumerate(lvlHSData):
-                            if en.name.lower() == pllower:
-                                oldEntry = en
-                                oldRank = r
-                                break
-                        ret.append((ep, lvl, rank, solScore, oldRank, oldEntry))
-                        break
-                    if entry.name.lower() == pllower:
-                        break
-        return (player, ret)
-    except (KeyError,TypeError):
-        raise NHighError('.sol data is incomplete')
-
 
 def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
     yaml = YAML()
