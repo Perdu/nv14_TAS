@@ -222,7 +222,11 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
         data[level_id][score_type]["time"] = score
         data[level_id][score_type]["authors"] = authors
     else:
-        data[level_id] = {score_type: {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo}}
+        if level_id in data:
+            level_data = data[level_id]
+        else:
+            level_data = {}
+        level_data[score_type] = {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo}
 
     with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(data, f)
