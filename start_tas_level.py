@@ -69,7 +69,7 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False)
             nb_frames += 1
     nb_markers += 1
     markers[f"{nb_markers}\\frame"] = nb_frames - 1
-    markers[f"{nb_markers}\\text"] = "RTA score"
+    markers[f"{nb_markers}\\text"] = f"RTA score ({rta_time})"
     markers["size"] = nb_markers
     return res, nb_frames, markers
 
