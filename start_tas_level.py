@@ -53,6 +53,7 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False)
             nb_frames += 1
     res += "|K20|\n"  # space
     nb_frames += 1
+    init_frames = nb_frames
 
     # Now extract meaningful information from the rta run
     with open("tas/level_data_rta.yml", "r", encoding="utf-8") as f:
@@ -61,22 +62,28 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False)
         tas_data = yaml.safe_load(f)
     level_name = f"{episode}-{level}"
     rta_time = rta_data[level_name][score_type]['time']
+    demo = rta_data[level_name][score_type]['demo']
+    libtas_input_rta, nb_frames_demo_rta = convert_demo_to_libtas(demo)
     if add_rta_run:
-        demo = rta_data[level_name][score_type]['demo']
-        libtas_input, nb_frames_demo = convert_demo_to_libtas(demo)
-        res += libtas_input
-        nb_frames += nb_frames_demo
+        res += libtas_input_rta
+        nb_frames += nb_frames_demo_rta
     elif level_name in tas_data and score_type in tas_data[level_name]:
         demo = tas_data[level_name][score_type]['demo']
         libtas_input, nb_frames_demo = convert_demo_to_libtas(demo)
         res += libtas_input
         nb_frames += nb_frames_demo
+        while nb_frames < init_frames + nb_frames_demo_rta:
+            res += "|\n"
+            nb_frames += 1
     else:
         for i in range(rta_time):
             res += "|\n"
             nb_frames += 1
+    # additional frame to trigger the exit
+    res += "|\n|\n|\n"
+    nb_frames += 3
     nb_markers += 1
-    markers[f"{nb_markers}\\frame"] = nb_frames - 1
+    markers[f"{nb_markers}\\frame"] = init_frames + nb_frames_demo_rta + 2
     markers[f"{nb_markers}\\text"] = f"RTA score ({rta_time})"
     markers["size"] = nb_markers
     return res, nb_frames, markers
