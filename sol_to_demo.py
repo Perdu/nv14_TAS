@@ -173,7 +173,7 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
         else:
             level_data = {}
         level_data[score_type] = {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo}
-    data[level_id] = level_data
+        data[level_id] = level_data
 
     with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(data, f)
