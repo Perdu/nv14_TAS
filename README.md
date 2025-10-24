@@ -36,6 +36,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - Perhaps make a lua script to display hitboxes
 - Would be great to display vectors of speed
 - Make a script to extract player position from rta run and display it during TASing
+- script counting time difference between TAS and rta
 - TAS the remaining 450 levels ;)
 
 ## Run
