@@ -14,12 +14,19 @@ def count_highscores_and_speedruns(filename):
 
     # Loop through all top-level entries (like '00-0', '00-1', etc.)
     for key, value in data.items():
-        if not isinstance(value, dict):
-            continue
         if 'Highscore' in value:
             highscores += 1
         if 'Speedrun' in value:
             speedruns += 1
+
+    print("Speedruns done:")
+    for key, value in sorted(data.items()):
+        if 'Speedrun' in value:
+            print(key)
+
+#    for key, value in data.items():
+#        if 'Highscore' in value:
+#            print(key)
 
     return highscores, speedruns
 
