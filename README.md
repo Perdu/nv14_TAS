@@ -32,9 +32,10 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
 
 ## Todo
-- Make a script to create .ltm file for individual levels
-- Make lua scripts to get information such as x;y positions, speed etc.
+- Make lua scripts to get information such as x;y positions, vertical and horizontal speed etc.
 - Perhaps make a lua script to display hitboxes
+- Would be great to display vectors of speed
+- Make a script to extract player position from rta run and display it during TASing
 - TAS the remaining 450 levels ;)
 
 ## Run
