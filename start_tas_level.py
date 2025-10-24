@@ -57,9 +57,17 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False)
     # Now extract meaningful information from the rta run
     with open("tas/level_data_rta.yml", "r", encoding="utf-8") as f:
         rta_data = yaml.safe_load(f)
-    rta_time = rta_data[f"{episode}-{level}"][score_type]['time']
+    with open("tas/level_data.yml", "r", encoding="utf-8") as f:
+        tas_data = yaml.safe_load(f)
+    level_name = f"{episode}-{level}"
+    rta_time = rta_data[level_name][score_type]['time']
     if add_rta_run:
-        demo = rta_data[f"{episode}-{level}"][score_type]['demo']
+        demo = rta_data[level_name][score_type]['demo']
+        libtas_input, nb_frames_demo = convert_demo_to_libtas(demo)
+        res += libtas_input
+        nb_frames += nb_frames_demo
+    elif level_name in tas_data and score_type in tas_data[level_name]:
+        demo = tas_data[level_name][score_type]['demo']
         libtas_input, nb_frames_demo = convert_demo_to_libtas(demo)
         res += libtas_input
         nb_frames += nb_frames_demo
