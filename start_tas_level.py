@@ -28,6 +28,7 @@ def start_level(episode, level):
 |M{coord["level"]["x"]}:{coord["level"]["y"][int(level)]}:A:1....:0|
 |M{coord["start"]["x"]}:{coord["start"]["y"]}:A:.....:0|
 |M{coord["start"]["x"]}:{coord["start"]["y"]}:A:1....:0|
+|
 """
     return inputs
 
@@ -44,7 +45,7 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False)
         res += "|\n"
         nb_frames += 1
     res += start_level(episode, level)
-    nb_frames += 6
+    nb_frames += 7
     with open("tas/loading_times.yml", "r", encoding="utf-8") as f:
         loading_times = yaml.safe_load(f)
         for i in range(loading_times[f"{episode}-{level}"]):
