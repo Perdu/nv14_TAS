@@ -62,6 +62,8 @@ FROM debian:12
   RUN echo "/root/src/ruffle/target/release/ruffle_desktop -g gl /home/n_v14.swf\n/root/src/libTAS/build/AppDir/usr/bin/libTAS /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &" > /root/.bash_history
   COPY docker/ruffle_desktop.ini /root/.config/libTAS/
   COPY docker/libTAS.ini /root/.config/libTAS/
+  # Use the .sol file. Remove for encoding
+  COPY docker_volume/n_tas.sol /root/.local/share/ruffle/SharedObjects/localhost/n_v14b_userdata.sol
 
 # run
   CMD bash
