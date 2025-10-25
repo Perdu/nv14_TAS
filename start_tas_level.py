@@ -106,10 +106,8 @@ if __name__ == "__main__":
     with open("extract/editor.ini", "w") as f:
         config["markers"] = markers
         config.write(f, space_around_delimiters=False)
+    config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     config.read("extract/config.ini")
     with open("extract/config.ini", "w") as f:
         config["General"]["rerecord_count"] = "0"
-        config.write(f, space_around_delimiters=False)
-    with open("extract/editor.ini", "w") as f:
-        config["markers"] = markers
         config.write(f, space_around_delimiters=False)
