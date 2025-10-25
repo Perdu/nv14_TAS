@@ -119,11 +119,12 @@ def display_time_difference(score_type="Speedrun"):
         total_diff = total_rta - total_tas
         if score_type == "Speedrun":
             total_diff_s = total_diff * 0.025
+            formatted_diff = format_seconds(total_diff_s)
             formatted_tas = format_seconds(total_tas * 0.025)
             formatted_rta = format_seconds(total_rta * 0.025)
             print(f"\nTotal TAS: {total_tas} {unit} ({formatted_tas})")
             print(f"Total RTA: {total_rta} {unit} ({formatted_rta})")
-            print(f"Total Δ = +{total_diff} {unit}")
+            print(f"Total Δ = +{total_diff} {unit} ({formatted_diff})")
         else:
             formatted = format_seconds(total_diff)
             print(f"\nTotal TAS: {total_tas:.3f} {unit}")
