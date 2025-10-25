@@ -62,6 +62,8 @@ FROM debian:12
   RUN echo "/root/src/ruffle/target/release/ruffle_desktop -g gl /home/n_v14.swf\n/root/src/libTAS/build/AppDir/usr/bin/libTAS /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &" > /root/.bash_history
   COPY docker/ruffle_desktop.ini /root/.config/libTAS/
   COPY docker/libTAS.ini /root/.config/libTAS/
+  # Fixing the determinism bug: by adding the libopenh264 file manually, we avoid having to open ruffle manually every time
+  COPY external/libopenh264-2.4.1-linux64.7.so /root/.cache/ruffle/video/
   # Use the .sol file. Remove for encoding
   COPY docker_volume/n_tas.sol /root/.local/share/ruffle/SharedObjects/localhost/n_v14b_userdata.sol
 
