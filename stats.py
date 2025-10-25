@@ -5,9 +5,6 @@ import yaml
 
 # Display statistics about the TASing progress
 
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RED = "\033[91m"
 RESET = "\033[0m"
 
 def count_highscores_and_speedruns(filename):
@@ -36,43 +33,78 @@ def count_highscores_and_speedruns(filename):
     return highscores, speedruns
 
 
-def display_episode_grid(filename, score_type):
+def color_for_progress(done, total=5, use_gradient=True):
+    """
+    Return a color code representing progress.
+    If use_gradient=True, uses smooth red→yellow→green RGB gradient.
+    If use_gradient=False, uses simple discrete colors.
+    """
+    if not use_gradient:
+        if done == 0:
+            return "\033[91m"  # Red
+        elif done < total:
+            return "\033[93m"  # Yellow
+        else:
+            return "\033[92m"  # Green
+
+    # --- Gradient mode ---
+    ratio = done / total
+    # Red (255,0,0) → Yellow (255,255,0) → Green (0,255,0)
+    if ratio < 0.5:
+        # Red → Yellow
+        r = 255
+        g = int(510 * ratio)  # 0 → 255
+    else:
+        # Yellow → Green
+        g = 255
+        r = int(510 * (1 - ratio))  # 255 → 0
+    return f"\033[38;2;{r};{g};0m"
+
+
+def display_episode_grid(filename, score_type="Speedrun", use_gradient=True):
+    """
+    Display a grid of episodes (00–99), colored according to how many levels (0–4)
+    have the given score_type ("Speedrun" or "Highscore").
+
+    Args:
+        filename (str): Path to the YAML file.
+        score_type (str): "Speedrun" or "Highscore".
+        use_gradient (bool): Whether to use RGB gradient colors.
+    """
     with open(filename, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
 
-    # Collect info about which episodes have speedruns
-    episodes = {f"{i:02d}": [False]*6 for i in range(100)}
+    # Each episode has 5 levels: 0–4
+    episodes = {f"{i:02d}": [False]*5 for i in range(100)}
 
     for key, value in data.items():
-        # Expect keys like '00-0', '07-5', etc.
         if '-' not in key:
             continue
         episode, level = key.split('-')
         if episode in episodes and level.isdigit():
             lvl = int(level)
-            if score_type in value:
+            if 0 <= lvl < 5 and score_type in value:
                 episodes[episode][lvl] = True
 
-    # Display grid
-    print("Episode Speedrun Grid:\n")
+    print(f"Episode {score_type} Grid:\n")
     for row in range(10):
         line = []
         for col in range(10):
             ep = f"{col}{row}"
             if ep not in episodes:
-                color = RESET
                 display = ep
             else:
-                levels = episodes[ep]
-                if all(levels):
-                    color = GREEN
-                elif any(levels):
-                    color = YELLOW
-                else:
-                    color = RED
+                done = sum(episodes[ep])
+                color = color_for_progress(done, total=5, use_gradient=use_gradient)
                 display = f"{color}{ep}{RESET}"
             line.append(display)
         print(" ".join(line))
+
+    print("\nLegend:")
+    for i in range(6):
+        color = color_for_progress(i, total=5, use_gradient=use_gradient)
+        print(f"{color}{i}/5{RESET}", end=" ")
+    print(f"→ levels with {score_type}")
 
 
 if __name__ == "__main__":
@@ -81,5 +113,5 @@ if __name__ == "__main__":
     print("Levels already TASed:")
     print(f"Highscores: {highscores}")
     print(f"Speedruns: {speedruns}")
-    display_episode_grid(filename, "Highscore")
-    display_episode_grid(filename, "Speedrun")
+    display_episode_grid(filename, "Highscore", use_gradient=False)
+    display_episode_grid(filename, "Speedrun", use_gradient=False)
