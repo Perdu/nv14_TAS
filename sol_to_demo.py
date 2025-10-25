@@ -11,6 +11,7 @@
 import sys
 import struct
 import getopt
+import re
 from ruamel.yaml import YAML
 
 from converter import extract_chunks
@@ -176,8 +177,27 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
         data[level_id] = level_data
 
     data = {k: data[k] for k in sorted(data.keys())}
+
+    # --- Dump to string first ---
+    import io
+    buf = io.StringIO()
+    yaml.dump(data, buf)
+    lines = buf.getvalue().splitlines()
+
+    # --- Insert blank line after each demo: line if missing ---
+    result_lines = []
+    i = 0
+    while i < len(lines):
+        result_lines.append(lines[i])
+        if lines[i].strip().startswith("demo:"):
+            # If next line exists and is not blank, insert a blank line
+            if i + 1 < len(lines) and lines[i + 1].strip() != "":
+                result_lines.append("")  # insert one blank line
+        i += 1
+
+    # --- Write back to file ---
     with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
-        yaml.dump(data, f)
+        f.write("\n".join(result_lines) + "\n")
     print(f"Updated {DEMO_DATA_FILE}")
 
 def get_level_data(episode, level):
