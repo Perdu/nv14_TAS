@@ -2,10 +2,14 @@
 # -*- coding: utf-8 -*-
 
 import yaml
+import re
 
 # Display statistics about the TASing progress
+# Most of this file is from Chatgpt
 
 RESET = "\033[0m"
+TAS_FILE = "tas/level_data.yml"
+RTA_FILE = "tas/level_data_rta.yml"
 
 def count_highscores_and_speedruns(filename):
     with open(filename, 'r', encoding='utf-8') as f:
@@ -31,6 +35,118 @@ def count_highscores_and_speedruns(filename):
 #            print(key)
 
     return highscores, speedruns
+
+def parse_score(value, score_type="Speedrun"):
+    """
+    Parse a score value depending on type.
+    - Speedrun: frames (e.g., "341 f") → return int frames
+    - Highscore: seconds (e.g., "450.825") → return float seconds
+    Returns None if parsing fails.
+    """
+    if value is None:
+        return None
+
+    s = str(value).strip().lower()
+
+    # Use regex to find first number
+    match = re.search(r"\d+(\.\d+)?", s)
+    if not match:
+        return None
+
+    num_str = match.group(0)
+
+    try:
+        if score_type.lower() == "speedrun":
+            return int(float(num_str))
+        else:  # Highscore
+            return float(num_str)
+    except (ValueError, OverflowError):
+        return None
+
+
+def display_time_difference(score_type="Speedrun"):
+    """
+    Compare TAS vs RTA scores and display total difference.
+    - Speedrun: display frames
+    - Highscore: display seconds
+    """
+    with open(TAS_FILE, 'r', encoding='utf-8') as f:
+        levels_data = yaml.safe_load(f)
+    with open(RTA_FILE, 'r', encoding='utf-8') as f:
+        rta_data = yaml.safe_load(f)
+
+    total_tas = 0
+    total_rta = 0
+    results = []
+    missing = []
+
+    for key, value in levels_data.items():
+        if score_type not in value:
+            continue
+
+        tas_score = parse_score(value[score_type], score_type)
+        if tas_score is None:
+            continue
+
+        # Find RTA score
+        rta_score = None
+        if key in rta_data:
+            rta_entry = rta_data[key]
+            if isinstance(rta_entry, dict):
+                # Try top-level 'time'
+                if "time" in rta_entry and score_type.lower() != "speedrun":
+                    rta_score = parse_score(rta_entry["time"], score_type)
+                # Try nested score_type
+                elif score_type in rta_entry and "time" in rta_entry[score_type]:
+                    rta_score = parse_score(rta_entry[score_type]["time"], score_type)
+
+        if rta_score is None:
+            missing.append(key)
+            continue
+
+        diff = tas_score - rta_score
+        total_tas += tas_score
+        total_rta += rta_score
+        results.append((key, tas_score, rta_score, diff))
+
+    # Display
+    unit = "f" if score_type.lower() == "speedrun" else "s"
+    print(f"\nTime differences ({score_type}) — RTA vs TAS:\n")
+    for key, tas, rta, diff in sorted(results):
+        print(f"{key}: TAS={tas} {unit} \tRTA={rta} {unit}\t{diff} {unit}")
+
+    if results:
+        total_diff = total_rta - total_tas
+        if score_type == "Speedrun":
+            total_diff_s = total_diff * 0.025
+            formatted_tas = format_seconds(total_tas * 0.025)
+            formatted_rta = format_seconds(total_rta * 0.025)
+            print(f"\nTotal TAS: {total_tas} {unit} ({formatted_tas})")
+            print(f"Total RTA: {total_rta} {unit} ({formatted_rta})")
+            print(f"Total Δ = +{total_diff} {unit}")
+        else:
+            formatted = format_seconds(total_diff)
+            print(f"\nTotal TAS: {total_tas:.3f} {unit}")
+            print(f"Total RTA: {total_rta:.3f} {unit}")
+            print(f"Total Δ = +{total_diff:.3f} {unit} ({formatted})")
+    else:
+        print("No valid entries found.")
+
+    if missing:
+        print(f"\n⚠ Missing RTA entries for: {', '.join(missing)}")
+
+
+def format_seconds(seconds: float) -> str:
+    """Format a duration in seconds as HhMmS.sss format."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = seconds % 60
+    if hours > 0:
+        return f"{hours}h{minutes:02d}m{secs:06.3f}s"
+    elif minutes > 0:
+        return f"{minutes}m{secs:06.3f}s"
+    else:
+        return f"{secs:.3f}s"
 
 
 def color_for_progress(done, total=5, use_gradient=True):
@@ -115,3 +231,4 @@ if __name__ == "__main__":
     print(f"Speedruns: {speedruns}")
     display_episode_grid(filename, "Highscore", use_gradient=False)
     display_episode_grid(filename, "Speedrun", use_gradient=False)
+    display_time_difference("Speedrun")
