@@ -63,10 +63,10 @@ def parse_score(value, score_type="Speedrun"):
     except (ValueError, OverflowError):
         return None
 
-
-def display_time_difference(score_type="Speedrun"):
+# AI-generated
+def display_time_difference(score_type="Speedrun", sort=True):
     """
-    Compare TAS vs RTA scores and display total difference.
+    Compare TAS vs RTA scores and display total difference with bar charts.
     - Speedrun: display frames
     - Highscore: display seconds
     """
@@ -74,20 +74,19 @@ def display_time_difference(score_type="Speedrun"):
         levels_data = yaml.safe_load(f)
     with open(RTA_FILE, 'r', encoding='utf-8') as f:
         rta_data = yaml.safe_load(f)
-
+    
     total_tas = 0
     total_rta = 0
     results = []
     missing = []
-
+    
     for key, value in levels_data.items():
         if score_type not in value:
             continue
-
         tas_score = parse_score(value[score_type], score_type)
         if tas_score is None:
             continue
-
+        
         # Find RTA score
         rta_score = None
         if key in rta_data:
@@ -99,24 +98,95 @@ def display_time_difference(score_type="Speedrun"):
                 # Try nested score_type
                 elif score_type in rta_entry and "time" in rta_entry[score_type]:
                     rta_score = parse_score(rta_entry[score_type]["time"], score_type)
-
+        
         if rta_score is None:
             missing.append(key)
             continue
-
-        diff = tas_score - rta_score
+        
+        diff = rta_score - tas_score  # Positive = RTA is slower
         total_tas += tas_score
         total_rta += rta_score
         results.append((key, tas_score, rta_score, diff))
+    
+    if not results:
+        print("No valid entries found.")
+        if missing:
+            print(f"\n⚠ Missing RTA entries for: {', '.join(missing)}")
+        return
+    
+    # Helper function to create colored bar chart
+    def create_bar(value, max_value, width=40, use_color=False):
+        """Create a colored horizontal bar based on value magnitude"""
+        # Color codes (ANSI)
+        GREEN = '\033[92m'
+        YELLOW = '\033[93m'
+        ORANGE = '\033[38;5;208m'
+        RED = '\033[91m'
+        RESET = '\033[0m'
+        
+        # Determine color based on value thresholds
+        abs_val = abs(value)
+        if use_color:
+            if abs_val < max_value * 0.25:
+                color = GREEN
+            elif abs_val < max_value * 0.5:
+                color = YELLOW
+            elif abs_val < max_value * 0.75:
+                color = ORANGE
+            else:
+                color = RED
+        else:
+            if value > 0:
+                color = GREEN
+            else:
+                color = RED
 
-    # Display
+        # Calculate bar length
+        bar_length = int((abs_val / max_value) * width) if max_value > 0 else 0
+        bar_length = min(bar_length, width)
+        
+        bar = '█' * bar_length
+        return f"{color}{bar}{RESET}"
+    
+    # Display with bar charts
     unit = "f" if score_type.lower() == "speedrun" else "s"
     print(f"\nTime differences ({score_type}) — RTA vs TAS:\n")
-    for key, tas, rta, diff in sorted(results):
-        print(f"{key}: TAS={tas} {unit} \tRTA={rta} {unit}\t{diff} {unit}")
-
+    
+    # Find max difference for scaling bars
+    max_diff = max(abs(diff) for _, _, _, diff in results)
+    
+    # Find max widths for alignment
+    max_key_len = max(len(key) for key, _, _, _ in results)
+    if score_type.lower() == "speedrun":
+        max_tas_len = max(len(str(int(tas))) for _, tas, _, _ in results)
+        max_rta_len = max(len(str(int(rta))) for _, _, rta, _ in results)
+        max_diff_len = max(len(str(int(abs(diff)))) for _, _, _, diff in results)
+    else:
+        max_tas_len = max(len(f"{tas:.3f}") for _, tas, _, _ in results)
+        max_rta_len = max(len(f"{rta:.3f}") for _, _, rta, _ in results)
+        max_diff_len = max(len(f"{abs(diff):.3f}") for _, _, _, diff in results)
+    
+    if sort:
+        levels = sorted(results, key=lambda x: x[3], reverse=True)
+    else:
+        levels = results
+    
+    for key, tas, rta, diff in levels:
+        bar = create_bar(diff, max_diff)
+        
+        # Format with fixed widths
+        if score_type.lower() == "speedrun":
+            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}} {unit}  RTA={rta:>{max_rta_len}} {unit}  {diff:>+{max_diff_len+1}} {unit}"
+        else:
+            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}.3f} {unit}  RTA={rta:>{max_rta_len}.3f} {unit}  {diff:>+{max_diff_len+1}.3f} {unit}"
+        
+        print(f"{original_line} {bar}")
+    
+    # Display totals
     if results:
         total_diff = total_rta - total_tas
+        print("\n" + "─" * 60)
+        
         if score_type == "Speedrun":
             total_diff_s = total_diff * 0.025
             formatted_diff = format_seconds(total_diff_s)
@@ -230,6 +300,6 @@ if __name__ == "__main__":
     print("Levels already TASed:")
     print(f"Highscores: {highscores}")
     print(f"Speedruns: {speedruns}")
-    display_time_difference("Speedrun")
+    display_time_difference("Speedrun", sort=False)
     display_episode_grid(filename, "Highscore", use_gradient=False)
     display_episode_grid(filename, "Speedrun", use_gradient=False)
