@@ -298,6 +298,7 @@ if __name__ == "__main__":
     print("Levels already TASed:")
     print(f"Highscores: {highscores}")
     print(f"Speedruns: {speedruns}")
+    display_time_difference("Speedrun", sort=True)
     display_time_difference("Speedrun", sort=False)
     display_episode_grid(filename, "Highscore", use_gradient=False)
     display_episode_grid(filename, "Speedrun", use_gradient=False)
