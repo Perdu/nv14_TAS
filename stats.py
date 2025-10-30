@@ -25,10 +25,10 @@ def count_highscores_and_speedruns(filename):
         if 'Speedrun' in value:
             speedruns += 1
 
-    print("Speedruns done:")
-    for key, value in sorted(data.items()):
-        if 'Speedrun' in value:
-            print(key)
+#    print("Speedruns done:")
+#    for key, value in sorted(data.items()):
+#        if 'Speedrun' in value:
+#            print(key)
 
 #    for key, value in data.items():
 #        if 'Highscore' in value:
