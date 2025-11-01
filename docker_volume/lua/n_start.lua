@@ -1,60 +1,54 @@
 -- AI-generated
 -- libTAS Lua Script
--- Behavior:
---   * If ASSUME_STARTS_PAUSED = true, unpause on the first onFrame() call.
---   * Wait for the first Space press.
---   * Save state to slot SAVE_SLOT, pause, and permanently disable script.
+-- Starts unpaused (if needed), waits for first Space press, saves a state, pauses,
+-- and permanently disables itself *per game session*.
 
-local ASSUME_STARTS_PAUSED = true
-local SAVE_SLOT = 1
+local KEY_SPACE = 0x020        -- X11 keysym for Space
+local SAVE_SLOT = 1             -- Save slot number (1–10)
+local ASSUME_STARTS_PAUSED = true  -- Set to false if your game starts unpaused
 
--- Keycode for Space (X11 keysym). If this doesn't match your environment,
--- try 0x040 (SDL) or print input.getKey codes to debug.
-local KEY_SPACE = 0x020
+-- Session state
+local done = false
+local triggered = false
+local need_unpause = false
 
-local done = false         -- script completed and disabled forever
-local triggered = false    -- space detected this frame
-local need_unpause = false -- request to unpause on first frame
-
--- onStartup: request an unpause if we assume the emulator starts paused.
--- We don't call runtime.playPause() here because runtime functions must
--- be executed in onFrame() to reliably affect the current frame.
+-- This runs each time the game (process) starts.
 function onStartup()
-    if ASSUME_STARTS_PAUSED then
-        need_unpause = true
-    end
+    -- Reset session variables (important when restarting the game)
+    done = false
+    triggered = false
+
+    -- Request an unpause on first frame if needed
+    need_unpause = ASSUME_STARTS_PAUSED
 end
 
--- onInput: detect Space press (called each input decision)
+-- Detect Space key press
 function onInput()
     if done then return end
+
     if input.getKey(KEY_SPACE) ~= 0 then
         triggered = true
     end
 end
 
--- onFrame: do runtime actions here
+-- Perform runtime actions (must be done in onFrame)
 function onFrame()
     if done then return end
 
-    -- If we asked to unpause at startup, do it here (on the first frame)
+    -- Unpause at startup if requested
     if need_unpause then
-        runtime.playPause()   -- toggle pause -> unpause (assumes start paused)
+        runtime.playPause()
         need_unpause = false
-        -- continue without returning; we still want to be able to detect Space this same run
     end
 
+    -- If Space was pressed, save and pause
     if triggered then
-        -- One-time actions (performed in onFrame as required)
         runtime.saveState(SAVE_SLOT)
-        runtime.playPause()  -- pause the game
+        runtime.playPause()
 
-        -- Permanently disable the script so it never triggers again
+        -- Disable for this session only
         done = true
         triggered = false
-
-        -- Optionally remove callbacks to avoid any further overhead
-        -- (libTAS doesn't expose a 'remove callback' in the API here, but marking done is enough)
     end
 end
 
