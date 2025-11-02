@@ -200,6 +200,10 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
         f.write("\n".join(result_lines) + "\n")
     print(f"Updated {DEMO_DATA_FILE}")
 
+def print_to_tmp(demo_full, episode, level):
+    with open(f"/tmp/{episode}-{level}.txt", 'w', encoding='utf-8') as f:
+        f.write(demo_full + "\n")
+
 def get_level_data(episode, level):
     yaml = YAML()
     with open(LEVEL_DATA_FILE, 'r', encoding='utf-8') as f:
@@ -235,5 +239,6 @@ if __name__ == "__main__":
     demo_full = f"{level_data}{demo}#"
     print()
     print(demo_full)
+    print_to_tmp(demo_full, episode, level)
     if save:
         save_demo(demo_full, episode, level, score_type=score_type, authors=authors)
