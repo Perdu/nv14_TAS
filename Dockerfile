@@ -68,4 +68,5 @@ FROM debian:12
   COPY docker_volume/n_tas.sol /root/.local/share/ruffle/SharedObjects/localhost/n_v14b_userdata.sol
 
 # run
+  WORKDIR /home
   CMD bash
