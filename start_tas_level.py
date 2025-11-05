@@ -33,7 +33,7 @@ def start_level(episode, level):
     return inputs
 
 
-def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False):
+def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False, add_hs_run=False):
     nb_frames = 0
     res = ""
     markers = {}
@@ -70,6 +70,14 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False)
     if add_rta_run:
         res += libtas_input_rta
         nb_frames += nb_frames_demo_rta
+    elif add_hs_run:
+        if "Highscore" not in tas_data[level_name]:
+            print("Error: no known highscore TAS for this level")
+        else:
+            demo_hs = tas_data[level_name]["Highscore"]['demo']
+            libtas_input_hs, nb_frames_demo_hs = convert_demo_to_libtas(demo_hs)
+            res += libtas_input_hs
+            nb_frames += nb_frames_demo_hs
     elif level_name in tas_data and score_type in tas_data[level_name]:
         demo = tas_data[level_name][score_type]['demo']
         libtas_input, nb_frames_demo = convert_demo_to_libtas(demo)
@@ -99,9 +107,13 @@ if __name__ == "__main__":
     episode = sys.argv[1].split('-')[0]
     level = sys.argv[1].split('-')[1]
     rta_run = False
-    if len(sys.argv) > 2 and sys.argv[2] == 'rta':
-        rta_run = True
-    libtas_input, nb_frames, markers = build_libtas_input(episode, level, "Speedrun", rta_run)
+    hs_run = False
+    if len(sys.argv) > 2:
+        if sys.argv[2] == 'rta':
+            rta_run = True
+        elif sys.argv[2] == 'hs':
+            hs_run = True
+    libtas_input, nb_frames, markers = build_libtas_input(episode, level, "Speedrun", rta_run, hs_run)
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     with open("extract/inputs", "w") as f:
         print(libtas_input, file=f)
