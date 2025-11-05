@@ -17,7 +17,7 @@ from ruamel.yaml import YAML
 from converter import extract_chunks
 
 
-SOL_FILE_LOCATION = 'docker_volume/n_tas.sol'
+SOL_FILE_LOCATION = 'volume/n_tas.sol'
 DEMO_DATA_FILE = 'tas/level_data.yml'
 LEVEL_DATA_FILE = 'external/level_build_data.yml'
 

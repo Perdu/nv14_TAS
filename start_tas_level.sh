@@ -4,7 +4,7 @@ SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 cd "$SCRIPT_DIR"
 
 EXTRACT_FOLDER="extract"  # also change in builder.py for markers
-DOCKER_VOLUME_PATH="docker_volume"
+DOCKER_VOLUME_PATH="volume"
 LTM_FILE="n_base_for_levels.ltm"
 
 mkdir -p $EXTRACT_FOLDER

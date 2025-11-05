@@ -1,7 +1,7 @@
-docker_volume/*
-!docker_volume/n_levels/
-!docker_volume/n_levels/*.ltm
-docker_volume/n_levels/*_rta.ltm
+volume/*
+!volume/n_levels/
+!volume/n_levels/*.ltm
+volume/n_levels/*_rta.ltm
 extract/
 db_config.py
 __pycache__/
