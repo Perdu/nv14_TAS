@@ -74,10 +74,10 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
             demo_str = level_data[score_type]["demo"]
             libtas_input, nb_frames_demo = convert_demo_to_libtas(demo_str)
             try:
-                date = level_data[score_type]['timestamp'].strftime("%Y-%m-%d")
+                date = level_data[score_type]['time'].strftime("%Y-%m-%d")
             except AttributeError:
                 # for the kryX-orange 25-2 case, which is not a date
-                date = level_data[score_type]['timestamp']
+                date = level_data[score_type]['time']
             lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"{level_data[score_type]['authors']}, {level_data[score_type]['time']}, {date}\"}},\n"
             res += libtas_input
             nb_frames += nb_frames_demo
