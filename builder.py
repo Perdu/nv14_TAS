@@ -11,7 +11,8 @@ from converter import convert_demo_to_libtas
 
 
 def usage():
-    print(f"Usage: {sys.argv[0]} [-e END_EPISODE|-s START_EPISODE|-h]")
+    print(f"Usage: {sys.argv[0]} [-e END_EPISODE|-s START_EPISODE|-r|-h]")
+    print("-r: build RTA scores")
     print("-h: print this help")
 
 
