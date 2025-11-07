@@ -23,7 +23,7 @@ function onStartup()
 end
 
 -- Detect Space key press
-function onInput()
+function check_space()
     if done then return end
 
     if input.getKey(KEY_SPACE) ~= 0 then
@@ -34,6 +34,8 @@ end
 -- Perform runtime actions (must be done in onFrame)
 function onFrame()
     if done then return end
+
+    check_space()
 
     -- Unpause at startup if requested
     if need_unpause then
@@ -54,5 +56,4 @@ end
 
 -- Register callbacks
 callback.onStartup(onStartup)
-callback.onInput(onInput)
 callback.onFrame(onFrame)
