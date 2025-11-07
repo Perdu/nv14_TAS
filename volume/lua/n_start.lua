@@ -23,7 +23,7 @@ function onStartup()
 end
 
 -- Detect Space key press
-function check_space()
+function onInput()
     if done then return end
 
     if input.getKey(KEY_SPACE) ~= 0 then
@@ -35,7 +35,7 @@ end
 function onFrame()
     if done then return end
 
-    check_space()
+    -- check_space()
 
     -- Unpause at startup if requested
     if need_unpause then
