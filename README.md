@@ -163,6 +163,8 @@ ffmpeg -i 'n_rta_hs.mkv' -vf scale=-1:720 'n_rta_hs_upscaled.mkv'
 
 This significantly *reduced* the size of the video because the fixed bitrate is removed.
 
+Disable Settings → Audio → Audio Control → Disable to have sound in encoding.
+
 ## Sound
 Getting sound to work in libTAS is not really useful, as you don't need sound during the TASing process (it breaks savestates) and sound in encoding will work regardless.
 
