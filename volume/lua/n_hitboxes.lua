@@ -1,6 +1,6 @@
+level = "02-0"
 memy="55f7270eb778"
-x_door="36"
-y_door="60"
+local levels = dofile("lua/levels.lua")
 
 function onPaint()
    local y_num = tonumber(memy, 16)
@@ -11,6 +11,5 @@ function onPaint()
    gui.text(150, 580, string.format("%f ; %f", x, y))
 
    -- door
-   gui.ellipse(x_door, y_door, 13, 13)
+   gui.ellipse(levels[level].door_x, levels[level].door_y, 13, 13)
 end
-
