@@ -11,5 +11,5 @@ function onPaint()
    gui.text(150, 580, string.format("%f ; %f", x, y))
 
    -- door
-   gui.ellipse(levels[level].door_x, levels[level].door_y, 13, 13)
+   gui.ellipse(levels[level].door_x, levels[level].door_y, 12, 12)
 end
