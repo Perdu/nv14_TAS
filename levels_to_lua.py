@@ -56,6 +56,6 @@ with open(output_path, "w", encoding="utf-8") as out:
             f'door_x = {data["door_x"] or "nil"}, door_y = {data["door_y"] or "nil"}, '
             f'doorswitch_x = {data["doorswitch_x"] or "nil"}, doorswitch_y = {data["doorswitch_y"] or "nil"} }},\n'
         )
-    out.write("}\n")
+    out.write("}\nreturn levels\n")
 
 print(f"✅ Parsed {len(levels)} levels and saved to {output_path}")
