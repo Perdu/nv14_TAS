@@ -21,6 +21,34 @@ local display_hitboxes = true
 local space_frame = -100
 local pos_found = false
 
+-- Convert r,g,b to 0xAARRGGBB color
+local function rgb(r,g,b,a)
+    a = a or 255
+    return (a << 24) | (r << 16) | (g << 8) | b
+end
+
+function drawList(list, size, r, g, b)
+   -- print(list)
+   for _, e in ipairs(list) do
+      gui.ellipse(e.x, e.y, size, size, 1, rgb(r, g, b))
+   end
+end
+
+function draw_hitboxes()
+      local data = levels[level]
+      if not data then return end
+
+      gui.ellipse(data.door_x, data.door_y, 12, 12)
+      gui.ellipse(data.doorswitch_x, data.doorswitch_y, 6, 6)
+
+      drawList(data.mines, 4, 255, 0, 0)         -- red mines
+      -- drawList(data.drones, 9, 0, 0, 255)
+      -- drawList(data.floorguards, 6, 0, 0, 0)
+      drawList(data.gold, 6, 255, 255, 0)
+      -- drawList(data.launchpads, 6, 255, 0, 255) -- magenta launchpads
+      drawList(data.switches, 5, 0, 255, 255)    -- cyan switches
+end
+
 function onPaint()
    if memy ~= "" then
       local y_num = tonumber(memy, 16)
@@ -34,8 +62,7 @@ function onPaint()
    end
 
    if display_hitboxes then
-   -- door
-      gui.ellipse(levels[level].door_x, levels[level].door_y, 12, 12)
+      draw_hitboxes()
    end
 end
 
