@@ -16,6 +16,7 @@ local level = "04-3"
 local memy=""
 local levels = dofile("/home/lua/levels.lua")
 local dbg = true
+local display_hitboxes = true
 
 local space_frame = -100
 local pos_found = false
@@ -26,12 +27,16 @@ function onPaint()
       local y = memory.readd(y_num)
       local x_num = y_num - 56
       local x = memory.readd(x_num)
-      gui.ellipse(x, y, 10, 10)
+      if display_hitboxes then
+         gui.ellipse(x, y, 10, 10)
+      end
       gui.text(150, 580, string.format("%f ; %f", x, y))
    end
 
+   if display_hitboxes then
    -- door
-   gui.ellipse(levels[level].door_x, levels[level].door_y, 12, 12)
+      gui.ellipse(levels[level].door_x, levels[level].door_y, 12, 12)
+   end
 end
 
 -- This runs each time the game (process) starts.
