@@ -13,7 +13,7 @@ mine_re = re.compile(r"12\^(\d+),(\d+)")
 drone_re = re.compile(r"6\^(\d+),(\d+)")
 floorguard_re = re.compile(r"4\^(\d+),(\d+)")
 gold_re = re.compile(r"0\^(\d+),(\d+)")
-launchpad_re = re.compile(r"2\^(\d+),(\d+)")
+launchpad_re = re.compile(r"!2\^(\d+),(\d+)")
 switch_re = re.compile(r"9\^(\d+),(\d+)")
 
 levels = {}
