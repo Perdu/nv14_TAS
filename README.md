@@ -38,6 +38,12 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - Make a script to extract player position from rta run and display it during TASing
 - TAS the remaining 442 levels ;)
 
+## Optimization level
+
+In the [level demo data](tas/level_data.yml), `optimization_level` means:
+- 1: level TASed without subpixel optimization
+- 2: level TASed with subpixel optimization
+
 ## Run
 
 After building the container (`docker build --tag libtas .`) using the [Dockerfile](Dockerfile):
