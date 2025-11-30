@@ -12,7 +12,7 @@ local done = false
 local triggered = false
 local need_unpause = false
 
-local level = "04-3"
+local level = "02-4"
 local memy=""
 local levels = dofile("/home/lua/levels.lua")
 local dbg = true
