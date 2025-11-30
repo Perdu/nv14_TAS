@@ -2,6 +2,8 @@ volume/*
 !volume/n_levels/
 !volume/n_levels/*.ltm
 volume/n_levels/*_rta.ltm
+!volume/ghosts/
+!volume/ghosts/*.csv
 extract/
 db_config.py
 __pycache__/
