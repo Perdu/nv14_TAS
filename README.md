@@ -40,8 +40,8 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 
 ## Optimization level
 
-In the [level demo data](tas/level_data.yml), `optimization_level` means:
-- 1: level TASed without subpixel optimization
+Jumping gives slightly more speed than running. As I was not aware that this kind of subpixel optimization was possible in this game (and because it takes a lot of time to optimize), this is not done for a lot of level. I indicate this in the [level demo data](tas/level_data.yml) file, with `optimization_level`:
+- 1 (or nothing): level TASed without subpixel optimization
 - 2: level TASed with subpixel optimization
 
 ## Run
