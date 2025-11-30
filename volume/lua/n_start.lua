@@ -12,12 +12,15 @@ local done = false
 local triggered = false
 local need_unpause = false
 
-local level = "02-4"
+local level = "04-0"
+local ghostFilePath = "/home/ghosts/" .. level .. ".csv"
 local memy=""
 local levels = dofile("/home/lua/levels.lua")
 local dbg = true
 local display_hitboxes = true
+local display_ghost = true
 
+local ghostData = {}      -- frame → {x, y}
 local space_frame = -100
 local pos_found = false
 
@@ -49,6 +52,24 @@ function draw_hitboxes()
       drawList(data.switches, 5, 0, 255, 255)    -- cyan switches
 end
 
+local function loadGhost()
+    local file = io.open(ghostFilePath, "r")
+    if not file then
+        print("ERROR: Could not open ghost CSV file!")
+        return
+    end
+
+    for line in file:lines() do
+        local frame, x, y = line:match("(%d+),([^,]+),([^,]+)")
+        if frame and x and y then
+            ghostData[tonumber(frame)] = { x = tonumber(x), y = tonumber(y) }
+        end
+    end
+
+    file:close()
+    print("Ghost loaded: " .. tostring(#ghostData) .. " frames")
+end
+
 function onPaint()
    if memy ~= "" then
       local y_num = tonumber(memy, 16)
@@ -64,6 +85,13 @@ function onPaint()
    if display_hitboxes then
       draw_hitboxes()
    end
+
+   local f = movie.currentFrame()
+   local ghost = ghostData[f]
+   if ghost and display_ghost then
+      gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
+      gui.text(610, 580, string.format("%f ; %f", ghost.x, ghost.y))
+   end
 end
 
 -- This runs each time the game (process) starts.
@@ -75,6 +103,8 @@ function onStartup()
 
     -- Request an unpause on first frame if needed
     need_unpause = ASSUME_STARTS_PAUSED
+
+   loadGhost()
 end
 
 -- Detect Space key press
