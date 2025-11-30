@@ -28,7 +28,7 @@ function onPaint()
       local x_num = y_num - 56
       local x = memory.readd(x_num)
       cur_frame = movie.currentFrame()
-      gui.text(150, 550, string.format("%f ; %f", x, y))
+      gui.text(150, 580, string.format("%f ; %f", x, y))
       print(string.format("%d,%f,%f", cur_frame, x, y))
    end
 end
