@@ -98,7 +98,7 @@ function onFrame()
          if i == 1 then
             memy = ramsearch.get_address(j)
          else
-            print("Error: found too many values")
+            print(string.format("Error: found too many values (%d)", i))
             if dbg then
                for j = 0,i-1,1
                do
