@@ -32,11 +32,10 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
 
 ## Todo
-- Make lua scripts to get information such as x;y positions, vertical and horizontal speed etc.
-- Perhaps make a lua script to display hitboxes
+- Figure out how speed works and extract it
+- extract all ghost information automatically
 - Would be great to display speed vectors
-- Make a script to extract player position from rta run and display it during TASing
-- TAS the remaining 442 levels ;)
+- TAS the remaining 416 levels ;)
 
 ## Optimization level
 
