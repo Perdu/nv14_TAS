@@ -5,7 +5,8 @@
 -- ==============================
 
 local ghostData = {}      -- frame → {x, y}
-local ghostFilePath = "/home/ghosts/04-0.csv"  -- Change if needed
+local level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
+local ghostFilePath = "/home/ghosts/" .. level .. ".csv"
 
 -- ------------------------------
 -- Reads CSV file into ghostData
