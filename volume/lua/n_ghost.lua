@@ -38,4 +38,6 @@ function onPaint()
    end
 end
 
-loadGhost()
+function onStartup()
+   loadGhost()
+end
