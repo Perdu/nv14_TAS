@@ -16,6 +16,8 @@ local level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
 local memy=""
 local levels = dofile("/home/lua/levels.lua")
 local dbg = true
+local ghostFilePath = "/home/ghosts/" .. level .. ".csv"
+local ghostFile = nil
 
 local space_frame = -100
 local pos_found = false
@@ -27,18 +29,7 @@ function onPaint()
       local y = memory.readd(y_num)
       local x_num = y_num - 56
       local x = memory.readd(x_num)
-      cur_frame = movie.currentFrame()
       gui.text(150, 580, string.format("%f ; %f", x, y))
-      if pos_found then
-         if not pre_reload_skipped then
-            -- since onPaint() is called on the start + 2 frame before
-            -- the reload, we need to skip this frame to avoid
-            -- displaying it
-            pre_reload_skipped = true
-         else
-            print(string.format("%d,%f,%f", cur_frame, x, y))
-         end
-      end
    end
 end
 
@@ -51,6 +42,8 @@ function onStartup()
 
     -- Request an unpause on first frame if needed
     need_unpause = ASSUME_STARTS_PAUSED
+
+    ghostFile = io.open(ghostFilePath, "w")
 end
 
 -- Detect Space key press
@@ -64,6 +57,8 @@ end
 
 -- Perform runtime actions (must be done in onFrame)
 function onFrame()
+   local f = movie.currentFrame()
+
     -- Unpause at startup if requested
     if need_unpause then
         runtime.playPause()
@@ -88,7 +83,6 @@ function onFrame()
     end
 
    if not pos_found then
-      local f = movie.currentFrame()
       if f == space_frame + 1 then
          local i = ramsearch.search()
          if dbg then
@@ -121,8 +115,28 @@ function onFrame()
          runtime.loadState(SAVE_SLOT)
       end
    end
-end
 
--- Register callbacks
-callback.onStartup(onStartup)
-callback.onFrame(onFrame)
+   if pos_found then
+      if not pre_reload_skipped then
+         -- since onPaint() is called on the start + 2 frame before
+         -- the reload, we need to skip this frame to avoid
+         -- displaying it
+         pre_reload_skipped = true
+      else
+         if memy ~= "" then
+            local y_num = tonumber(memy, 16)
+            local y = memory.readd(y_num)
+            local x_num = y_num - 56
+            local x = memory.readd(x_num)
+            print(string.format("%d,%f,%f", f, x, y))
+            ghostFile:write(string.format("%d,%f,%f\n", f, x, y))
+         end
+      end
+   end
+
+   -- close ghost file at the end of the movie
+   if f > movie.frameCount() then
+      ghostFile:close()
+      print("Closed ghost file.")
+   end
+end
