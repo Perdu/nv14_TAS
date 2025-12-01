@@ -19,7 +19,7 @@ local dbg = true
 
 local space_frame = -100
 local pos_found = false
-
+local pre_reload_skipped = false
 
 function onPaint()
    if memy ~= "" then
@@ -29,7 +29,16 @@ function onPaint()
       local x = memory.readd(x_num)
       cur_frame = movie.currentFrame()
       gui.text(150, 580, string.format("%f ; %f", x, y))
-      print(string.format("%d,%f,%f", cur_frame, x, y))
+      if pos_found then
+         if not pre_reload_skipped then
+            -- since onPaint() is called on the start + 2 frame before
+            -- the reload, we need to skip this frame to avoid
+            -- displaying it
+            pre_reload_skipped = true
+         else
+            print(string.format("%d,%f,%f", cur_frame, x, y))
+         end
+      end
    end
 end
 
