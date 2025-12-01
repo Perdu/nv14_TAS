@@ -5,8 +5,8 @@
 -- ==============================
 
 local ghostData = {}      -- frame → {x, y}
-local level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
-local ghostFilePath = "/home/ghosts/" .. level .. ".csv"
+local level = nil
+local ghostFilePath = nil
 
 -- ------------------------------
 -- Reads CSV file into ghostData
@@ -39,5 +39,7 @@ function onPaint()
 end
 
 function onStartup()
+   level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
+   ghostFilePath = "/home/ghosts/" .. level .. ".csv"
    loadGhost()
 end

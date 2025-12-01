@@ -12,8 +12,8 @@ local done = false
 local triggered = false
 local need_unpause = false
 
-local level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
-local ghostFilePath = "/home/ghosts/" .. level .. ".csv"
+local level = nil
+local ghostFilePath = nil
 local memy=""
 local levels = dofile("/home/lua/levels.lua")
 local dbg = true
@@ -104,6 +104,8 @@ function onStartup()
     -- Request an unpause on first frame if needed
     need_unpause = ASSUME_STARTS_PAUSED
 
+   level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
+   ghostFilePath = "/home/ghosts/" .. level .. ".csv"
    loadGhost()
 end
 
