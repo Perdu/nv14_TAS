@@ -60,7 +60,7 @@ function onPaint()
         local x = math.floor(p.x + 0.5)
         local y = math.floor(p.y + 0.5)
 
-        gui.ellipse(p.x - 1, p.y - 1, 1, 1, 1, 0xffffff00) -- yellow dot
+        gui.ellipse(p.x, p.y, 1, 1, 1, 0xffffff00) -- yellow dot
     end
 
     -- Optional: display ghost coords at current frame
