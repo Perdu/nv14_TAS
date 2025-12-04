@@ -4,6 +4,7 @@
 -- and permanently disables itself *per game session*.
 
 local KEY_SPACE = 0x020        -- X11 keysym for Space
+-- local KEY_S = 0x073            -- X11 keysym for s
 local SAVE_SLOT = 1             -- Save slot number (1–10)
 local ASSUME_STARTS_PAUSED = true  -- Set to false if your game starts unpaused
 
@@ -23,6 +24,8 @@ local display_ghost = true
 local ghostData = {}      -- frame → {x, y}
 local space_frame = -100
 local pos_found = false
+local max_x = 0
+local max_y = 0
 
 -- Convert r,g,b to 0xAARRGGBB color
 local function rgb(r,g,b,a)
@@ -92,6 +95,10 @@ function onPaint()
       gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
       gui.text(610, 580, string.format("%f ; %f", ghost.x, ghost.y))
    end
+
+   if max_x > 0 and max_y > 0 then
+      gui.ellipse(max_x, max_y, 10, 10)
+   end
 end
 
 -- This runs each time the game (process) starts.
@@ -111,10 +118,20 @@ end
 
 -- Detect Space key press
 function onInput()
-    if done then return end
+    if input.getKey(KEY_SPACE) ~= 0 and memy ~= "" then
+       print("Position saved")
+       local y_num = tonumber(memy, 16)
+       local y = memory.readd(y_num)
+       local x_num = y_num - 56
+       local x = memory.readd(x_num)
+       max_x = x
+       max_y = y
+    end
 
-    if input.getKey(KEY_SPACE) ~= 0 then
-        triggered = true
+    if not done then
+       if input.getKey(KEY_SPACE) ~= 0 then
+          triggered = true
+       end
     end
 end
 
