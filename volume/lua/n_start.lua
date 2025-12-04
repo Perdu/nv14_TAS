@@ -20,12 +20,26 @@ local levels = dofile("/home/lua/levels.lua")
 local dbg = true
 local display_hitboxes = true
 local display_ghost = true
+local display_current_path = true
 
 local ghostData = {}      -- frame → {x, y}
 local space_frame = -100
 local pos_found = false
 local max_x = 0
 local max_y = 0
+
+local path = {}
+local knownFrames = {}   -- sorted list of frames already stored
+
+
+-- Insert or update path at a specific frame
+local function recordFrame(frame, x, y)
+    if not path[frame] then
+        table.insert(knownFrames, frame)
+        table.sort(knownFrames)
+    end
+    path[frame] = {x = x, y = y}
+end
 
 -- Convert r,g,b to 0xAARRGGBB color
 local function rgb(r,g,b,a)
@@ -74,11 +88,13 @@ local function loadGhost()
 end
 
 function onPaint()
+   local x = -1
+   local y = -1
    if memy ~= "" then
       local y_num = tonumber(memy, 16)
-      local y = memory.readd(y_num)
+      y = memory.readd(y_num)
       local x_num = y_num - 56
-      local x = memory.readd(x_num)
+      x = memory.readd(x_num)
       if display_hitboxes then
          gui.ellipse(x, y, 10, 10)
       end
@@ -99,6 +115,22 @@ function onPaint()
    if max_x > 0 and max_y > 0 then
       gui.ellipse(max_x, max_y, 10, 10)
    end
+
+   if display_current_path then
+      -- Draw line segments between consecutive stored frames
+      for i = 1, #knownFrames do
+         local fA = knownFrames[i]
+
+         if fA > f then break end   -- Do not go beyond current frame
+
+         local a = path[fA]
+
+         gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffffff) -- purple-yellow dot
+      end
+      if x ~= -1 then
+         gui.ellipse(x, y, 1, 1, 1, 0xffffffff) -- purple-yellow dot
+      end
+   end
 end
 
 -- This runs each time the game (process) starts.
@@ -114,6 +146,9 @@ function onStartup()
    level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
    ghostFilePath = "/home/ghosts/" .. level .. ".csv"
    loadGhost()
+
+    path = {}
+    knownFrames = {}
 end
 
 -- Detect Space key press
@@ -126,6 +161,15 @@ function onInput()
        local x = memory.readd(x_num)
        max_x = x
        max_y = y
+    end
+
+    if display_current_path and memy ~= "" then
+       local f = movie.currentFrame()
+       local y_num = tonumber(memy, 16)
+       local y = memory.readd(y_num)
+       local x_num = y_num - 56
+       local x = memory.readd(x_num)
+       recordFrame(f, x, y)
     end
 
     if not done then
