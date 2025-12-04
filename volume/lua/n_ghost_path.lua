@@ -1,7 +1,7 @@
 -- AI-generated
 -- ==============================
 -- Ghost path display for libTAS
--- Reads CSV and draws full ghost path
+-- Full line always, dots up to current frame
 -- ==============================
 
 local ghostData = {}      -- frame → {x, y}
@@ -29,26 +29,41 @@ local function loadGhost()
     end
 
     file:close()
-
     table.sort(sortedFrames)
 
     print("Ghost loaded: " .. tostring(#sortedFrames) .. " frames")
 end
 
 -- ------------------------------
--- Draw full ghost path (no limits)
+-- Draw full path always, dots only up to current frame
 -- ------------------------------
 function onPaint()
-    -- Draw ALL line segments, ignoring current frame
+    local f = movie.currentFrame()
+
+    -- ---- Full line always ----
     for i = 1, #sortedFrames - 1 do
         local a = ghostData[sortedFrames[i]]
         local b = ghostData[sortedFrames[i+1]]
-
-        gui.line(a.x, a.y, b.x, b.y, 0xffff00ff) -- yellow-magenta line
+        gui.line(a.x, a.y, b.x, b.y, 0xffff00ff)
     end
 
-    -- Optional: display exact ghost coords at current frame
-    local f = movie.currentFrame()
+    -- ---- Dots only up to CURRENT frame ----
+    for i = 1, #sortedFrames do
+        local frame = sortedFrames[i]
+        if frame > f then
+            break   -- stop once we pass current frame
+        end
+
+        local p = ghostData[frame]
+
+        -- round to nearest pixel (required for gui.pixel)
+        local x = math.floor(p.x + 0.5)
+        local y = math.floor(p.y + 0.5)
+
+        gui.ellipse(p.x - 1, p.y - 1, 1, 1, 1, 0xffffff00) -- yellow dot
+    end
+
+    -- Optional: display ghost coords at current frame
     local ghost = ghostData[f]
     if ghost then
         gui.text(610, 580, string.format("%f ; %f", ghost.x, ghost.y))
