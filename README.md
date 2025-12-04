@@ -32,9 +32,11 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
 
 ## Todo
-- Figure out how speed works and extract it
+- Figure out how speed works and extract it. Would be great to display it as speed vectors
+- Fix script finding x;y pos + ghost script for the cases in which the player is not falling on frame 1
 - extract all ghost information automatically
-- Would be great to display speed vectors
+- Display J L R info for ghosts. Also for previous and next 10 frames
+- Have a command to draw current hitbox permanently (possibly all former frames leading to this as well in a similar command)
 - TAS the remaining 416 levels ;)
 
 ## Optimization level
