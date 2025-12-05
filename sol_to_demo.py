@@ -198,7 +198,7 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
     # --- Write back to file ---
     with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
         f.write("\n".join(result_lines) + "\n")
-    print(f"Updated {DEMO_DATA_FILE}")
+    # print(f"Updated {DEMO_DATA_FILE}")
 
 def print_to_tmp(demo_full, episode, level):
     with open(f"/tmp/{episode}-{level}.txt", 'w', encoding='utf-8') as f:
