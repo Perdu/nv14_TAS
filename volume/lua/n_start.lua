@@ -30,7 +30,7 @@ local max_y = 0
 
 local path = {}
 local knownFrames = {}   -- sorted list of frames already stored
-
+local bestPath = {}
 
 -- Insert or update path at a specific frame
 local function recordFrame(frame, x, y)
@@ -114,6 +114,11 @@ function onPaint()
 
    if max_x > 0 and max_y > 0 then
       gui.ellipse(max_x, max_y, 10, 10, 1, 0xffffff00)
+      -- draw position of best path
+      local a = bestPath[f]
+      if a then
+         gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffff00)
+      end
    end
 
    if display_current_path then
@@ -148,6 +153,7 @@ function onStartup()
    loadGhost()
 
     path = {}
+    bestPath = {}
     knownFrames = {}
 end
 
@@ -164,6 +170,10 @@ function onInput()
        input.setKey(KEY_SPACE, 0)
        if movie.getMarker() ~= "" then
           movie.setMarker("best")
+       end
+       -- copy path into bestPath
+       for frame, pos in pairs(path) do
+          bestPath[frame] = { x = pos.x, y = pos.y }
        end
     end
 
