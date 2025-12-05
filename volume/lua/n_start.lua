@@ -161,6 +161,10 @@ function onInput()
        local x = memory.readd(x_num)
        max_x = x
        max_y = y
+       input.setKey(KEY_SPACE, 0)
+       if movie.getMarker() ~= "" then
+          movie.setMarker("best")
+       end
     end
 
     if display_current_path and memy ~= "" then
