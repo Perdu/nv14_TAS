@@ -159,7 +159,7 @@ end
 
 -- Detect Space key press
 function onInput()
-    if input.getKey(KEY_SPACE) ~= 0 and memy ~= "" then
+    if input.getKey(KEY_SPACE) ~= 0 and memy ~= "" and not triggered then
        print("Position saved")
        local y_num = tonumber(memy, 16)
        local y = memory.readd(y_num)
