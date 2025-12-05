@@ -113,7 +113,7 @@ function onPaint()
    end
 
    if max_x > 0 and max_y > 0 then
-      gui.ellipse(max_x, max_y, 10, 10)
+      gui.ellipse(max_x, max_y, 10, 10, 1, 0xffffff00)
    end
 
    if display_current_path then
