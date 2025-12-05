@@ -126,7 +126,7 @@ function onPaint()
       for i = 1, #knownFrames do
          local fA = knownFrames[i]
 
-         if fA > f then break end   -- Do not go beyond current frame
+         if fA >= f then break end   -- Do not go beyond current frame
 
          local a = path[fA]
 
