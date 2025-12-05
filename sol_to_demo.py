@@ -173,7 +173,7 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
             level_data = data[level_id]
         else:
             level_data = {}
-        level_data[score_type] = {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo}
+        level_data[score_type] = {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo, 'optimization_level': 2}
         data[level_id] = level_data
 
     data = {k: data[k] for k in sorted(data.keys())}
