@@ -144,16 +144,9 @@ function onFrame()
       end
    end
 
-   if f == movie.frameCount() then
-      -- libTAS automatically stop there, but we need one more frame
-      runtime.playPause()
-   end
-
    -- close ghost file at the end of the movie
-   -- still keep a bit more frames as it's usually cut beforehand
-   if f > movie.frameCount() + 3 then
+   if f >= movie.frameCount() then
       ghostFile:close()
-      runtime.playPause()
       print("Closed ghost file.")
    end
 end
