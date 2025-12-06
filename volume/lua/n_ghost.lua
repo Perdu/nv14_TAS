@@ -7,6 +7,9 @@
 local ghostData = {}      -- frame → {x, y}
 local level = nil
 local ghostFilePath = nil
+local space_frame = -100
+
+local KEY_SPACE = 0x020        -- X11 keysym for Space
 
 -- ------------------------------
 -- Reads CSV file into ghostData
@@ -31,15 +34,26 @@ end
 
 function onPaint()
    local f = movie.currentFrame()
-   local ghost = ghostData[f]
-   if ghost then
-      gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
-      gui.text(610, 580, string.format("%f ; %f", ghost.x, ghost.y))
+   if triggered then
+      local ghost = ghostData[f - space_frame]
+      if ghost then
+         gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
+         gui.text(610, 580, string.format("%f ; %f", ghost.x, ghost.y))
+      end
    end
+end
+
+function onFrame()
+    if not triggered and input.getKey(KEY_SPACE) ~= 0 then
+       space_frame = movie.currentFrame()
+       triggered = true
+    end
 end
 
 function onStartup()
    level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
    ghostFilePath = "/home/ghosts/" .. level .. ".csv"
    loadGhost()
+   space_frame = -100
+   triggered = false
 end
