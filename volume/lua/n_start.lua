@@ -106,7 +106,7 @@ function onPaint()
    end
 
    local f = movie.currentFrame()
-   local ghost = ghostData[f]
+   local ghost = ghostData[f - space_frame]
    if ghost and display_ghost then
       gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
       gui.text(610, 580, string.format("%f ; %f", ghost.x, ghost.y))

@@ -131,7 +131,7 @@ function onFrame()
             local x_num = y_num - 56
             local x = memory.readd(x_num)
             print(string.format("%d,%f,%f", f, x, y))
-            ghostFile:write(string.format("%d,%f,%f\n", f, x, y))
+            ghostFile:write(string.format("%d,%f,%f\n", f - space_frame, x, y))
          end
       end
    end
