@@ -77,9 +77,15 @@ local function loadGhost()
     end
 
     for line in file:lines() do
-        local frame, x, y = line:match("(%d+),([^,]+),([^,]+)")
+        local frame, x, y, shift, left, right = line:match("(%d+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+)")
         if frame and x and y then
-            ghostData[tonumber(frame)] = { x = tonumber(x), y = tonumber(y) }
+           ghostData[tonumber(frame)] = {
+              x = tonumber(x),
+              y = tonumber(y),
+              shift = tonumber(shift),
+              left = tonumber(left),
+              right = tonumber(right)
+           }
         end
     end
 
@@ -109,7 +115,29 @@ function onPaint()
    local ghost = ghostData[f - space_frame]
    if ghost and display_ghost then
       gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
-      gui.text(610, 580, string.format("%f ; %f", ghost.x, ghost.y))
+      gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y))
+
+      if ghost.shift == 1 then
+         color = 0xffffffff
+      else
+         color = 0xff000000
+      end
+      gui.text(760, 580, "J", color)
+
+      if ghost.left == 1 then
+         color = 0xffffffff
+      else
+         color = 0xff000000
+      end
+      gui.text(770, 580, "<", color)
+
+      if ghost.right == 1 then
+         color = 0xffffffff
+      else
+         color = 0xff000000
+      end
+      gui.text(780, 580, ">", color)
+
    end
 
    if max_x > 0 and max_y > 0 then
