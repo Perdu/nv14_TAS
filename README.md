@@ -40,6 +40,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - Display J L R info for ghosts. Also for previous and next 10 frames
 - Distance from ghost, with a graph across time? Not sure if actually useful
 - Sort Readme into several files for better readability
+- automatically update README with current progress/stats
 - TAS the remaining 416 levels ;)
 
 ## Optimization level
