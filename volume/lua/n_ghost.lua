@@ -53,6 +53,7 @@ function onPaint()
             color = 0xff000000
          end
          gui.text(760, 580, "J", color)
+         gui.text(ghost.x - 14, ghost.y + 13, "J", color)
 
          if ghost.left == 1 then
             color = 0xffffffff
@@ -60,6 +61,7 @@ function onPaint()
             color = 0xff000000
          end
          gui.text(770, 580, "<", color)
+         gui.text(ghost.x - 4, ghost.y + 13, "<", color)
 
          if ghost.right == 1 then
             color = 0xffffffff
@@ -67,6 +69,7 @@ function onPaint()
             color = 0xff000000
          end
          gui.text(780, 580, ">", color)
+         gui.text(ghost.x + 6, ghost.y + 13, ">", color)
       end
    end
 end
