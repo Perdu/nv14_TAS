@@ -112,34 +112,36 @@ function onPaint()
    end
 
    local f = movie.currentFrame()
-   local ghost = ghostData[f - space_frame]
-   if ghost and display_ghost then
-      gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
-      gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y))
+   if space_frame ~= - 100 then
+      local ghost = ghostData[f - space_frame]
+      if ghost and display_ghost then
+         gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
+         gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y))
 
-      if ghost.shift == 1 then
-         color = 0xffffffff
-      else
-         color = 0xff000000
-      end
-      gui.text(760, 580, "J", color)
-      gui.text(ghost.x - 14, ghost.y + 13, "J", color)
+         if ghost.shift == 1 then
+            color = 0xffffffff
+         else
+            color = 0xff000000
+         end
+         gui.text(760, 580, "J", color)
+         gui.text(ghost.x - 14, ghost.y + 13, "J", color)
 
-      if ghost.left == 1 then
-         color = 0xffffffff
-      else
-         color = 0xff000000
-      end
-      gui.text(770, 580, "<", color)
-      gui.text(ghost.x - 4, ghost.y + 13, "<", color)
+         if ghost.left == 1 then
+            color = 0xffffffff
+         else
+            color = 0xff000000
+         end
+         gui.text(770, 580, "<", color)
+         gui.text(ghost.x - 4, ghost.y + 13, "<", color)
 
-      if ghost.right == 1 then
-         color = 0xffffffff
-      else
-         color = 0xff000000
+         if ghost.right == 1 then
+            color = 0xffffffff
+         else
+            color = 0xff000000
+         end
+         gui.text(780, 580, ">", color)
+         gui.text(ghost.x + 6, ghost.y + 13, ">", color)
       end
-      gui.text(780, 580, ">", color)
-      gui.text(ghost.x + 6, ghost.y + 13, ">", color)
    end
 
    if max_x > 0 and max_y > 0 then
@@ -174,13 +176,17 @@ function onStartup()
     done = false
     triggered = false
     pos_found = false
+    space_frame = -100
+    max_x = 0
+    max_y = 0
 
     -- Request an unpause on first frame if needed
     need_unpause = ASSUME_STARTS_PAUSED
 
-   level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
-   ghostFilePath = "/home/ghosts/" .. level .. ".csv"
-   loadGhost()
+    ghostData = {}
+    level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
+    ghostFilePath = "/home/ghosts/" .. level .. ".csv"
+    loadGhost()
 
     path = {}
     bestPath = {}
