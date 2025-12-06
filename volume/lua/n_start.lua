@@ -155,6 +155,7 @@ function onStartup()
     path = {}
     bestPath = {}
     knownFrames = {}
+    memy = ""
 end
 
 -- Detect Space key press
