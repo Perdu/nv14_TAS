@@ -37,7 +37,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - Figure out how speed works and extract it. Would be great to display it as speed vectors
 - Fix script finding x;y pos + ghost script for the cases in which the player is not falling on frame 1
 - extract all ghost information automatically
-- Display J L R info for ghosts. Also for previous and next 10 frames
 - Distance from ghost, with a graph across time? Not sure if actually useful
 - Sort Readme into several files for better readability
 - automatically update README with current progress/stats

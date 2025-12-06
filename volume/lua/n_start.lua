@@ -93,6 +93,60 @@ local function loadGhost()
     print("Ghost loaded: " .. tostring(#ghostData) .. " frames")
 end
 
+function display_ghost_history(ghost, f)
+   -- vertical offset for listing
+   local baseY = 150
+   local lineH = 14
+   local rel = f - space_frame
+   local fontsize = 14
+   local ghost_hist_x = 771
+   -- ---- PREVIOUS 10 FRAMES ----
+   for i = 10, 1, -1 do
+      local gf = ghostData[rel - i]
+      if gf then
+         local y = baseY + (10 - i) * lineH
+         color = (gf.shift == 1) and 0xff8888ff or 0xff000000
+         gui.text(ghost_hist_x, y, "J", color, 0, 0, fontsize)
+
+         color = (gf.left == 1) and 0xff8888ff or 0xff000000
+         gui.text(ghost_hist_x + 8, y, "<", color, 0, 0, fontsize)
+
+         color = (gf.right == 1) and 0xff8888ff or 0xff000000
+         gui.text(ghost_hist_x + 15, y, ">", color, 0, 0, fontsize)
+      end
+   end
+   -- ---- CURRENT FRAME ----
+   local gf = ghostData[rel]
+   if gf then
+      local y = baseY + 11 * lineH
+      color = (gf.shift == 1) and 0xffffffff or 0xff000000
+      gui.text(ghost_hist_x, y, "J", color, 0, 0, fontsize)
+
+      color = (gf.left == 1) and 0xffffffff or 0xff000000
+      gui.text(ghost_hist_x + 8, y, "<", color, 0, 0, fontsize)
+
+      color = (gf.right == 1) and 0xffffffff or 0xff000000
+      gui.text(ghost_hist_x + 15, y, ">", color, 0, 0, fontsize)
+   end
+   -- ---- NEXT 10 FRAMES ----
+   for i = 1, 10 do
+      local gf = ghostData[rel + i]
+      if gf then
+         local y = baseY + (11 + i + 1) * lineH
+         color = (gf.shift == 1) and 0xff88ff88 or 0xff000000
+         gui.text(ghost_hist_x, y, "J", color, 0, 0, fontsize)
+
+         color = (gf.left == 1) and 0xff88ff88 or 0xff000000
+         gui.text(ghost_hist_x + 8, y, "<", color, 0, 0, fontsize)
+
+         color = (gf.right == 1) and 0xff88ff88 or 0xff000000
+         gui.text(ghost_hist_x + 15, y, ">", color, 0, 0, fontsize)
+
+         -- gui.text(600, y, str, 0xff88ff88)  -- light green for future
+      end
+   end
+end
+
 function onPaint()
    local x = -1
    local y = -1
@@ -114,34 +168,24 @@ function onPaint()
    local f = movie.currentFrame()
    if space_frame ~= - 100 then
       local ghost = ghostData[f - space_frame]
-      if ghost and display_ghost then
+      if ghost then
          gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
          gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y))
 
-         if ghost.shift == 1 then
-            color = 0xffffffff
-         else
-            color = 0xff000000
-         end
-         gui.text(760, 580, "J", color)
+         color = (ghost.shift == 1) and 0xffffffff or 0xff000000
+         -- gui.text(760, 580, "J", color)
          gui.text(ghost.x - 14, ghost.y + 13, "J", color)
 
-         if ghost.left == 1 then
-            color = 0xffffffff
-         else
-            color = 0xff000000
-         end
-         gui.text(770, 580, "<", color)
+         color = (ghost.left == 1) and 0xffffffff or 0xff000000
+         -- gui.text(770, 580, "<", color)
          gui.text(ghost.x - 4, ghost.y + 13, "<", color)
 
-         if ghost.right == 1 then
-            color = 0xffffffff
-         else
-            color = 0xff000000
-         end
-         gui.text(780, 580, ">", color)
+         color = (ghost.right == 1) and 0xffffffff or 0xff000000
+         -- gui.text(780, 580, ">", color)
          gui.text(ghost.x + 6, ghost.y + 13, ">", color)
       end
+
+      display_ghost_history(ghost, f)
    end
 
    if max_x > 0 and max_y > 0 then
