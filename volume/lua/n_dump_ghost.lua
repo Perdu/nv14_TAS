@@ -4,6 +4,9 @@
 -- and permanently disables itself *per game session*.
 
 local KEY_SPACE = 0x020        -- X11 keysym for Space
+local KEY_LEFT  = 0xff51   -- XK_Left
+local KEY_RIGHT = 0xff53   -- XK_Right
+local KEY_SHIFT = 0xffe1   -- XK_Shift_L (or 0xffe2 for right shift)
 local SAVE_SLOT = 1             -- Save slot number (1–10)
 local ASSUME_STARTS_PAUSED = true  -- Set to false if your game starts unpaused
 
@@ -130,8 +133,13 @@ function onFrame()
             local y = memory.readd(y_num)
             local x_num = y_num - 56
             local x = memory.readd(x_num)
-            print(string.format("%d,%f,%f", f, x, y))
-            ghostFile:write(string.format("%d,%f,%f\n", f - space_frame, x, y))
+            -- read keys
+            local shift = (input.getKey(KEY_SHIFT) ~= 0) and 1 or 0
+            local left  = (input.getKey(KEY_LEFT)  ~= 0) and 1 or 0
+            local right = (input.getKey(KEY_RIGHT) ~= 0) and 1 or 0
+
+            print(string.format("%d,%f,%f,%d,%d,%d", f, x, y, shift, left, right))
+            ghostFile:write(string.format("%d,%f,%f,%d,%d,%d\n", f - space_frame, x, y, shift, left, right))
          end
       end
    end
