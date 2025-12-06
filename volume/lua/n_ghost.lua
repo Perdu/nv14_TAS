@@ -8,6 +8,7 @@ local ghostData = {}      -- frame → {x, y}
 local level = nil
 local ghostFilePath = nil
 local space_frame = -100
+local triggered = false
 
 local KEY_SPACE = 0x020        -- X11 keysym for Space
 
