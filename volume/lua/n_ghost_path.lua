@@ -8,6 +8,10 @@ local ghostData = {}      -- frame → {x, y}
 local level = nil
 local ghostFilePath = nil
 local sortedFrames = {}   -- ordered list of frame numbers
+local space_frame = -100
+local triggered = false
+
+local KEY_SPACE = 0x020        -- X11 keysym for Space
 
 -- ------------------------------
 -- Reads CSV file into ghostData
@@ -48,25 +52,35 @@ function onPaint()
     end
 
     -- ---- Dots only up to CURRENT frame ----
-    for i = 1, #sortedFrames do
-        local frame = sortedFrames[i]
-        if frame > f then
-            break   -- stop once we pass current frame
-        end
+    if triggered then
+--       for i = 1, #sortedFrames do
+--          local frame = sortedFrames[i]
+--          if frame > f then
+--             break   -- stop once we pass current frame
+--          end
+--
+--          local p = ghostData[frame - space_frame]
+--
+--          -- round to nearest pixel (required for gui.pixel)
+--          local x = math.floor(p.x + 0.5)
+--          local y = math.floor(p.y + 0.5)
+--
+--          gui.ellipse(p.x, p.y, 1, 1, 1, 0xffffff00) -- yellow dot
+--       end
 
-        local p = ghostData[frame]
-
-        -- round to nearest pixel (required for gui.pixel)
-        local x = math.floor(p.x + 0.5)
-        local y = math.floor(p.y + 0.5)
-
-        gui.ellipse(p.x, p.y, 1, 1, 1, 0xffffff00) -- yellow dot
+       -- Optional: display ghost coords at current frame
+       local ghost = ghostData[f - space_frame]
+       if ghost then
+          gui.text(610, 580, string.format("%f ; %f", ghost.x, ghost.y))
+          gui.ellipse(ghost.x, ghost.y, 1, 1, 1, 0xffffff00) -- yellow dot
+       end
     end
+end
 
-    -- Optional: display ghost coords at current frame
-    local ghost = ghostData[f]
-    if ghost then
-        gui.text(610, 580, string.format("%f ; %f", ghost.x, ghost.y))
+function onFrame()
+    if not triggered and input.getKey(KEY_SPACE) ~= 0 then
+       space_frame = movie.currentFrame()
+       triggered = true
     end
 end
 
@@ -77,4 +91,6 @@ function onStartup()
     level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
     ghostFilePath = "/home/ghosts/" .. level .. ".csv"
     loadGhost()
+    space_frame = -100
+    triggered = false
 end
