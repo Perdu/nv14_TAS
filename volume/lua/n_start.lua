@@ -172,17 +172,15 @@ function onPaint()
          gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
          gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y))
 
-         color = (ghost.shift == 1) and 0xffffffff or 0xff000000
-         -- gui.text(760, 580, "J", color)
-         gui.text(ghost.x - 14, ghost.y + 13, "J", color)
-
-         color = (ghost.left == 1) and 0xffffffff or 0xff000000
-         -- gui.text(770, 580, "<", color)
-         gui.text(ghost.x - 4, ghost.y + 13, "<", color)
-
-         color = (ghost.right == 1) and 0xffffffff or 0xff000000
-         -- gui.text(780, 580, ">", color)
-         gui.text(ghost.x + 6, ghost.y + 13, ">", color)
+         if ghost.shift == 1 then
+            gui.text(ghost.x - 14, ghost.y + 13, "J", 0xffffffff)
+         end
+         if ghost.left == 1 then
+            gui.text(ghost.x - 4, ghost.y + 13, "<", 0xffffffff)
+         end
+         if ghost.right == 1 then
+            gui.text(ghost.x + 6, ghost.y + 13, ">", 0xffffffff)
+         end
       end
 
       display_ghost_history(ghost, f)
