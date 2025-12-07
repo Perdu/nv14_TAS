@@ -170,7 +170,7 @@ function onPaint()
       local ghost = ghostData[f - space_frame]
       if ghost then
          gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
-         gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y))
+         gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff)
 
          if ghost.shift == 1 then
             gui.text(ghost.x - 14, ghost.y + 13, "J", 0xffffffff)

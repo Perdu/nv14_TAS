@@ -102,7 +102,7 @@ function onPaint()
          gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
 
          if display_position then
-            gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y))
+            gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff)
          end
 
          if display_inputs then
