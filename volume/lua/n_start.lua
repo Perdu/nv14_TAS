@@ -16,6 +16,7 @@ local need_unpause = false
 local level = nil
 local ghostFilePath = nil
 local memy=""
+local memspeed_y=""
 local levels = dofile("/home/lua/levels.lua")
 local dbg = true
 local display_hitboxes = true
@@ -24,7 +25,7 @@ local display_current_path = true
 
 local ghostData = {}      -- frame → {x, y}
 local space_frame = -100
-local pos_found = false
+local ramsearch_done = false
 local max_x = 0
 local max_y = 0
 
@@ -167,6 +168,38 @@ function display_ghost_history(ghost, f)
    end
 end
 
+function draw_velocity_arrows(x, y, vx, vy)
+    -- scale speed so arrows stay readable
+    local scale = 4     -- adjust if arrows feel too long/short
+
+    -- horizontal arrow
+    local hx = x + vx * scale
+    gui.line(x, y, hx, y, 0xff00ffff) -- cyan
+
+    -- small arrowhead for horizontal
+    if vx ~= 0 then
+        local dir = (vx > 0) and 1 or -1
+        gui.line(hx, y, hx - 4 * dir, y - 3, 0xff00ffff)
+        gui.line(hx, y, hx - 4 * dir, y + 3, 0xff00ffff)
+    end
+
+    -- vertical arrow
+    local vy_scaled = vy * scale
+    local hy = y + vy_scaled
+    gui.line(x, y, x, hy, 0xffffff00) -- yellow
+
+    -- arrowhead for vertical
+    if vy ~= 0 then
+        local dir = (vy > 0) and 1 or -1
+        gui.line(x, hy, x - 3, hy - 4 * dir, 0xffffff00)
+        gui.line(x, hy, x + 3, hy - 4 * dir, 0xffffff00)
+    end
+
+    -- Optional: draw numeric values
+    gui.text(x + 15, y - 20, string.format("vx: %f", vx), 0xff00ffff)
+    gui.text(x + 15, y - 8,  string.format("vy: %f", vy), 0xffffff00)
+end
+
 function onPaint()
    local x = -1
    local y = -1
@@ -182,6 +215,15 @@ function onPaint()
       if door_x and door_y then
          display_distance_to_door(x, y, door_x, door_y)
       end
+   end
+
+   if memspeed_y ~= "" then
+      local y_num = tonumber(memspeed_y, 16)
+      local vy = memory.readd(y_num)
+      local x_num = y_num - 56
+      local vx = memory.readd(x_num)
+      -- gui.text(350, 580, string.format("%f ; %f", vx, vy))
+      draw_velocity_arrows(260, 570, vx, vy)
    end
 
    if display_hitboxes then
@@ -247,7 +289,7 @@ function onStartup()
     -- Reset session variables (important when restarting the game)
     done = false
     triggered = false
-    pos_found = false
+    ramsearch_done = false
     space_frame = -100
     max_x = 0
     max_y = 0
@@ -264,6 +306,7 @@ function onStartup()
     bestPath = {}
     knownFrames = {}
     memy = ""
+    memspeed_y = ""
     door_x = nil
     door_y = nil
 end
@@ -329,7 +372,7 @@ function onFrame()
         triggered = false
     end
 
-   if not pos_found then
+   if not ramsearch_done then
       local f = movie.currentFrame()
       if f == space_frame + 1 then
          local i = ramsearch.search()
@@ -359,9 +402,32 @@ function onFrame()
                end
             end
          end
-         pos_found = true
-         runtime.loadState(SAVE_SLOT)
-         runtime.playPause()
+         -- And now, speed
+         i = ramsearch.newsearch(9, 0, 1, 0.14, ">")
+         if dbg then
+            print(string.format("nb_results newsearch speed: %d", i))
+         end
+         i = ramsearch.search(1, 0.16, "<")
+         if dbg then
+            print(string.format("nb_results search speed 2: %d", i))
+         end
+      elseif f == space_frame + 3 then
+         local i = ramsearch.search(1, 0.29, ">")
+         if dbg then
+            print(string.format("nb_results search speed 3: %d", i))
+         end
+         i = ramsearch.search(1, 0.30, "<")
+         if dbg then
+            print(string.format("nb_results search speed 4: %d", i))
+         end
+         if i == 1 then
+            memspeed_y = ramsearch.get_address(0)
+            print(memspeed_y)
+         else
+            ramsearch_done = true
+            runtime.loadState(SAVE_SLOT)
+            runtime.playPause()
+         end
       end
    end
 end
