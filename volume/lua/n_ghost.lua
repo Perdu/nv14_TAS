@@ -9,6 +9,9 @@ local level = nil
 local ghostFilePath = nil
 local space_frame = -100
 local triggered = false
+local display_history = false
+local display_inputs = false
+local display_position = false
 
 local KEY_SPACE = 0x020        -- X11 keysym for Space
 
@@ -97,22 +100,29 @@ function onPaint()
       local ghost = ghostData[f - space_frame]
       if ghost then
          gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
-         gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y))
 
-         color = (ghost.shift == 1) and 0xffffffff or 0xff000000
-         -- gui.text(760, 580, "J", color)
-         gui.text(ghost.x - 14, ghost.y + 13, "J", color)
+         if display_position then
+            gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y))
+         end
 
-         color = (ghost.left == 1) and 0xffffffff or 0xff000000
-         -- gui.text(770, 580, "<", color)
-         gui.text(ghost.x - 4, ghost.y + 13, "<", color)
+         if display_inputs then
+            color = (ghost.shift == 1) and 0xffffffff or 0xff000000
+            -- gui.text(760, 580, "J", color)
+            gui.text(ghost.x - 14, ghost.y + 13, "J", color)
 
-         color = (ghost.right == 1) and 0xffffffff or 0xff000000
-         -- gui.text(780, 580, ">", color)
-         gui.text(ghost.x + 6, ghost.y + 13, ">", color)
+            color = (ghost.left == 1) and 0xffffffff or 0xff000000
+            -- gui.text(770, 580, "<", color)
+            gui.text(ghost.x - 4, ghost.y + 13, "<", color)
+
+            color = (ghost.right == 1) and 0xffffffff or 0xff000000
+            -- gui.text(780, 580, ">", color)
+            gui.text(ghost.x + 6, ghost.y + 13, ">", color)
+         end
       end
 
-      display_ghost_history(ghost, f)
+      if display_history then
+         display_ghost_history(ghost, f)
+      end
    end
 end
 
