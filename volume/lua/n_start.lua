@@ -170,7 +170,13 @@ function onPaint()
       local ghost = ghostData[f - space_frame]
       if ghost then
          gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
-         gui.text(150, 575, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff, 0, 0, 15)
+         local ghost_text_position = 150
+         local best_path_exists = bestPath[f]
+         if best_path_exists then
+            -- move ghost text to the left to display best path instead
+            ghost_text_position = 320
+         end
+         gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff, 0, 0, 15)
 
          if ghost.shift == 1 then
             gui.text(ghost.x - 14, ghost.y + 13, "J", 0xffffffff)
@@ -192,7 +198,7 @@ function onPaint()
       local a = bestPath[f]
       if a then
          gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffff00)
-         gui.text(320, 580, string.format("%f ; %f", a.x, a.y), 0xffffff00)
+         gui.text(150, 575, string.format("%f ; %f", a.x, a.y), 0xffffff00, 0, 0, 15)
       end
    end
 
