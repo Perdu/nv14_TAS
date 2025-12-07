@@ -158,7 +158,7 @@ function onPaint()
       if display_hitboxes then
          gui.ellipse(x, y, 10, 10)
       end
-      gui.text(150, 580, string.format("%f ; %f", x, y))
+      gui.text(150, 587, string.format("%f ; %f", x, y), 0xffffffff, 0, 0, 15)
    end
 
    if display_hitboxes then
@@ -170,7 +170,7 @@ function onPaint()
       local ghost = ghostData[f - space_frame]
       if ghost then
          gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
-         gui.text(590, 580, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff)
+         gui.text(150, 575, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff, 0, 0, 15)
 
          if ghost.shift == 1 then
             gui.text(ghost.x - 14, ghost.y + 13, "J", 0xffffffff)
