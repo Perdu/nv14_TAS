@@ -31,6 +31,8 @@ local max_y = 0
 local path = {}
 local knownFrames = {}   -- sorted list of frames already stored
 local bestPath = {}
+local door_x = nil
+local door_y = nil
 
 -- Insert or update path at a specific frame
 local function recordFrame(frame, x, y)
@@ -54,12 +56,30 @@ function drawList(list, size, r, g, b)
    end
 end
 
+function display_distance_to_door(x, y, door_x, door_y)
+   local dx = x - door_x
+   local dy = y - door_y
+
+   -- distance between the centers
+   local center_dist = math.sqrt(dx*dx + dy*dy)
+
+   -- subtract radii (player=10, door=12)
+   local edge_dist = center_dist - (10 + 12)
+
+    if edge_dist > 0 and edge_dist < 50 then
+       -- draw the value on screen
+       gui.text(door_x - 20, door_y + 10, string.format("%.2f", edge_dist), 0xffffff00)
+    end
+end
+
 function draw_hitboxes()
       local data = levels[level]
       if not data then return end
 
       gui.ellipse(data.door_x, data.door_y, 12, 12)
       gui.ellipse(data.doorswitch_x, data.doorswitch_y, 6, 6)
+      door_x = data.door_x
+      door_y = data.door_y
 
       drawList(data.mines, 4, 255, 0, 0)         -- red mines
       -- drawList(data.drones, 9, 0, 0, 255)
@@ -159,6 +179,9 @@ function onPaint()
          gui.ellipse(x, y, 10, 10)
       end
       gui.text(150, 587, string.format("%f ; %f", x, y), 0xffffffff, 0, 0, 15)
+      if door_x and door_y then
+         display_distance_to_door(x, y, door_x, door_y)
+      end
    end
 
    if display_hitboxes then
@@ -241,6 +264,8 @@ function onStartup()
     bestPath = {}
     knownFrames = {}
     memy = ""
+    door_x = nil
+    door_y = nil
 end
 
 -- Detect Space key press
