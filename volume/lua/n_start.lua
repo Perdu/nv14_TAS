@@ -171,33 +171,35 @@ end
 function draw_velocity_arrows(x, y, vx, vy)
     -- scale speed so arrows stay readable
     local scale = 4     -- adjust if arrows feel too long/short
+    local vertical_color = 0x88ff0000
+    local horizontal_color = 0x880000ff
 
     -- horizontal arrow
     local hx = x + vx * scale
-    gui.line(x, y, hx, y, 0xff00ffff) -- cyan
+    gui.line(x, y, hx, y, horizontal_color)
 
     -- small arrowhead for horizontal
     if vx ~= 0 then
         local dir = (vx > 0) and 1 or -1
-        gui.line(hx, y, hx - 4 * dir, y - 3, 0xff00ffff)
-        gui.line(hx, y, hx - 4 * dir, y + 3, 0xff00ffff)
+        gui.line(hx, y, hx - 4 * dir, y - 3, horizontal_color)
+        gui.line(hx, y, hx - 4 * dir, y + 3, horizontal_color)
     end
 
     -- vertical arrow
     local vy_scaled = vy * scale
     local hy = y + vy_scaled
-    gui.line(x, y, x, hy, 0xffffff00) -- yellow
+    gui.line(x, y, x, hy, vertical_color)
 
     -- arrowhead for vertical
     if vy ~= 0 then
         local dir = (vy > 0) and 1 or -1
-        gui.line(x, hy, x - 3, hy - 4 * dir, 0xffffff00)
-        gui.line(x, hy, x + 3, hy - 4 * dir, 0xffffff00)
+        gui.line(x, hy, x - 3, hy - 4 * dir, vertical_color)
+        gui.line(x, hy, x + 3, hy - 4 * dir, vertical_color)
     end
 
     -- Optional: draw numeric values
-    gui.text(x + 15, y - 20, string.format("vx: %f", vx), 0xff00ffff)
-    gui.text(x + 15, y - 8,  string.format("vy: %f", vy), 0xffffff00)
+    gui.text(300, 575, string.format("vx: %f", vx), vertical_color, 0, 0, 15)
+    gui.text(300, 585,  string.format("vy: %f", vy), horizontal_color, 0, 0, 15)
 end
 
 function onPaint()
@@ -215,15 +217,13 @@ function onPaint()
       if door_x and door_y then
          display_distance_to_door(x, y, door_x, door_y)
       end
-   end
-
-   if memspeed_y ~= "" then
-      local y_num = tonumber(memspeed_y, 16)
-      local vy = memory.readd(y_num)
-      local x_num = y_num - 56
-      local vx = memory.readd(x_num)
-      -- gui.text(350, 580, string.format("%f ; %f", vx, vy))
-      draw_velocity_arrows(260, 570, vx, vy)
+      if memspeed_y ~= "" then
+         local y_num = tonumber(memspeed_y, 16)
+         local vy = memory.readd(y_num)
+         local x_num = y_num - 56
+         local vx = memory.readd(x_num)
+         draw_velocity_arrows(x, y, vx, vy)
+      end
    end
 
    if display_hitboxes then
