@@ -194,6 +194,7 @@ function onPaint()
       local a = bestPath[f]
       if a then
          gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffff00)
+         gui.text(320, 580, string.format("%f ; %f", a.x, a.y), 0xffffff00)
       end
    end
 
