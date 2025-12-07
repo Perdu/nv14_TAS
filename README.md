@@ -34,7 +34,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [Thread on air speed](https://forum.droni.es/viewtopic.php?f=20&t=10336&sid=569eab4beeecd814135f67b0fa574a3a)
 
 ## Todo
-- Figure out how speed works and extract it. Would be great to display it as speed vectors
 - Fix script finding x;y pos + ghost script for the cases in which the player is not falling on frame 1
 - extract all ghost information automatically
 - Distance from ghost, with a graph across time? Not sure if actually useful
