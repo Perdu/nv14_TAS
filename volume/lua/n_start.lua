@@ -419,11 +419,10 @@ function onFrame()
          if i == 1 then
             memspeed_y = ramsearch.get_address(0)
             print(string.format("memspeed_y: %s", memspeed_y))
-         else
-            ramsearch_done = true
-            runtime.loadState(SAVE_SLOT)
-            runtime.playPause()
          end
+         ramsearch_done = true
+         runtime.loadState(SAVE_SLOT)
+         runtime.playPause()
       end
    end
 end
