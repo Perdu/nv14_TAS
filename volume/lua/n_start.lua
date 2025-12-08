@@ -26,6 +26,7 @@ local display_current_path = true
 local ghostData = {}      -- frame → {x, y}
 local space_frame = -100
 local ramsearch_done = false
+local advance_one_step_after_ramsearch = 2
 local max_x = 0
 local max_y = 0
 
@@ -282,6 +283,14 @@ function onPaint()
          gui.ellipse(x, y, 1, 1, 1, 0xffffffff) -- purple-yellow dot
       end
    end
+
+   if not ramsearch_done then
+      gui.text(120, 580, "Waiting...")
+   end
+
+   -- if advance_one_step_after_ramsearch == 2 then
+   --   gui.text(120, 580, "Go!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+   -- end
 end
 
 -- This runs each time the game (process) starts.
@@ -290,6 +299,7 @@ function onStartup()
     done = false
     triggered = false
     ramsearch_done = false
+    advance_one_step_after_ramsearch = 2
     space_frame = -100
     max_x = 0
     max_y = 0
@@ -372,6 +382,13 @@ function onFrame()
         triggered = false
     end
 
+   if advance_one_step_after_ramsearch < 2 then
+      advance_one_step_after_ramsearch = advance_one_step_after_ramsearch + 1
+      if advance_one_step_after_ramsearch == 2 then
+         runtime.playPause()
+      end
+   end
+
    if not ramsearch_done then
       local f = movie.currentFrame()
       if f == space_frame + 1 then
@@ -422,7 +439,7 @@ function onFrame()
          end
          ramsearch_done = true
          runtime.loadState(SAVE_SLOT)
-         runtime.playPause()
+         advance_one_step_after_ramsearch = 0
       end
    end
 end
