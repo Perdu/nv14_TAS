@@ -370,7 +370,7 @@ function onFrame()
        space_frame = movie.currentFrame()
         runtime.saveState(SAVE_SLOT)
         if dbg then
-           print(string.format("nb_results newsearch: %f", levels[level].n_y))
+           print(string.format("Looking for player at y position %f", levels[level].n_y))
         end
         local i = ramsearch.newsearch(9, 0, 1, levels[level].n_y, "==")
         if dbg then
@@ -405,13 +405,28 @@ function onFrame()
             memy = ramsearch.get_address(j)
             print(string.format("memy: %s", memy))
          else
-            print(string.format("Error: found too many values (%d)", i))
+            -- try filtering a bit more
+            print("Too many results, we try filtering a bit more")
+            local i = ramsearch.search(1, levels[level].n_y + 5.0, "<")
             if dbg then
-               for j = 0,i-1,1
-               do
-                  local v = ramsearch.get_current_value(j)
-                  local addr = ramsearch.get_address(j)
-                  print(string.format("current value: %f @ %s", v, addr))
+               print(string.format("nb_results: %d", i))
+            end
+            local i = ramsearch.search(1, levels[level].n_y - 5.0, ">")
+            if dbg then
+               print(string.format("nb_results: %d", i))
+            end
+            if i == 1 then
+               memy = ramsearch.get_address(0)
+               print(string.format("memy: %s", memy))
+            else
+               print(string.format("Error: found too many values (%d)", i))
+               if dbg then
+                  for j = 0,i,1
+                  do
+                     local v = ramsearch.get_current_value(j)
+                     local addr = ramsearch.get_address(j)
+                     print(string.format("current value: %f @ %s", v, addr))
+                  end
                end
             end
          end
