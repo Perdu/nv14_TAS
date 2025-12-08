@@ -7,7 +7,7 @@ output_path = "volume/lua/levels.lua"
 
 # Regex patterns
 level_id_re = re.compile(r"\$(\d\d-\d)")
-ninja_re = re.compile(r"5\^(\d+),(\d+)")
+ninja_re = re.compile(r"5\^(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)")
 door_re = re.compile(r"11\^(\d+),(\d+),(\d+),(\d+)")
 mine_re = re.compile(r"12\^(\d+),(\d+)")
 drone_re = re.compile(r"6\^(\d+),(\d+)")
