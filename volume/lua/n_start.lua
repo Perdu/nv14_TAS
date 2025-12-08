@@ -378,11 +378,6 @@ function onFrame()
          local i = ramsearch.search()
          if dbg then
             print(string.format("nb_results: %d", i))
-            for j = 0,i-1,1
-            do
-               local v = ramsearch.get_current_value(j)
-               print(string.format("current value: %f", v))
-            end
          end
       elseif f == space_frame + 2 then
          local i = ramsearch.search(0, 0, "!=")
