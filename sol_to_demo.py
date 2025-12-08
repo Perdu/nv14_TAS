@@ -20,7 +20,7 @@ from converter import extract_chunks
 SOL_FILE_LOCATION = 'volume/n_tas.sol'
 DEMO_DATA_FILE = 'tas/level_data.yml'
 LEVEL_DATA_FILE = 'external/level_build_data.yml'
-
+OPTIMIZATION_LEVEL = 2
 
 def usage(ret_code):
     print(f"Usage: python {sys.argv[0]} [-h|-s|--save|-g|--highscore|-a|--authors] LEVEL")
@@ -161,19 +161,27 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
     if score_type != "Speedrun":
         print("Please manually enter score")
     if level_id in data and score_type in data[level_id]:
-        data[level_id][score_type]["demo"] = demo
+        # Recreating a dict to ensure we insert optimization_level at the right place
+        # (because order depends on insert in dict)
+        new_dict = {
+            "time": score,
+            # Don't override authors list
+            "authors": data[level_id][score_type]["authors"],
+            "type": "tas",
+            "optimization_level": 2,
+            "demo": demo
+        }
         saved_score = int(data[level_id][score_type]["time"].split()[0])
         if score_type == "Speedrun" and saved_score < number_of_frames:
             print(f"Error: saved level already has a better score ({saved_score}). Not saving.")
             return
-        data[level_id][score_type]["time"] = score
-        data[level_id][score_type]["authors"] = authors
+        data[level_id][score_type] = new_dict
     else:
         if level_id in data:
             level_data = data[level_id]
         else:
             level_data = {}
-        level_data[score_type] = {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo, 'optimization_level': 2}
+        level_data[score_type] = {'time': score, 'authors': authors, 'type': 'tas', 'demo': demo, 'optimization_level': OPTIMIZATION_LEVEL}
         data[level_id] = level_data
 
     data = {k: data[k] for k in sorted(data.keys())}
