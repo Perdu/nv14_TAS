@@ -386,6 +386,7 @@ function onFrame()
          end
          if i == 1 then
             memy = ramsearch.get_address(j)
+            print(string.format("memy: %s", memy))
          else
             print(string.format("Error: found too many values (%d)", i))
             if dbg then
@@ -417,7 +418,7 @@ function onFrame()
          end
          if i == 1 then
             memspeed_y = ramsearch.get_address(0)
-            print(memspeed_y)
+            print(string.format("memspeed_y: %s", memspeed_y))
          else
             ramsearch_done = true
             runtime.loadState(SAVE_SLOT)
