@@ -36,10 +36,9 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 ## Todo
 - Fix script finding x;y pos + ghost script for the cases in which the player is not falling on frame 1
 - extract all ghost information automatically
-- Distance from ghost, with a graph across time? Not sure if actually useful
 - Sort Readme into several files for better readability
 - automatically update README with current progress/stats
-- TAS the remaining 416 levels ;)
+- TAS the remaining 414 levels ;)
 
 ## Optimization level
 
