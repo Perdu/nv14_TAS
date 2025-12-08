@@ -25,6 +25,7 @@ local display_current_path = true
 
 local ghostData = {}      -- frame → {x, y}
 local space_frame = -100
+local pos_found = false
 local ramsearch_done = false
 local advance_one_step_after_ramsearch = 2
 local max_x = 0
@@ -298,6 +299,7 @@ function onStartup()
     -- Reset session variables (important when restarting the game)
     done = false
     triggered = false
+    pos_found = false
     ramsearch_done = false
     advance_one_step_after_ramsearch = 2
     space_frame = -100
@@ -391,46 +393,52 @@ function onFrame()
 
    if not ramsearch_done then
       local f = movie.currentFrame()
-      if f == space_frame + 1 then
-         local i = ramsearch.search()
-         if dbg then
-            print(string.format("nb_results: %d", i))
-         end
-      elseif f == space_frame + 2 then
-         local i = ramsearch.search(0, 0, "!=")
-         if dbg then
-            print(string.format("nb_results: %d", i))
-         end
-         if i == 1 then
-            memy = ramsearch.get_address(j)
-            print(string.format("memy: %s", memy))
-         else
-            -- try filtering a bit more
-            print("Too many results, we try filtering a bit more")
-            local i = ramsearch.search(1, levels[level].n_y + 5.0, "<")
+      if not pos_found then
+         if f == space_frame + 1 then
+            local i = ramsearch.search()
             if dbg then
                print(string.format("nb_results: %d", i))
             end
-            local i = ramsearch.search(1, levels[level].n_y - 5.0, ">")
+         elseif f == space_frame + 2 then
+            local i = ramsearch.search(0, 0, "!=")
             if dbg then
                print(string.format("nb_results: %d", i))
             end
             if i == 1 then
                memy = ramsearch.get_address(0)
+               pos_found = true
                print(string.format("memy: %s", memy))
             else
-               print(string.format("Error: found too many values (%d)", i))
+               -- try filtering a bit more
+               print("Too many results, we try filtering a bit more")
+               local i = ramsearch.search(1, levels[level].n_y + 5.0, "<")
                if dbg then
-                  for j = 0,i,1
-                  do
-                     local v = ramsearch.get_current_value(j)
-                     local addr = ramsearch.get_address(j)
-                     print(string.format("current value: %f @ %s", v, addr))
+                  print(string.format("nb_results: %d", i))
+               end
+               local i = ramsearch.search(1, levels[level].n_y - 5.0, ">")
+               if dbg then
+                  print(string.format("nb_results: %d", i))
+               end
+               if i == 1 then
+                  memy = ramsearch.get_address(0)
+                  pos_found = true
+                  print(string.format("memy: %s", memy))
+               else
+                  print(string.format("Error: found too many values (%d)", i))
+                  if dbg then
+                     for j = 0,i,1
+                     do
+                        local v = ramsearch.get_current_value(j)
+                        local addr = ramsearch.get_address(j)
+                        print(string.format("current value: %f @ %s", v, addr))
+                     end
                   end
                end
             end
          end
-         -- And now, speed
+      end
+      -- And now, speed
+      if f == space_frame + 2 then
          i = ramsearch.newsearch(9, 0, 1, 0.14, ">")
          if dbg then
             print(string.format("nb_results newsearch speed: %d", i))
