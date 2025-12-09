@@ -339,8 +339,11 @@ function onInput()
        end
        -- copy path into bestPath
        for frame, pos in pairs(path) do
+          -- print(string.format("%d: %f ; %f", frame, pos.x, pos.y))
           bestPath[frame] = { x = pos.x, y = pos.y }
        end
+       -- current frame
+       bestPath[movie.currentFrame()] = { x = x, y = y }
     end
 
     if display_current_path and memy ~= "" then
