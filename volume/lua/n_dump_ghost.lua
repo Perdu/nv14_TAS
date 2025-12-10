@@ -105,18 +105,28 @@ function onFrame()
          end
          if i == 1 then
             memy = ramsearch.get_address(j)
+            pos_found = true
          else
             print(string.format("Error: found too many values (%d)", i))
-            if dbg then
-               for j = 0,i-1,1
-               do
-                  local v = ramsearch.get_current_value(j)
-                  local addr = ramsearch.get_address(j)
-                  print(string.format("current value: %f @ %s", v, addr))
+            for j = 0,i-1,1
+            do
+               local v = ramsearch.get_current_value(j)
+               local addr = ramsearch.get_address(j)
+               local addr_x = tonumber(addr, 16) - 56
+               local x = memory.readd(addr_x)
+               if dbg then
+                  print(string.format("Value %d: %f @%s", j, v, addr))
+                  print(string.format("Corresponding x value @%s : %f", addr_x, x))
+               end
+               if x == levels[level].n_y then
+                  -- we finally found the right one
+                  memy = ramsearch.get_address(j)
+                  print("Found!")
+                  pos_found = true
+                  break
                end
             end
          end
-         pos_found = true
          runtime.loadState(SAVE_SLOT)
       end
    end
