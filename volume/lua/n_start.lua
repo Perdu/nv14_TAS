@@ -173,8 +173,11 @@ end
 function draw_velocity_arrows(x, y, vx, vy)
     -- scale speed so arrows stay readable
     local scale = 4     -- adjust if arrows feel too long/short
-    local vertical_color = 0x88ff0000
-    local horizontal_color = 0x880000ff
+    local horizontal_color = 0x88ff0000
+    local vertical_color = 0x880000ff
+    if vy >= 7.00 or vy <= -7.00 then
+       vertical_color = 0xffff0000
+    end
 
     -- horizontal arrow
     local hx = x + vx * scale
@@ -191,6 +194,10 @@ function draw_velocity_arrows(x, y, vx, vy)
     local vy_scaled = vy * scale
     local hy = y + vy_scaled
     gui.line(x, y, x, hy, vertical_color)
+    if vy >= 7.00 or vy <= -7.00 then
+       gui.line(x - 1, y, x - 1, hy, vertical_color)
+       gui.line(x + 1, y, x + 1, hy, vertical_color)
+    end
 
     -- arrowhead for vertical
     if vy ~= 0 then
@@ -200,8 +207,8 @@ function draw_velocity_arrows(x, y, vx, vy)
     end
 
     -- Optional: draw numeric values
-    gui.text(300, 575, string.format("vx: %f", vx), vertical_color, 0, 0, 15)
-    gui.text(300, 585,  string.format("vy: %f", vy), horizontal_color, 0, 0, 15)
+    gui.text(300, 575, string.format("vx: %f", vx), horizontal_color, 0, 0, 15)
+    gui.text(300, 585,  string.format("vy: %f", vy), vertical_color, 0, 0, 15)
 end
 
 function onPaint()
