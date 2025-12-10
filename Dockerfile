@@ -59,7 +59,7 @@ FROM debian:12
 
 # n-related commands
   COPY external/n_v14.swf /home/
-  RUN echo "/root/src/ruffle/target/release/ruffle_desktop -g gl /home/n_v14.swf\n/root/src/libTAS/build/AppDir/usr/bin/libTAS -i -L -r /home/n_levels/00-0_rta.ltm --lua /home/lua/n_dump_ghost.lua /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &\n/root/src/libTAS/build/AppDir/usr/bin/libTAS -i -r /home/n_levels/00-0.ltm --lua /home/lua/n_start.lua /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &" > /root/.bash_history
+  RUN echo "/root/src/ruffle/target/release/ruffle_desktop -g gl /home/n_v14.swf\n/root/src/libTAS/build/AppDir/usr/bin/libTAS -i -n -L -r /home/n_levels/\${LEVEL}_rta.ltm --lua /home/lua/n_dump_ghost.lua /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &\n/root/src/libTAS/build/AppDir/usr/bin/libTAS -i -r /home/n_levels/\$LEVEL.ltm --lua /home/lua/n_start.lua /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &\nLEVEL='00-0'" > /root/.bash_history
   COPY docker/ruffle_desktop.ini /root/.config/libTAS/
   COPY docker/libTAS.ini /root/.config/libTAS/
   # Fixing the determinism bug: by adding the libopenh264 file manually, we avoid having to open ruffle manually every time
