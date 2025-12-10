@@ -20,6 +20,7 @@ local memspeed_y=""
 local levels = dofile("/home/lua/levels.lua")
 local dbg = true
 local display_hitboxes = true
+local draw_gold_hitboxes = false
 local display_ghost = true
 local display_current_path = true
 
@@ -87,7 +88,9 @@ function draw_hitboxes()
       drawList(data.mines, 4, 255, 0, 0)         -- red mines
       -- drawList(data.drones, 9, 0, 0, 255)
       -- drawList(data.floorguards, 6, 0, 0, 0)
-      drawList(data.gold, 6, 255, 255, 0)
+      if draw_gold_hitboxes then
+         drawList(data.gold, 6, 255, 255, 0)
+      end
       -- drawList(data.launchpads, 6, 255, 0, 255) -- magenta launchpads
       drawList(data.switches, 5, 0, 255, 255)    -- cyan switches
 end
