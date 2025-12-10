@@ -6,7 +6,7 @@
 local KEY_SPACE = 0x020        -- X11 keysym for Space
 -- local KEY_S = 0x073            -- X11 keysym for s
 local SAVE_SLOT = 1             -- Save slot number (1–10)
-local ASSUME_STARTS_PAUSED = true  -- Set to false if your game starts unpaused
+local ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 
 -- Session state
 local done = false
