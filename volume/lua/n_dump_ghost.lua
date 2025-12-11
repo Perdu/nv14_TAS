@@ -8,7 +8,7 @@ local KEY_LEFT  = 0xff51   -- XK_Left
 local KEY_RIGHT = 0xff53   -- XK_Right
 local KEY_SHIFT = 0xffe1   -- XK_Shift_L (or 0xffe2 for right shift)
 local SAVE_SLOT = 1             -- Save slot number (1–10)
-local ASSUME_STARTS_PAUSED = true  -- Set to false if your game starts unpaused
+local ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 
 -- Session state
 local done = false
