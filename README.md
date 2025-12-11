@@ -35,9 +35,11 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [Stumbles](https://discord.com/channels/197765375503368192/199460839252688896/1431062811903266957)
 
 ## Todo
+- Fix position finding for cases:
+  - where the ninja starts grounded
+  - where ninja position is a non-round float
 - change order of inputs
 - bestPath change automatically create a savestate
-- dump_ghost: dump speed information as well
 - resulting speed vector
 - extract all ghost information automatically
 - Sort Readme into several files for better readability
