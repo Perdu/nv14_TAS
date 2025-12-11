@@ -31,6 +31,7 @@ local ramsearch_done = false
 local advance_one_step_after_ramsearch = 2
 local max_x = 0
 local max_y = 0
+local save_position_state = false
 
 local path = {}
 local knownFrames = {}   -- sorted list of frames already stored
@@ -336,17 +337,18 @@ end
 -- Detect Space key press
 function onInput()
     if input.getKey(KEY_SPACE) ~= 0 and memy ~= "" and not triggered then
-       print("Position saved")
        local y_num = tonumber(memy, 16)
        local y = memory.readd(y_num)
        local x_num = y_num - 56
        local x = memory.readd(x_num)
        max_x = x
        max_y = y
+       print("Position saved")
        input.setKey(KEY_SPACE, 0)
        if movie.getMarker() ~= "" then
           movie.setMarker("best")
        end
+       save_position_state = true
        -- copy path into bestPath
        for frame, pos in pairs(path) do
           -- print(string.format("%d: %f ; %f", frame, pos.x, pos.y))
@@ -402,6 +404,11 @@ function onFrame()
       if advance_one_step_after_ramsearch == 2 then
          runtime.playPause()
       end
+   end
+
+   if save_position_state then
+      runtime.saveState(10)
+      save_position_state = false
    end
 
    if not ramsearch_done then
