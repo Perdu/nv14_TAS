@@ -124,7 +124,7 @@ function onFrame()
                       print(string.format("Value %d: %f @%s", j, v, addr))
                       print(string.format("Corresponding x value @%s : %f", addr_x, x))
                    end
-                   if x == levels[level].n_y then
+                   if x == levels[level].n_x then
                       -- we finally found the right one
                       memy = ramsearch.get_address(j)
                       print("Found!")
