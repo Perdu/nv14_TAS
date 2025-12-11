@@ -17,9 +17,10 @@ else
     tar czf $DOCKER_VOLUME_PATH/n_levels/"$1".ltm -C $EXTRACT_FOLDER .
 fi
 
-if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1"_rta.ltm ]; then
-    echo "$1_rta.ltm already exists, not creating"
-else
-    python start_tas_level.py $@ rta
-    tar czf $DOCKER_VOLUME_PATH/n_levels/"$1"_rta.ltm -C $EXTRACT_FOLDER .
-fi
+# Commented out as we already created all of them
+# if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1"_rta.ltm ]; then
+#     echo "$1_rta.ltm already exists, not creating"
+# else
+#     python start_tas_level.py $@ rta
+#     tar czf $DOCKER_VOLUME_PATH/n_levels/"$1"_rta.ltm -C $EXTRACT_FOLDER .
+# fi
