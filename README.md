@@ -38,7 +38,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - Fix position finding for cases:
   - where the ninja starts grounded
   - where ninja position is a non-round float
-- change order of inputs
 - bestPath change automatically create a savestate
 - resulting speed vector
 - extract all ghost information automatically
