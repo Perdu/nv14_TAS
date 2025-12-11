@@ -27,6 +27,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - https://github.com/clementgallet/libTAS/issues
 - https://github.com/ruffle-rs/ruffle/issues
 ### Forums
+- [Discord channel where we discuss this TAS](https://discord.com/channels/197765375503368192/199460839252688896)
 - [TAS thread on N forum](https://forum.droni.es/viewtopic.php?f=20&t=4468&p=177293&sid=6f5f179201d5b44d889afbe5865cb685#p177293)
 - [tasvideos.org: N TAS](https://tasvideos.org/Forum/Topics/9371)
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
