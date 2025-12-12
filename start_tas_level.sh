@@ -9,7 +9,7 @@ LTM_FILE="n_base_for_levels.ltm"
 
 mkdir -p $EXTRACT_FOLDER
 
-tar xzf $DOCKER_VOLUME_PATH/$LTM_FILE -C $EXTRACT_FOLDER
+tar xzf $LTM_FILE -C $EXTRACT_FOLDER
 if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1".ltm ]; then
     echo "$1.ltm already exists, not creating"
 else
