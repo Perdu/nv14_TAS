@@ -5,9 +5,21 @@ if triggered then
    if dbg then
       print(string.format("Looking for player at y position %f", levels[level].n_y))
    end
-   local i = ramsearch.newsearch(9, 0, 1, levels[level].n_y, "==")
-   if dbg then
-      print(string.format("nb_results newsearch: %d", i))
+   if math.floor(levels[level].n_y) == levels[level].n_y then
+      -- it's round, we can look for the exact value (majority case)
+      local i = ramsearch.newsearch(9, 0, 1, levels[level].n_y, "==")
+      if dbg then
+         print(string.format("nb_results newsearch (==): %d", i))
+      end
+   else
+      local i = ramsearch.newsearch(9, 0, 1, levels[level].n_y - 0.1, ">")
+      if dbg then
+         print(string.format("nb_results newsearch (>): %d", i))
+      end
+      i = ramsearch.search(1, levels[level].n_y + 0.1, "<")
+      if dbg then
+         print(string.format("nb_results search (<): %d", i))
+      end
    end
 
    -- Disable for this session only
