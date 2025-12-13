@@ -3,41 +3,41 @@
 -- Starts unpaused (if needed), waits for first Space press, saves a state, pauses,
 -- and permanently disables itself *per game session*.
 
-local KEY_SPACE = 0x020        -- X11 keysym for Space
--- local KEY_S = 0x073            -- X11 keysym for s
-local SAVE_SLOT = 1             -- Save slot number (1–10)
-local ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
+KEY_SPACE = 0x020        -- X11 keysym for Space
+-- KEY_S = 0x073            -- X11 keysym for s
+SAVE_SLOT = 1             -- Save slot number (1–10)
+ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 
 -- Session state
-local done = false
-local triggered = false
-local need_unpause = false
+done = false
+triggered = false
+need_unpause = false
 
-local level = nil
-local ghostFilePath = nil
-local memy=""
-local memspeed_y=""
-local levels = dofile("/home/lua/levels.lua")
-local dbg = true
-local display_hitboxes = true
-local draw_gold_hitboxes = false
-local display_ghost = true
-local display_current_path = true
+level = nil
+ghostFilePath = nil
+memy=""
+memspeed_y=""
+levels = dofile("/home/lua/levels.lua")
+dbg = true
+display_hitboxes = true
+draw_gold_hitboxes = false
+display_ghost = true
+display_current_path = true
 
-local ghostData = {}      -- frame → {x, y}
-local space_frame = -100
-local pos_found = false
-local ramsearch_done = false
-local advance_one_step_after_ramsearch = 2
-local max_x = 0
-local max_y = 0
-local save_position_state = false
+ghostData = {}      -- frame → {x, y}
+space_frame = -100
+pos_found = false
+ramsearch_done = false
+advance_one_step_after_ramsearch = 2
+max_x = 0
+max_y = 0
+save_position_state = false
 
-local path = {}
-local knownFrames = {}   -- sorted list of frames already stored
-local bestPath = {}
-local door_x = nil
-local door_y = nil
+path = {}
+knownFrames = {}   -- sorted list of frames already stored
+bestPath = {}
+door_x = nil
+door_y = nil
 
 -- Insert or update path at a specific frame
 local function recordFrame(frame, x, y)
@@ -382,23 +382,6 @@ function onFrame()
         need_unpause = false
     end
 
-    -- If Space was pressed, save and pause
-    if triggered then
-       space_frame = movie.currentFrame()
-        runtime.saveState(SAVE_SLOT)
-        if dbg then
-           print(string.format("Looking for player at y position %f", levels[level].n_y))
-        end
-        local i = ramsearch.newsearch(9, 0, 1, levels[level].n_y, "==")
-        if dbg then
-           print(string.format("nb_results newsearch: %d", i))
-        end
-
-        -- Disable for this session only
-        done = true
-        triggered = false
-    end
-
    if advance_one_step_after_ramsearch < 2 then
       advance_one_step_after_ramsearch = advance_one_step_after_ramsearch + 1
       if advance_one_step_after_ramsearch == 2 then
@@ -411,90 +394,7 @@ function onFrame()
       save_position_state = false
    end
 
-   if not ramsearch_done then
-      local f = movie.currentFrame()
-      if not pos_found then
-         if f == space_frame + 1 then
-            local i = ramsearch.search()
-            if dbg then
-               print(string.format("nb_results: %d", i))
-            end
-         elseif f == space_frame + 2 then
-            local i = ramsearch.search(0, 0, "!=")
-            if dbg then
-               print(string.format("nb_results: %d", i))
-            end
-            if i == 1 then
-               memy = ramsearch.get_address(0)
-               pos_found = true
-               print(string.format("memy: %s", memy))
-            else
-               -- try filtering a bit more
-               print("Too many results, we try filtering a bit more")
-               local i = ramsearch.search(1, levels[level].n_y + 5.0, "<")
-               if dbg then
-                  print(string.format("nb_results: %d", i))
-               end
-               local i = ramsearch.search(1, levels[level].n_y - 5.0, ">")
-               if dbg then
-                  print(string.format("nb_results: %d", i))
-               end
-               if i == 1 then
-                  memy = ramsearch.get_address(0)
-                  pos_found = true
-                  print(string.format("memy: %s", memy))
-               else
-                  print(string.format("Error: found too many values (%d). Checking if any of them has x position at the right place.", i))
-                  for j = 0,i-1,1
-                  do
-                     local v = ramsearch.get_current_value(j)
-                     local addr = ramsearch.get_address(j)
-                     local addr_x = tonumber(addr, 16) - 56
-                     local x = memory.readd(addr_x)
-                     if dbg then
-                        print(string.format("Value %d: %f @%s", j, v, addr))
-                        print(string.format("Corresponding x value @%s : %f", addr_x, x))
-                     end
-                     if x == levels[level].n_x then
-                        -- we finally found the right one
-                        memy = ramsearch.get_address(j)
-                        print("Found!")
-                        pos_found = true
-                        break
-                     end
-                  end
-               end
-            end
-         end
-      end
-      -- And now, speed
-      if f == space_frame + 2 then
-         i = ramsearch.newsearch(9, 0, 1, 0.14, ">")
-         if dbg then
-            print(string.format("nb_results newsearch speed: %d", i))
-         end
-         i = ramsearch.search(1, 0.16, "<")
-         if dbg then
-            print(string.format("nb_results search speed 2: %d", i))
-         end
-      elseif f == space_frame + 3 then
-         local i = ramsearch.search(1, 0.29, ">")
-         if dbg then
-            print(string.format("nb_results search speed 3: %d", i))
-         end
-         i = ramsearch.search(1, 0.30, "<")
-         if dbg then
-            print(string.format("nb_results search speed 4: %d", i))
-         end
-         if i == 1 then
-            memspeed_y = ramsearch.get_address(0)
-            print(string.format("memspeed_y: %s", memspeed_y))
-         end
-         ramsearch_done = true
-         runtime.loadState(SAVE_SLOT)
-         advance_one_step_after_ramsearch = 0
-      end
-   end
+   dofile("/home/lua/lib/n_position_ramsearch.lua")
 end
 
 -- Register callbacks
