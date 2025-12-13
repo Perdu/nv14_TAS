@@ -19,6 +19,7 @@ from converter import extract_chunks
 
 SOL_FILE_LOCATION = 'volume/n_tas.sol'
 DEMO_DATA_FILE = 'tas/level_data.yml'
+RTA_DEMO_DATA_FILE = 'tas/level_data_rta.yml'
 LEVEL_DATA_FILE = 'external/level_build_data.yml'
 OPTIMIZATION_LEVEL = 2
 
@@ -207,6 +208,18 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
     with open(DEMO_DATA_FILE, 'w', encoding='utf-8') as f:
         f.write("\n".join(result_lines) + "\n")
     # print(f"Updated {DEMO_DATA_FILE}")
+
+    # Calculate difference with rta
+    with open(RTA_DEMO_DATA_FILE, 'r', encoding='utf-8') as f:
+        data_rta = yaml.load(f)
+    if score_type == "Speedrun":
+        score = int(str(data_rta[level_id][score_type]["time"]).split(" ", 1)[0])
+    else:
+        score = data_rta[level_id][score_type]["time"]
+    difference =  score - number_of_frames
+    print()
+    print(f"Difference with 0th: {difference}")
+
 
 def print_to_tmp(demo_full, episode, level):
     with open(f"/tmp/{episode}-{level}.txt", 'w', encoding='utf-8') as f:
