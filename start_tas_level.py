@@ -79,6 +79,8 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False,
             res += libtas_input_hs
             nb_frames += nb_frames_demo_hs
     elif level_name in tas_data and score_type in tas_data[level_name]:
+        # A TAS already exists
+        print("Using existing TAS data")
         demo = tas_data[level_name][score_type]['demo']
         libtas_input, nb_frames_demo = convert_demo_to_libtas(demo)
         res += libtas_input
