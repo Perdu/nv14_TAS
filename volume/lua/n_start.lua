@@ -5,6 +5,7 @@
 
 KEY_SPACE = 0x020        -- X11 keysym for Space
 -- KEY_S = 0x073            -- X11 keysym for s
+KEY_SHIFT = 0xffe1
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 
@@ -18,6 +19,9 @@ ghostFilePath = nil
 memy=""
 memspeed_y=""
 levels = dofile("/home/lua/levels.lua")
+dofile("/home/lua/lib/grounded_levels.lua")
+shift_pressed = false
+original_input_modified = false
 dbg = true
 display_hitboxes = true
 draw_gold_hitboxes = false
@@ -372,6 +376,8 @@ function onInput()
           triggered = true
        end
     end
+
+   dofile("/home/lua/lib/n_position_ramsearch_oninput.lua")
 end
 
 -- Perform runtime actions (must be done in onFrame)

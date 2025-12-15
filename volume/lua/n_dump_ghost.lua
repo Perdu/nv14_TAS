@@ -19,6 +19,9 @@ level = nil
 memy=""
 memspeed_y=""
 levels = dofile("/home/lua/levels.lua")
+dofile("/home/lua/lib/grounded_levels.lua")
+shift_pressed = false
+original_input_modified = false
 dbg = true
 ghostFilePath = nil
 ghostFile = nil
@@ -57,11 +60,14 @@ end
 
 -- Detect Space key press
 function onInput()
-    if done then return end
 
-    if input.getKey(KEY_SPACE) ~= 0 then
-        triggered = true
+    if not done then
+       if input.getKey(KEY_SPACE) ~= 0 then
+          triggered = true
+       end
     end
+
+   dofile("/home/lua/lib/n_position_ramsearch_oninput.lua")
 end
 
 -- Perform runtime actions (must be done in onFrame)
