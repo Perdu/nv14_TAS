@@ -349,9 +349,9 @@ function onInput()
        max_y = y
        print("Position saved")
        input.setKey(KEY_SPACE, 0)
-       if movie.getMarker() ~= "" then
-          movie.setMarker("best")
-       end
+       -- if movie.getMarker() ~= "" then
+       --    movie.setMarker("best")
+       -- end
        save_position_state = true
        -- copy path into bestPath
        for frame, pos in pairs(path) do
