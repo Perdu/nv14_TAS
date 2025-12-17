@@ -35,7 +35,7 @@ ramsearch_done = false
 advance_one_step_after_ramsearch = 2
 max_x = 0
 max_y = 0
-save_position_state = false
+save_best_position = false
 
 path = {}
 knownFrames = {}   -- sorted list of frames already stored
@@ -341,25 +341,12 @@ end
 -- Detect Space key press
 function onInput()
     if input.getKey(KEY_SPACE) ~= 0 and memy ~= "" and not triggered then
-       local y_num = tonumber(memy, 16)
-       local y = memory.readd(y_num)
-       local x_num = y_num - 56
-       local x = memory.readd(x_num)
-       max_x = x
-       max_y = y
-       print("Position saved")
        input.setKey(KEY_SPACE, 0)
        -- if movie.getMarker() ~= "" then
        --    movie.setMarker("best")
        -- end
-       save_position_state = true
-       -- copy path into bestPath
-       for frame, pos in pairs(path) do
-          -- print(string.format("%d: %f ; %f", frame, pos.x, pos.y))
-          bestPath[frame] = { x = pos.x, y = pos.y }
-       end
-       -- current frame
-       bestPath[movie.currentFrame()] = { x = x, y = y }
+       -- do it on next frame so it's on the savestate frame
+       save_best_position = true
     end
 
     if display_current_path and memy ~= "" then
@@ -413,9 +400,25 @@ function onFrame()
       end
    end
 
-   if save_position_state then
+   if save_best_position then
+       local y_num = tonumber(memy, 16)
+       local y = memory.readd(y_num)
+       local x_num = y_num - 56
+       local x = memory.readd(x_num)
+       max_x = x
+       max_y = y
+
+       -- copy path into bestPath
+       for frame, pos in pairs(path) do
+          -- print(string.format("%d: %f ; %f", frame, pos.x, pos.y))
+          bestPath[frame] = { x = pos.x, y = pos.y }
+       end
+       -- current frame
+       bestPath[movie.currentFrame()] = { x = x, y = y }
+       print("Position saved")
+
       runtime.saveState(10)
-      save_position_state = false
+      save_best_position = false
    end
 
    dofile("/home/lua/lib/n_position_ramsearch.lua")
