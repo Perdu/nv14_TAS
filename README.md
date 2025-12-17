@@ -36,15 +36,14 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [Stumbles](https://discord.com/channels/197765375503368192/199460839252688896/1431062811903266957)
 
 ## Todo
-- Fix position finding for cases:
-  - where the ninja starts grounded
-  - where ninja position is a non-round float
 - bestPath change automatically create a savestate
 - resulting speed vector
+- make script to create ghost information for multiple levels in a row
 - extract all ghost information automatically
+- speed extraction still doesn't work for some grounded levels (01-0, 02-0)
 - Sort Readme into several files for better readability
 - automatically update README with current progress/stats
-- TAS the remaining 414 levels ;)
+- TAS the remaining 498 levels ;)
 
 ## Optimization level
 
