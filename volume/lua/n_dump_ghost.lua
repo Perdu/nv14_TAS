@@ -116,11 +116,16 @@ function onFrame()
             local left  = (input.getKey(KEY_LEFT)  ~= 0) and 1 or 0
             local right = (input.getKey(KEY_RIGHT) ~= 0) and 1 or 0
             -- speed
-            local y_num_speed = tonumber(memspeed_y, 16)
-            local vy = memory.readd(y_num_speed)
-            local x_num_speed = y_num_speed - 56
-            local vx = memory.readd(x_num_speed)
-
+            if memspeed_y ~= "" then
+               local y_num_speed = tonumber(memspeed_y, 16)
+               vy = memory.readd(y_num_speed)
+               local x_num_speed = y_num_speed - 56
+               vx = memory.readd(x_num_speed)
+            else
+               -- give up, we didn't find them
+               vx = 0.0
+               vy = 0.0
+            end
             print(string.format("%d,%f,%f,%d,%d,%d,%f,%f", f, x, y, shift, left, right, vx, vy))
             ghostFile:write(string.format("%d,%f,%f,%d,%d,%d,%f,%f\n", f - space_frame, x, y, shift, left, right, vx, vy))
          end
