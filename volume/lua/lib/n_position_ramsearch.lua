@@ -31,7 +31,7 @@ if not ramsearch_done then
    local f = movie.currentFrame()
    if not pos_found then
       if grounded_levels[level] then
-         if f == space_frame + 3 then
+         if f == space_frame + 2 then
             -- as we added a jump, we should be 3 pixels higher than start
             local i = ramsearch.search(1, levels[level].n_y - 3, "==")
             if dbg then
@@ -112,13 +112,17 @@ if not ramsearch_done then
                print(string.format("nb_results search speed 2: %d", i))
             end
          elseif f == space_frame + 4 then
+            -- local i = ramsearch.search(0, 0, "!=")
+            -- if dbg then
+            --    print(string.format("nb_results search speed 3: %d", i))
+            -- end
             local i = ramsearch.search(1, -0.29, "<")
             if dbg then
-               print(string.format("nb_results search speed 3: %d", i))
+                print(string.format("nb_results search speed 3: %d", i))
             end
             i = ramsearch.search(1, -0.30, ">")
             if dbg then
-               print(string.format("nb_results search speed 4: %d", i))
+                print(string.format("nb_results search speed 4: %d", i))
             end
             if i == 1 then
                memspeed_y = ramsearch.get_address(0)
