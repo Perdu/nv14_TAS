@@ -38,7 +38,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 ## Todo
 - bestPath change automatically create a savestate
 - resulting speed vector
-- make script to create ghost information for multiple levels in a row
 - extract all ghost information automatically
 - speed extraction still doesn't work for some grounded levels (01-0, 02-0)
 - Sort Readme into several files for better readability
