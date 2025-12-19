@@ -4,6 +4,7 @@
 import sys
 import getopt
 import yaml
+import csv
 import configparser
 from string import Template
 
@@ -48,6 +49,8 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
         data = yaml.safe_load(f)
     with open("tas/loading_times.yml", "r", encoding="utf-8") as f:
         loading_times = yaml.safe_load(f)
+    output_ghost_file = open("volume/n_recomp_rta_speedrun_ghost.csv", "w", encoding="utf-8")
+    output_ghost = csv.writer(output_ghost_file)
 
     for level_name, level_data in data.items():
         episode = int(level_name.split("-")[0])
@@ -58,6 +61,10 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
         elif episode > end_episode:
             # we reached the end
             break
+        ghost_file = f"volume/ghosts/{level_name}.csv"
+        with open(ghost_file, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            ghost_data = list(reader)
         if loading_times[level_name] is None:
             loading_time = 58  # fill missing ones so as to be able to calculate them with script
         else:
@@ -80,6 +87,8 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
                 date = level_data[score_type]['time']
             lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"{level_data[score_type]['authors']}, {level_data[score_type]['time']}, {date}\"}},\n"
             res += libtas_input
+            for i in range(nb_frames_demo):
+                output_ghost.writerow([nb_frames + i] + ghost_data[i][1:])
             nb_frames += nb_frames_demo
             res += "|K20|\n"  # space
             nb_frames += 1
@@ -92,6 +101,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
                 res += start_episode(int((episode + 1) / 10), 0)
                 nb_frames += 4
     markers["size"] = nb_markers
+    output_ghost_file.close()
     return res, nb_frames, markers, lua_infos
 
 

@@ -12,6 +12,7 @@ local triggered = false
 local display_history = false
 local display_inputs = false
 local display_position = false
+local case = ""
 
 local KEY_SPACE = 0x020        -- X11 keysym for Space
 
@@ -97,7 +98,12 @@ end
 function onPaint()
    local f = movie.currentFrame()
    if triggered then
-      local ghost = ghostData[f - space_frame]
+      if case == "combined" then
+         i = f
+      else
+         i = f - space_frame
+      end
+      local ghost = ghostData[i]
       if ghost then
          gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
 
@@ -124,7 +130,7 @@ function onPaint()
    end
 end
 
-function onFrame()
+function onInput()
     if not triggered and input.getKey(KEY_SPACE) ~= 0 then
        space_frame = movie.currentFrame()
        triggered = true
@@ -132,8 +138,16 @@ function onFrame()
 end
 
 function onStartup()
-   level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
-   ghostFilePath = "/home/ghosts/" .. level .. ".csv"
+   ltmfile = movie.getMovieFileName()
+   if ltmfile == "/home/n_recomp_rta_speedrun.ltm" then
+      case = "combined"
+      ghostFilePath = "/home/n_recomp_rta_speedrun_ghost.csv"
+      triggered = true
+   else
+      case = "level"
+      level = ltmfile:match("/(%d+-%d+).*%.ltm$")
+      ghostFilePath = "/home/ghosts/" .. level .. ".csv"
+   end
    loadGhost()
    space_frame = -100
    triggered = false
