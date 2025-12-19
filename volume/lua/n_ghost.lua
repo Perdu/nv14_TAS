@@ -99,7 +99,7 @@ function onPaint()
    local f = movie.currentFrame()
    if triggered then
       if case == "combined" then
-         i = f
+         i = f - 1
       else
          i = f - space_frame
       end
@@ -132,7 +132,7 @@ end
 
 function onInput()
     if not triggered and input.getKey(KEY_SPACE) ~= 0 then
-       space_frame = movie.currentFrame()
+       space_frame = movie.currentFrame() + 1
        triggered = true
     end
 end
