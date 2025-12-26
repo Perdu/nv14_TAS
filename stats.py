@@ -176,7 +176,8 @@ def display_time_difference(score_type="Speedrun", sort=True):
         
         # Format with fixed widths
         if score_type.lower() == "speedrun":
-            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}} {unit}  RTA={rta:>{max_rta_len}} {unit}  {diff:>+{max_diff_len+1}} {unit}"
+            diff_s = 0.025 * diff
+            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}} {unit}  RTA={rta:>{max_rta_len}} {unit}  {diff:>+{max_diff_len+1}} {unit} ({diff_s:.3f})"
         else:
             original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}.3f} {unit}  RTA={rta:>{max_rta_len}.3f} {unit}  {diff:>+{max_diff_len+1}.3f} {unit}"
         
