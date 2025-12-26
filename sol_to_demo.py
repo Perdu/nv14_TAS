@@ -217,8 +217,9 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
     else:
         score = data_rta[level_id][score_type]["time"]
     difference =  score - number_of_frames
+    diff_s = 0.025 * diff
     print()
-    print(f"Difference with 0th: {difference}")
+    print(f"Difference with 0th: {difference} ({diff_s:.3f})")
 
 
 def print_to_tmp(demo_full, episode, level):
