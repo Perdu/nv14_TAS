@@ -159,6 +159,19 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
     level_id = f"{episode}-{level}"
     chunks, number_of_frames = extract_chunks(demo)
     score = f"{number_of_frames} f"
+
+    # Calculate difference with rta
+    with open(RTA_DEMO_DATA_FILE, 'r', encoding='utf-8') as f:
+        data_rta = yaml.load(f)
+    if score_type == "Speedrun":
+        score_diff = int(str(data_rta[level_id][score_type]["time"]).split(" ", 1)[0])
+        difference = score_diff - number_of_frames
+        diff_s = 0.025 * difference
+        diff_str_total = f"{difference} f ({diff_s:.3f})"
+    else:
+        score_diff = data_rta[level_id][score_type]["time"]
+        diff_str_total = score_diff
+
     if score_type != "Speedrun":
         print("Please manually enter score")
     if level_id in data and score_type in data[level_id]:
@@ -166,6 +179,7 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
         # (because order depends on insert in dict)
         new_dict = {
             "time": score,
+            'diff_with_0th': diff_str_total,
             # Don't override authors list
             "authors": data[level_id][score_type]["authors"],
             "type": "tas",
@@ -182,7 +196,7 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
             level_data = data[level_id]
         else:
             level_data = {}
-        level_data[score_type] = {'time': score, 'authors': authors, 'type': 'tas', 'optimization_level': OPTIMIZATION_LEVEL, 'demo': demo}
+        level_data[score_type] = {'time': score, 'diff_with_0th': diff_str_total, 'authors': authors, 'type': 'tas', 'optimization_level': OPTIMIZATION_LEVEL, 'demo': demo}
         data[level_id] = level_data
 
     data = {k: data[k] for k in sorted(data.keys())}
@@ -209,15 +223,6 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
         f.write("\n".join(result_lines) + "\n")
     # print(f"Updated {DEMO_DATA_FILE}")
 
-    # Calculate difference with rta
-    with open(RTA_DEMO_DATA_FILE, 'r', encoding='utf-8') as f:
-        data_rta = yaml.load(f)
-    if score_type == "Speedrun":
-        score = int(str(data_rta[level_id][score_type]["time"]).split(" ", 1)[0])
-    else:
-        score = data_rta[level_id][score_type]["time"]
-    difference =  score - number_of_frames
-    diff_s = 0.025 * diff
     print()
     print(f"Difference with 0th: {difference} ({diff_s:.3f})")
 

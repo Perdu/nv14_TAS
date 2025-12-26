@@ -448,6 +448,7 @@
 08-3:
   Speedrun:
     time: 691 f
+    diff_with_0th: 145 f (3.625)
     authors: zapkt
     type: tas
     optimization_level: 2
