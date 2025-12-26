@@ -13,6 +13,8 @@ mkdir -p extract
 # Empty or create the output file
 > "$OUTPUT_FILE"
 
+total_rerecords=0
+
 # Loop through all .ltm files matching the pattern
 for file in "$ROOT_DIR"/*-*.ltm; do
     # Extract the base filename (e.g., 00-0.ltm -> 00-0)
@@ -26,14 +28,29 @@ for file in "$ROOT_DIR"/*-*.ltm; do
         else
             annotations=""
         fi
+
+        if tar xOzf "$file" config.ini &>/dev/null; then
+            rerecords=$(tar xOzf "$file" config.ini | grep rerecord_count | cut -d '=' -f 2)
+        else
+            rerecords=""
+        fi
     
         # Append to output file with markdown format
         {
             echo "# $base"
+            if [ "$rerecords" != "" ]; then
+                echo "rerecords: $rerecords"
+                echo ""
+            fi
             echo "$annotations"
             echo ""
         } >> "$OUTPUT_FILE"
+
+        (( total_rerecords += rerecords ))
     fi
 done
 
+echo "# Total rerecords: $total_rerecords" >> "$OUTPUT_FILE"
+
 echo "Annotations extracted to $OUTPUT_FILE"
+echo "Total rerecords: $total_rerecords"

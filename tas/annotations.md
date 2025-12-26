@@ -2,18 +2,28 @@
 
 
 # 00-1
+rerecords: 105
+
 
 
 # 00-2
+rerecords: 29
+
 
 
 # 00-3
+rerecords: 76
+
 
 
 # 00-4
+rerecords: 169
+
 
 
 # 01-0
+rerecords: 562
+
 It's possible to do a cj on the bb in the beginning. It's slightly faster, but we don't have a good angle to land and start the rcj
 
 I changed route over the MBD: at the top of the level, I do a stumble instead of a cj, then I jump directly on the wall of the switch instead of stumbling. This saves some time, but makes it difficult to get a good angle. I still manage to save 5f overall
@@ -21,13 +31,19 @@ I changed route over the MBD: at the top of the level, I do a stumble instead of
 The angle to land on the slope is extremly tight and we need to jump sufficiently long during the cj to land it. There is some angle for which that works with a stumble instead of a cj up there, but it ends up not being faster as the cj makes us hit the ceiling and fall faster.
 
 # 01-1
+rerecords: 130
+
 Didn't work:
 - Using the one-way platforms in the beginning to slow descent down
 
 # 01-2
+rerecords: 0
+
 I copied the inputs of the RTA run for the beginning (up to the doorkey) because I find a better or even tying route
 
 # 01-3
+rerecords: 698
+
 I tried:
 - many ways to turn around in the beginning. The RTA jump does not seem faster.
 - to take the second switch on the way down, getting pushed from the ceiling or not. It's slower
@@ -39,6 +55,8 @@ The RTA path of jumping at the beginning of the slope is slower. Best is to jump
 Left-jump for the end is equally fast (but not in terms of subpixels)
 
 # 01-4
+rerecords: 695
+
 Can't start turning right on 177 because the drone kills us
 Jumping one frame earlier in 202 make us stumble on the platform on the right, which only allows for slower later paths
 Can't get a better angle on jump back up (751) because one less jump frame gets a stumble
@@ -50,6 +68,8 @@ For other (slower) route with more double jumps, watch this out:
 $01-4 steps#metanet##0001110000000000000000000011140000000000000000000:1114000000000000000000011114000000000000000000011114000000000000000000:1111400000000000000000011111400000000000000000011111400000000000000000:1111140000000000000000011111140000000000000000011111140000000000000000:1111114000000000000000011111114000000000000000011111114000000000000000:11111118;000000000000001111111110000000000000001111111100000<000000000:11111110000010000000000111111100000=0000000000011111100000000000000000:1111100000000000000000011111000000000000000000011110000000000000000000:1110000000000000000000011100000000000000000000011000000000000000000000:10000000000000000000000180000100010001000100000000000000000000000000000000000000000000000000000|5^732,564!11^36,84,60,252!9^468,60,0,0,28,23,1,0,0!0^108,108!0^180,156!0^252,204!0^324,252!0^396,300!0^468,348!0^540,396!0^612,444!0^684,492!2^216,576,0,-1!2^24,408,0.707106781186547,-0.707106781186547!6^36,564,1,0,0,0!6^756,36,5,1,0,2!2^204,324,-0.707106781186547,-0.707106781186547!0^708,180!0^708,156!0^708,276!0^708,252!0^708,348!0^708,372!0^672,564!0^660,564!0^648,564!0^636,564!0^612,564!0^624,564!0^600,564!0^588,564!0^576,564!0^564,564!0^552,564!0^540,564!0^528,564!0^516,564!0^492,564!0^504,564!0^480,564!0^468,564!0^456,564!0^444,564!0^432,564!0^420,564!0^396,564!0^408,564!0^384,564!0^372,564!0^360,564!0^348,564!0^336,564!0^636,468!0^564,420!0^492,372!0^420,324!0^348,276!0^276,228!0^204,180!0^132,132#843:17895697|17895697|30478609|107374189|107374182|107374182|89478609|89478485|107374306|107374182|107374182|97609318|89478485|89478485|89478485|89478485|89478485|17913173|17895697|17895697|35791393|35791394|35791394|36577826|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|546|35791394|17895697|17895697|17895697|17895697|17895697|17898769|17895697|17895697|17895697|17895697|17895697|17895697|17895697|17895697|17898769|17895697|17895697|17895697|17895697|17895697|17895697|17895697|35791361|35791394|35791394|19014178|17895697|17895697|17895697|17895697|1|0|0|0|48234496|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|237117986|89478609|89478485|18175317|17895697|17895697|17895697|219222289|89478609|89478485|89478485|17895701|17895697|17895697|17895697|219222289|89510161|89478485|89478485|17895765|17895697|17895697|17895697|89510161|17913173|17895697|273#
 
 # 02-0
+rerecords: 237
+
 Jumping faster on the bounceblock and the first platform eventually slows us down
 
 Not doing a corner jump to be able to go to the door directly is a tie. I tried all possible strategies inbetween there. I kept the most stylish one ;)
@@ -58,20 +78,28 @@ Didn't work:
 - doing reverse corner jumps between blocks in the middle section (angle are not good for the whole column)
 
 # 02-1
+rerecords: 698
+
 Jumping twice on the wall left or the wall right around 500 is not faster
 
 Jumping to get down before the doorswitch does not save any frame, it's just for style
 
 # 02-2
+rerecords: 567
+
 I tried doing a corner jump on the thwump to jump-start the jumps but it didn't work
 
 The frame-perfect chimney jump does not save any frame over rta.
 I just saved one frame by entering the chimney with a slightly better angle
 
 # 02-3
+rerecords: 190
+
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
+rerecords: 1521
+
 Jumping to go down small paths does not save any frame, it's just for style
 
 Stumbling near the end is faster
@@ -79,14 +107,20 @@ Stumbling near the end is faster
 Calculating the best path to slow down and jump down tubes is a pain and may still be improvable
 
 # 03-0
+rerecords: 331
+
 It might be able to crame 1 or 2 additional frames, but it's hell to optimize
 
 # 03-1
+rerecords: 308
+
 Beginning is so tight and frame-perfect that I can only copy 0th and not gain any millimeter
 
 The only gain is on the jump over the doorswitch
 
 # 03-2
+rerecords: 469
+
 Straight jump from the top platform (no corner jump): slower
 
 Somehow I can't reproduce the RTA jump... It's faster, but I can't reproduce it while fixing the beginning
@@ -94,6 +128,8 @@ Somehow I can't reproduce the RTA jump... It's faster, but I can't reproduce it 
 That said, even if I reach the doorswitch faster, I struggle doing a score as good as the current TAS
 
 # 03-3
+rerecords: 867
+
 Can't beat the drone in the beginning
 Going after the drone without jumping on the wall in the beginning is a bit slower (reaching platform on frame 273 instead of 267)
 Jumping on the left wall around 320 to get detected by the drone -> slower
@@ -111,12 +147,16 @@ I also tried some tricks for the hs TAS:
 Lost markers for some reason
 
 # 03-4
+rerecords: 143
+
 Jumping longer or shorter around 100 is slower (or not faster for longer jumps)
 
 It's hard to understand how much the timing of the jump influence the last turnaround.
 Anyway, by random tries, this is the fastest I went to the door, which is *half* a frame faster than rta (which doesn't save a frame)
 
 # 04-0
+rerecords: 745
+
 In the beginning, there doesn't appear to be a way to get in the ceiling hole with a walljump without using the thwump
 Waiting for the jump out of the ceiling hole is faster than stumbling out
 We wait for a few frames on the thwump to get higher. Waiting for longer gets lower.
@@ -124,20 +164,28 @@ The stumble down is the fastest way
 In the end, being pushed right by the ceiling then doing a regular jump instead of a reverse corner jump is just sliiiightly too slow to get the door on the next frame
 
 # 04-1
+rerecords: 760
+
 Corner jump on the bounceblock on the way down: useless, you have to slow down a lot for it
 In the end, we're going *too fast* and need to slow down or we meet the thwump
 Actually, slowing down in the end before the drone is better as it allows for a better navigation after the slope, which is what ultimately saves time
 Slowing down even more does not appear to save time (the navigation is really tricky... it might be possible to find a best path)
 
 # 04-2
+rerecords: 283
+
 With the right angle, you can jump on the top thwump. This is absolutely completely useless as it speeds you downwards
 
 It's probably possible to optimize it more but finding the right angle that works is a pain and random
 
 # 04-3
+rerecords: 121
+
 
 
 # 04-4
+rerecords: 755
+
 Reused the beginning from Raif et al
 Not getting the stumble around 210 is not faster
 We can't go back directly in the hole in a single jump because the turret kills us if we stay in the air too long. iirc there were some paths that did work but were much slower.
@@ -146,6 +194,8 @@ We can't get a better angle than the one we get. We can press left to get a bett
 We have to slow down a little bit after the doorswitch, otherwise the drone is in a position that prevents us from doing the last jump directly to the door
 
 # 05-0
+rerecords: 1450
+
 No or single walljump left for the first switch is not faster
 I tried going backwards to do a double rcj on the single-block wall but couldn't make it work (and wasn't sure this would lead to anything anyway)
 
@@ -154,6 +204,8 @@ We wait to release the lower drone, but not the upper one. This is frame-perfect
 It does not seem possible to go between the last drone and the slope in the very end
 
 # 05-1
+rerecords: 900
+
 In the beginning, we can get a bit of advance over 0th by corner jumping on the 3rd bit, but then we cannot reproduce the second corner jump with gain much more time
 I had to copy the exact path of the 0th
 
@@ -163,14 +215,20 @@ You can do a reverse corner jump around 595, and jump on the whole on the left..
 Using the pipe in the end is faster than turning around (by about 10f)
 
 # 05-2
+rerecords: 29
+
 
 
 # 05-3
+rerecords: 517
+
 We can take the doorswitch without falling down (there's a 1-frame moment where we can jump), but it's useless as there's a drone that get in the way to get right directly.
 We cannot get a cj on the thwump protecting the doorswitch.
 We cannot beat the drone after the second switch (going directly up)
 
 # 05-4
+rerecords: 526
+
 The turnaround to reach the switch is painful to optimize.
 0th does a jump that's slower but does not stumble on landing. Current solution is slightly better.
 Counter-intuitively, holding the wall for 1 frame *speed us down* a little bit
@@ -183,14 +241,20 @@ I tried many strategies in the end:
 - getting less height on the right wall to be able to go directly up
 
 # 06-0
+rerecords: 225
+
 
 
 # 06-1
+rerecords: 229
+
 With our faster beginning, we get seen by the drone and have to find a strategy to get out of the bb faster.
 To get out of the central place, jumping directly right is not faster, neither is landing and jumping
 Can't make a corner jump for the last big jump
 
 # 06-2
+rerecords: 571
+
 If we land directly after the first switch, we die. We need to stumble.
 
 It seems the best turnaround on 572 is to single-frame jump
@@ -198,14 +262,20 @@ It seems the best turnaround on 572 is to single-frame jump
 For the last long jump to get to the door, corner jumping on the lower platform is exactly 1f slower (0.07 subpixels lol)
 
 # 06-3
+rerecords: 261
+
 All this all new strategy in the beginning to barely be any faster
 
 # 06-4
+rerecords: 605
+
 That double thwump cj is incredibly frame-perfect and hard to find. Hopefully I don't have to redo it because of earlier optimization
 
 It's possible to save 1f in the beginning with 2 jumps (1 small then 1 mid), but this requires doing the 3 thwump cj again and they're a pain to pull off correctly
 
 # 07-0
+rerecords: 467
+
 I tried:
 - landing before starting the "pipe" jumps -> slower
 - starting the pipe jumps earlier -> I can't do the additional jump on the block, I have to wait *that* much, which also means waiting for the drone to go
@@ -213,29 +283,41 @@ I tried:
 - jumping directly from first switch to second one: it is just barely not enough. There is one situation in which we can manage to be high enough to do a cj, but it's much slower
 
 # 07-1
+rerecords: 141
+
 cj on last bb is not faster
 
 # 07-2
+rerecords: 551
+
 We can jump one frame earlier in the beginning, but then we don't get good enough angles
 
 Mayyybe avoiding the first drone to detect us in the beginning could save a few frames in the end, to avoid having to jump over it. But I'm not redoing everything...
 
 # 07-3
+rerecords: 342
+
 We need the missing to explodeon the platform ceiling, and for this we can't land too much on the left and jump to fast
 
 # 07-4
+rerecords: 498
+
 Adding another jump on the slope of the way up from the bowl is not faster because the bb on the way down slows us down
 Double jumping on the bb on the lower left corner instead of reverse slope jump is not faster
 Corner jump on the bb on the way up is not faster
 Not jumping in the end is not faster
 
 # 08-0
+rerecords: 347
+
 If very precisely timed, we can make a second jump on a bb on the left - but it's useless
 The second jump we make on the way up makes us land later, but more to the right. It's better to get detected by the drone earlier!
 
 The last jump to go down is extremlely tight. RTA seems to get a better angle for the stumble, which I can't reproduce (i'm not starting with the same speed)
 
 # 08-1
+rerecords: 820
+
 In the beginning, landing the fall with a cj on the bb is slower
 It's extremely annoying to find a turnaround strategy around the switch that doesn't get us killed. This solution works. There may be better ones.
 cj on the bb on the way up does not allow us to jump straight into the hole on the left
@@ -244,6 +326,8 @@ jump from the bb does not allow us to jump straight into the hole on the left
 It's possible to do a 5-jump pipe jump in the end, but we need to slow down considerably to pull it off, and it ends up being slower.
 
 # 08-2
+rerecords: 786
+
 It's possible to do a rj then a rcj on the spiky platform on the left, then another one on the second spiky platform on the left, but it's completely useless
 
 I tried different strategies for the beginning. This one seems to be the best at doing a double jump as fast as possible.
@@ -258,6 +342,8 @@ Triple jump around 550: doesn't lead anywhere
 For the end, instead of using the launchpad, I initially did a rcj then jumped on the bb, then a cj to reach to door. The launchpad is 16 frames faster
 
 # 08-3
+rerecords: 2394
+
 That skip took me 4-5 hours to pull off.
 
 It's extremely tight and I only found one input sequence in which I used all possible time saves to make it work.
@@ -274,9 +360,13 @@ Jumping on the left slope instead of doing a turnaround is slower.
 
 
 # 13-1
+rerecords: 155
+
 
 
 # 19-4
+rerecords: 453
+
 Didn't work:
 - in the beginning, jumping right from before the launchpad to reach the platform: it's very tightly too short (the ceiling pushes us down)
 - in the first square, going down from the middle section, then using the launchpad to try to get to the second square from the bottom (works, but slower: we have to make a walljump to get to the switch) or the right (slower)
@@ -289,12 +379,18 @@ Somehow, the stumble on the middle rectangle make us gain 1 frame when reaching 
 Stumble in the end is faster with subpixel optimization
 
 # 20-4
+rerecords: 140
+
 
 
 # 35-3
+rerecords: 43
+
 Seems already optimal
 
 # 36-3
+rerecords: 640
+
 Can't get over the first drone without losing time...
 
 Getting over the first drone to start on the left column is slower (+ we end up with a drone chasing us)
@@ -302,6 +398,8 @@ Getting over the first drone to start on the left column is slower (+ we end up 
 Slowing down to get detected by the drone we have to avoid on the way up is slower.
 
 # 39-4
+rerecords: 991
+
 Doesn't work:
 - starting on the left slope
 - going to the left and double-jumping on the thwump (gets electrocuted afterwards)	
@@ -316,13 +414,19 @@ Interesting version:
 $39-4 tower of long mistakes int.#metanet##00000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000111100000000000000000031111031111111111111111111111111111111111111111111111111111111111001001001111111110010010000000021111100100000000000000000000000000000000000000000000000000000000000000000000000000000000000300001001001001001001001000000000000000000000020000000000000000000000000000000000000000000000111110010000000000000001111111100100100000000311111111111111001001001111111111111111111111110211111111111111111111100000000000000000021111000000000000000000011110000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003|5^324,564!8^540,516,2!8^252,540,0!8^540,468,2!8^252,444,0!8^252,396,0!8^540,372,2!8^516,324,2!8^276,300,0!8^276,252,0!8^516,228,2!8^492,180,2!8^300,156,0!11^468,564,396,96!0^456,204!0^444,204!0^432,204!0^360,204!0^348,204!0^336,204!0^348,276!0^336,276!0^324,276!0^444,276!0^456,276!0^468,276!0^468,348!0^456,348!0^444,348!0^348,348!0^336,348!0^324,348!0^312,420!0^324,420!0^336,420!0^312,492!0^324,492!0^336,492!0^480,420!0^468,420!0^456,420!0^456,492!0^468,492!0^480,492#265:4369|35791394|35791394|35791394|107405858|107401318|107374182|107405926|107374182|107374182|107374182|237397606|107374182|89548390|89478485|89478485|89478485|219501909|17913173|36071138|19014178|107304401|107374182|35791462|35791394|35791394|35791394|546|0|0|0|17825792|4369|0|17895697|35791394|35791394|2236962#
 
 # 42-3
+rerecords: 9
+
 
 
 # 43-1
+rerecords: 553
+
 A very clean one, with a corner jump on the way up (which is slower)
 431:139810|17895680|17895697|97587473|89478485|17896789|17895697|89548397|89478485|18175317|22876433|17895697|17895697|17895697|35791393|35791394|35791394|35791394|35791394|35791394|35790848|35791394|35791394|35791394|35791394|107880994|35808870|35791394|107374306|107374182|107374182|35791394|89478494|22369621|17895697|17895697|17895697|17895697|17895697|235999505|89548390|89478485|89478485|18175317|17895697|107374289|89478485|89478485|17896789|17895697|219222289|90596966|89478485|89478485|17895697|17895697|17895697|17895697|17895697|17898769|17895697|4369
 
 # 49-4
+rerecords: 1922
+
 Somehow, not delaying the jump at 467 was always faster. Current solution may not be the absolute best one.
 
 Doing two proper bounce corner jump in the beginning gets us too fast: we end up hitting the drone on the left. I had to slow down a bit to be able to pass it
@@ -332,15 +436,23 @@ Double corner bounce on lower bb around 820: useless trajectory
 Not sure if doing a double bounce block jump in the end like the rta run does would be faster. I don't think it would, and I could not reproduce a proper one a second time. I think current solution is faster anyway. It's slower in rta at least.
 
 # 53-0
+rerecords: 14
+
 Optimal
 
 # 53-2
+rerecords: 40
+
 Doing frame-perfect jumps in the doorswitch pipe kills us lmao
 
 # 59-0
+rerecords: 117
+
 This level is maxed out already.
 
 # 59-4
+rerecords: 862
+
 To land, stumble + lower part of the slope after the mine is slower
 Somehow the stumble at 417 is by one frame the fastest way
 Around 650: reverse slope jump + left walljump: it's sooo bad
@@ -348,14 +460,20 @@ In the end, jumping to avoid touching the floorchaser's floor is slower
 A simple jump on the left wall in the end is equally fast but way less cool ;)
 
 # 60-0
+rerecords: 21
+
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
 # 70-0
+rerecords: 400
+
 Stopping the jump at 147 and left input at 139 is *too fast*: we can't get the thwump corner jump
 
 I can't beat RTA. I need speed information to manage to optimize the beginning.
 
 # 70-2
+rerecords: 336
+
 Cornerjump on the third square on the right -> slower to reach the doorswitch by 13 frames
 
 Can't get pushed down on the square at 205 because we can't turn left without landing on the lower square
@@ -363,28 +481,40 @@ Can't get pushed down on the square at 205 because we can't turn left without la
 Can't beat rta, nor improve it
 
 # 70-3
+rerecords: 318
+
 Triple jump in the beginning doesn't lead anywhere useful
 Same for direct jump on wall
 
 # 70-4
+rerecords: 313
+
 Turns out I can get 2 pixels on the way down by hitting the ceiling on this exact spot
 Optimization of the path on the way down saves the remaining pixels, up to our last frame
 Best strategy is actually not to avoid the last bb, but to catch it as early as possible so it gets pushed to the left
 
 # 71-0
+rerecords: 169
+
 Jumping earlier around 238 does not allow to save a frame over rta. The jump is slightly lower, but not enough to save a frame
 
 # 71-1
+rerecords: 712
+
 Can't find a path that gets a good corner jump around 210 without slowing a lot
 Can't get a corner jump around 160
 Can't get above the mine around 430 directly after the first land. Manage to do it once after a jump (don't remember which) but it was slower and now I can't reproduce it
 
 # 74-4
+rerecords: 727
+
 Doing an amazing series of jumps on bounceblocks using corners on the way up, we get so much speed that we crash on the ceiling :(
 
 Corner jump on the top bounce on the right (the one in the middle) gives us an angle a little bit too low, we hit the edge and stumble way too much
 
 # 78-4
+rerecords: 1050
+
 First tased level, the intro was still done manually
 
 Not faster:
@@ -395,17 +525,26 @@ Did not work:
 - use the small portion of the slope next to the mines to land on the previous-to-last row. It's possible on the second row (but slower), but somehow I can't get it to work on the other one, because the drone restrict possible trajectories
 
 # 86-3
+rerecords: 146
+
 Slower than RTA. Annoying.
 
 # 90-0
+rerecords: 802
+
 I tried many different strategies for this one. The optimal one seems to be to maximize the number of corner jumps, as long as they don't require pressing opposite directions *too much*. This is why we avoid some of them, and notably the last one, which is too slow.
 
 I tried jumping directly on the first bb on the left by it was slower due to having to press opposite direction
 
 # 94-0
+rerecords: 3
+
 
 
 # 99-0
+rerecords: 246
+
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
+# Total rerecords: 33300
