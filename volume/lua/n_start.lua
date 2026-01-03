@@ -281,6 +281,20 @@ function onPaint()
       if a then
          gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffff00)
          gui.text(150, 575, string.format("%f ; %f", a.x, a.y), 0xffffff00, 0, 0, 15)
+         if a.x > x then
+            gui.text(130, 587, "<", 0xffffffff, 0, 0, 15)
+         elseif a.x == x then
+            gui.text(130, 587, "=", 0xffffffff, 0, 0, 15)
+         else
+            gui.text(130, 587, ">", 0xffffffff, 0, 0, 15)
+         end
+         if a.y > y then
+            gui.text(140, 587, "^", 0xffffffff, 0, 0, 15)
+         elseif a.y == y then
+            gui.text(140, 587, "=", 0xffffffff, 0, 0, 15)
+         else
+            gui.text(140, 587, "v", 0xffffffff, 0, 0, 15)
+         end
       end
    end
 
