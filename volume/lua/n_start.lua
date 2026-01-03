@@ -81,6 +81,40 @@ function display_distance_to_door(x, y, door_x, door_y)
     end
 end
 
+function display_distance_to_switches(x, y, switches)
+    for _, sw in ipairs(switches) do
+        local dx = x - sw.x
+        local dy = y - sw.y
+
+        -- distance between centers
+        local center_dist = math.sqrt(dx*dx + dy*dy)
+
+        -- player radius = 10, switch radius = 5
+        local edge_dist = center_dist - (10 + 5)
+
+        if edge_dist > 0 and edge_dist < 50 then
+            -- draw the value near the switch
+            gui.text(sw.x - 15, sw.y + 10, string.format("%.2f", edge_dist), 0xff0000ff)  -- blue
+        end
+    end
+end
+
+function display_distance_to_doorswitch(x, y, doorswitch_x, doorswitch_y)
+   local dx = x - doorswitch_x
+   local dy = y - doorswitch_y
+
+   -- distance between centers
+   local center_dist = math.sqrt(dx*dx + dy*dy)
+
+   -- player radius = 10, doorswitch radius = 6
+   local edge_dist = center_dist - (10 + 6)
+
+   if edge_dist > 0 and edge_dist < 50 then
+      -- draw the value near the switch
+      gui.text(doorswitch_x - 15, doorswitch_y + 10, string.format("%.2f", edge_dist), 0xff0000ff)  -- blue
+   end
+end
+
 function draw_hitboxes()
       local data = levels[level]
       if not data then return end
@@ -266,6 +300,12 @@ function onPaint()
       gui.text(150, 587, string.format("%f ; %f", x, y), 0xffffffff, 0, 0, 15)
       if door_x and door_y then
          display_distance_to_door(x, y, door_x, door_y)
+      end
+      if levels[level].doorswitch_x and levels[level].doorswitch_y then
+         display_distance_to_doorswitch(x, y, levels[level].doorswitch_x, levels[level].doorswitch_y)
+      end
+      if levels[level].switches then
+         display_distance_to_switches(x, y, levels[level].switches)
       end
       if memspeed_y ~= "" then
          local y_num = tonumber(memspeed_y, 16)
