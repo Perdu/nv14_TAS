@@ -301,7 +301,7 @@ function onPaint()
    end
 
    if not ramsearch_done then
-      gui.text(120, 580, "Waiting...")
+      gui.text(80, 580, "Waiting...")
    end
 
    -- if advance_one_step_after_ramsearch == 2 then
