@@ -255,8 +255,8 @@ function onPaint()
          local ghost_text_position = 150
          local best_path_exists = bestPath[f]
          if best_path_exists then
-            -- move ghost text to the left to display best path instead
-            ghost_text_position = 320
+            -- move ghost text to the right to display best path instead
+            ghost_text_position = 400
          end
          gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff, 0, 0, 15)
 
