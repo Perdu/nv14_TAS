@@ -181,8 +181,8 @@ end
 function draw_velocity_arrows(x, y, vx, vy)
     -- scale speed so arrows stay readable
     local scale = 4     -- adjust if arrows feel too long/short
-    local horizontal_color = 0x88ff0000
-    local vertical_color = 0x880000ff
+    local horizontal_color = 0xffff0000
+    local vertical_color = 0xff0000ff
     if vy >= 7.00 or vy <= -7.00 then
        vertical_color = 0xffff0000
     end
