@@ -36,7 +36,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [Stumbles](https://discord.com/channels/197765375503368192/199460839252688896/1431062811903266957)
 
 ## Todo
-- resulting speed vector
 - extract all ghost information automatically
 - speed extraction still doesn't work for some grounded levels (01-0, 02-0)
 - Sort Readme into several files for better readability

@@ -217,6 +217,39 @@ function draw_velocity_arrows(x, y, vx, vy)
     -- Optional: draw numeric values
     gui.text(300, 575, string.format("vx: %f", vx), horizontal_color, 0, 0, 15)
     gui.text(300, 585,  string.format("vy: %f", vy), vertical_color, 0, 0, 15)
+
+    -- compute endpoint of combined vector
+    local rx = x + vx * scale
+    local ry = y + vy * scale
+
+    -- choose a color for the resultant vector
+    local result_color = 0xffffff00  -- orange
+
+    -- draw line for combined vector
+    gui.line(x, y, rx, ry, result_color)
+
+    -- draw a proper arrowhead
+    if vx ~= 0 or vy ~= 0 then
+       -- normalize direction vector
+       local len = math.sqrt(vx*vx + vy*vy)
+       local dir_x = (vx / len)
+       local dir_y = (vy / len)
+
+       local arrow_size = 5  -- pixels
+       local perp_x = -dir_y
+       local perp_y = dir_x
+
+       -- two lines forming the arrowhead
+       gui.line(rx, ry,
+                rx - dir_x*arrow_size + perp_x*arrow_size/2,
+                ry - dir_y*arrow_size + perp_y*arrow_size/2,
+                result_color)
+       gui.line(rx, ry,
+                rx - dir_x*arrow_size - perp_x*arrow_size/2,
+                ry - dir_y*arrow_size - perp_y*arrow_size/2,
+                result_color)
+    end
+
 end
 
 function onPaint()
