@@ -40,7 +40,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - speed extraction still doesn't work for some grounded levels (01-0, 02-0)
 - Sort Readme into several files for better readability
 - automatically update README with current progress/stats
-- TAS the remaining 498 levels ;)
+- TAS the remaining 388 levels ;)
 
 ## Optimization level
 
