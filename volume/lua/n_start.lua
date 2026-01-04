@@ -40,8 +40,6 @@ save_best_position = false
 path = {}
 knownFrames = {}   -- sorted list of frames already stored
 bestPath = {}
-door_x = nil
-door_y = nil
 
 -- Insert or update path at a specific frame
 local function recordFrame(frame, x, y)
@@ -65,20 +63,38 @@ function drawList(list, size, r, g, b)
    end
 end
 
-function display_distance_to_door(x, y, door_x, door_y)
-   local dx = x - door_x
-   local dy = y - door_y
+function display_distance_to_doors(x, y, doors)
+   for _, sw in ipairs(doors) do
+      local dx = x - sw.x
+      local dy = y - sw.y
 
-   -- distance between the centers
-   local center_dist = math.sqrt(dx*dx + dy*dy)
+      -- distance between the centers
+      local center_dist = math.sqrt(dx*dx + dy*dy)
 
-   -- subtract radii (player=10, door=12)
-   local edge_dist = center_dist - (10 + 12)
+      -- subtract radii (player=10, door=12)
+      local edge_dist = center_dist - (10 + 12)
 
-    if edge_dist > 0 and edge_dist < 50 then
-       -- draw the value on screen
-       gui.text(door_x - 20, door_y + 10, string.format("%.2f", edge_dist), 0xffffff00)
-    end
+      if edge_dist > 0 and edge_dist < 50 then
+         -- draw the value on screen
+         gui.text(sw.x - 20, sw.y + 10, string.format("%.2f", edge_dist), 0xffffff00)
+      end
+
+      -- doorswitches
+      dx = x - sw.sx
+      dy = y - sw.sy
+
+      -- distance between centers
+      center_dist = math.sqrt(dx*dx + dy*dy)
+
+      -- player radius = 10, doorswitch radius = 6
+      edge_dist = center_dist - (10 + 6)
+
+      if edge_dist > 0 and edge_dist < 50 then
+         -- draw the value near the switch
+         gui.text(sw.sx - 15, sw.sy - 20, string.format("%.2f", edge_dist), 0xff0000ff)  -- blue
+      end
+
+   end
 end
 
 function display_distance_to_switches(x, y, switches)
@@ -99,30 +115,14 @@ function display_distance_to_switches(x, y, switches)
     end
 end
 
-function display_distance_to_doorswitch(x, y, doorswitch_x, doorswitch_y)
-   local dx = x - doorswitch_x
-   local dy = y - doorswitch_y
-
-   -- distance between centers
-   local center_dist = math.sqrt(dx*dx + dy*dy)
-
-   -- player radius = 10, doorswitch radius = 6
-   local edge_dist = center_dist - (10 + 6)
-
-   if edge_dist > 0 and edge_dist < 50 then
-      -- draw the value near the switch
-      gui.text(doorswitch_x - 15, doorswitch_y + 10, string.format("%.2f", edge_dist), 0xff0000ff)  -- blue
-   end
-end
-
 function draw_hitboxes()
       local data = levels[level]
       if not data then return end
 
-      gui.ellipse(data.door_x, data.door_y, 12, 12)
-      gui.ellipse(data.doorswitch_x, data.doorswitch_y, 6, 6)
-      door_x = data.door_x
-      door_y = data.door_y
+      for _, e in ipairs(data.doors) do
+         gui.ellipse(e.x, e.y, 12, 12, 1)
+         gui.ellipse(e.sx, e.sy, 6, 6, 1)
+      end
 
       drawList(data.mines, 4, 255, 0, 0)         -- red mines
       -- drawList(data.drones, 9, 0, 0, 255)
@@ -298,15 +298,14 @@ function onPaint()
          gui.ellipse(x, y, 10, 10)
       end
       gui.text(150, 587, string.format("%f ; %f", x, y), 0xffffffff, 0, 0, 15)
-      if door_x and door_y then
-         display_distance_to_door(x, y, door_x, door_y)
+      data = levels[level]
+      if data.doors then
+         display_distance_to_doors(x, y, data.doors)
       end
-      if levels[level].doorswitch_x and levels[level].doorswitch_y then
-         display_distance_to_doorswitch(x, y, levels[level].doorswitch_x, levels[level].doorswitch_y)
-      end
-      if levels[level].switches then
-         display_distance_to_switches(x, y, levels[level].switches)
-      end
+
+--      if levels[level].switches then
+--         display_distance_to_switches(x, y, levels[level].switches)
+--      end
       if memspeed_y ~= "" then
          local y_num = tonumber(memspeed_y, 16)
          local vy = memory.readd(y_num)
@@ -421,8 +420,6 @@ function onStartup()
     knownFrames = {}
     memy = ""
     memspeed_y = ""
-    door_x = nil
-    door_y = nil
 end
 
 -- Detect Space key press
