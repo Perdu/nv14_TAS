@@ -36,13 +36,8 @@ with open(input_path, "r", encoding="utf-8") as f:
         if ninja_match:
             n_x, n_y = ninja_match.groups()
 
-        # Extract door
-        door_match = door_re.search(line)
-        door_x = door_y = doorswitch_x = doorswitch_y = None
-        if door_match:
-            door_x, door_y, doorswitch_x, doorswitch_y = door_match.groups()
-
         # Extract lists of entities
+        doors = [tuple(m) for m in door_re.findall(line)]
         mines = [tuple(m) for m in mine_re.findall(line)]
         drones = [tuple(d) for d in drone_re.findall(line)]
         guards = [tuple(g) for g in floorguard_re.findall(line)]
@@ -53,10 +48,7 @@ with open(input_path, "r", encoding="utf-8") as f:
         levels[level_id] = {
             "n_x": n_x,
             "n_y": n_y,
-            "door_x": door_x,
-            "door_y": door_y,
-            "doorswitch_x": doorswitch_x,
-            "doorswitch_y": doorswitch_y,
+            "doors": doors,
             "mines": mines,
             "drones": drones,
             "floorguards": guards,
@@ -73,15 +65,18 @@ with open(output_path, "w", encoding="utf-8") as out:
     for lid, data in levels.items():
         out.write(f'   ["{lid}"] = {{\n')
         out.write(f'      n_x = {data["n_x"]}, n_y = {data["n_y"]},\n')
-        out.write(f'      door_x = {data["door_x"]}, door_y = {data["door_y"]},\n')
-        out.write(f'      doorswitch_x = {data["doorswitch_x"]}, doorswitch_y = {data["doorswitch_y"]},\n')
 
-        def write_list(name, lst):
+        def write_list(name, lst, nb_items=2):
             out.write(f"      {name} = {{ ")
-            for x, y in lst:
-                out.write(f"{{x={x}, y={y}}}, ")
+            if nb_items == 2:
+                for x, y in lst:
+                    out.write(f"{{x={x}, y={y}}}, ")
+            else:
+                for x, y, sx, sy in lst:
+                    out.write(f"{{x={x}, y={y}, sx={sx}, sy={sy}}}, ")
             out.write("},\n")
 
+        write_list("doors", data["doors"], nb_items=4)
         write_list("mines", data["mines"])
         write_list("drones", data["drones"])
         write_list("floorguards", data["floorguards"])

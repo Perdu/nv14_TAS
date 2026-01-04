@@ -1,8 +1,7 @@
 levels = {
    ["00-0"] = {
       n_x = 60, n_y = 516,
-      door_x = 588, door_y = 492,
-      doorswitch_x = 168, doorswitch_y = 156,
+      doors = { {x=588, y=492, sx=168, sy=156}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -12,8 +11,7 @@ levels = {
    },
    ["00-1"] = {
       n_x = 108, n_y = 564,
-      door_x = 372, door_y = 444,
-      doorswitch_x = 36, doorswitch_y = 396,
+      doors = { {x=708, y=492, sx=36, sy=396}, {x=372, y=444, sx=60, sy=60}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -23,8 +21,7 @@ levels = {
    },
    ["00-2"] = {
       n_x = 324, n_y = 564,
-      door_x = 756, door_y = 324,
-      doorswitch_x = 36, doorswitch_y = 156,
+      doors = { {x=756, y=324, sx=36, sy=156}, },
       mines = { {x=384, y=552}, {x=384, y=516}, {x=384, y=480}, {x=384, y=444}, {x=384, y=408}, {x=384, y=372}, {x=384, y=336}, {x=384, y=300}, {x=384, y=264}, {x=384, y=228}, {x=384, y=192}, {x=384, y=156}, {x=384, y=120}, {x=264, y=120}, {x=264, y=156}, {x=264, y=192}, {x=264, y=228}, {x=264, y=264}, {x=264, y=300}, {x=264, y=336}, {x=264, y=372}, {x=264, y=408}, {x=264, y=444}, {x=264, y=480}, {x=264, y=516}, {x=264, y=552}, {x=480, y=360}, {x=168, y=360}, {x=192, y=192}, {x=192, y=228}, {x=192, y=264}, {x=192, y=300}, {x=192, y=336}, {x=456, y=336}, {x=456, y=300}, {x=456, y=264}, {x=480, y=396}, {x=480, y=432}, {x=480, y=468}, {x=168, y=396}, {x=168, y=432}, },
       drones = { },
       floorguards = { },
@@ -34,8 +31,7 @@ levels = {
    },
    ["00-3"] = {
       n_x = 348, n_y = 564,
-      door_x = 204, door_y = 132,
-      doorswitch_x = 732, doorswitch_y = 60,
+      doors = { {x=204, y=132, sx=732, sy=60}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -45,8 +41,7 @@ levels = {
    },
    ["00-4"] = {
       n_x = 36, n_y = 396,
-      door_x = 732, door_y = 108,
-      doorswitch_x = 588, doorswitch_y = 96,
+      doors = { {x=732, y=108, sx=588, sy=96}, },
       mines = { },
       drones = { {x=36, y=36}, },
       floorguards = { },
@@ -56,8 +51,7 @@ levels = {
    },
    ["01-0"] = {
       n_x = 671.959736390519, n_y = 566,
-      door_x = 756, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 36,
+      doors = { {x=756, y=564, sx=756, sy=36}, },
       mines = { {x=264, y=492}, {x=348, y=516}, {x=492, y=564}, {x=492, y=108}, {x=528, y=132}, {x=84, y=276}, {x=96, y=288}, {x=216, y=264}, {x=204, y=264}, {x=192, y=264}, {x=180, y=264}, {x=168, y=264}, {x=384, y=420}, {x=372, y=396}, },
       drones = { {x=84, y=252}, {x=252, y=60}, },
       floorguards = { },
@@ -67,8 +61,7 @@ levels = {
    },
    ["01-1"] = {
       n_x = 36, n_y = 348,
-      door_x = 756, door_y = 228,
-      doorswitch_x = 300, doorswitch_y = 132,
+      doors = { {x=756, y=228, sx=300, sy=132}, },
       mines = { },
       drones = { },
       floorguards = { {x=660, y=114}, {x=108, y=570}, },
@@ -78,8 +71,7 @@ levels = {
    },
    ["01-2"] = {
       n_x = 600, n_y = 252,
-      door_x = 540, door_y = 252,
-      doorswitch_x = 192, doorswitch_y = 540,
+      doors = { {x=540, y=252, sx=192, sy=540}, },
       mines = { },
       drones = { {x=36, y=60}, {x=660, y=468}, {x=588, y=324}, {x=372, y=132}, },
       floorguards = { },
@@ -89,8 +81,7 @@ levels = {
    },
    ["01-3"] = {
       n_x = 36, n_y = 564,
-      door_x = 660, door_y = 276,
-      doorswitch_x = 756, doorswitch_y = 60,
+      doors = { {x=660, y=276, sx=756, sy=60}, },
       mines = { {x=768, y=372}, {x=768, y=408}, {x=768, y=444}, {x=768, y=480}, {x=768, y=516}, {x=768, y=552}, },
       drones = { },
       floorguards = { },
@@ -100,8 +91,7 @@ levels = {
    },
    ["01-4"] = {
       n_x = 732, n_y = 564,
-      door_x = 36, door_y = 84,
-      doorswitch_x = 60, doorswitch_y = 252,
+      doors = { {x=36, y=84, sx=60, sy=252}, },
       mines = { },
       drones = { {x=36, y=564}, {x=756, y=36}, },
       floorguards = { },
@@ -111,8 +101,7 @@ levels = {
    },
    ["02-0"] = {
       n_x = 447.675733432821, n_y = 566,
-      door_x = 36, door_y = 60,
-      doorswitch_x = 420, doorswitch_y = 60,
+      doors = { {x=36, y=60, sx=420, sy=60}, },
       mines = { },
       drones = { {x=756, y=36}, {x=36, y=36}, },
       floorguards = { },
@@ -122,8 +111,7 @@ levels = {
    },
    ["02-1"] = {
       n_x = 756, n_y = 564,
-      door_x = 84, door_y = 300,
-      doorswitch_x = 372, doorswitch_y = 372,
+      doors = { {x=84, y=300, sx=372, sy=372}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -133,8 +121,7 @@ levels = {
    },
    ["02-2"] = {
       n_x = 708, n_y = 564,
-      door_x = 732, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 372,
+      doors = { {x=732, y=564, sx=36, sy=372}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -144,8 +131,7 @@ levels = {
    },
    ["02-3"] = {
       n_x = 396, n_y = 516,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 744, doorswitch_y = 564,
+      doors = { {x=48, y=564, sx=744, sy=564}, },
       mines = { },
       drones = { {x=36, y=516}, {x=756, y=516}, {x=300, y=36}, },
       floorguards = { },
@@ -155,8 +141,7 @@ levels = {
    },
    ["02-4"] = {
       n_x = 756, n_y = 564,
-      door_x = 36, door_y = 60,
-      doorswitch_x = 132, doorswitch_y = 204,
+      doors = { {x=36, y=60, sx=132, sy=204}, },
       mines = { },
       drones = { },
       floorguards = { {x=108, y=306}, },
@@ -166,8 +151,7 @@ levels = {
    },
    ["03-0"] = {
       n_x = 396, n_y = 528,
-      door_x = 396, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 300,
+      doors = { {x=396, y=84, sx=396, sy=300}, },
       mines = { },
       drones = { {x=252, y=36}, {x=540, y=564}, {x=36, y=300}, {x=756, y=300}, },
       floorguards = { },
@@ -177,8 +161,7 @@ levels = {
    },
    ["03-1"] = {
       n_x = 586.632097968693, n_y = 566,
-      door_x = 300, door_y = 564,
-      doorswitch_x = 732, doorswitch_y = 564,
+      doors = { {x=300, y=564, sx=732, sy=564}, },
       mines = { {x=516, y=264}, },
       drones = { },
       floorguards = { },
@@ -188,8 +171,7 @@ levels = {
    },
    ["03-2"] = {
       n_x = 36, n_y = 540,
-      door_x = 708, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 180,
+      doors = { {x=708, y=564, sx=756, sy=180}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -199,8 +181,7 @@ levels = {
    },
    ["03-3"] = {
       n_x = 420, n_y = 300,
-      door_x = 396, door_y = 252,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=396, y=252, sx=396, sy=60}, },
       mines = { },
       drones = { {x=516, y=420}, {x=276, y=180}, {x=276, y=60}, {x=132, y=564}, {x=660, y=492}, {x=228, y=300}, },
       floorguards = { },
@@ -210,8 +191,7 @@ levels = {
    },
    ["03-4"] = {
       n_x = 732, n_y = 564,
-      door_x = 612, door_y = 204,
-      doorswitch_x = 516, doorswitch_y = 84,
+      doors = { {x=612, y=204, sx=516, sy=84}, },
       mines = { {x=408, y=444}, {x=420, y=444}, {x=516, y=444}, {x=528, y=444}, },
       drones = { {x=36, y=564}, },
       floorguards = { },
@@ -221,8 +201,7 @@ levels = {
    },
    ["04-0"] = {
       n_x = 36, n_y = 564,
-      door_x = 732, door_y = 564,
-      doorswitch_x = 708, doorswitch_y = 60,
+      doors = { {x=732, y=564, sx=708, sy=60}, },
       mines = { {x=432, y=480}, {x=456, y=456}, {x=480, y=432}, {x=504, y=408}, {x=528, y=384}, {x=552, y=360}, {x=432, y=120}, {x=456, y=144}, {x=480, y=168}, {x=504, y=192}, {x=528, y=216}, {x=552, y=240}, },
       drones = { },
       floorguards = { {x=396, y=258}, {x=324, y=570}, },
@@ -232,8 +211,7 @@ levels = {
    },
    ["04-1"] = {
       n_x = 48, n_y = 36,
-      door_x = 708, door_y = 564,
-      doorswitch_x = 60, doorswitch_y = 228,
+      doors = { {x=708, y=564, sx=60, sy=228}, },
       mines = { {x=180, y=228}, {x=204, y=228}, {x=228, y=228}, {x=372, y=228}, {x=396, y=228}, {x=420, y=228}, {x=564, y=228}, {x=588, y=228}, },
       drones = { {x=420, y=516}, },
       floorguards = { {x=372, y=546}, },
@@ -243,8 +221,7 @@ levels = {
    },
    ["04-2"] = {
       n_x = 756, n_y = 564,
-      door_x = 36, door_y = 96,
-      doorswitch_x = 564, doorswitch_y = 84,
+      doors = { {x=36, y=96, sx=564, sy=84}, },
       mines = { {x=672, y=516}, {x=672, y=480}, {x=672, y=444}, {x=672, y=408}, {x=672, y=372}, {x=648, y=324}, {x=648, y=288}, {x=648, y=252}, {x=648, y=216}, {x=648, y=180}, {x=648, y=144}, {x=120, y=516}, {x=120, y=480}, {x=120, y=444}, {x=120, y=408}, {x=120, y=372}, {x=144, y=324}, {x=144, y=288}, {x=144, y=252}, {x=144, y=216}, {x=144, y=180}, {x=144, y=144}, {x=456, y=516}, {x=456, y=480}, {x=456, y=444}, {x=456, y=408}, {x=456, y=372}, {x=456, y=336}, {x=456, y=300}, {x=456, y=264}, {x=336, y=264}, {x=480, y=228}, {x=480, y=192}, {x=480, y=156}, {x=312, y=228}, {x=312, y=192}, {x=312, y=156}, {x=336, y=300}, {x=336, y=336}, {x=336, y=372}, {x=336, y=408}, {x=336, y=444}, {x=336, y=480}, {x=336, y=516}, {x=768, y=480}, {x=768, y=408}, {x=768, y=324}, {x=768, y=252}, {x=768, y=180}, {x=768, y=108}, {x=24, y=480}, {x=24, y=408}, {x=24, y=324}, {x=24, y=252}, {x=24, y=180}, {x=444, y=60}, {x=348, y=60}, },
       drones = { {x=564, y=108}, {x=228, y=108}, },
       floorguards = { {x=276, y=570}, },
@@ -254,8 +231,7 @@ levels = {
    },
    ["04-3"] = {
       n_x = 756, n_y = 564,
-      door_x = 468, door_y = 564,
-      doorswitch_x = 492, doorswitch_y = 300,
+      doors = { {x=468, y=564, sx=492, sy=300}, },
       mines = { {x=420, y=468}, {x=420, y=492}, {x=612, y=276}, {x=588, y=276}, {x=372, y=252}, {x=420, y=540}, {x=420, y=564}, },
       drones = { {x=636, y=60}, {x=540, y=132}, {x=348, y=204}, {x=372, y=252}, },
       floorguards = { },
@@ -265,8 +241,7 @@ levels = {
    },
    ["04-4"] = {
       n_x = 138, n_y = 564,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 744, doorswitch_y = 564,
+      doors = { {x=48, y=564, sx=744, sy=564}, },
       mines = { {x=66, y=84}, {x=180, y=102}, {x=180, y=30}, {x=360, y=456}, {x=456, y=456}, {x=552, y=456}, {x=576, y=456}, {x=204, y=456}, {x=276, y=456}, {x=240, y=456}, },
       drones = { {x=660, y=204}, {x=684, y=180}, {x=684, y=420}, },
       floorguards = { },
@@ -276,8 +251,7 @@ levels = {
    },
    ["05-0"] = {
       n_x = 48, n_y = 48,
-      door_x = 84, door_y = 60,
-      doorswitch_x = 108, doorswitch_y = 468,
+      doors = { {x=84, y=60, sx=108, sy=468}, },
       mines = { {x=180, y=288}, {x=108, y=288}, {x=144, y=252}, {x=768, y=228}, {x=708, y=348}, {x=768, y=348}, {x=168, y=492}, {x=216, y=444}, {x=204, y=84}, {x=204, y=48}, {x=444, y=156}, {x=684, y=60}, {x=324, y=228}, {x=492, y=288}, {x=540, y=372}, {x=300, y=420}, {x=300, y=348}, {x=60, y=396}, {x=60, y=348}, },
       drones = { {x=132, y=132}, {x=636, y=300}, {x=684, y=276}, {x=516, y=468}, {x=636, y=492}, },
       floorguards = { },
@@ -287,8 +261,7 @@ levels = {
    },
    ["05-1"] = {
       n_x = 756, n_y = 564,
-      door_x = 48, door_y = 60,
-      doorswitch_x = 624, doorswitch_y = 60,
+      doors = { {x=48, y=60, sx=624, sy=60}, },
       mines = { {x=420, y=216}, {x=396, y=216}, {x=660, y=576}, {x=120, y=456}, {x=96, y=456}, {x=468, y=456}, {x=444, y=456}, {x=660, y=456}, },
       drones = { },
       floorguards = { },
@@ -298,8 +271,7 @@ levels = {
    },
    ["05-2"] = {
       n_x = 732, n_y = 564,
-      door_x = 588, door_y = 444,
-      doorswitch_x = 108, doorswitch_y = 564,
+      doors = { {x=588, y=444, sx=108, sy=564}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -309,8 +281,7 @@ levels = {
    },
    ["05-3"] = {
       n_x = 660, n_y = 36,
-      door_x = 636, door_y = 132,
-      doorswitch_x = 132, doorswitch_y = 132,
+      doors = { {x=636, y=132, sx=132, sy=132}, },
       mines = { },
       drones = { {x=396, y=180}, {x=372, y=84}, {x=132, y=36}, {x=204, y=132}, {x=252, y=84}, },
       floorguards = { },
@@ -320,8 +291,7 @@ levels = {
    },
    ["05-4"] = {
       n_x = 36, n_y = 36,
-      door_x = 60, door_y = 396,
-      doorswitch_x = 612, doorswitch_y = 132,
+      doors = { {x=60, y=396, sx=612, sy=132}, },
       mines = { {x=444, y=48}, {x=444, y=480}, {x=420, y=360}, {x=84, y=576}, {x=108, y=288}, },
       drones = { {x=156, y=132}, {x=564, y=252}, {x=252, y=348}, {x=636, y=444}, },
       floorguards = { {x=156, y=474}, {x=492, y=378}, {x=348, y=138}, },
@@ -331,8 +301,7 @@ levels = {
    },
    ["06-0"] = {
       n_x = 396, n_y = 36,
-      door_x = 696, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 516,
+      doors = { {x=696, y=84, sx=396, sy=516}, },
       mines = { },
       drones = { {x=396, y=444}, {x=36, y=540}, {x=756, y=540}, {x=468, y=252}, },
       floorguards = { },
@@ -342,8 +311,7 @@ levels = {
    },
    ["06-1"] = {
       n_x = 708, n_y = 36,
-      door_x = 720, door_y = 84,
-      doorswitch_x = 312, doorswitch_y = 300,
+      doors = { {x=720, y=84, sx=312, sy=300}, },
       mines = { },
       drones = { {x=660, y=324}, {x=348, y=396}, {x=60, y=252}, {x=348, y=156}, },
       floorguards = { },
@@ -353,8 +321,7 @@ levels = {
    },
    ["06-2"] = {
       n_x = 36, n_y = 564,
-      door_x = 564, door_y = 252,
-      doorswitch_x = 756, doorswitch_y = 420,
+      doors = { {x=564, y=252, sx=756, sy=420}, },
       mines = { },
       drones = { {x=60, y=156}, },
       floorguards = { },
@@ -364,8 +331,7 @@ levels = {
    },
    ["06-3"] = {
       n_x = 420, n_y = 564,
-      door_x = 204, door_y = 324,
-      doorswitch_x = 108, doorswitch_y = 60,
+      doors = { {x=204, y=324, sx=108, sy=60}, },
       mines = { },
       drones = { {x=156, y=396}, },
       floorguards = { },
@@ -375,8 +341,7 @@ levels = {
    },
    ["06-4"] = {
       n_x = 47.6846448661045, n_y = 500.259948983262,
-      door_x = 756, door_y = 108,
-      doorswitch_x = 396, doorswitch_y = 348,
+      doors = { {x=756, y=108, sx=396, sy=348}, },
       mines = { {x=36, y=156}, {x=36, y=180}, },
       drones = { },
       floorguards = { {x=276, y=210}, {x=252, y=570}, },
@@ -386,8 +351,7 @@ levels = {
    },
    ["07-0"] = {
       n_x = 756, n_y = 564,
-      door_x = 744, door_y = 132,
-      doorswitch_x = 36, doorswitch_y = 564,
+      doors = { {x=744, y=132, sx=36, sy=564}, },
       mines = { {x=252, y=312}, {x=312, y=414}, {x=492, y=282}, {x=366, y=156}, {x=234, y=108}, {x=600, y=96}, {x=720, y=468}, {x=120, y=480}, },
       drones = { {x=84, y=540}, {x=204, y=252}, },
       floorguards = { },
@@ -397,8 +361,7 @@ levels = {
    },
    ["07-1"] = {
       n_x = 756, n_y = 564,
-      door_x = 384, door_y = 36,
-      doorswitch_x = 420, doorswitch_y = 36,
+      doors = { {x=384, y=36, sx=420, sy=36}, },
       mines = { {x=396, y=276}, {x=636, y=252}, {x=636, y=156}, {x=396, y=180}, {x=156, y=156}, {x=156, y=252}, {x=84, y=348}, {x=156, y=444}, {x=228, y=372}, {x=300, y=444}, {x=228, y=540}, {x=396, y=540}, {x=564, y=540}, {x=708, y=540}, {x=636, y=444}, {x=708, y=348}, {x=564, y=372}, {x=492, y=444}, {x=396, y=396}, },
       drones = { },
       floorguards = { },
@@ -408,8 +371,7 @@ levels = {
    },
    ["07-2"] = {
       n_x = 744, n_y = 540,
-      door_x = 48, door_y = 396,
-      doorswitch_x = 756, doorswitch_y = 492,
+      doors = { {x=48, y=396, sx=756, sy=492}, },
       mines = { },
       drones = { {x=108, y=204}, {x=756, y=132}, {x=588, y=276}, {x=204, y=348}, },
       floorguards = { },
@@ -419,8 +381,7 @@ levels = {
    },
    ["07-3"] = {
       n_x = 396, n_y = 36,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 204,
+      doors = { {x=396, y=564, sx=396, sy=204}, },
       mines = { },
       drones = { {x=372, y=396}, {x=420, y=396}, },
       floorguards = { },
@@ -430,8 +391,7 @@ levels = {
    },
    ["07-4"] = {
       n_x = 696, n_y = 240,
-      door_x = 564, door_y = 180,
-      doorswitch_x = 84, doorswitch_y = 492,
+      doors = { {x=564, y=180, sx=84, sy=492}, },
       mines = { },
       drones = { {x=444, y=564}, {x=372, y=564}, {x=252, y=564}, },
       floorguards = { },
@@ -441,8 +401,7 @@ levels = {
    },
    ["08-0"] = {
       n_x = 300, n_y = 564,
-      door_x = 504, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 204,
+      doors = { {x=504, y=564, sx=396, sy=204}, },
       mines = { {x=324, y=204}, {x=300, y=228}, {x=276, y=252}, {x=252, y=276}, {x=348, y=180}, {x=444, y=180}, {x=468, y=204}, {x=492, y=228}, {x=516, y=252}, {x=540, y=276}, },
       drones = { {x=300, y=36}, {x=492, y=36}, },
       floorguards = { },
@@ -452,8 +411,7 @@ levels = {
    },
    ["08-1"] = {
       n_x = 624, n_y = 60,
-      door_x = 660, door_y = 144,
-      doorswitch_x = 120, doorswitch_y = 516,
+      doors = { {x=660, y=144, sx=120, sy=516}, },
       mines = { },
       drones = { {x=204, y=492}, {x=372, y=396}, {x=564, y=396}, },
       floorguards = { {x=156, y=258}, {x=228, y=354}, {x=276, y=402}, {x=348, y=570}, },
@@ -463,8 +421,7 @@ levels = {
    },
    ["08-2"] = {
       n_x = 48, n_y = 540,
-      door_x = 732, door_y = 84,
-      doorswitch_x = 36, doorswitch_y = 276,
+      doors = { {x=732, y=84, sx=36, sy=276}, },
       mines = { {x=348, y=300}, {x=348, y=276}, {x=468, y=276}, {x=468, y=300}, },
       drones = { {x=636, y=564}, {x=276, y=564}, {x=492, y=564}, {x=396, y=204}, },
       floorguards = { },
@@ -474,8 +431,7 @@ levels = {
    },
    ["08-3"] = {
       n_x = 48, n_y = 60,
-      door_x = 408, door_y = 108,
-      doorswitch_x = 72, doorswitch_y = 552,
+      doors = { {x=408, y=108, sx=72, sy=552}, },
       mines = { {x=300, y=108}, {x=276, y=144}, {x=300, y=180}, {x=336, y=84}, {x=336, y=204}, },
       drones = { {x=732, y=300}, {x=660, y=492}, {x=660, y=396}, {x=708, y=468}, },
       floorguards = { {x=204, y=570}, {x=396, y=570}, {x=588, y=570}, {x=492, y=474}, },
@@ -485,8 +441,7 @@ levels = {
    },
    ["08-4"] = {
       n_x = 36, n_y = 60,
-      door_x = 744, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 564,
+      doors = { {x=744, y=564, sx=36, sy=564}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -496,8 +451,7 @@ levels = {
    },
    ["09-0"] = {
       n_x = 432, n_y = 552,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 132,
+      doors = { {x=396, y=564, sx=396, sy=132}, },
       mines = { },
       drones = { {x=612, y=84}, {x=180, y=84}, {x=36, y=468}, {x=756, y=468}, },
       floorguards = { },
@@ -507,8 +461,7 @@ levels = {
    },
    ["09-1"] = {
       n_x = 144, n_y = 48,
-      door_x = 684, door_y = 108,
-      doorswitch_x = 144, doorswitch_y = 144,
+      doors = { {x=684, y=108, sx=144, sy=144}, },
       mines = { {x=168, y=324}, {x=168, y=348}, {x=168, y=372}, {x=168, y=396}, {x=240, y=432}, {x=264, y=432}, {x=288, y=432}, {x=312, y=432}, {x=564, y=420}, {x=540, y=420}, {x=588, y=420}, },
       drones = { {x=300, y=564}, {x=588, y=564}, {x=492, y=348}, {x=372, y=396}, },
       floorguards = { },
@@ -518,8 +471,7 @@ levels = {
    },
    ["09-2"] = {
       n_x = 732, n_y = 552,
-      door_x = 624, door_y = 372,
-      doorswitch_x = 36, doorswitch_y = 564,
+      doors = { {x=624, y=372, sx=36, sy=564}, },
       mines = { {x=24, y=408}, {x=72, y=348}, {x=72, y=228}, {x=24, y=168}, {x=72, y=108}, {x=24, y=60}, },
       drones = { {x=180, y=132}, {x=324, y=492}, {x=36, y=228}, {x=132, y=348}, },
       floorguards = { {x=84, y=570}, },
@@ -529,8 +481,7 @@ levels = {
    },
    ["09-3"] = {
       n_x = 756, n_y = 552,
-      door_x = 696, door_y = 540,
-      doorswitch_x = 372, doorswitch_y = 300,
+      doors = { {x=696, y=540, sx=372, sy=300}, },
       mines = { },
       drones = { {x=540, y=420}, {x=180, y=300}, {x=132, y=84}, {x=276, y=492}, },
       floorguards = { },
@@ -540,8 +491,7 @@ levels = {
    },
    ["09-4"] = {
       n_x = 60, n_y = 468,
-      door_x = 684, door_y = 564,
-      doorswitch_x = 732, doorswitch_y = 60,
+      doors = { {x=684, y=564, sx=732, sy=60}, },
       mines = { {x=24, y=192}, {x=24, y=276}, {x=24, y=360}, {x=24, y=444}, {x=24, y=528}, {x=36, y=402}, {x=36, y=486}, {x=42, y=318}, {x=42, y=234}, {x=756, y=192}, {x=768, y=288}, {x=756, y=384}, {x=768, y=480}, {x=744, y=540}, {x=756, y=432}, {x=756, y=336}, {x=756, y=240}, },
       drones = { {x=84, y=540}, },
       floorguards = { },
@@ -551,8 +501,7 @@ levels = {
    },
    ["10-0"] = {
       n_x = 696, n_y = 480,
-      door_x = 396, door_y = 108,
-      doorswitch_x = 396, doorswitch_y = 168,
+      doors = { {x=396, y=108, sx=396, sy=168}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -562,8 +511,7 @@ levels = {
    },
    ["10-1"] = {
       n_x = 108, n_y = 396,
-      door_x = 108, door_y = 276,
-      doorswitch_x = 156, doorswitch_y = 276,
+      doors = { {x=108, y=276, sx=156, sy=276}, },
       mines = { {x=204, y=432}, {x=348, y=420}, {x=492, y=408}, {x=636, y=396}, {x=204, y=408}, {x=348, y=396}, {x=492, y=384}, {x=636, y=372}, {x=540, y=264}, {x=468, y=264}, {x=384, y=276}, {x=264, y=264}, {x=384, y=204}, {x=384, y=168}, {x=264, y=168}, {x=312, y=216}, {x=216, y=216}, {x=504, y=168}, {x=384, y=192}, {x=384, y=180}, {x=384, y=288}, {x=288, y=276}, {x=240, y=276}, },
       drones = { },
       floorguards = { },
@@ -573,8 +521,7 @@ levels = {
    },
    ["10-2"] = {
       n_x = 84, n_y = 540,
-      door_x = 48, door_y = 84,
-      doorswitch_x = 48, doorswitch_y = 276,
+      doors = { {x=48, y=84, sx=48, sy=276}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -584,8 +531,7 @@ levels = {
    },
    ["10-3"] = {
       n_x = 720, n_y = 108,
-      door_x = 72, door_y = 132,
-      doorswitch_x = 396, doorswitch_y = 252,
+      doors = { {x=72, y=132, sx=396, sy=252}, },
       mines = { {x=468, y=420}, {x=324, y=420}, {x=204, y=372}, {x=588, y=372}, {x=588, y=204}, {x=204, y=204}, {x=444, y=156}, {x=348, y=156}, {x=432, y=372}, {x=360, y=372}, },
       drones = { },
       floorguards = { },
@@ -595,8 +541,7 @@ levels = {
    },
    ["10-4"] = {
       n_x = 180, n_y = 564,
-      door_x = 384, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 72,
+      doors = { {x=384, y=564, sx=396, sy=72}, },
       mines = { },
       drones = { {x=156, y=372}, {x=588, y=180}, {x=204, y=132}, {x=636, y=324}, },
       floorguards = { },
@@ -606,8 +551,7 @@ levels = {
    },
    ["11-0"] = {
       n_x = 684, n_y = 540,
-      door_x = 60, door_y = 564,
-      doorswitch_x = 612, doorswitch_y = 84,
+      doors = { {x=60, y=564, sx=612, sy=84}, },
       mines = { {x=36, y=456}, {x=36, y=336}, {x=36, y=216}, {x=756, y=216}, {x=756, y=336}, {x=756, y=456}, },
       drones = { {x=564, y=444}, {x=60, y=132}, {x=372, y=204}, {x=228, y=324}, {x=540, y=324}, {x=684, y=132}, },
       floorguards = { },
@@ -617,8 +561,7 @@ levels = {
    },
    ["11-1"] = {
       n_x = 348, n_y = 492,
-      door_x = 612, door_y = 84,
-      doorswitch_x = 60, doorswitch_y = 60,
+      doors = { {x=612, y=84, sx=60, sy=60}, },
       mines = { },
       drones = { {x=180, y=36}, },
       floorguards = { {x=468, y=570}, },
@@ -628,8 +571,7 @@ levels = {
    },
    ["11-2"] = {
       n_x = 48, n_y = 72,
-      door_x = 744, door_y = 84,
-      doorswitch_x = 744, doorswitch_y = 552,
+      doors = { {x=744, y=84, sx=744, sy=552}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -639,8 +581,7 @@ levels = {
    },
    ["11-3"] = {
       n_x = 60, n_y = 348,
-      door_x = 36, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 84,
+      doors = { {x=36, y=564, sx=756, sy=84}, },
       mines = { },
       drones = { {x=324, y=324}, },
       floorguards = { {x=732, y=570}, },
@@ -650,8 +591,7 @@ levels = {
    },
    ["11-4"] = {
       n_x = 732, n_y = 540,
-      door_x = 348, door_y = 564,
-      doorswitch_x = 528, doorswitch_y = 324,
+      doors = { {x=348, y=564, sx=528, sy=324}, },
       mines = { },
       drones = { {x=300, y=372}, {x=492, y=372}, {x=492, y=540}, {x=300, y=540}, },
       floorguards = { },
@@ -661,8 +601,7 @@ levels = {
    },
    ["12-0"] = {
       n_x = 36, n_y = 396,
-      door_x = 708, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 300,
+      doors = { {x=708, y=84, sx=396, sy=300}, },
       mines = { {x=516, y=552}, {x=540, y=552}, {x=252, y=552}, {x=276, y=552}, },
       drones = { {x=684, y=84}, {x=588, y=84}, {x=468, y=132}, {x=588, y=564}, },
       floorguards = { {x=132, y=570}, {x=396, y=570}, {x=660, y=570}, },
@@ -672,8 +611,7 @@ levels = {
    },
    ["12-1"] = {
       n_x = 36, n_y = 48,
-      door_x = 660, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 60,
+      doors = { {x=660, y=564, sx=756, sy=60}, },
       mines = { },
       drones = { {x=228, y=444}, {x=636, y=420}, {x=36, y=516}, {x=420, y=564}, },
       floorguards = { },
@@ -683,8 +621,7 @@ levels = {
    },
    ["12-2"] = {
       n_x = 324, n_y = 60,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 684, doorswitch_y = 564,
+      doors = { {x=396, y=564, sx=684, sy=564}, },
       mines = { {x=660, y=420}, {x=660, y=300}, {x=660, y=180}, {x=564, y=228}, {x=564, y=108}, {x=228, y=108}, {x=228, y=228}, {x=132, y=180}, {x=132, y=300}, {x=132, y=420}, },
       drones = { {x=732, y=84}, {x=60, y=84}, },
       floorguards = { },
@@ -694,8 +631,7 @@ levels = {
    },
    ["12-3"] = {
       n_x = 60, n_y = 552,
-      door_x = 396, door_y = 516,
-      doorswitch_x = 744, doorswitch_y = 552,
+      doors = { {x=396, y=516, sx=744, sy=552}, },
       mines = { {x=84, y=420}, {x=132, y=396}, {x=180, y=420}, {x=228, y=396}, {x=276, y=420}, {x=324, y=396}, {x=372, y=420}, {x=708, y=420}, {x=660, y=396}, {x=612, y=420}, {x=564, y=396}, {x=516, y=420}, {x=468, y=396}, {x=420, y=420}, {x=228, y=324}, {x=564, y=324}, {x=432, y=252}, {x=360, y=252}, {x=612, y=204}, {x=180, y=204}, {x=84, y=60}, {x=708, y=60}, },
       drones = { },
       floorguards = { },
@@ -705,8 +641,7 @@ levels = {
    },
    ["12-4"] = {
       n_x = 72, n_y = 516,
-      door_x = 132, door_y = 228,
-      doorswitch_x = 180, doorswitch_y = 228,
+      doors = { {x=132, y=228, sx=180, sy=228}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -716,8 +651,7 @@ levels = {
    },
    ["13-0"] = {
       n_x = 36, n_y = 156,
-      door_x = 48, door_y = 84,
-      doorswitch_x = 732, doorswitch_y = 84,
+      doors = { {x=48, y=84, sx=732, sy=84}, },
       mines = { },
       drones = { {x=612, y=276}, {x=612, y=204}, {x=180, y=204}, {x=180, y=276}, },
       floorguards = { },
@@ -727,8 +661,7 @@ levels = {
    },
    ["13-1"] = {
       n_x = 48, n_y = 48,
-      door_x = 336, door_y = 84,
-      doorswitch_x = 612, doorswitch_y = 348,
+      doors = { {x=336, y=84, sx=612, sy=348}, },
       mines = { },
       drones = { {x=324, y=396}, {x=540, y=324}, },
       floorguards = { {x=372, y=570}, },
@@ -738,8 +671,7 @@ levels = {
    },
    ["13-2"] = {
       n_x = 156, n_y = 540,
-      door_x = 744, door_y = 84,
-      doorswitch_x = 390, doorswitch_y = 198,
+      doors = { {x=744, y=84, sx=390, sy=198}, },
       mines = { {x=588, y=408}, {x=672, y=408}, {x=630, y=408}, {x=348, y=438}, {x=348, y=402}, {x=336, y=420}, {x=372, y=492}, {x=420, y=456}, {x=480, y=468}, {x=432, y=504}, {x=504, y=540}, {x=576, y=528}, {x=636, y=492}, {x=636, y=456}, {x=564, y=444}, {x=528, y=480}, {x=588, y=492}, {x=648, y=540}, {x=660, y=480}, {x=612, y=552}, {x=456, y=540}, {x=504, y=504}, {x=372, y=540}, {x=324, y=528}, {x=444, y=408}, {x=456, y=408}, },
       drones = { {x=132, y=36}, {x=684, y=156}, },
       floorguards = { },
@@ -749,8 +681,7 @@ levels = {
    },
    ["13-3"] = {
       n_x = 684, n_y = 540,
-      door_x = 648, door_y = 60,
-      doorswitch_x = 168, doorswitch_y = 564,
+      doors = { {x=648, y=60, sx=168, sy=564}, },
       mines = { },
       drones = { {x=36, y=276}, {x=756, y=324}, },
       floorguards = { },
@@ -760,8 +691,7 @@ levels = {
    },
    ["13-4"] = {
       n_x = 732, n_y = 84,
-      door_x = 204, door_y = 564,
-      doorswitch_x = 744, doorswitch_y = 276,
+      doors = { {x=204, y=564, sx=744, sy=276}, },
       mines = { {x=648, y=156}, {x=612, y=168}, {x=576, y=180}, {x=540, y=192}, {x=504, y=204}, {x=468, y=216}, {x=432, y=228}, {x=396, y=240}, {x=360, y=252}, {x=684, y=144}, {x=324, y=264}, {x=288, y=276}, {x=288, y=300}, },
       drones = { {x=396, y=564}, {x=588, y=420}, {x=468, y=396}, },
       floorguards = { },
@@ -771,8 +701,7 @@ levels = {
    },
    ["14-0"] = {
       n_x = 420, n_y = 552,
-      door_x = 396, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 276,
+      doors = { {x=396, y=60, sx=396, sy=276}, },
       mines = { },
       drones = { {x=396, y=348}, {x=468, y=324}, {x=420, y=252}, {x=348, y=276}, },
       floorguards = { },
@@ -782,8 +711,7 @@ levels = {
    },
    ["14-1"] = {
       n_x = 684, n_y = 480,
-      door_x = 504, door_y = 396,
-      doorswitch_x = 60, doorswitch_y = 84,
+      doors = { {x=504, y=396, sx=60, sy=84}, },
       mines = { },
       drones = { {x=84, y=564}, {x=132, y=468}, {x=444, y=132}, {x=108, y=36}, {x=300, y=108}, },
       floorguards = { },
@@ -793,8 +721,7 @@ levels = {
    },
    ["14-2"] = {
       n_x = 120, n_y = 60,
-      door_x = 672, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=672, y=84, sx=396, sy=84}, },
       mines = { {x=204, y=528}, {x=588, y=528}, {x=768, y=192}, {x=768, y=324}, {x=768, y=468}, {x=24, y=240}, {x=24, y=396}, },
       drones = { },
       floorguards = { },
@@ -804,8 +731,7 @@ levels = {
    },
    ["14-3"] = {
       n_x = 204, n_y = 540,
-      door_x = 168, door_y = 60,
-      doorswitch_x = 624, doorswitch_y = 60,
+      doors = { {x=168, y=60, sx=624, sy=60}, },
       mines = { {x=768, y=528}, {x=768, y=432}, {x=768, y=336}, {x=768, y=240}, {x=768, y=144}, {x=24, y=528}, {x=24, y=432}, {x=24, y=336}, {x=24, y=240}, {x=24, y=144}, },
       drones = { },
       floorguards = { },
@@ -815,8 +741,7 @@ levels = {
    },
    ["14-4"] = {
       n_x = 708, n_y = 288,
-      door_x = 288, door_y = 564,
-      doorswitch_x = 216, doorswitch_y = 108,
+      doors = { {x=288, y=564, sx=216, sy=108}, },
       mines = { {x=36, y=156}, {x=84, y=228}, {x=36, y=300}, {x=84, y=372}, },
       drones = { {x=60, y=108}, },
       floorguards = { {x=108, y=570}, {x=708, y=570}, },
@@ -826,8 +751,7 @@ levels = {
    },
    ["15-0"] = {
       n_x = 660, n_y = 504,
-      door_x = 120, door_y = 516,
-      doorswitch_x = 600, doorswitch_y = 300,
+      doors = { {x=120, y=516, sx=600, sy=300}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -837,8 +761,7 @@ levels = {
    },
    ["15-1"] = {
       n_x = 396, n_y = 444,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 48,
+      doors = { {x=396, y=564, sx=396, sy=48}, },
       mines = { },
       drones = { {x=60, y=348}, {x=636, y=372}, {x=636, y=84}, {x=156, y=372}, },
       floorguards = { },
@@ -848,8 +771,7 @@ levels = {
    },
    ["15-2"] = {
       n_x = 60, n_y = 540,
-      door_x = 612, door_y = 492,
-      doorswitch_x = 420, doorswitch_y = 420,
+      doors = { {x=612, y=492, sx=420, sy=420}, },
       mines = { {x=132, y=324}, {x=60, y=408}, {x=216, y=228}, {x=216, y=360}, {x=132, y=252}, {x=84, y=132}, {x=564, y=576}, {x=648, y=576}, },
       drones = { {x=468, y=540}, {x=540, y=180}, {x=132, y=36}, },
       floorguards = { },
@@ -859,8 +781,7 @@ levels = {
    },
    ["15-3"] = {
       n_x = 48, n_y = 516,
-      door_x = 48, door_y = 468,
-      doorswitch_x = 660, doorswitch_y = 552,
+      doors = { {x=48, y=468, sx=660, sy=552}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -870,8 +791,7 @@ levels = {
    },
    ["15-4"] = {
       n_x = 396, n_y = 396,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 156,
+      doors = { {x=396, y=564, sx=396, sy=156}, },
       mines = { {x=228, y=276}, {x=204, y=300}, {x=228, y=324}, {x=252, y=300}, {x=396, y=276}, {x=396, y=324}, {x=420, y=300}, {x=372, y=300}, {x=564, y=276}, {x=540, y=300}, {x=564, y=324}, {x=588, y=300}, {x=756, y=216}, {x=36, y=216}, {x=36, y=252}, {x=36, y=288}, {x=756, y=252}, {x=756, y=288}, },
       drones = { {x=60, y=540}, {x=636, y=516}, {x=756, y=84}, {x=180, y=204}, },
       floorguards = { },
@@ -881,8 +801,7 @@ levels = {
    },
    ["16-0"] = {
       n_x = 312, n_y = 240,
-      door_x = 312, door_y = 180,
-      doorswitch_x = 648, doorswitch_y = 120,
+      doors = { {x=312, y=180, sx=648, sy=120}, },
       mines = { },
       drones = { {x=180, y=36}, {x=36, y=348}, {x=252, y=564}, {x=588, y=324}, },
       floorguards = { },
@@ -892,8 +811,7 @@ levels = {
    },
    ["16-1"] = {
       n_x = 84, n_y = 324,
-      door_x = 84, door_y = 564,
-      doorswitch_x = 660, doorswitch_y = 300,
+      doors = { {x=84, y=564, sx=660, sy=300}, },
       mines = { },
       drones = { {x=708, y=324}, },
       floorguards = { },
@@ -903,8 +821,7 @@ levels = {
    },
    ["16-2"] = {
       n_x = 684, n_y = 540,
-      door_x = 396, door_y = 324,
-      doorswitch_x = 96, doorswitch_y = 540,
+      doors = { {x=396, y=324, sx=96, sy=540}, },
       mines = { },
       drones = { {x=84, y=228}, {x=108, y=420}, {x=132, y=36}, {x=300, y=132}, },
       floorguards = { },
@@ -914,8 +831,7 @@ levels = {
    },
    ["16-3"] = {
       n_x = 396, n_y = 540,
-      door_x = 396, door_y = 492,
-      doorswitch_x = 672, doorswitch_y = 492,
+      doors = { {x=396, y=492, sx=672, sy=492}, },
       mines = { },
       drones = { {x=684, y=36}, {x=156, y=156}, {x=396, y=108}, {x=708, y=204}, },
       floorguards = { },
@@ -925,8 +841,7 @@ levels = {
    },
    ["16-4"] = {
       n_x = 96, n_y = 540,
-      door_x = 696, door_y = 132,
-      doorswitch_x = 396, doorswitch_y = 252,
+      doors = { {x=696, y=132, sx=396, sy=252}, },
       mines = { {x=144, y=372}, {x=144, y=408}, {x=144, y=444}, {x=144, y=480}, {x=144, y=516}, {x=648, y=372}, {x=648, y=408}, {x=648, y=444}, {x=648, y=480}, {x=648, y=516}, {x=636, y=540}, {x=156, y=540}, {x=624, y=564}, {x=168, y=564}, {x=636, y=348}, {x=156, y=348}, {x=600, y=576}, {x=192, y=576}, },
       drones = { {x=36, y=60}, {x=684, y=516}, {x=756, y=420}, {x=156, y=60}, },
       floorguards = { },
@@ -936,8 +851,7 @@ levels = {
    },
    ["17-0"] = {
       n_x = 300, n_y = 564,
-      door_x = 372, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 180,
+      doors = { {x=372, y=564, sx=396, sy=180}, },
       mines = { },
       drones = { {x=300, y=36}, {x=492, y=36}, },
       floorguards = { },
@@ -947,8 +861,7 @@ levels = {
    },
    ["17-1"] = {
       n_x = 132, n_y = 372,
-      door_x = 84, door_y = 372,
-      doorswitch_x = 30, doorswitch_y = 564,
+      doors = { {x=84, y=372, sx=30, sy=564}, },
       mines = { {x=552, y=564}, {x=456, y=564}, {x=228, y=564}, {x=144, y=564}, },
       drones = { {x=156, y=84}, {x=84, y=84}, {x=708, y=84}, {x=636, y=84}, },
       floorguards = { },
@@ -958,8 +871,7 @@ levels = {
    },
    ["17-2"] = {
       n_x = 84, n_y = 84,
-      door_x = 264, door_y = 372,
-      doorswitch_x = 744, doorswitch_y = 312,
+      doors = { {x=264, y=372, sx=744, sy=312}, },
       mines = { {x=276, y=180}, {x=324, y=180}, {x=372, y=168}, {x=228, y=168}, {x=108, y=168}, {x=84, y=168}, },
       drones = { {x=156, y=132}, },
       floorguards = { },
@@ -969,8 +881,7 @@ levels = {
    },
    ["17-3"] = {
       n_x = 72, n_y = 300,
-      door_x = 60, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 108,
+      doors = { {x=60, y=564, sx=36, sy=108}, },
       mines = { {x=384, y=396}, {x=432, y=408}, {x=480, y=408}, {x=528, y=408}, {x=564, y=396}, {x=600, y=576}, {x=420, y=576}, {x=264, y=576}, {x=132, y=576}, {x=168, y=540}, {x=360, y=516}, {x=324, y=468}, {x=84, y=432}, {x=216, y=504}, {x=492, y=480}, {x=540, y=528}, {x=444, y=528}, {x=600, y=432}, {x=588, y=492}, {x=648, y=516}, {x=684, y=420}, {x=276, y=408}, {x=180, y=432}, },
       drones = { },
       floorguards = { },
@@ -980,8 +891,7 @@ levels = {
    },
    ["17-4"] = {
       n_x = 36, n_y = 276,
-      door_x = 396, door_y = 108,
-      doorswitch_x = 756, doorswitch_y = 276,
+      doors = { {x=396, y=108, sx=756, sy=276}, },
       mines = { {x=768, y=432}, {x=768, y=480}, {x=768, y=528}, {x=24, y=432}, {x=24, y=480}, {x=24, y=528}, {x=36, y=576}, {x=756, y=576}, {x=708, y=576}, {x=660, y=576}, {x=612, y=576}, {x=564, y=576}, {x=516, y=576}, {x=468, y=576}, {x=420, y=576}, {x=372, y=576}, {x=324, y=576}, {x=276, y=576}, {x=228, y=576}, {x=180, y=576}, {x=132, y=576}, {x=84, y=576}, },
       drones = { },
       floorguards = { },
@@ -991,8 +901,7 @@ levels = {
    },
    ["18-0"] = {
       n_x = 396, n_y = 492,
-      door_x = 732, door_y = 180,
-      doorswitch_x = 252, doorswitch_y = 204,
+      doors = { {x=732, y=180, sx=252, sy=204}, },
       mines = { },
       drones = { {x=396, y=108}, {x=84, y=180}, {x=84, y=420}, },
       floorguards = { {x=204, y=570}, },
@@ -1002,8 +911,7 @@ levels = {
    },
    ["18-1"] = {
       n_x = 48, n_y = 516,
-      door_x = 456, door_y = 60,
-      doorswitch_x = 96, doorswitch_y = 84,
+      doors = { {x=456, y=60, sx=96, sy=84}, },
       mines = { },
       drones = { {x=156, y=36}, {x=420, y=372}, {x=588, y=252}, {x=372, y=108}, },
       floorguards = { },
@@ -1013,8 +921,7 @@ levels = {
    },
    ["18-2"] = {
       n_x = 192, n_y = 504,
-      door_x = 432, door_y = 564,
-      doorswitch_x = 684, doorswitch_y = 564,
+      doors = { {x=432, y=564, sx=684, sy=564}, },
       mines = { {x=312, y=444}, {x=312, y=396}, {x=72, y=396}, {x=72, y=348}, {x=72, y=324}, {x=312, y=324}, {x=312, y=348}, {x=312, y=276}, {x=72, y=276}, {x=72, y=228}, {x=72, y=204}, {x=312, y=156}, {x=312, y=204}, {x=312, y=228}, {x=72, y=444}, {x=384, y=132}, {x=384, y=168}, {x=384, y=204}, {x=384, y=240}, {x=384, y=276}, {x=384, y=312}, {x=384, y=348}, {x=384, y=384}, {x=384, y=420}, {x=384, y=456}, {x=384, y=492}, {x=720, y=168}, {x=720, y=228}, {x=720, y=288}, {x=720, y=348}, {x=720, y=408}, {x=720, y=468}, {x=720, y=528}, },
       drones = { },
       floorguards = { },
@@ -1024,8 +931,7 @@ levels = {
    },
    ["18-3"] = {
       n_x = 744, n_y = 564,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 204,
+      doors = { {x=48, y=564, sx=396, sy=204}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1035,8 +941,7 @@ levels = {
    },
    ["18-4"] = {
       n_x = 396, n_y = 540,
-      door_x = 744, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 72,
+      doors = { {x=744, y=564, sx=396, sy=72}, },
       mines = { {x=540, y=156}, {x=252, y=156}, {x=60, y=252}, {x=60, y=444}, {x=732, y=252}, {x=732, y=444}, },
       drones = { {x=756, y=300}, {x=36, y=300}, {x=84, y=36}, {x=708, y=36}, },
       floorguards = { },
@@ -1046,8 +951,7 @@ levels = {
    },
    ["19-0"] = {
       n_x = 564, n_y = 132,
-      door_x = 372, door_y = 108,
-      doorswitch_x = 588, doorswitch_y = 276,
+      doors = { {x=372, y=108, sx=588, sy=276}, },
       mines = { {x=576, y=456}, {x=552, y=384}, {x=576, y=312}, {x=588, y=228}, {x=540, y=228}, {x=240, y=408}, {x=168, y=252}, },
       drones = { {x=372, y=156}, {x=396, y=108}, {x=180, y=396}, {x=180, y=276}, },
       floorguards = { },
@@ -1057,8 +961,7 @@ levels = {
    },
    ["19-1"] = {
       n_x = 36, n_y = 48,
-      door_x = 660, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 60,
+      doors = { {x=660, y=564, sx=756, sy=60}, },
       mines = { {x=576, y=444}, {x=588, y=324}, {x=636, y=228}, {x=684, y=132}, {x=108, y=360}, {x=240, y=384}, {x=108, y=480}, {x=216, y=528}, {x=312, y=504}, },
       drones = { {x=468, y=564}, {x=420, y=492}, },
       floorguards = { },
@@ -1068,8 +971,7 @@ levels = {
    },
    ["19-2"] = {
       n_x = 396, n_y = 516,
-      door_x = 396, door_y = 84,
-      doorswitch_x = 744, doorswitch_y = 528,
+      doors = { {x=396, y=84, sx=744, sy=528}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1079,8 +981,7 @@ levels = {
    },
    ["19-3"] = {
       n_x = 648, n_y = 48,
-      door_x = 384, door_y = 492,
-      doorswitch_x = 396, doorswitch_y = 216,
+      doors = { {x=384, y=492, sx=396, sy=216}, },
       mines = { {x=120, y=204}, {x=168, y=258}, {x=168, y=132}, {x=672, y=282}, {x=624, y=204}, {x=672, y=132}, },
       drones = { {x=660, y=252}, {x=132, y=252}, {x=324, y=324}, },
       floorguards = { {x=756, y=570}, {x=36, y=570}, },
@@ -1090,8 +991,7 @@ levels = {
    },
    ["19-4"] = {
       n_x = 396, n_y = 504,
-      door_x = 456, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 288,
+      doors = { {x=456, y=84, sx=396, sy=288}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1101,8 +1001,7 @@ levels = {
    },
    ["20-0"] = {
       n_x = 156, n_y = 108,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 420,
+      doors = { {x=396, y=564, sx=396, sy=420}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1112,8 +1011,7 @@ levels = {
    },
    ["20-1"] = {
       n_x = 396, n_y = 300,
-      door_x = 72, door_y = 276,
-      doorswitch_x = 288, doorswitch_y = 204,
+      doors = { {x=72, y=276, sx=288, sy=204}, {x=720, y=276, sx=504, sy=204}, {x=336, y=564, sx=36, sy=396}, {x=456, y=564, sx=756, sy=396}, },
       mines = { },
       drones = { {x=516, y=132}, {x=204, y=444}, {x=612, y=396}, },
       floorguards = { {x=156, y=282}, {x=660, y=282}, {x=276, y=570}, {x=516, y=570}, },
@@ -1123,8 +1021,7 @@ levels = {
    },
    ["20-2"] = {
       n_x = 156, n_y = 564,
-      door_x = 564, door_y = 204,
-      doorswitch_x = 444, doorswitch_y = 564,
+      doors = { {x=564, y=204, sx=444, sy=564}, },
       mines = { {x=396, y=372}, {x=576, y=408}, {x=672, y=168}, {x=720, y=192}, {x=648, y=72}, {x=168, y=456}, {x=144, y=384}, {x=120, y=144}, {x=144, y=288}, {x=288, y=240}, {x=384, y=48}, },
       drones = { {x=300, y=84}, {x=588, y=156}, },
       floorguards = { {x=696, y=570}, },
@@ -1134,8 +1031,7 @@ levels = {
    },
    ["20-3"] = {
       n_x = 48, n_y = 108,
-      door_x = 708, door_y = 564,
-      doorswitch_x = 636, doorswitch_y = 564,
+      doors = { {x=708, y=564, sx=636, sy=564}, },
       mines = { {x=612, y=216}, {x=564, y=564}, {x=516, y=540}, {x=372, y=540}, {x=300, y=564}, {x=168, y=552}, {x=204, y=504}, {x=276, y=516}, {x=228, y=468}, {x=348, y=456}, {x=480, y=492}, {x=468, y=516}, {x=396, y=552}, {x=408, y=504}, {x=324, y=492}, {x=624, y=384}, {x=600, y=408}, {x=540, y=576}, {x=564, y=420}, {x=588, y=444}, {x=540, y=396}, {x=228, y=564}, {x=168, y=576}, {x=396, y=576}, {x=180, y=156}, {x=180, y=180}, {x=180, y=204}, {x=204, y=144}, {x=228, y=132}, {x=636, y=228}, {x=636, y=252}, {x=636, y=276}, {x=588, y=204}, {x=648, y=396}, {x=204, y=444}, {x=252, y=456}, {x=300, y=480}, {x=180, y=312}, {x=180, y=336}, {x=180, y=360}, {x=180, y=384}, {x=180, y=288}, {x=204, y=276}, {x=228, y=264}, {x=636, y=300}, },
       drones = { },
       floorguards = { },
@@ -1145,8 +1041,7 @@ levels = {
    },
    ["20-4"] = {
       n_x = 744, n_y = 540,
-      door_x = 60, door_y = 156,
-      doorswitch_x = 48, doorswitch_y = 372,
+      doors = { {x=60, y=156, sx=48, sy=372}, },
       mines = { },
       drones = { {x=756, y=252}, {x=396, y=108}, {x=180, y=228}, },
       floorguards = { },
@@ -1156,8 +1051,7 @@ levels = {
    },
    ["21-0"] = {
       n_x = 744, n_y = 48,
-      door_x = 552, door_y = 468,
-      doorswitch_x = 180, doorswitch_y = 564,
+      doors = { {x=552, y=468, sx=180, sy=564}, },
       mines = { },
       drones = { {x=564, y=564}, {x=372, y=420}, {x=84, y=156}, {x=516, y=540}, },
       floorguards = { },
@@ -1167,8 +1061,7 @@ levels = {
    },
    ["21-1"] = {
       n_x = 396, n_y = 468,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=564, sx=396, sy=84}, },
       mines = { },
       drones = { {x=36, y=300}, {x=588, y=276}, {x=396, y=228}, {x=108, y=444}, },
       floorguards = { },
@@ -1178,8 +1071,7 @@ levels = {
    },
    ["21-2"] = {
       n_x = 60, n_y = 336,
-      door_x = 204, door_y = 564,
-      doorswitch_x = 720, doorswitch_y = 564,
+      doors = { {x=204, y=564, sx=720, sy=564}, {x=708, y=276, sx=48, sy=48}, },
       mines = { {x=684, y=540}, {x=144, y=552}, {x=72, y=492}, {x=228, y=420}, {x=360, y=360}, {x=732, y=360}, {x=600, y=408}, {x=360, y=480}, {x=468, y=540}, {x=576, y=492}, {x=468, y=468}, {x=468, y=372}, {x=600, y=336}, {x=672, y=408}, {x=264, y=516}, {x=168, y=444}, {x=192, y=360}, {x=336, y=552}, {x=708, y=468}, {x=408, y=576}, {x=684, y=576}, {x=576, y=576}, {x=84, y=576}, {x=684, y=276}, {x=684, y=252}, {x=708, y=252}, {x=144, y=576}, {x=336, y=576}, {x=492, y=564}, },
       drones = { {x=588, y=276}, {x=228, y=60}, },
       floorguards = { },
@@ -1189,8 +1081,7 @@ levels = {
    },
    ["21-3"] = {
       n_x = 396, n_y = 72,
-      door_x = 396, door_y = 132,
-      doorswitch_x = 396, doorswitch_y = 192,
+      doors = { {x=396, y=132, sx=396, sy=192}, },
       mines = { {x=48, y=516}, {x=132, y=492}, {x=240, y=504}, {x=432, y=516}, {x=420, y=480}, {x=300, y=480}, {x=156, y=444}, {x=96, y=456}, {x=504, y=480}, {x=600, y=468}, {x=660, y=420}, {x=708, y=444}, {x=708, y=492}, {x=648, y=504}, {x=540, y=528}, {x=372, y=516}, {x=240, y=444}, {x=180, y=504}, {x=336, y=504}, {x=468, y=492}, {x=564, y=492}, {x=636, y=456}, {x=744, y=444}, {x=768, y=468}, {x=24, y=444}, {x=204, y=468}, {x=72, y=468}, {x=360, y=468}, {x=756, y=360}, {x=708, y=348}, {x=732, y=372}, {x=696, y=396}, {x=96, y=396}, {x=48, y=408}, {x=36, y=360}, {x=48, y=324}, },
       drones = { {x=36, y=300}, {x=612, y=252}, {x=276, y=180}, {x=108, y=36}, },
       floorguards = { },
@@ -1200,8 +1091,7 @@ levels = {
    },
    ["21-4"] = {
       n_x = 396, n_y = 480,
-      door_x = 396, door_y = 516,
-      doorswitch_x = 396, doorswitch_y = 132,
+      doors = { {x=396, y=516, sx=396, sy=132}, },
       mines = { {x=36, y=576}, {x=756, y=576}, {x=708, y=576}, {x=660, y=576}, {x=612, y=576}, {x=84, y=576}, {x=132, y=576}, {x=180, y=576}, {x=228, y=576}, {x=276, y=576}, {x=324, y=576}, {x=564, y=576}, {x=516, y=576}, {x=468, y=576}, {x=420, y=576}, {x=372, y=576}, {x=60, y=552}, {x=108, y=552}, {x=156, y=552}, {x=204, y=552}, {x=252, y=552}, {x=300, y=552}, {x=348, y=552}, {x=396, y=552}, {x=444, y=552}, {x=492, y=552}, {x=540, y=552}, {x=588, y=552}, {x=636, y=552}, {x=684, y=552}, {x=732, y=552}, {x=768, y=552}, {x=24, y=552}, },
       drones = { {x=108, y=60}, {x=684, y=60}, },
       floorguards = { },
@@ -1211,8 +1101,7 @@ levels = {
    },
    ["22-0"] = {
       n_x = 660, n_y = 108,
-      door_x = 72, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 300,
+      doors = { {x=72, y=60, sx=396, sy=300}, },
       mines = { },
       drones = { {x=492, y=540}, {x=348, y=228}, },
       floorguards = { },
@@ -1222,8 +1111,7 @@ levels = {
    },
    ["22-1"] = {
       n_x = 156, n_y = 72,
-      door_x = 720, door_y = 108,
-      doorswitch_x = 384, doorswitch_y = 564,
+      doors = { {x=720, y=108, sx=384, sy=564}, },
       mines = { },
       drones = { {x=420, y=228}, },
       floorguards = { {x=228, y=570}, },
@@ -1233,8 +1121,7 @@ levels = {
    },
    ["22-2"] = {
       n_x = 396, n_y = 516,
-      door_x = 48, door_y = 48,
-      doorswitch_x = 756, doorswitch_y = 60,
+      doors = { {x=48, y=48, sx=756, sy=60}, },
       mines = { {x=444, y=564}, {x=492, y=564}, {x=348, y=564}, {x=300, y=564}, {x=252, y=564}, {x=540, y=564}, {x=588, y=564}, {x=636, y=564}, {x=684, y=564}, {x=732, y=564}, {x=204, y=564}, {x=156, y=564}, {x=108, y=564}, {x=60, y=564}, {x=36, y=540}, {x=756, y=540}, {x=468, y=516}, {x=324, y=516}, {x=516, y=492}, {x=564, y=468}, {x=276, y=492}, {x=228, y=468}, {x=612, y=444}, {x=660, y=420}, {x=708, y=420}, {x=744, y=444}, {x=768, y=480}, {x=768, y=516}, {x=180, y=444}, {x=132, y=420}, {x=84, y=420}, {x=48, y=444}, {x=24, y=480}, {x=24, y=516}, },
       drones = { {x=756, y=180}, {x=36, y=324}, },
       floorguards = { },
@@ -1244,8 +1131,7 @@ levels = {
    },
    ["22-3"] = {
       n_x = 660, n_y = 468,
-      door_x = 144, door_y = 132,
-      doorswitch_x = 504, doorswitch_y = 552,
+      doors = { {x=144, y=132, sx=504, sy=552}, },
       mines = { {x=408, y=204}, {x=408, y=180}, },
       drones = { {x=396, y=516}, {x=324, y=372}, {x=468, y=204}, {x=348, y=204}, {x=324, y=156}, },
       floorguards = { },
@@ -1255,8 +1141,7 @@ levels = {
    },
    ["22-4"] = {
       n_x = 684, n_y = 48,
-      door_x = 504, door_y = 156,
-      doorswitch_x = 636, doorswitch_y = 516,
+      doors = { {x=504, y=156, sx=636, sy=516}, },
       mines = { },
       drones = { {x=612, y=564}, {x=252, y=492}, {x=444, y=108}, {x=540, y=300}, {x=636, y=228}, },
       floorguards = { },
@@ -1266,8 +1151,7 @@ levels = {
    },
    ["23-0"] = {
       n_x = 396, n_y = 84,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 84,
+      doors = { {x=396, y=564, sx=756, sy=84}, },
       mines = { {x=24, y=156}, {x=24, y=204}, {x=24, y=252}, {x=24, y=300}, {x=24, y=348}, {x=24, y=396}, {x=768, y=156}, {x=768, y=204}, {x=768, y=252}, {x=768, y=300}, {x=768, y=348}, {x=768, y=396}, {x=768, y=540}, {x=24, y=540}, },
       drones = { {x=156, y=36}, {x=540, y=36}, {x=612, y=84}, {x=108, y=84}, },
       floorguards = { },
@@ -1277,8 +1161,7 @@ levels = {
    },
    ["23-1"] = {
       n_x = 204, n_y = 528,
-      door_x = 132, door_y = 564,
-      doorswitch_x = 732, doorswitch_y = 108,
+      doors = { {x=132, y=564, sx=732, sy=108}, },
       mines = { },
       drones = { {x=60, y=228}, {x=84, y=300}, {x=36, y=156}, },
       floorguards = { },
@@ -1288,8 +1171,7 @@ levels = {
    },
    ["23-2"] = {
       n_x = 48, n_y = 564,
-      door_x = 744, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=744, y=564, sx=396, sy=84}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1299,8 +1181,7 @@ levels = {
    },
    ["23-3"] = {
       n_x = 492, n_y = 540,
-      door_x = 384, door_y = 324,
-      doorswitch_x = 360, doorswitch_y = 288,
+      doors = { {x=384, y=324, sx=360, sy=288}, },
       mines = { {x=168, y=372}, {x=168, y=324}, {x=216, y=372}, {x=216, y=324}, {x=360, y=372}, {x=360, y=396}, {x=408, y=396}, {x=408, y=372}, {x=576, y=396}, {x=576, y=324}, {x=432, y=360}, {x=456, y=360}, {x=348, y=348}, {x=276, y=312}, {x=312, y=312}, {x=240, y=312}, {x=492, y=348}, {x=564, y=420}, {x=324, y=564}, {x=252, y=564}, {x=288, y=552}, {x=156, y=276}, {x=156, y=180}, {x=132, y=180}, {x=132, y=276}, },
       drones = { {x=252, y=420}, {x=36, y=420}, {x=156, y=564}, },
       floorguards = { {x=384, y=138}, },
@@ -1310,8 +1191,7 @@ levels = {
    },
    ["23-4"] = {
       n_x = 564, n_y = 108,
-      door_x = 60, door_y = 156,
-      doorswitch_x = 396, doorswitch_y = 396,
+      doors = { {x=60, y=156, sx=396, sy=396}, },
       mines = { {x=240, y=408}, {x=522, y=378}, {x=588, y=420}, {x=648, y=468}, {x=684, y=540}, {x=456, y=504}, {x=312, y=528}, {x=348, y=432}, {x=156, y=504}, {x=468, y=372}, {x=276, y=372}, {x=204, y=432}, },
       drones = { {x=108, y=348}, {x=36, y=108}, {x=84, y=36}, {x=564, y=540}, },
       floorguards = { },
@@ -1321,8 +1201,7 @@ levels = {
    },
    ["24-0"] = {
       n_x = 660, n_y = 444,
-      door_x = 672, door_y = 564,
-      doorswitch_x = 180, doorswitch_y = 396,
+      doors = { {x=672, y=564, sx=180, sy=396}, },
       mines = { },
       drones = { {x=84, y=348}, },
       floorguards = { },
@@ -1332,8 +1211,7 @@ levels = {
    },
    ["24-1"] = {
       n_x = 396, n_y = 492,
-      door_x = 396, door_y = 204,
-      doorswitch_x = 396, doorswitch_y = 324,
+      doors = { {x=396, y=204, sx=396, sy=324}, },
       mines = { {x=468, y=420}, {x=324, y=420}, {x=276, y=228}, {x=516, y=228}, {x=588, y=228}, {x=204, y=228}, {x=648, y=252}, {x=144, y=252}, {x=348, y=156}, {x=372, y=156}, {x=396, y=156}, {x=420, y=156}, {x=444, y=156}, },
       drones = { {x=348, y=180}, {x=108, y=372}, {x=300, y=156}, {x=708, y=108}, },
       floorguards = { },
@@ -1343,8 +1221,7 @@ levels = {
    },
    ["24-2"] = {
       n_x = 60, n_y = 48,
-      door_x = 504, door_y = 564,
-      doorswitch_x = 684, doorswitch_y = 468,
+      doors = { {x=504, y=564, sx=684, sy=468}, },
       mines = { {x=144, y=120}, {x=240, y=168}, {x=360, y=228}, {x=576, y=192}, {x=648, y=156}, {x=672, y=276}, {x=576, y=324}, {x=480, y=372}, {x=336, y=360}, {x=264, y=324}, {x=192, y=288}, {x=120, y=252}, {x=48, y=456}, {x=120, y=492}, {x=192, y=528}, {x=264, y=564}, {x=324, y=576}, {x=384, y=564}, {x=456, y=528}, {x=528, y=492}, {x=600, y=456}, {x=672, y=420}, {x=588, y=228}, {x=504, y=264}, {x=360, y=264}, {x=264, y=216}, {x=168, y=168}, {x=96, y=384}, {x=240, y=468}, {x=408, y=480}, {x=480, y=444}, {x=552, y=408}, {x=624, y=372}, {x=168, y=420}, {x=756, y=564}, {x=732, y=564}, {x=708, y=564}, {x=684, y=564}, {x=756, y=540}, {x=756, y=516}, {x=732, y=516}, {x=732, y=540}, {x=708, y=540}, {x=684, y=540}, {x=708, y=516}, {x=684, y=516}, {x=660, y=540}, {x=660, y=564}, {x=636, y=564}, },
       drones = { {x=252, y=372}, {x=516, y=420}, {x=300, y=516}, },
       floorguards = { },
@@ -1354,8 +1231,7 @@ levels = {
    },
    ["24-3"] = {
       n_x = 264, n_y = 540,
-      door_x = 720, door_y = 84,
-      doorswitch_x = 36, doorswitch_y = 564,
+      doors = { {x=720, y=84, sx=36, sy=564}, },
       mines = { {x=732, y=576}, {x=60, y=576}, {x=132, y=576}, {x=660, y=576}, {x=588, y=576}, {x=516, y=576}, {x=204, y=576}, {x=444, y=576}, {x=372, y=576}, },
       drones = { {x=84, y=180}, {x=396, y=372}, {x=588, y=228}, {x=36, y=324}, },
       floorguards = { },
@@ -1365,8 +1241,7 @@ levels = {
    },
    ["24-4"] = {
       n_x = 252, n_y = 540,
-      door_x = 168, door_y = 492,
-      doorswitch_x = 744, doorswitch_y = 60,
+      doors = { {x=168, y=492, sx=744, sy=60}, },
       mines = { {x=372, y=420}, {x=540, y=264}, {x=576, y=156}, {x=324, y=72}, {x=288, y=264}, {x=216, y=372}, {x=348, y=216}, {x=444, y=156}, {x=264, y=132}, {x=492, y=444}, {x=588, y=516}, {x=636, y=516}, },
       drones = { },
       floorguards = { {x=756, y=570}, },
@@ -1376,8 +1251,7 @@ levels = {
    },
    ["25-0"] = {
       n_x = 396, n_y = 60,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 456,
+      doors = { {x=396, y=564, sx=396, sy=456}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1387,8 +1261,7 @@ levels = {
    },
    ["25-1"] = {
       n_x = 396, n_y = 564,
-      door_x = 396, door_y = 516,
-      doorswitch_x = 756, doorswitch_y = 60,
+      doors = { {x=396, y=516, sx=756, sy=60}, },
       mines = { {x=756, y=252}, {x=36, y=252}, {x=96, y=180}, {x=696, y=180}, {x=612, y=264}, {x=180, y=264}, },
       drones = { {x=204, y=252}, {x=588, y=252}, },
       floorguards = { },
@@ -1398,8 +1271,7 @@ levels = {
    },
    ["25-2"] = {
       n_x = 36, n_y = 60,
-      door_x = 636, door_y = 564,
-      doorswitch_x = 84, doorswitch_y = 204,
+      doors = { {x=636, y=564, sx=84, sy=204}, },
       mines = { {x=132, y=168}, {x=132, y=204}, {x=132, y=240}, {x=132, y=276}, {x=132, y=312}, {x=132, y=348}, {x=132, y=384}, {x=132, y=420}, {x=132, y=456}, {x=132, y=492}, {x=132, y=528}, },
       drones = { },
       floorguards = { },
@@ -1409,8 +1281,7 @@ levels = {
    },
    ["25-3"] = {
       n_x = 444, n_y = 516,
-      door_x = 348, door_y = 372,
-      doorswitch_x = 504, doorswitch_y = 252,
+      doors = { {x=348, y=372, sx=504, sy=252}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1420,8 +1291,7 @@ levels = {
    },
    ["25-4"] = {
       n_x = 108, n_y = 420,
-      door_x = 744, door_y = 324,
-      doorswitch_x = 756, doorswitch_y = 36,
+      doors = { {x=744, y=324, sx=756, sy=36}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1431,8 +1301,7 @@ levels = {
    },
    ["26-0"] = {
       n_x = 48, n_y = 552,
-      door_x = 732, door_y = 60,
-      doorswitch_x = 180, doorswitch_y = 60,
+      doors = { {x=732, y=60, sx=180, sy=60}, },
       mines = { {x=144, y=252}, {x=372, y=180}, {x=576, y=132}, {x=708, y=192}, {x=480, y=72}, {x=288, y=120}, {x=468, y=240}, {x=636, y=264}, {x=204, y=216}, {x=444, y=156}, {x=576, y=204}, {x=312, y=240}, {x=204, y=288}, {x=156, y=288}, {x=300, y=288}, {x=348, y=288}, {x=444, y=288}, {x=492, y=288}, {x=588, y=288}, {x=636, y=288}, {x=732, y=288}, {x=756, y=276}, {x=768, y=192}, },
       drones = { },
       floorguards = { },
@@ -1442,8 +1311,7 @@ levels = {
    },
    ["26-1"] = {
       n_x = 396, n_y = 324,
-      door_x = 744, door_y = 276,
-      doorswitch_x = 552, doorswitch_y = 276,
+      doors = { {x=744, y=276, sx=552, sy=276}, },
       mines = { },
       drones = { {x=540, y=228}, {x=492, y=300}, {x=252, y=252}, {x=252, y=300}, },
       floorguards = { },
@@ -1453,8 +1321,7 @@ levels = {
    },
    ["26-2"] = {
       n_x = 396, n_y = 444,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 204,
+      doors = { {x=396, y=564, sx=396, sy=204}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1464,8 +1331,7 @@ levels = {
    },
    ["26-3"] = {
       n_x = 36, n_y = 60,
-      door_x = 720, door_y = 564,
-      doorswitch_x = 228, doorswitch_y = 444,
+      doors = { {x=720, y=564, sx=228, sy=444}, },
       mines = { {x=180, y=300}, {x=120, y=360}, {x=204, y=372}, {x=576, y=480}, {x=480, y=480}, {x=744, y=456}, {x=624, y=456}, {x=348, y=468}, {x=408, y=432}, {x=312, y=360}, {x=192, y=456}, {x=252, y=468}, },
       drones = { {x=36, y=228}, {x=756, y=228}, {x=756, y=540}, {x=420, y=372}, {x=396, y=420}, },
       floorguards = { },
@@ -1475,8 +1341,7 @@ levels = {
    },
    ["26-4"] = {
       n_x = 60, n_y = 300,
-      door_x = 228, door_y = 564,
-      doorswitch_x = 444, doorswitch_y = 84,
+      doors = { {x=228, y=564, sx=444, sy=84}, },
       mines = { {x=336, y=468}, {x=552, y=516}, {x=60, y=444}, },
       drones = { {x=612, y=492}, {x=132, y=60}, },
       floorguards = { },
@@ -1486,8 +1351,7 @@ levels = {
    },
    ["27-0"] = {
       n_x = 60, n_y = 48,
-      door_x = 204, door_y = 180,
-      doorswitch_x = 168, doorswitch_y = 96,
+      doors = { {x=204, y=180, sx=168, sy=96}, },
       mines = { {x=336, y=132}, {x=336, y=180}, {x=336, y=228}, {x=336, y=276}, {x=336, y=324}, {x=336, y=372}, {x=336, y=420}, {x=252, y=372}, {x=264, y=132}, {x=264, y=180}, {x=264, y=228}, {x=264, y=276}, {x=264, y=324}, {x=504, y=84}, {x=648, y=84}, },
       drones = { {x=324, y=444}, {x=108, y=276}, {x=468, y=444}, {x=756, y=348}, },
       floorguards = { },
@@ -1497,8 +1361,7 @@ levels = {
    },
    ["27-1"] = {
       n_x = 180, n_y = 420,
-      door_x = 732, door_y = 492,
-      doorswitch_x = 36, doorswitch_y = 66,
+      doors = { {x=732, y=492, sx=36, sy=66}, },
       mines = { {x=708, y=408}, {x=684, y=408}, {x=660, y=408}, {x=684, y=72}, {x=708, y=72}, {x=732, y=72}, {x=720, y=348}, {x=672, y=312}, {x=708, y=228}, {x=744, y=168}, {x=636, y=216}, {x=564, y=348}, {x=504, y=396}, {x=516, y=456}, {x=588, y=420}, {x=612, y=288}, {x=588, y=288}, {x=564, y=288}, },
       drones = { {x=204, y=564}, {x=564, y=540}, {x=468, y=324}, {x=468, y=204}, },
       floorguards = { },
@@ -1508,8 +1371,7 @@ levels = {
    },
    ["27-2"] = {
       n_x = 720, n_y = 540,
-      door_x = 84, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 108,
+      doors = { {x=84, y=564, sx=396, sy=108}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1519,8 +1381,7 @@ levels = {
    },
    ["27-3"] = {
       n_x = 756, n_y = 444,
-      door_x = 48, door_y = 60,
-      doorswitch_x = 732, doorswitch_y = 84,
+      doors = { {x=48, y=60, sx=732, sy=84}, },
       mines = { },
       drones = { {x=36, y=516}, {x=756, y=516}, },
       floorguards = { },
@@ -1530,8 +1391,7 @@ levels = {
    },
    ["27-4"] = {
       n_x = 228, n_y = 564,
-      door_x = 720, door_y = 564,
-      doorswitch_x = 744, doorswitch_y = 36,
+      doors = { {x=720, y=564, sx=744, sy=36}, },
       mines = { {x=48, y=72}, {x=144, y=72}, {x=324, y=72}, {x=432, y=72}, {x=528, y=72}, {x=624, y=72}, {x=720, y=72}, {x=378, y=24}, {x=480, y=24}, {x=576, y=24}, {x=672, y=24}, {x=96, y=24}, {x=234, y=24}, {x=768, y=468}, {x=768, y=420}, {x=768, y=372}, {x=768, y=324}, {x=768, y=276}, },
       drones = { {x=132, y=420}, {x=156, y=204}, {x=156, y=492}, },
       floorguards = { },
@@ -1541,8 +1401,7 @@ levels = {
    },
    ["28-0"] = {
       n_x = 108, n_y = 276,
-      door_x = 744, door_y = 324,
-      doorswitch_x = 396, doorswitch_y = 180,
+      doors = { {x=744, y=324, sx=396, sy=180}, },
       mines = { },
       drones = { {x=396, y=372}, },
       floorguards = { },
@@ -1552,8 +1411,7 @@ levels = {
    },
    ["28-1"] = {
       n_x = 420, n_y = 552,
-      door_x = 60, door_y = 252,
-      doorswitch_x = 60, doorswitch_y = 552,
+      doors = { {x=60, y=252, sx=60, sy=552}, },
       mines = { {x=36, y=528}, {x=84, y=528}, {x=132, y=528}, {x=180, y=528}, {x=228, y=528}, {x=276, y=528}, {x=324, y=528}, {x=372, y=528}, {x=420, y=528}, {x=468, y=528}, {x=516, y=528}, {x=564, y=528}, {x=612, y=528}, {x=660, y=528}, {x=708, y=528}, {x=132, y=396}, {x=276, y=396}, {x=420, y=396}, {x=564, y=396}, {x=708, y=396}, },
       drones = { {x=84, y=84}, {x=708, y=84}, },
       floorguards = { },
@@ -1563,8 +1421,7 @@ levels = {
    },
    ["28-2"] = {
       n_x = 84, n_y = 540,
-      door_x = 660, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=660, y=564, sx=396, sy=84}, },
       mines = { {x=660, y=540}, {x=684, y=540}, {x=636, y=540}, },
       drones = { {x=60, y=156}, {x=204, y=252}, },
       floorguards = { },
@@ -1574,8 +1431,7 @@ levels = {
    },
    ["28-3"] = {
       n_x = 684, n_y = 468,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 108, doorswitch_y = 564,
+      doors = { {x=48, y=564, sx=108, sy=564}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1585,8 +1441,7 @@ levels = {
    },
    ["28-4"] = {
       n_x = 396, n_y = 48,
-      door_x = 396, door_y = 156,
-      doorswitch_x = 420, doorswitch_y = 348,
+      doors = { {x=396, y=156, sx=420, sy=348}, },
       mines = { {x=564, y=252}, {x=744, y=384}, {x=636, y=360}, {x=732, y=252}, {x=696, y=180}, {x=624, y=228}, {x=708, y=324}, {x=636, y=276}, {x=768, y=432}, {x=696, y=456}, {x=504, y=276}, {x=108, y=348}, },
       drones = { {x=276, y=132}, {x=516, y=132}, },
       floorguards = { },
@@ -1596,8 +1451,7 @@ levels = {
    },
    ["29-0"] = {
       n_x = 396, n_y = 540,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=396, y=564, sx=396, sy=60}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1607,8 +1461,7 @@ levels = {
    },
    ["29-1"] = {
       n_x = 204, n_y = 552,
-      door_x = 276, door_y = 60,
-      doorswitch_x = 660, doorswitch_y = 540,
+      doors = { {x=276, y=60, sx=660, sy=540}, },
       mines = { {x=348, y=156}, {x=408, y=276}, {x=420, y=456}, {x=312, y=372}, },
       drones = { {x=84, y=540}, {x=60, y=564}, {x=36, y=540}, {x=60, y=516}, },
       floorguards = { },
@@ -1618,8 +1471,7 @@ levels = {
    },
    ["29-2"] = {
       n_x = 684, n_y = 528,
-      door_x = 96, door_y = 564,
-      doorswitch_x = 444, doorswitch_y = 108,
+      doors = { {x=96, y=564, sx=444, sy=108}, },
       mines = { },
       drones = { {x=60, y=396}, },
       floorguards = { },
@@ -1629,8 +1481,7 @@ levels = {
    },
    ["29-3"] = {
       n_x = 396, n_y = 552,
-      door_x = 624, door_y = 564,
-      doorswitch_x = 228, doorswitch_y = 564,
+      doors = { {x=624, y=564, sx=228, sy=564}, },
       mines = { {x=624, y=168}, {x=720, y=156}, {x=528, y=156}, {x=528, y=252}, {x=720, y=252}, {x=684, y=276}, {x=564, y=276}, {x=624, y=252}, {x=648, y=156}, {x=600, y=156}, {x=744, y=204}, {x=504, y=204}, {x=624, y=216}, {x=624, y=120}, {x=624, y=96}, {x=768, y=156}, {x=480, y=156}, {x=480, y=252}, {x=768, y=252}, {x=624, y=300}, {x=624, y=360}, },
       drones = { {x=348, y=300}, {x=444, y=300}, {x=636, y=444}, {x=516, y=492}, },
       floorguards = { },
@@ -1640,8 +1491,7 @@ levels = {
    },
    ["29-4"] = {
       n_x = 660, n_y = 564,
-      door_x = 492, door_y = 564,
-      doorswitch_x = 408, doorswitch_y = 132,
+      doors = { {x=492, y=564, sx=408, sy=132}, },
       mines = { {x=768, y=204}, {x=768, y=336}, {x=768, y=456}, {x=648, y=204}, {x=648, y=264}, {x=648, y=324}, {x=648, y=384}, {x=144, y=204}, {x=144, y=288}, {x=144, y=372}, {x=24, y=396}, {x=24, y=480}, {x=24, y=516}, {x=24, y=336}, {x=24, y=216}, },
       drones = { {x=660, y=108}, {x=132, y=108}, {x=180, y=300}, {x=612, y=300}, },
       floorguards = { },
@@ -1651,8 +1501,7 @@ levels = {
    },
    ["30-0"] = {
       n_x = 36, n_y = 84,
-      door_x = 48, door_y = 228,
-      doorswitch_x = 756, doorswitch_y = 132,
+      doors = { {x=48, y=228, sx=756, sy=132}, },
       mines = { {x=708, y=384}, {x=636, y=336}, {x=168, y=348}, {x=96, y=372}, {x=96, y=456}, {x=168, y=504}, {x=360, y=516}, {x=372, y=420}, {x=312, y=360}, {x=228, y=300}, {x=396, y=300}, {x=492, y=324}, {x=480, y=396}, {x=432, y=492}, {x=480, y=552}, {x=624, y=552}, {x=720, y=516}, {x=720, y=456}, {x=636, y=420}, {x=612, y=372}, {x=540, y=432}, {x=588, y=492}, {x=444, y=444}, {x=252, y=444}, {x=228, y=396}, {x=48, y=408}, {x=48, y=504}, {x=216, y=552}, {x=276, y=552}, {x=324, y=468}, {x=168, y=420}, {x=48, y=324}, {x=768, y=312}, {x=768, y=336}, {x=768, y=360}, {x=60, y=576}, {x=732, y=576}, {x=672, y=576}, {x=120, y=576}, {x=180, y=576}, {x=612, y=576}, {x=552, y=576}, {x=492, y=576}, {x=240, y=576}, {x=300, y=576}, {x=360, y=576}, {x=432, y=576}, {x=408, y=372}, {x=672, y=456}, {x=132, y=372}, {x=348, y=312}, },
       drones = { },
       floorguards = { },
@@ -1662,8 +1511,7 @@ levels = {
    },
    ["30-1"] = {
       n_x = 60, n_y = 564,
-      door_x = 216, door_y = 564,
-      doorswitch_x = 600, doorswitch_y = 564,
+      doors = { {x=216, y=564, sx=600, sy=564}, },
       mines = { },
       drones = { {x=588, y=300}, {x=324, y=276}, {x=180, y=132}, {x=732, y=84}, },
       floorguards = { {x=564, y=594}, },
@@ -1673,8 +1521,7 @@ levels = {
    },
    ["30-2"] = {
       n_x = 168, n_y = 180,
-      door_x = 204, door_y = 252,
-      doorswitch_x = 624, doorswitch_y = 204,
+      doors = { {x=204, y=252, sx=624, sy=204}, },
       mines = { {x=300, y=204}, {x=492, y=204}, {x=396, y=264}, {x=612, y=264}, },
       drones = { },
       floorguards = { {x=588, y=258}, },
@@ -1684,8 +1531,7 @@ levels = {
    },
    ["30-3"] = {
       n_x = 396, n_y = 564,
-      door_x = 396, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 276,
+      doors = { {x=396, y=84, sx=396, sy=276}, },
       mines = { },
       drones = { {x=756, y=444}, {x=36, y=300}, },
       floorguards = { },
@@ -1695,8 +1541,7 @@ levels = {
    },
    ["30-4"] = {
       n_x = 48, n_y = 60,
-      door_x = 120, door_y = 468,
-      doorswitch_x = 468, doorswitch_y = 228,
+      doors = { {x=120, y=468, sx=468, sy=228}, },
       mines = { {x=156, y=216}, {x=156, y=204}, {x=348, y=216}, {x=348, y=204}, {x=540, y=216}, {x=540, y=204}, {x=672, y=384}, {x=672, y=372}, {x=528, y=384}, {x=528, y=372}, {x=312, y=360}, {x=312, y=348}, {x=168, y=408}, {x=156, y=396}, {x=468, y=324}, {x=384, y=288}, {x=240, y=336}, {x=72, y=360}, {x=24, y=264}, {x=540, y=36}, {x=540, y=108}, {x=348, y=36}, {x=348, y=108}, {x=156, y=36}, {x=156, y=108}, {x=684, y=144}, {x=768, y=96}, {x=768, y=204}, {x=156, y=576}, {x=192, y=576}, {x=228, y=576}, {x=264, y=576}, {x=432, y=576}, {x=468, y=576}, {x=504, y=576}, {x=540, y=576}, },
       drones = { {x=396, y=468}, {x=228, y=420}, {x=588, y=468}, },
       floorguards = { },
@@ -1706,8 +1551,7 @@ levels = {
    },
    ["31-0"] = {
       n_x = 708, n_y = 48,
-      door_x = 588, door_y = 60,
-      doorswitch_x = 192, doorswitch_y = 108,
+      doors = { {x=588, y=60, sx=192, sy=108}, },
       mines = { },
       drones = { },
       floorguards = { {x=672, y=570}, {x=300, y=570}, },
@@ -1717,8 +1561,7 @@ levels = {
    },
    ["31-1"] = {
       n_x = 684, n_y = 540,
-      door_x = 108, door_y = 564,
-      doorswitch_x = 384, doorswitch_y = 408,
+      doors = { {x=108, y=564, sx=384, sy=408}, },
       mines = { },
       drones = { },
       floorguards = { {x=300, y=546}, },
@@ -1728,8 +1571,7 @@ levels = {
    },
    ["31-2"] = {
       n_x = 684, n_y = 300,
-      door_x = 48, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=48, y=84, sx=396, sy=60}, },
       mines = { {x=576, y=348}, {x=552, y=348}, {x=408, y=300}, {x=384, y=300}, {x=192, y=324}, {x=168, y=324}, {x=96, y=396}, {x=120, y=396}, {x=216, y=516}, {x=240, y=516}, {x=312, y=420}, {x=336, y=420}, {x=456, y=444}, {x=480, y=444}, {x=672, y=492}, {x=696, y=492}, {x=768, y=564}, {x=768, y=516}, {x=768, y=468}, {x=768, y=420}, {x=768, y=372}, {x=768, y=324}, {x=768, y=276}, {x=768, y=228}, {x=24, y=564}, {x=24, y=516}, {x=24, y=468}, {x=24, y=420}, {x=24, y=372}, {x=24, y=324}, {x=24, y=276}, {x=24, y=228}, {x=744, y=540}, {x=48, y=540}, {x=48, y=492}, {x=744, y=492}, {x=720, y=516}, {x=72, y=516}, },
       drones = { {x=108, y=84}, {x=612, y=36}, {x=228, y=36}, },
       floorguards = { },
@@ -1739,8 +1581,7 @@ levels = {
    },
    ["31-3"] = {
       n_x = 60, n_y = 552,
-      door_x = 408, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 336,
+      doors = { {x=408, y=564, sx=396, sy=336}, },
       mines = { },
       drones = { {x=684, y=492}, {x=108, y=492}, {x=348, y=36}, {x=444, y=36}, },
       floorguards = { },
@@ -1750,8 +1591,7 @@ levels = {
    },
    ["31-4"] = {
       n_x = 180, n_y = 252,
-      door_x = 180, door_y = 132,
-      doorswitch_x = 684, doorswitch_y = 492,
+      doors = { {x=180, y=132, sx=684, sy=492}, },
       mines = { {x=204, y=564}, {x=252, y=564}, {x=300, y=564}, {x=348, y=564}, {x=396, y=564}, {x=444, y=564}, {x=492, y=564}, {x=540, y=564}, {x=588, y=564}, {x=636, y=564}, {x=684, y=564}, {x=732, y=564}, {x=756, y=540}, {x=756, y=492}, {x=756, y=444}, {x=756, y=396}, {x=756, y=348}, {x=756, y=300}, {x=156, y=564}, {x=108, y=564}, {x=60, y=564}, {x=36, y=540}, {x=36, y=480}, {x=36, y=420}, {x=36, y=348}, {x=228, y=552}, {x=276, y=552}, {x=324, y=552}, {x=372, y=552}, {x=420, y=552}, {x=468, y=552}, {x=516, y=552}, {x=564, y=552}, {x=612, y=552}, {x=660, y=552}, {x=708, y=552}, {x=180, y=552}, {x=132, y=552}, {x=84, y=552}, },
       drones = { },
       floorguards = { },
@@ -1761,8 +1601,7 @@ levels = {
    },
    ["32-0"] = {
       n_x = 756, n_y = 516,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 72,
+      doors = { {x=396, y=564, sx=756, sy=72}, },
       mines = { },
       drones = { {x=564, y=180}, {x=588, y=420}, {x=300, y=372}, {x=228, y=156}, {x=108, y=228}, },
       floorguards = { },
@@ -1772,8 +1611,7 @@ levels = {
    },
    ["32-1"] = {
       n_x = 396, n_y = 156,
-      door_x = 372, door_y = 348,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=372, y=348, sx=396, sy=60}, },
       mines = { },
       drones = { {x=564, y=564}, {x=156, y=36}, {x=756, y=300}, {x=36, y=300}, },
       floorguards = { },
@@ -1783,8 +1621,7 @@ levels = {
    },
    ["32-2"] = {
       n_x = 432, n_y = 540,
-      door_x = 60, door_y = 60,
-      doorswitch_x = 432, doorswitch_y = 288,
+      doors = { {x=60, y=60, sx=432, sy=288}, },
       mines = { },
       drones = { {x=756, y=444}, {x=108, y=468}, {x=684, y=36}, {x=108, y=60}, },
       floorguards = { },
@@ -1794,8 +1631,7 @@ levels = {
    },
    ["32-3"] = {
       n_x = 48, n_y = 48,
-      door_x = 612, door_y = 516,
-      doorswitch_x = 192, doorswitch_y = 48,
+      doors = { {x=612, y=516, sx=192, sy=48}, },
       mines = { {x=192, y=108}, {x=612, y=204}, {x=564, y=144}, {x=444, y=144}, {x=504, y=144}, {x=324, y=72}, {x=240, y=72}, {x=696, y=72}, {x=756, y=156}, {x=684, y=228}, {x=732, y=300}, {x=696, y=372}, {x=432, y=396}, {x=384, y=372}, {x=216, y=540}, {x=96, y=540}, {x=156, y=576}, {x=240, y=516}, {x=216, y=444}, {x=72, y=516}, {x=480, y=516}, {x=528, y=516}, {x=360, y=444}, {x=312, y=480}, {x=360, y=516}, {x=324, y=564}, },
       drones = { {x=492, y=468}, {x=468, y=204}, {x=252, y=252}, {x=588, y=396}, {x=684, y=108}, },
       floorguards = { },
@@ -1805,8 +1641,7 @@ levels = {
    },
    ["32-4"] = {
       n_x = 108, n_y = 84,
-      door_x = 72, door_y = 84,
-      doorswitch_x = 48, doorswitch_y = 540,
+      doors = { {x=72, y=84, sx=48, sy=540}, },
       mines = { },
       drones = { },
       floorguards = { {x=420, y=186}, {x=492, y=282}, {x=132, y=474}, {x=684, y=378}, {x=540, y=570}, {x=156, y=282}, {x=444, y=90}, {x=204, y=378}, {x=660, y=474}, },
@@ -1816,8 +1651,7 @@ levels = {
    },
    ["33-0"] = {
       n_x = 396, n_y = 516,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=396, y=564, sx=396, sy=60}, },
       mines = { {x=360, y=300}, {x=432, y=300}, {x=504, y=300}, {x=576, y=300}, {x=648, y=300}, {x=288, y=300}, {x=216, y=300}, {x=144, y=300}, {x=72, y=300}, {x=108, y=264}, {x=108, y=336}, {x=108, y=408}, {x=72, y=444}, {x=108, y=480}, {x=144, y=444}, {x=252, y=408}, {x=216, y=444}, {x=252, y=480}, {x=288, y=444}, {x=396, y=408}, {x=360, y=444}, {x=396, y=480}, {x=432, y=444}, {x=540, y=408}, {x=504, y=444}, {x=540, y=480}, {x=576, y=444}, {x=684, y=408}, {x=648, y=444}, {x=684, y=480}, {x=720, y=444}, {x=684, y=336}, {x=720, y=300}, {x=684, y=264}, {x=540, y=264}, {x=540, y=336}, {x=396, y=336}, {x=396, y=264}, {x=252, y=264}, {x=252, y=336}, {x=108, y=192}, {x=72, y=156}, {x=144, y=156}, {x=108, y=120}, {x=252, y=120}, {x=216, y=156}, {x=252, y=192}, {x=288, y=156}, {x=396, y=120}, {x=360, y=156}, {x=396, y=192}, {x=432, y=156}, {x=504, y=156}, {x=540, y=120}, {x=576, y=156}, {x=540, y=192}, {x=648, y=156}, {x=684, y=120}, {x=720, y=156}, {x=684, y=192}, },
       drones = { {x=36, y=492}, {x=156, y=36}, {x=660, y=36}, {x=756, y=300}, },
       floorguards = { },
@@ -1827,8 +1661,7 @@ levels = {
    },
    ["33-1"] = {
       n_x = 108, n_y = 564,
-      door_x = 108, door_y = 492,
-      doorswitch_x = 108, doorswitch_y = 108,
+      doors = { {x=108, y=492, sx=108, sy=108}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1838,8 +1671,7 @@ levels = {
    },
    ["33-2"] = {
       n_x = 84, n_y = 540,
-      door_x = 204, door_y = 204,
-      doorswitch_x = 708, doorswitch_y = 252,
+      doors = { {x=204, y=204, sx=708, sy=252}, },
       mines = { {x=336, y=96}, {x=384, y=144}, {x=468, y=144}, {x=552, y=144}, {x=612, y=144}, {x=660, y=144}, {x=744, y=144}, {x=768, y=108}, {x=768, y=60}, {x=684, y=48}, {x=636, y=84}, {x=576, y=120}, {x=552, y=60}, {x=456, y=48}, {x=420, y=96}, {x=312, y=48}, {x=384, y=120}, {x=492, y=144}, },
       drones = { {x=108, y=372}, {x=60, y=348}, {x=108, y=108}, },
       floorguards = { {x=540, y=258}, },
@@ -1849,8 +1681,7 @@ levels = {
    },
    ["33-3"] = {
       n_x = 444, n_y = 288,
-      door_x = 36, door_y = 84,
-      doorswitch_x = 756, doorswitch_y = 540,
+      doors = { {x=36, y=84, sx=756, sy=540}, },
       mines = { },
       drones = { {x=396, y=36}, },
       floorguards = { {x=108, y=570}, {x=228, y=570}, {x=492, y=570}, {x=588, y=570}, {x=708, y=570}, },
@@ -1860,8 +1691,7 @@ levels = {
    },
    ["33-4"] = {
       n_x = 588, n_y = 300,
-      door_x = 480, door_y = 396,
-      doorswitch_x = 300, doorswitch_y = 60,
+      doors = { {x=480, y=396, sx=300, sy=60}, },
       mines = { {x=36, y=564}, {x=60, y=576}, {x=756, y=564}, {x=732, y=576}, {x=684, y=576}, {x=636, y=576}, {x=588, y=576}, {x=108, y=576}, {x=156, y=576}, {x=204, y=576}, {x=252, y=576}, {x=300, y=576}, {x=348, y=576}, {x=396, y=576}, {x=444, y=576}, {x=492, y=576}, {x=540, y=576}, {x=708, y=552}, {x=660, y=552}, {x=612, y=552}, {x=564, y=552}, {x=516, y=552}, {x=468, y=552}, {x=420, y=552}, {x=372, y=552}, {x=324, y=552}, {x=276, y=552}, {x=228, y=552}, {x=180, y=552}, {x=132, y=552}, {x=84, y=552}, },
       drones = { },
       floorguards = { },
@@ -1871,8 +1701,7 @@ levels = {
    },
    ["34-0"] = {
       n_x = 48, n_y = 564,
-      door_x = 744, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 204,
+      doors = { {x=744, y=564, sx=396, sy=204}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1882,8 +1711,7 @@ levels = {
    },
    ["34-1"] = {
       n_x = 144, n_y = 468,
-      door_x = 612, door_y = 564,
-      doorswitch_x = 624, doorswitch_y = 168,
+      doors = { {x=612, y=564, sx=624, sy=168}, },
       mines = { {x=336, y=384}, {x=288, y=384}, {x=288, y=408}, {x=336, y=408}, {x=288, y=432}, {x=336, y=432}, {x=288, y=360}, },
       drones = { {x=36, y=228}, {x=516, y=300}, {x=540, y=468}, {x=612, y=300}, },
       floorguards = { {x=444, y=570}, {x=324, y=474}, {x=516, y=66}, {x=624, y=210}, },
@@ -1893,8 +1721,7 @@ levels = {
    },
    ["34-2"] = {
       n_x = 744, n_y = 516,
-      door_x = 672, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 72,
+      doors = { {x=672, y=564, sx=36, sy=72}, },
       mines = { {x=768, y=468}, {x=768, y=432}, {x=768, y=396}, {x=768, y=504}, {x=768, y=540}, },
       drones = { },
       floorguards = { },
@@ -1904,8 +1731,7 @@ levels = {
    },
    ["34-3"] = {
       n_x = 444, n_y = 516,
-      door_x = 360, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 264,
+      doors = { {x=360, y=564, sx=396, sy=264}, },
       mines = { },
       drones = { {x=108, y=108}, {x=684, y=108}, {x=396, y=468}, {x=468, y=396}, },
       floorguards = { },
@@ -1915,8 +1741,7 @@ levels = {
    },
    ["34-4"] = {
       n_x = 720, n_y = 120,
-      door_x = 84, door_y = 180,
-      doorswitch_x = 396, doorswitch_y = 396,
+      doors = { {x=84, y=180, sx=396, sy=396}, },
       mines = { {x=456, y=72}, {x=384, y=72}, {x=252, y=72}, {x=84, y=72}, {x=132, y=72}, },
       drones = { {x=108, y=60}, {x=132, y=372}, {x=684, y=324}, {x=564, y=564}, {x=324, y=180}, },
       floorguards = { },
@@ -1926,8 +1751,7 @@ levels = {
    },
    ["35-0"] = {
       n_x = 300, n_y = 552,
-      door_x = 600, door_y = 492,
-      doorswitch_x = 132, doorswitch_y = 216,
+      doors = { {x=600, y=492, sx=132, sy=216}, },
       mines = { {x=528, y=432}, {x=576, y=384}, {x=672, y=288}, {x=696, y=264}, },
       drones = { {x=660, y=492}, },
       floorguards = { },
@@ -1937,8 +1761,7 @@ levels = {
    },
    ["35-1"] = {
       n_x = 192, n_y = 552,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=396, y=564, sx=396, sy=60}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1948,8 +1771,7 @@ levels = {
    },
    ["35-2"] = {
       n_x = 456, n_y = 540,
-      door_x = 360, door_y = 252,
-      doorswitch_x = 132, doorswitch_y = 276,
+      doors = { {x=360, y=252, sx=132, sy=276}, },
       mines = { {x=624, y=312}, {x=516, y=348}, {x=564, y=324}, {x=468, y=288}, {x=384, y=384}, {x=288, y=336}, {x=216, y=324}, {x=360, y=288}, {x=168, y=240}, {x=156, y=300}, {x=264, y=264}, },
       drones = { {x=180, y=300}, {x=228, y=372}, {x=420, y=444}, {x=660, y=348}, {x=756, y=396}, {x=36, y=204}, },
       floorguards = { },
@@ -1959,8 +1781,7 @@ levels = {
    },
    ["35-3"] = {
       n_x = 144, n_y = 552,
-      door_x = 228, door_y = 84,
-      doorswitch_x = 228, doorswitch_y = 36,
+      doors = { {x=228, y=84, sx=228, sy=36}, {x=648, y=564, sx=396, sy=540}, },
       mines = { {x=252, y=276}, {x=252, y=324}, {x=252, y=228}, {x=252, y=372}, {x=252, y=420}, {x=252, y=468}, {x=708, y=540}, {x=708, y=516}, {x=588, y=516}, {x=588, y=540}, {x=612, y=564}, {x=684, y=564}, {x=252, y=540}, {x=252, y=504}, },
       drones = { {x=204, y=420}, {x=84, y=228}, },
       floorguards = { },
@@ -1970,8 +1791,7 @@ levels = {
    },
    ["35-4"] = {
       n_x = 252, n_y = 540,
-      door_x = 372, door_y = 516,
-      doorswitch_x = 444, doorswitch_y = 108,
+      doors = { {x=372, y=516, sx=444, sy=108}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -1981,8 +1801,7 @@ levels = {
    },
    ["36-0"] = {
       n_x = 36, n_y = 108,
-      door_x = 216, door_y = 252,
-      doorswitch_x = 216, doorswitch_y = 324,
+      doors = { {x=216, y=252, sx=216, sy=324}, },
       mines = { {x=720, y=96}, {x=480, y=168}, {x=768, y=156}, {x=768, y=228}, {x=672, y=120}, {x=768, y=504}, {x=672, y=528}, {x=720, y=468}, {x=732, y=564}, {x=528, y=384}, {x=408, y=348}, {x=408, y=420}, {x=528, y=480}, {x=588, y=480}, {x=468, y=408}, {x=312, y=372}, {x=264, y=72}, {x=360, y=120}, {x=444, y=72}, {x=516, y=96}, {x=600, y=48}, {x=684, y=60}, {x=336, y=36}, {x=216, y=552}, {x=264, y=492}, {x=168, y=492}, {x=216, y=420}, {x=216, y=444}, },
       drones = { {x=324, y=228}, {x=36, y=348}, },
       floorguards = { },
@@ -1992,8 +1811,7 @@ levels = {
    },
    ["36-1"] = {
       n_x = 36, n_y = 348,
-      door_x = 720, door_y = 564,
-      doorswitch_x = 588, doorswitch_y = 120,
+      doors = { {x=720, y=564, sx=588, sy=120}, },
       mines = { },
       drones = { {x=156, y=228}, {x=612, y=396}, {x=180, y=396}, },
       floorguards = { },
@@ -2003,8 +1821,7 @@ levels = {
    },
    ["36-2"] = {
       n_x = 684, n_y = 60,
-      door_x = 96, door_y = 564,
-      doorswitch_x = 588, doorswitch_y = 468,
+      doors = { {x=96, y=564, sx=588, sy=468}, },
       mines = { {x=768, y=108}, {x=600, y=108}, {x=600, y=180}, {x=768, y=180}, {x=768, y=252}, {x=600, y=252}, {x=600, y=324}, {x=768, y=324}, {x=768, y=396}, {x=600, y=396}, {x=768, y=468}, {x=768, y=540}, {x=720, y=576}, {x=648, y=576}, {x=684, y=180}, {x=684, y=396}, {x=684, y=252}, {x=684, y=324}, {x=156, y=204}, {x=156, y=348}, {x=36, y=252}, {x=36, y=156}, {x=36, y=396}, {x=156, y=444}, {x=192, y=372}, {x=192, y=180}, {x=192, y=276}, {x=576, y=396}, {x=576, y=324}, {x=576, y=252}, {x=612, y=564}, {x=756, y=564}, },
       drones = { {x=444, y=564}, {x=396, y=36}, },
       floorguards = { },
@@ -2014,8 +1831,7 @@ levels = {
    },
    ["36-3"] = {
       n_x = 588, n_y = 504,
-      door_x = 744, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 108,
+      doors = { {x=744, y=564, sx=756, sy=108}, },
       mines = { {x=768, y=324}, {x=768, y=444}, {x=408, y=324}, {x=408, y=444}, {x=408, y=276}, {x=768, y=276}, {x=768, y=156}, {x=408, y=156}, {x=408, y=228}, {x=408, y=204}, {x=408, y=372}, {x=408, y=396}, {x=768, y=372}, {x=768, y=396}, {x=768, y=228}, {x=768, y=204}, {x=744, y=312}, {x=432, y=312}, {x=432, y=480}, {x=744, y=480}, {x=648, y=300}, {x=624, y=300}, {x=552, y=300}, {x=528, y=300}, {x=504, y=468}, {x=480, y=468}, {x=576, y=468}, {x=600, y=468}, {x=672, y=468}, {x=696, y=468}, },
       drones = { {x=348, y=564}, {x=348, y=444}, {x=60, y=564}, {x=60, y=348}, {x=204, y=36}, },
       floorguards = { },
@@ -2025,8 +1841,7 @@ levels = {
    },
    ["36-4"] = {
       n_x = 540, n_y = 564,
-      door_x = 408, door_y = 564,
-      doorswitch_x = 348, doorswitch_y = 84,
+      doors = { {x=408, y=564, sx=348, sy=84}, },
       mines = { {x=408, y=528}, {x=660, y=480}, {x=180, y=480}, {x=228, y=480}, {x=420, y=384}, {x=492, y=384}, {x=564, y=384}, {x=756, y=336}, {x=612, y=264}, {x=324, y=264}, {x=252, y=264}, {x=108, y=336}, {x=60, y=336}, {x=48, y=192}, {x=240, y=120}, {x=444, y=144}, {x=492, y=144}, {x=636, y=72}, {x=732, y=192}, },
       drones = { },
       floorguards = { },
@@ -2036,8 +1851,7 @@ levels = {
    },
    ["37-0"] = {
       n_x = 414.184780354589, n_y = 542,
-      door_x = 396, door_y = 540,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=396, y=540, sx=396, sy=60}, },
       mines = { {x=132, y=204}, {x=108, y=216}, {x=84, y=204}, {x=108, y=144}, {x=84, y=156}, {x=72, y=180}, {x=372, y=372}, {x=396, y=384}, {x=420, y=372}, {x=660, y=204}, {x=684, y=216}, {x=708, y=204}, {x=720, y=180}, {x=708, y=156}, {x=684, y=144}, {x=372, y=324}, {x=420, y=324}, {x=756, y=348}, {x=36, y=348}, {x=72, y=576}, {x=192, y=576}, {x=312, y=576}, {x=480, y=576}, {x=600, y=576}, {x=720, y=576}, },
       drones = { },
       floorguards = { },
@@ -2047,8 +1861,7 @@ levels = {
    },
    ["37-1"] = {
       n_x = 708, n_y = 228,
-      door_x = 648, door_y = 108,
-      doorswitch_x = 252, doorswitch_y = 96,
+      doors = { {x=648, y=108, sx=252, sy=96}, },
       mines = { {x=564, y=540}, {x=516, y=540}, {x=276, y=540}, {x=228, y=540}, {x=36, y=540}, {x=756, y=540}, {x=216, y=72}, {x=288, y=72}, {x=252, y=120}, {x=228, y=120}, {x=276, y=120}, {x=312, y=48}, {x=192, y=48}, {x=192, y=504}, {x=72, y=504}, {x=516, y=492}, {x=276, y=492}, {x=348, y=468}, {x=396, y=480}, {x=432, y=456}, {x=552, y=372}, {x=600, y=372}, {x=552, y=420}, {x=624, y=420}, {x=552, y=468}, {x=600, y=504}, },
       drones = { },
       floorguards = { {x=396, y=570}, },
@@ -2058,8 +1871,7 @@ levels = {
    },
    ["37-2"] = {
       n_x = 60, n_y = 396,
-      door_x = 660, door_y = 564,
-      doorswitch_x = 708, doorswitch_y = 564,
+      doors = { {x=660, y=564, sx=708, sy=564}, {x=468, y=564, sx=516, sy=564}, {x=276, y=564, sx=324, sy=564}, {x=84, y=564, sx=132, sy=564}, {x=708, y=420, sx=660, sy=420}, },
       mines = { {x=252, y=372}, {x=300, y=372}, {x=348, y=372}, {x=396, y=372}, {x=444, y=372}, {x=492, y=372}, {x=540, y=372}, {x=588, y=372}, {x=636, y=372}, {x=684, y=372}, {x=732, y=372}, {x=768, y=348}, {x=768, y=300}, {x=768, y=252}, {x=768, y=204}, {x=768, y=156}, {x=768, y=108}, {x=768, y=60}, {x=24, y=60}, {x=24, y=108}, {x=24, y=156}, {x=24, y=204}, {x=24, y=252}, {x=24, y=300}, {x=24, y=348}, {x=276, y=300}, {x=288, y=204}, {x=276, y=60}, {x=564, y=60}, {x=420, y=180}, {x=504, y=288}, {x=648, y=168}, {x=168, y=228}, {x=108, y=84}, {x=384, y=108}, {x=564, y=180}, },
       drones = { },
       floorguards = { },
@@ -2069,8 +1881,7 @@ levels = {
    },
    ["37-3"] = {
       n_x = 36, n_y = 60,
-      door_x = 180, door_y = 372,
-      doorswitch_x = 240, doorswitch_y = 132,
+      doors = { {x=180, y=372, sx=240, sy=132}, },
       mines = { {x=84, y=72}, {x=108, y=72}, {x=132, y=72}, {x=156, y=72}, {x=180, y=72}, {x=204, y=72}, {x=348, y=72}, {x=372, y=72}, {x=396, y=72}, {x=228, y=72}, {x=420, y=72}, {x=444, y=72}, {x=468, y=72}, {x=252, y=72}, {x=564, y=72}, {x=588, y=72}, {x=612, y=72}, {x=636, y=72}, {x=660, y=72}, {x=492, y=72}, {x=276, y=72}, {x=732, y=576}, {x=708, y=576}, {x=684, y=576}, {x=660, y=576}, {x=636, y=576}, {x=612, y=576}, {x=588, y=564}, {x=756, y=564}, {x=540, y=72}, {x=516, y=72}, {x=324, y=72}, {x=300, y=72}, {x=60, y=72}, {x=408, y=288}, {x=120, y=372}, {x=120, y=204}, {x=264, y=456}, {x=408, y=396}, {x=384, y=216}, {x=48, y=348}, {x=60, y=132}, {x=504, y=192}, },
       drones = { {x=324, y=372}, {x=324, y=156}, {x=180, y=444}, {x=420, y=540}, {x=372, y=156}, },
       floorguards = { },
@@ -2080,8 +1891,7 @@ levels = {
    },
    ["37-4"] = {
       n_x = 696, n_y = 564,
-      door_x = 696, door_y = 276,
-      doorswitch_x = 300, doorswitch_y = 156,
+      doors = { {x=696, y=276, sx=300, sy=156}, },
       mines = { {x=768, y=204}, {x=768, y=156}, {x=768, y=108}, {x=768, y=60}, {x=768, y=252}, {x=756, y=276}, {x=720, y=288}, {x=672, y=288}, {x=636, y=276}, {x=636, y=108}, {x=636, y=156}, {x=636, y=204}, {x=624, y=252}, },
       drones = { },
       floorguards = { },
@@ -2091,8 +1901,7 @@ levels = {
    },
    ["38-0"] = {
       n_x = 396, n_y = 228,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=564, sx=396, sy=84}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -2102,8 +1911,7 @@ levels = {
    },
    ["38-1"] = {
       n_x = 756, n_y = 36,
-      door_x = 36, door_y = 36,
-      doorswitch_x = 396, doorswitch_y = 300,
+      doors = { {x=36, y=36, sx=396, sy=300}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -2113,8 +1921,7 @@ levels = {
    },
    ["38-2"] = {
       n_x = 300, n_y = 48,
-      door_x = 444, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 180,
+      doors = { {x=444, y=60, sx=396, sy=180}, },
       mines = { {x=468, y=180}, {x=324, y=180}, {x=504, y=324}, {x=288, y=324}, {x=396, y=432}, {x=396, y=288}, {x=396, y=144}, {x=396, y=504}, {x=396, y=360}, {x=396, y=216}, {x=456, y=360}, {x=336, y=360}, {x=456, y=468}, {x=492, y=504}, {x=300, y=504}, {x=336, y=468}, {x=612, y=468}, {x=552, y=468}, {x=180, y=468}, {x=240, y=468}, },
       drones = { {x=516, y=204}, {x=204, y=348}, {x=636, y=444}, {x=396, y=204}, {x=156, y=492}, {x=588, y=348}, },
       floorguards = { {x=444, y=210}, {x=324, y=498}, {x=372, y=354}, },
@@ -2124,8 +1931,7 @@ levels = {
    },
    ["38-3"] = {
       n_x = 372, n_y = 36,
-      door_x = 384, door_y = 108,
-      doorswitch_x = 396, doorswitch_y = 516,
+      doors = { {x=384, y=108, sx=396, sy=516}, },
       mines = { },
       drones = { },
       floorguards = { {x=468, y=570}, {x=252, y=570}, {x=756, y=570}, },
@@ -2135,8 +1941,7 @@ levels = {
    },
    ["38-4"] = {
       n_x = 636, n_y = 564,
-      door_x = 696, door_y = 564,
-      doorswitch_x = 336, doorswitch_y = 360,
+      doors = { {x=696, y=564, sx=336, sy=360}, },
       mines = { {x=636, y=516}, {x=636, y=468}, {x=636, y=420}, {x=636, y=372}, {x=636, y=324}, {x=636, y=276}, {x=636, y=228}, {x=636, y=180}, {x=636, y=132}, {x=636, y=84}, {x=36, y=84}, {x=36, y=132}, {x=36, y=180}, {x=36, y=228}, {x=36, y=276}, {x=36, y=324}, {x=36, y=372}, {x=36, y=420}, {x=36, y=468}, {x=36, y=516}, },
       drones = { {x=684, y=468}, {x=732, y=396}, {x=708, y=276}, {x=732, y=204}, {x=708, y=156}, },
       floorguards = { },
@@ -2146,8 +1951,7 @@ levels = {
    },
    ["39-0"] = {
       n_x = 396, n_y = 36,
-      door_x = 402, door_y = 564,
-      doorswitch_x = 504, doorswitch_y = 492,
+      doors = { {x=402, y=564, sx=504, sy=492}, },
       mines = { {x=648, y=336}, {x=648, y=480}, {x=144, y=336}, {x=144, y=480}, {x=324, y=360}, {x=468, y=360}, {x=264, y=408}, {x=528, y=408}, {x=600, y=432}, {x=192, y=432}, {x=564, y=456}, {x=228, y=456}, {x=300, y=408}, {x=492, y=408}, {x=648, y=408}, {x=144, y=408}, {x=432, y=312}, {x=360, y=312}, {x=564, y=348}, {x=228, y=348}, },
       drones = { {x=516, y=36}, {x=276, y=36}, {x=732, y=564}, {x=60, y=564}, },
       floorguards = { {x=588, y=162}, {x=204, y=162}, {x=564, y=570}, {x=228, y=570}, },
@@ -2157,8 +1961,7 @@ levels = {
    },
    ["39-1"] = {
       n_x = 228, n_y = 564,
-      door_x = 312, door_y = 564,
-      doorswitch_x = 84, doorswitch_y = 132,
+      doors = { {x=312, y=564, sx=84, sy=132}, },
       mines = { {x=420, y=312}, {x=384, y=348}, {x=384, y=492}, {x=384, y=420}, {x=288, y=228}, {x=288, y=300}, {x=288, y=372}, {x=288, y=444}, {x=372, y=384}, {x=372, y=456}, {x=384, y=312}, {x=324, y=264}, {x=324, y=336}, {x=324, y=408}, {x=324, y=480}, {x=324, y=192}, },
       drones = { {x=156, y=252}, {x=132, y=372}, {x=180, y=516}, },
       floorguards = { },
@@ -2168,8 +1971,7 @@ levels = {
    },
    ["39-2"] = {
       n_x = 132, n_y = 564,
-      door_x = 720, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 108,
+      doors = { {x=720, y=564, sx=396, sy=108}, },
       mines = { {x=396, y=144}, {x=396, y=72}, {x=396, y=432}, {x=396, y=360}, {x=432, y=396}, {x=360, y=396}, {x=372, y=252}, {x=336, y=468}, {x=336, y=516}, {x=456, y=516}, {x=456, y=468}, {x=588, y=300}, {x=660, y=300}, {x=516, y=300}, {x=276, y=300}, {x=204, y=300}, {x=132, y=300}, {x=144, y=132}, {x=648, y=132}, {x=552, y=132}, {x=240, y=132}, {x=504, y=84}, {x=288, y=84}, {x=192, y=84}, {x=600, y=84}, {x=696, y=84}, {x=96, y=84}, {x=396, y=576}, {x=468, y=576}, {x=324, y=576}, {x=360, y=540}, {x=432, y=540}, {x=516, y=60}, {x=336, y=132}, {x=456, y=132}, {x=336, y=276}, {x=336, y=324}, {x=456, y=276}, {x=456, y=324}, {x=420, y=252}, {x=372, y=204}, {x=420, y=204}, {x=276, y=60}, },
       drones = { {x=540, y=468}, {x=252, y=516}, {x=276, y=372}, {x=564, y=228}, {x=372, y=180}, },
       floorguards = { },
@@ -2179,8 +1981,7 @@ levels = {
    },
    ["39-3"] = {
       n_x = 300, n_y = 564,
-      door_x = 204, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 96,
+      doors = { {x=204, y=564, sx=396, sy=96}, },
       mines = { {x=24, y=468}, {x=768, y=468}, {x=768, y=372}, {x=768, y=324}, {x=768, y=228}, {x=768, y=180}, {x=768, y=84}, {x=24, y=84}, {x=24, y=180}, {x=24, y=228}, {x=24, y=324}, {x=24, y=372}, {x=768, y=516}, {x=24, y=516}, },
       drones = { {x=708, y=564}, },
       floorguards = { },
@@ -2190,8 +1991,7 @@ levels = {
    },
    ["39-4"] = {
       n_x = 324, n_y = 564,
-      door_x = 468, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 96,
+      doors = { {x=468, y=564, sx=396, sy=96}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -2201,8 +2001,7 @@ levels = {
    },
    ["40-0"] = {
       n_x = 156, n_y = 156,
-      door_x = 228, door_y = 156,
-      doorswitch_x = 480, doorswitch_y = 348,
+      doors = { {x=228, y=156, sx=480, sy=348}, },
       mines = { {x=564, y=204}, {x=528, y=144}, {x=420, y=132}, {x=348, y=192}, {x=456, y=216}, },
       drones = { {x=660, y=228}, {x=300, y=108}, {x=180, y=564}, {x=756, y=108}, },
       floorguards = { {x=372, y=234}, },
@@ -2212,8 +2011,7 @@ levels = {
    },
    ["40-1"] = {
       n_x = 504, n_y = 468,
-      door_x = 204, door_y = 564,
-      doorswitch_x = 408, doorswitch_y = 36,
+      doors = { {x=204, y=564, sx=408, sy=36}, },
       mines = { },
       drones = { {x=252, y=372}, {x=564, y=132}, {x=708, y=444}, {x=228, y=180}, {x=444, y=348}, },
       floorguards = { },
@@ -2223,8 +2021,7 @@ levels = {
    },
    ["40-2"] = {
       n_x = 396, n_y = 540,
-      door_x = 396, door_y = 420,
-      doorswitch_x = 396, doorswitch_y = 108,
+      doors = { {x=396, y=420, sx=396, sy=108}, },
       mines = { },
       drones = { {x=324, y=60}, {x=468, y=60}, {x=756, y=468}, {x=36, y=468}, },
       floorguards = { },
@@ -2234,8 +2031,7 @@ levels = {
    },
    ["40-3"] = {
       n_x = 708, n_y = 60,
-      door_x = 60, door_y = 564,
-      doorswitch_x = 660, doorswitch_y = 108,
+      doors = { {x=60, y=564, sx=660, sy=108}, },
       mines = { {x=696, y=180}, {x=768, y=156}, {x=768, y=228}, {x=696, y=252}, {x=696, y=348}, {x=768, y=300}, {x=768, y=396}, {x=696, y=420}, {x=768, y=444}, {x=756, y=564}, {x=768, y=540}, {x=696, y=492}, {x=768, y=60}, {x=636, y=132}, {x=636, y=168}, {x=660, y=192}, {x=660, y=228}, {x=600, y=168}, {x=576, y=144}, {x=540, y=144}, {x=36, y=108}, {x=36, y=204}, {x=36, y=300}, {x=36, y=396}, {x=36, y=492}, {x=48, y=444}, {x=48, y=348}, {x=48, y=252}, {x=48, y=156}, },
       drones = { },
       floorguards = { {x=108, y=570}, },
@@ -2245,8 +2041,7 @@ levels = {
    },
    ["40-4"] = {
       n_x = 396, n_y = 108,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 384,
+      doors = { {x=396, y=564, sx=396, sy=384}, },
       mines = { {x=768, y=564}, {x=24, y=564}, {x=312, y=564}, {x=480, y=564}, {x=396, y=252}, {x=396, y=204}, {x=396, y=156}, {x=396, y=300}, {x=432, y=372}, {x=360, y=372}, },
       drones = { },
       floorguards = { {x=180, y=570}, {x=612, y=570}, },
@@ -2256,8 +2051,7 @@ levels = {
    },
    ["41-0"] = {
       n_x = 84, n_y = 372,
-      door_x = 624, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 564,
+      doors = { {x=624, y=564, sx=36, sy=564}, },
       mines = { {x=348, y=444}, {x=408, y=324}, {x=564, y=300}, {x=660, y=384}, {x=492, y=432}, {x=144, y=456}, {x=240, y=504}, {x=588, y=468}, {x=480, y=276}, {x=264, y=408}, {x=444, y=384}, {x=468, y=516}, {x=108, y=564}, {x=84, y=504}, {x=300, y=528}, {x=516, y=192}, {x=564, y=192}, {x=612, y=192}, {x=660, y=192}, {x=24, y=336}, {x=24, y=252}, {x=24, y=168}, {x=24, y=84}, },
       drones = { {x=132, y=276}, {x=204, y=108}, {x=108, y=180}, },
       floorguards = { },
@@ -2267,8 +2061,7 @@ levels = {
    },
    ["41-1"] = {
       n_x = 36, n_y = 492,
-      door_x = 72, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 264,
+      doors = { {x=72, y=564, sx=36, sy=264}, },
       mines = { {x=120, y=528}, {x=168, y=528}, {x=216, y=528}, {x=264, y=528}, {x=312, y=528}, {x=360, y=528}, {x=408, y=528}, {x=456, y=528}, {x=504, y=528}, {x=552, y=528}, {x=600, y=528}, {x=648, y=528}, {x=696, y=528}, {x=648, y=240}, {x=600, y=240}, {x=552, y=240}, {x=504, y=240}, {x=456, y=240}, {x=408, y=240}, {x=360, y=240}, {x=312, y=240}, {x=264, y=240}, {x=216, y=240}, {x=168, y=240}, {x=120, y=240}, {x=72, y=240}, {x=288, y=96}, {x=432, y=96}, {x=432, y=384}, {x=288, y=384}, {x=576, y=96}, {x=576, y=384}, },
       drones = { {x=756, y=180}, {x=36, y=204}, {x=444, y=348}, {x=612, y=252}, },
       floorguards = { },
@@ -2278,8 +2071,7 @@ levels = {
    },
    ["41-2"] = {
       n_x = 156, n_y = 132,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 492,
+      doors = { {x=396, y=564, sx=396, sy=492}, },
       mines = { {x=168, y=300}, {x=144, y=300}, {x=384, y=156}, {x=408, y=156}, {x=624, y=156}, {x=648, y=156}, {x=624, y=300}, {x=648, y=300}, {x=384, y=300}, {x=408, y=300}, {x=384, y=444}, {x=408, y=444}, {x=144, y=444}, {x=168, y=444}, {x=624, y=444}, {x=648, y=444}, {x=708, y=444}, {x=708, y=300}, {x=708, y=156}, {x=84, y=156}, {x=144, y=156}, {x=168, y=156}, {x=84, y=300}, {x=24, y=156}, {x=768, y=156}, {x=768, y=300}, {x=768, y=444}, {x=24, y=300}, {x=24, y=444}, {x=84, y=444}, {x=108, y=480}, {x=60, y=480}, {x=108, y=336}, {x=60, y=336}, {x=108, y=192}, {x=60, y=192}, {x=684, y=192}, {x=732, y=192}, {x=684, y=336}, {x=732, y=336}, {x=684, y=480}, {x=732, y=480}, },
       drones = { },
       floorguards = { },
@@ -2289,8 +2081,7 @@ levels = {
    },
    ["41-3"] = {
       n_x = 396, n_y = 108,
-      door_x = 396, door_y = 468,
-      doorswitch_x = 396, doorswitch_y = 288,
+      doors = { {x=396, y=468, sx=396, sy=288}, },
       mines = { {x=768, y=396}, {x=768, y=444}, {x=768, y=492}, {x=768, y=540}, {x=732, y=576}, {x=60, y=576}, {x=108, y=576}, {x=156, y=576}, {x=204, y=576}, {x=252, y=576}, {x=684, y=576}, {x=636, y=576}, {x=588, y=576}, {x=540, y=576}, {x=492, y=576}, {x=444, y=576}, {x=396, y=576}, {x=348, y=576}, {x=300, y=576}, {x=468, y=552}, {x=420, y=552}, {x=372, y=552}, {x=324, y=552}, {x=276, y=552}, {x=228, y=552}, {x=180, y=552}, {x=516, y=552}, {x=564, y=552}, {x=612, y=552}, {x=756, y=564}, {x=36, y=564}, {x=24, y=540}, {x=24, y=492}, {x=24, y=444}, {x=24, y=396}, {x=768, y=180}, {x=768, y=132}, {x=768, y=84}, {x=768, y=36}, {x=24, y=180}, {x=24, y=132}, {x=24, y=84}, {x=24, y=36}, },
       drones = { {x=420, y=372}, {x=276, y=372}, {x=516, y=348}, {x=684, y=300}, {x=300, y=276}, },
       floorguards = { },
@@ -2300,8 +2091,7 @@ levels = {
    },
    ["41-4"] = {
       n_x = 60, n_y = 564,
-      door_x = 720, door_y = 564,
-      doorswitch_x = 240, doorswitch_y = 204,
+      doors = { {x=720, y=564, sx=240, sy=204}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -2311,8 +2101,7 @@ levels = {
    },
    ["42-0"] = {
       n_x = 576, n_y = 552,
-      door_x = 216, door_y = 564,
-      doorswitch_x = 384, doorswitch_y = 48,
+      doors = { {x=216, y=564, sx=384, sy=48}, },
       mines = { },
       drones = { {x=444, y=468}, {x=348, y=300}, {x=540, y=228}, {x=228, y=228}, },
       floorguards = { },
@@ -2322,8 +2111,7 @@ levels = {
    },
    ["42-1"] = {
       n_x = 120, n_y = 60,
-      door_x = 120, door_y = 108,
-      doorswitch_x = 696, doorswitch_y = 84,
+      doors = { {x=120, y=108, sx=696, sy=84}, },
       mines = { },
       drones = { {x=204, y=324}, {x=420, y=396}, {x=588, y=348}, {x=444, y=276}, {x=132, y=444}, {x=564, y=204}, },
       floorguards = { {x=648, y=570}, {x=384, y=546}, {x=180, y=570}, },
@@ -2333,8 +2121,7 @@ levels = {
    },
    ["42-2"] = {
       n_x = 612, n_y = 468,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 288,
+      doors = { {x=396, y=564, sx=396, sy=288}, },
       mines = { },
       drones = { {x=204, y=564}, {x=348, y=36}, {x=756, y=156}, {x=36, y=420}, },
       floorguards = { },
@@ -2344,8 +2131,7 @@ levels = {
    },
    ["42-3"] = {
       n_x = 564, n_y = 108,
-      door_x = 456, door_y = 84,
-      doorswitch_x = 300, doorswitch_y = 108,
+      doors = { {x=456, y=84, sx=300, sy=108}, },
       mines = { {x=408, y=456}, {x=420, y=372}, {x=312, y=408}, {x=300, y=336}, {x=228, y=420}, {x=336, y=468}, {x=492, y=360}, },
       drones = { {x=396, y=276}, {x=252, y=252}, {x=204, y=276}, {x=516, y=300}, },
       floorguards = { },
@@ -2355,8 +2141,7 @@ levels = {
    },
    ["42-4"] = {
       n_x = 396, n_y = 516,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 108,
+      doors = { {x=396, y=564, sx=396, sy=108}, },
       mines = { {x=324, y=360}, {x=180, y=360}, {x=468, y=360}, {x=612, y=360}, {x=612, y=132}, {x=468, y=132}, {x=324, y=132}, {x=180, y=132}, {x=756, y=312}, {x=36, y=312}, {x=36, y=180}, {x=756, y=180}, {x=756, y=444}, {x=36, y=444}, {x=612, y=108}, {x=612, y=84}, {x=180, y=108}, {x=180, y=84}, {x=324, y=36}, {x=468, y=36}, {x=324, y=60}, {x=300, y=132}, {x=348, y=132}, {x=468, y=60}, {x=444, y=132}, {x=492, y=132}, {x=396, y=180}, {x=540, y=180}, {x=252, y=180}, },
       drones = { },
       floorguards = { },
@@ -2366,8 +2151,7 @@ levels = {
    },
    ["43-0"] = {
       n_x = 168, n_y = 516,
-      door_x = 660, door_y = 564,
-      doorswitch_x = 60, doorswitch_y = 348,
+      doors = { {x=660, y=564, sx=60, sy=348}, },
       mines = { {x=264, y=564}, {x=300, y=528}, {x=336, y=456}, {x=408, y=396}, {x=420, y=432}, {x=372, y=480}, {x=348, y=528}, {x=396, y=552}, {x=432, y=480}, {x=456, y=528}, {x=348, y=408}, {x=372, y=396}, {x=348, y=576}, {x=396, y=576}, {x=288, y=576}, {x=456, y=456}, {x=480, y=492}, {x=492, y=552}, {x=396, y=492}, {x=300, y=504}, {x=312, y=444}, },
       drones = { },
       floorguards = { },
@@ -2377,8 +2161,7 @@ levels = {
    },
    ["43-1"] = {
       n_x = 756, n_y = 420,
-      door_x = 120, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 264,
+      doors = { {x=120, y=60, sx=396, sy=264}, },
       mines = { {x=564, y=432}, {x=228, y=432}, {x=636, y=528}, {x=156, y=528}, {x=396, y=564}, },
       drones = { {x=540, y=300}, {x=228, y=372}, {x=756, y=156}, {x=36, y=132}, },
       floorguards = { {x=708, y=570}, {x=84, y=570}, },
@@ -2388,8 +2171,7 @@ levels = {
    },
    ["43-2"] = {
       n_x = 732, n_y = 540,
-      door_x = 60, door_y = 564,
-      doorswitch_x = 252, doorswitch_y = 96,
+      doors = { {x=60, y=564, sx=252, sy=96}, },
       mines = { {x=768, y=516}, {x=768, y=444}, {x=768, y=372}, {x=768, y=300}, {x=768, y=228}, {x=768, y=156}, {x=768, y=84}, {x=24, y=516}, {x=24, y=444}, {x=24, y=372}, {x=24, y=300}, {x=24, y=228}, {x=24, y=156}, {x=24, y=84}, },
       drones = { },
       floorguards = { },
@@ -2399,8 +2181,7 @@ levels = {
    },
    ["43-3"] = {
       n_x = 396, n_y = 36,
-      door_x = 396, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 396,
+      doors = { {x=396, y=84, sx=396, sy=396}, },
       mines = { {x=48, y=552}, {x=60, y=516}, {x=180, y=528}, {x=120, y=552}, {x=216, y=540}, {x=288, y=528}, {x=312, y=504}, {x=360, y=528}, {x=132, y=516}, {x=576, y=528}, {x=624, y=540}, {x=660, y=516}, {x=696, y=480}, {x=744, y=504}, {x=696, y=504}, {x=600, y=504}, {x=528, y=540}, {x=444, y=552}, {x=408, y=540}, {x=324, y=552}, {x=456, y=516}, {x=492, y=516}, {x=264, y=564}, {x=204, y=516}, {x=36, y=516}, {x=756, y=444}, {x=756, y=372}, {x=756, y=300}, {x=756, y=228}, {x=756, y=156}, {x=756, y=84}, {x=36, y=444}, {x=36, y=372}, {x=36, y=300}, {x=36, y=228}, {x=36, y=156}, {x=36, y=84}, {x=732, y=408}, {x=732, y=336}, {x=732, y=264}, {x=732, y=192}, {x=732, y=120}, {x=60, y=408}, {x=60, y=336}, {x=60, y=264}, {x=60, y=192}, {x=60, y=120}, },
       drones = { {x=564, y=252}, {x=228, y=252}, {x=588, y=444}, {x=636, y=396}, },
       floorguards = { },
@@ -2410,8 +2191,7 @@ levels = {
    },
    ["43-4"] = {
       n_x = 732, n_y = 540,
-      door_x = 732, door_y = 564,
-      doorswitch_x = 156, doorswitch_y = 60,
+      doors = { {x=732, y=564, sx=156, sy=60}, },
       mines = { {x=768, y=360}, {x=768, y=300}, {x=768, y=240}, {x=768, y=180}, {x=768, y=120}, {x=768, y=60}, {x=300, y=492}, {x=300, y=516}, {x=60, y=456}, {x=60, y=264}, {x=36, y=360}, {x=36, y=528}, {x=36, y=192}, },
       drones = { {x=348, y=564}, {x=492, y=564}, {x=60, y=564}, {x=36, y=156}, },
       floorguards = { },
@@ -2421,8 +2201,7 @@ levels = {
    },
    ["44-0"] = {
       n_x = 396, n_y = 540,
-      door_x = 396, door_y = 396,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=396, y=396, sx=396, sy=60}, },
       mines = { },
       drones = { {x=468, y=300}, {x=324, y=300}, {x=396, y=444}, },
       floorguards = { },
@@ -2432,8 +2211,7 @@ levels = {
    },
    ["44-1"] = {
       n_x = 348, n_y = 516,
-      door_x = 384, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 276,
+      doors = { {x=384, y=564, sx=396, sy=276}, },
       mines = { {x=564, y=348}, {x=564, y=324}, {x=564, y=300}, {x=564, y=276}, {x=564, y=252}, {x=228, y=348}, {x=228, y=324}, {x=228, y=300}, {x=228, y=276}, {x=228, y=252}, {x=564, y=420}, {x=228, y=420}, {x=228, y=180}, {x=564, y=180}, },
       drones = { {x=684, y=564}, {x=108, y=564}, {x=588, y=396}, {x=204, y=204}, },
       floorguards = { },
@@ -2443,8 +2221,7 @@ levels = {
    },
    ["44-2"] = {
       n_x = 348, n_y = 564,
-      door_x = 660, door_y = 492,
-      doorswitch_x = 84, doorswitch_y = 468,
+      doors = { {x=660, y=492, sx=84, sy=468}, },
       mines = { },
       drones = { {x=348, y=60}, {x=756, y=348}, {x=36, y=156}, },
       floorguards = { },
@@ -2454,8 +2231,7 @@ levels = {
    },
    ["44-3"] = {
       n_x = 336, n_y = 36,
-      door_x = 540, door_y = 36,
-      doorswitch_x = 396, doorswitch_y = 504,
+      doors = { {x=540, y=36, sx=396, sy=504}, },
       mines = { {x=744, y=444}, {x=396, y=480}, {x=744, y=348}, {x=744, y=540}, {x=48, y=348}, {x=48, y=540}, {x=48, y=444}, {x=744, y=252}, {x=48, y=252}, {x=744, y=192}, {x=744, y=132}, {x=48, y=192}, {x=48, y=132}, {x=48, y=492}, {x=48, y=396}, {x=744, y=396}, {x=744, y=492}, {x=216, y=576}, {x=336, y=576}, {x=456, y=576}, {x=576, y=576}, {x=696, y=576}, {x=96, y=576}, {x=156, y=564}, {x=276, y=564}, {x=396, y=564}, {x=516, y=564}, {x=636, y=564}, {x=396, y=540}, {x=420, y=540}, {x=372, y=540}, {x=156, y=528}, {x=636, y=528}, {x=636, y=480}, {x=156, y=480}, {x=276, y=528}, {x=276, y=480}, {x=516, y=528}, {x=516, y=480}, },
       drones = { {x=684, y=84}, {x=756, y=564}, {x=36, y=396}, {x=36, y=180}, },
       floorguards = { },
@@ -2465,8 +2241,7 @@ levels = {
    },
    ["44-4"] = {
       n_x = 540, n_y = 228,
-      door_x = 612, door_y = 228,
-      doorswitch_x = 396, doorswitch_y = 468,
+      doors = { {x=612, y=228, sx=396, sy=468}, },
       mines = { },
       drones = { {x=324, y=420}, {x=468, y=444}, {x=132, y=276}, {x=660, y=420}, {x=156, y=468}, },
       floorguards = { {x=396, y=570}, {x=660, y=570}, {x=156, y=570}, {x=276, y=186}, {x=516, y=330}, },
@@ -2476,8 +2251,7 @@ levels = {
    },
    ["45-0"] = {
       n_x = 588, n_y = 372,
-      door_x = 624, door_y = 108,
-      doorswitch_x = 204, doorswitch_y = 564,
+      doors = { {x=624, y=108, sx=204, sy=564}, },
       mines = { {x=456, y=540}, {x=312, y=468}, {x=168, y=396}, {x=432, y=528}, {x=288, y=456}, {x=144, y=384}, {x=360, y=504}, {x=216, y=432}, },
       drones = { {x=36, y=540}, {x=348, y=564}, },
       floorguards = { },
@@ -2487,8 +2261,7 @@ levels = {
    },
    ["45-1"] = {
       n_x = 240, n_y = 564,
-      door_x = 552, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 108,
+      doors = { {x=552, y=564, sx=396, sy=108}, },
       mines = { },
       drones = { {x=84, y=36}, {x=84, y=492}, {x=708, y=36}, {x=708, y=492}, {x=348, y=204}, {x=444, y=204}, },
       floorguards = { },
@@ -2498,8 +2271,7 @@ levels = {
    },
    ["45-2"] = {
       n_x = 36, n_y = 84,
-      door_x = 120, door_y = 564,
-      doorswitch_x = 738, doorswitch_y = 546,
+      doors = { {x=120, y=564, sx=738, sy=546}, },
       mines = { {x=672, y=432}, {x=672, y=240}, {x=120, y=336}, {x=120, y=528}, {x=588, y=576}, {x=588, y=456}, {x=576, y=516}, {x=600, y=516}, },
       drones = { },
       floorguards = { },
@@ -2509,8 +2281,7 @@ levels = {
    },
    ["45-3"] = {
       n_x = 60, n_y = 48,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 60, doorswitch_y = 108,
+      doors = { {x=48, y=564, sx=60, sy=108}, },
       mines = { },
       drones = { },
       floorguards = { {x=204, y=570}, {x=180, y=498}, {x=156, y=426}, {x=132, y=354}, {x=108, y=282}, {x=84, y=210}, {x=60, y=138}, },
@@ -2520,8 +2291,7 @@ levels = {
    },
    ["45-4"] = {
       n_x = 732, n_y = 84,
-      door_x = 396, door_y = 132,
-      doorswitch_x = 420, doorswitch_y = 540,
+      doors = { {x=396, y=132, sx=420, sy=540}, },
       mines = { {x=672, y=144}, {x=624, y=192}, {x=672, y=252}, {x=624, y=300}, {x=672, y=336}, {x=624, y=360}, {x=672, y=384}, {x=624, y=432}, {x=672, y=444}, {x=672, y=480}, {x=672, y=516}, {x=660, y=528}, {x=156, y=132}, {x=156, y=492}, {x=156, y=420}, {x=156, y=204}, {x=156, y=276}, {x=156, y=348}, {x=192, y=240}, {x=120, y=168}, {x=120, y=312}, {x=192, y=384}, {x=120, y=456}, },
       drones = { {x=516, y=516}, {x=348, y=492}, {x=132, y=516}, {x=180, y=36}, },
       floorguards = { },
@@ -2531,8 +2301,7 @@ levels = {
    },
    ["46-0"] = {
       n_x = 36, n_y = 60,
-      door_x = 84, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 384,
+      doors = { {x=84, y=564, sx=756, sy=384}, },
       mines = { {x=396, y=96}, {x=396, y=432}, {x=396, y=204}, {x=396, y=312}, {x=504, y=240}, {x=600, y=96}, {x=192, y=96}, {x=288, y=240}, {x=288, y=144}, {x=504, y=144}, {x=624, y=444}, {x=168, y=444}, {x=168, y=276}, {x=624, y=276}, {x=624, y=360}, {x=168, y=360}, {x=396, y=372}, {x=288, y=372}, {x=504, y=372}, {x=672, y=192}, {x=120, y=192}, {x=396, y=24}, {x=96, y=396}, {x=696, y=396}, {x=252, y=480}, {x=540, y=480}, {x=660, y=540}, {x=732, y=540}, {x=696, y=540}, {x=768, y=540}, {x=624, y=540}, {x=588, y=540}, },
       drones = { },
       floorguards = { {x=396, y=570}, },
@@ -2542,8 +2311,7 @@ levels = {
    },
    ["46-1"] = {
       n_x = 60, n_y = 36,
-      door_x = 708, door_y = 564,
-      doorswitch_x = 468, doorswitch_y = 348,
+      doors = { {x=708, y=564, sx=468, sy=348}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -2553,8 +2321,7 @@ levels = {
    },
    ["46-2"] = {
       n_x = 396, n_y = 84,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 420,
+      doors = { {x=396, y=564, sx=396, sy=420}, },
       mines = { {x=744, y=288}, {x=48, y=288}, {x=768, y=516}, {x=24, y=516}, {x=768, y=444}, {x=768, y=372}, {x=24, y=372}, {x=24, y=444}, {x=744, y=552}, {x=48, y=552}, {x=756, y=252}, {x=36, y=252}, {x=768, y=204}, {x=24, y=204}, {x=24, y=132}, {x=768, y=132}, {x=768, y=60}, {x=24, y=60}, {x=708, y=576}, {x=84, y=576}, {x=636, y=576}, {x=156, y=576}, {x=228, y=576}, {x=564, y=576}, {x=672, y=564}, {x=600, y=564}, {x=120, y=564}, {x=192, y=564}, {x=756, y=480}, {x=756, y=408}, {x=756, y=168}, {x=756, y=96}, {x=36, y=96}, {x=36, y=168}, {x=36, y=408}, {x=36, y=480}, },
       drones = { {x=756, y=348}, {x=228, y=348}, {x=228, y=228}, {x=660, y=228}, },
       floorguards = { },
@@ -2564,8 +2331,7 @@ levels = {
    },
    ["46-3"] = {
       n_x = 120, n_y = 48,
-      door_x = 120, door_y = 60,
-      doorswitch_x = 36, doorswitch_y = 456,
+      doors = { {x=120, y=60, sx=36, sy=456}, },
       mines = { {x=144, y=276}, {x=144, y=300}, {x=144, y=324}, {x=120, y=396}, {x=120, y=204}, {x=120, y=156}, {x=144, y=120}, {x=144, y=84}, {x=96, y=480}, {x=96, y=516}, {x=180, y=84}, {x=228, y=60}, },
       drones = { {x=684, y=276}, {x=36, y=348}, {x=60, y=156}, {x=732, y=84}, {x=756, y=516}, },
       floorguards = { },
@@ -2575,8 +2341,7 @@ levels = {
    },
    ["46-4"] = {
       n_x = 72, n_y = 36,
-      door_x = 276, door_y = 516,
-      doorswitch_x = 420, doorswitch_y = 516,
+      doors = { {x=276, y=516, sx=420, sy=516}, },
       mines = { {x=84, y=228}, {x=84, y=372}, {x=708, y=108}, {x=684, y=132}, {x=684, y=168}, {x=684, y=204}, {x=708, y=264}, {x=708, y=336}, {x=708, y=408}, {x=84, y=108}, {x=84, y=300}, {x=96, y=144}, {x=96, y=192}, {x=84, y=444}, {x=96, y=504}, {x=192, y=516}, {x=216, y=504}, {x=240, y=492}, {x=420, y=396}, {x=528, y=408}, {x=312, y=408}, },
       drones = { {x=324, y=36}, {x=732, y=36}, {x=36, y=300}, },
       floorguards = { {x=684, y=570}, },
@@ -2586,8 +2351,7 @@ levels = {
    },
    ["47-0"] = {
       n_x = 396, n_y = 492,
-      door_x = 396, door_y = 84,
-      doorswitch_x = 708, doorswitch_y = 84,
+      doors = { {x=396, y=84, sx=708, sy=84}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -2597,8 +2361,7 @@ levels = {
    },
    ["47-1"] = {
       n_x = 396, n_y = 468,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=396, y=564, sx=396, sy=60}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -2608,8 +2371,7 @@ levels = {
    },
    ["47-2"] = {
       n_x = 396, n_y = 60,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 564,
+      doors = { {x=48, y=564, sx=756, sy=564}, },
       mines = { {x=348, y=132}, {x=348, y=180}, {x=348, y=276}, {x=348, y=324}, {x=348, y=420}, {x=348, y=468}, {x=276, y=540}, {x=276, y=492}, {x=276, y=348}, {x=276, y=396}, {x=276, y=252}, {x=276, y=204}, {x=372, y=156}, {x=252, y=228}, {x=372, y=300}, {x=252, y=372}, {x=372, y=444}, {x=252, y=516}, {x=420, y=156}, {x=540, y=228}, {x=420, y=300}, {x=540, y=372}, {x=420, y=444}, {x=516, y=300}, {x=444, y=372}, {x=516, y=444}, {x=444, y=228}, {x=468, y=300}, {x=492, y=228}, {x=468, y=156}, {x=492, y=372}, {x=492, y=516}, {x=540, y=516}, {x=468, y=444}, {x=744, y=204}, {x=600, y=204}, {x=600, y=300}, {x=744, y=300}, {x=744, y=396}, {x=600, y=396}, {x=600, y=492}, {x=744, y=492}, {x=60, y=516}, {x=180, y=516}, {x=48, y=456}, {x=192, y=456}, {x=192, y=348}, {x=48, y=348}, {x=192, y=252}, {x=48, y=252}, },
       drones = { {x=204, y=300}, {x=36, y=396}, {x=180, y=492}, },
       floorguards = { {x=396, y=570}, },
@@ -2619,8 +2381,7 @@ levels = {
    },
    ["47-3"] = {
       n_x = 756, n_y = 204,
-      door_x = 396, door_y = 516,
-      doorswitch_x = 396, doorswitch_y = 108,
+      doors = { {x=396, y=516, sx=396, sy=108}, },
       mines = { {x=684, y=84}, {x=108, y=84}, {x=252, y=84}, {x=156, y=84}, {x=636, y=84}, {x=540, y=84}, {x=420, y=108}, {x=372, y=108}, {x=312, y=72}, {x=480, y=72}, {x=204, y=60}, {x=588, y=60}, },
       drones = { {x=156, y=516}, {x=564, y=564}, {x=324, y=564}, },
       floorguards = { },
@@ -2630,8 +2391,7 @@ levels = {
    },
    ["47-4"] = {
       n_x = 732, n_y = 228,
-      door_x = 684, door_y = 564,
-      doorswitch_x = 132, doorswitch_y = 564,
+      doors = { {x=684, y=564, sx=132, sy=564}, },
       mines = { {x=492, y=444}, {x=540, y=396}, {x=588, y=348}, {x=444, y=492}, {x=192, y=372}, {x=228, y=348}, {x=192, y=336}, {x=216, y=324}, {x=192, y=300}, {x=48, y=360}, {x=36, y=216}, {x=60, y=300}, {x=108, y=384}, {x=108, y=540}, {x=60, y=480}, {x=60, y=420}, {x=744, y=300}, {x=744, y=276}, },
       drones = { {x=36, y=84}, {x=660, y=156}, {x=756, y=60}, {x=612, y=444}, },
       floorguards = { },
@@ -2641,8 +2401,7 @@ levels = {
    },
    ["48-0"] = {
       n_x = 396, n_y = 492,
-      door_x = 48, door_y = 372,
-      doorswitch_x = 696, doorswitch_y = 132,
+      doors = { {x=48, y=372, sx=696, sy=132}, },
       mines = { {x=108, y=324}, {x=84, y=300}, {x=84, y=264}, {x=84, y=228}, {x=756, y=492}, {x=756, y=444}, {x=756, y=396}, {x=756, y=348}, {x=756, y=300}, {x=756, y=252}, {x=756, y=204}, {x=756, y=156}, {x=756, y=108}, },
       drones = { {x=396, y=540}, {x=396, y=60}, },
       floorguards = { },
@@ -2652,8 +2411,7 @@ levels = {
    },
    ["48-1"] = {
       n_x = 432, n_y = 312,
-      door_x = 168, door_y = 108,
-      doorswitch_x = 132, doorswitch_y = 300,
+      doors = { {x=168, y=108, sx=132, sy=300}, },
       mines = { {x=168, y=252}, {x=156, y=264}, {x=156, y=288}, {x=96, y=252}, {x=108, y=264}, {x=108, y=288}, {x=132, y=372}, {x=204, y=360}, {x=60, y=360}, {x=114, y=312}, {x=150, y=312}, },
       drones = { {x=324, y=36}, {x=252, y=36}, {x=252, y=564}, {x=348, y=564}, },
       floorguards = { },
@@ -2663,8 +2421,7 @@ levels = {
    },
    ["48-2"] = {
       n_x = 396, n_y = 72,
-      door_x = 396, door_y = 540,
-      doorswitch_x = 396, doorswitch_y = 300,
+      doors = { {x=396, y=540, sx=396, sy=300}, },
       mines = { },
       drones = { {x=732, y=276}, {x=60, y=324}, },
       floorguards = { {x=540, y=546}, },
@@ -2674,8 +2431,7 @@ levels = {
    },
    ["48-3"] = {
       n_x = 408, n_y = 252,
-      door_x = 432, door_y = 372,
-      doorswitch_x = 408, doorswitch_y = 216,
+      doors = { {x=432, y=372, sx=408, sy=216}, },
       mines = { {x=300, y=564}, {x=396, y=564}, {x=492, y=564}, {x=564, y=540}, {x=612, y=468}, {x=516, y=468}, {x=648, y=504}, {x=648, y=528}, {x=672, y=480}, {x=696, y=480}, {x=720, y=480}, {x=648, y=480}, {x=744, y=480}, {x=756, y=468}, {x=60, y=348}, {x=96, y=312}, {x=180, y=300}, {x=192, y=384}, {x=132, y=420}, {x=60, y=444}, {x=72, y=396}, {x=108, y=360}, {x=144, y=348}, {x=264, y=348}, {x=264, y=396}, {x=180, y=444}, {x=204, y=348}, {x=24, y=372}, {x=24, y=336}, {x=24, y=432}, {x=84, y=480}, {x=144, y=480}, {x=216, y=480}, {x=228, y=420}, {x=252, y=492}, {x=348, y=576}, {x=444, y=576}, {x=528, y=576}, {x=600, y=576}, {x=252, y=576}, {x=492, y=276}, {x=468, y=276}, {x=420, y=276}, {x=396, y=276}, {x=324, y=276}, {x=348, y=276}, },
       drones = { },
       floorguards = { },
@@ -2685,8 +2441,7 @@ levels = {
    },
    ["48-4"] = {
       n_x = 144, n_y = 564,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 564,
+      doors = { {x=396, y=564, sx=36, sy=564}, },
       mines = { {x=612, y=576}, {x=456, y=576}, {x=276, y=576}, {x=312, y=552}, {x=504, y=564}, {x=204, y=564}, {x=576, y=516}, {x=648, y=528}, {x=528, y=492}, {x=432, y=528}, {x=468, y=480}, {x=372, y=540}, {x=396, y=492}, {x=240, y=528}, {x=132, y=516}, {x=180, y=492}, {x=228, y=576}, {x=312, y=576}, {x=480, y=552}, {x=540, y=528}, {x=516, y=456}, {x=432, y=456}, {x=348, y=480}, {x=276, y=456}, },
       drones = { },
       floorguards = { },
@@ -2696,8 +2451,7 @@ levels = {
    },
    ["49-0"] = {
       n_x = 396, n_y = 540,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 72,
+      doors = { {x=396, y=564, sx=396, sy=72}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -2707,8 +2461,7 @@ levels = {
    },
    ["49-1"] = {
       n_x = 60, n_y = 108,
-      door_x = 732, door_y = 564,
-      doorswitch_x = 732, doorswitch_y = 324,
+      doors = { {x=732, y=564, sx=732, sy=324}, },
       mines = { {x=384, y=576}, {x=432, y=576}, {x=384, y=528}, {x=72, y=504}, {x=72, y=432}, {x=24, y=468}, {x=24, y=540}, {x=156, y=540}, {x=276, y=540}, {x=216, y=540}, {x=264, y=504}, {x=204, y=504}, {x=144, y=504}, {x=252, y=120}, {x=492, y=120}, {x=360, y=120}, {x=420, y=72}, {x=300, y=96}, {x=492, y=48}, {x=588, y=72}, {x=636, y=120}, {x=684, y=72}, {x=540, y=264}, {x=300, y=252}, {x=276, y=276}, {x=444, y=252}, {x=468, y=276}, {x=300, y=384}, {x=324, y=384}, },
       drones = { {x=468, y=468}, {x=444, y=204}, {x=636, y=228}, {x=660, y=396}, },
       floorguards = { {x=252, y=570}, {x=156, y=378}, },
@@ -2718,8 +2471,7 @@ levels = {
    },
    ["49-2"] = {
       n_x = 540, n_y = 36,
-      door_x = 396, door_y = 36,
-      doorswitch_x = 564, doorswitch_y = 144,
+      doors = { {x=396, y=36, sx=564, sy=144}, },
       mines = { {x=24, y=36}, {x=768, y=36}, {x=768, y=204}, {x=24, y=204}, {x=24, y=96}, {x=24, y=144}, {x=768, y=96}, {x=768, y=144}, },
       drones = { {x=444, y=84}, {x=252, y=156}, {x=108, y=228}, {x=372, y=180}, {x=588, y=252}, },
       floorguards = { {x=252, y=210}, },
@@ -2729,8 +2481,7 @@ levels = {
    },
    ["49-3"] = {
       n_x = 348, n_y = 372,
-      door_x = 336, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 540,
+      doors = { {x=336, y=84, sx=396, sy=540}, },
       mines = { },
       drones = { {x=612, y=564}, {x=180, y=564}, {x=708, y=36}, {x=84, y=36}, },
       floorguards = { },
@@ -2740,8 +2491,7 @@ levels = {
    },
    ["49-4"] = {
       n_x = 756, n_y = 60,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 564,
+      doors = { {x=48, y=564, sx=756, sy=564}, },
       mines = { {x=732, y=204}, {x=732, y=156}, {x=768, y=180}, {x=60, y=156}, {x=60, y=204}, {x=24, y=180}, {x=60, y=420}, {x=24, y=420}, {x=768, y=420}, {x=732, y=420}, {x=756, y=324}, {x=756, y=276}, {x=720, y=300}, {x=36, y=324}, {x=36, y=276}, {x=72, y=300}, {x=60, y=96}, {x=60, y=24}, {x=108, y=60}, {x=156, y=96}, {x=156, y=24}, {x=204, y=60}, {x=252, y=96}, {x=252, y=24}, {x=300, y=60}, {x=348, y=96}, {x=348, y=24}, {x=96, y=216}, {x=144, y=216}, {x=192, y=216}, {x=696, y=216}, {x=648, y=216}, {x=600, y=216}, {x=696, y=144}, {x=648, y=144}, {x=600, y=144}, {x=96, y=144}, {x=144, y=144}, {x=192, y=144}, },
       drones = { {x=708, y=180}, {x=84, y=420}, {x=732, y=444}, },
       floorguards = { },
@@ -2751,8 +2501,7 @@ levels = {
    },
    ["50-0"] = {
       n_x = 36, n_y = 144,
-      door_x = 696, door_y = 144,
-      doorswitch_x = 504, doorswitch_y = 36,
+      doors = { {x=696, y=144, sx=504, sy=36}, },
       mines = { },
       drones = { {x=276, y=132}, {x=732, y=324}, },
       floorguards = { },
@@ -2762,8 +2511,7 @@ levels = {
    },
    ["50-1"] = {
       n_x = 660, n_y = 492,
-      door_x = 372, door_y = 468,
-      doorswitch_x = 276, doorswitch_y = 228,
+      doors = { {x=372, y=468, sx=276, sy=228}, },
       mines = { {x=684, y=204}, {x=672, y=204}, {x=660, y=204}, {x=468, y=360}, {x=468, y=348}, {x=468, y=336}, {x=468, y=324}, {x=468, y=312}, {x=468, y=300}, },
       drones = { {x=324, y=348}, {x=324, y=36}, },
       floorguards = { {x=252, y=498}, },
@@ -2773,8 +2521,7 @@ levels = {
    },
    ["50-2"] = {
       n_x = 420, n_y = 564,
-      door_x = 72, door_y = 564,
-      doorswitch_x = 708, doorswitch_y = 132,
+      doors = { {x=72, y=564, sx=708, sy=132}, },
       mines = { },
       drones = { {x=732, y=468}, {x=204, y=300}, {x=348, y=204}, {x=84, y=420}, },
       floorguards = { },
@@ -2784,8 +2531,7 @@ levels = {
    },
    ["50-3"] = {
       n_x = 372, n_y = 564,
-      door_x = 564, door_y = 36,
-      doorswitch_x = 372, doorswitch_y = 132,
+      doors = { {x=564, y=36, sx=372, sy=132}, },
       mines = { },
       drones = { {x=492, y=204}, {x=252, y=204}, {x=492, y=396}, {x=252, y=396}, },
       floorguards = { },
@@ -2795,8 +2541,7 @@ levels = {
    },
    ["50-4"] = {
       n_x = 396, n_y = 516,
-      door_x = 648, door_y = 36,
-      doorswitch_x = 144, doorswitch_y = 36,
+      doors = { {x=648, y=36, sx=144, sy=36}, },
       mines = { {x=180, y=60}, {x=180, y=84}, {x=612, y=60}, {x=612, y=84}, {x=396, y=144}, {x=444, y=144}, {x=348, y=144}, {x=372, y=456}, {x=420, y=456}, {x=396, y=468}, {x=696, y=360}, {x=576, y=360}, {x=636, y=360}, {x=96, y=360}, {x=216, y=360}, {x=156, y=360}, {x=720, y=348}, {x=552, y=348}, {x=240, y=348}, {x=72, y=348}, {x=516, y=156}, {x=516, y=132}, {x=276, y=132}, {x=276, y=156}, },
       drones = { {x=708, y=444}, {x=756, y=132}, {x=132, y=132}, {x=60, y=204}, {x=420, y=324}, },
       floorguards = { {x=132, y=570}, {x=660, y=570}, },
@@ -2806,8 +2551,7 @@ levels = {
    },
    ["51-0"] = {
       n_x = 252, n_y = 564,
-      door_x = 744, door_y = 180,
-      doorswitch_x = 384, doorswitch_y = 36,
+      doors = { {x=744, y=180, sx=384, sy=36}, {x=744, y=372, sx=492, sy=324}, {x=744, y=564, sx=600, sy=564}, },
       mines = { {x=216, y=516}, {x=216, y=492}, {x=216, y=468}, {x=216, y=444}, {x=216, y=420}, {x=216, y=396}, {x=216, y=372}, {x=216, y=348}, {x=216, y=252}, {x=216, y=228}, {x=216, y=204}, {x=216, y=180}, {x=216, y=156}, {x=216, y=132}, {x=216, y=108}, {x=216, y=84}, {x=720, y=216}, {x=720, y=408}, {x=36, y=504}, {x=180, y=504}, {x=264, y=132}, {x=384, y=108}, {x=516, y=48}, {x=552, y=120}, {x=432, y=192}, {x=564, y=228}, {x=660, y=180}, {x=648, y=60}, {x=324, y=48}, {x=492, y=132}, {x=588, y=48}, {x=720, y=72}, {x=180, y=144}, {x=180, y=192}, {x=36, y=192}, {x=36, y=144}, {x=180, y=360}, {x=180, y=408}, {x=36, y=408}, {x=36, y=360}, {x=36, y=300}, {x=36, y=252}, {x=36, y=84}, {x=60, y=36}, },
       drones = { },
       floorguards = { },
@@ -2817,8 +2561,7 @@ levels = {
    },
    ["51-1"] = {
       n_x = 648, n_y = 120,
-      door_x = 732, door_y = 360,
-      doorswitch_x = 204, doorswitch_y = 108,
+      doors = { {x=732, y=360, sx=204, sy=108}, },
       mines = { {x=24, y=372}, {x=24, y=396}, {x=24, y=420}, {x=24, y=444}, {x=24, y=468}, {x=24, y=492}, {x=504, y=216}, {x=456, y=168}, {x=444, y=168}, {x=468, y=168}, {x=456, y=192}, {x=492, y=192}, {x=504, y=192}, {x=492, y=216}, {x=480, y=216}, {x=516, y=216}, {x=528, y=216}, {x=480, y=168}, {x=432, y=168}, {x=432, y=72}, {x=444, y=72}, {x=456, y=72}, {x=468, y=72}, {x=480, y=72}, {x=504, y=48}, {x=480, y=48}, {x=492, y=48}, {x=468, y=48}, {x=456, y=48}, {x=480, y=24}, {x=492, y=24}, {x=504, y=24}, {x=516, y=24}, {x=528, y=24}, {x=528, y=312}, {x=516, y=312}, {x=504, y=312}, {x=492, y=312}, {x=480, y=312}, {x=432, y=360}, {x=444, y=360}, {x=456, y=360}, {x=468, y=360}, {x=480, y=360}, {x=456, y=336}, {x=468, y=336}, {x=480, y=336}, {x=492, y=336}, {x=504, y=336}, {x=432, y=456}, {x=444, y=456}, {x=456, y=456}, {x=468, y=456}, {x=480, y=456}, {x=456, y=480}, {x=468, y=480}, {x=480, y=480}, {x=492, y=480}, {x=468, y=192}, {x=480, y=192}, },
       drones = { {x=252, y=324}, },
       floorguards = { },
@@ -2828,8 +2571,7 @@ levels = {
    },
    ["51-2"] = {
       n_x = 108, n_y = 564,
-      door_x = 732, door_y = 60,
-      doorswitch_x = 372, doorswitch_y = 276,
+      doors = { {x=732, y=60, sx=372, sy=276}, },
       mines = { {x=204, y=72}, {x=336, y=72}, {x=456, y=72}, {x=552, y=384}, {x=156, y=216}, },
       drones = { {x=396, y=108}, },
       floorguards = { },
@@ -2839,8 +2581,7 @@ levels = {
    },
    ["51-3"] = {
       n_x = 684, n_y = 48,
-      door_x = 144, door_y = 564,
-      doorswitch_x = 420, doorswitch_y = 36,
+      doors = { {x=144, y=564, sx=420, sy=36}, },
       mines = { {x=768, y=492}, {x=768, y=444}, {x=768, y=396}, {x=768, y=348}, {x=768, y=300}, {x=768, y=252}, {x=768, y=204}, {x=768, y=156}, {x=768, y=108}, {x=768, y=60}, {x=24, y=60}, {x=24, y=108}, {x=24, y=156}, {x=24, y=204}, {x=24, y=252}, {x=24, y=300}, {x=24, y=348}, {x=24, y=396}, {x=24, y=444}, {x=24, y=492}, },
       drones = { },
       floorguards = { {x=708, y=570}, {x=588, y=570}, {x=420, y=570}, {x=324, y=570}, {x=156, y=522}, },
@@ -2850,8 +2591,7 @@ levels = {
    },
    ["51-4"] = {
       n_x = 36, n_y = 96,
-      door_x = 240, door_y = 312,
-      doorswitch_x = 708, doorswitch_y = 516,
+      doors = { {x=240, y=312, sx=708, sy=516}, },
       mines = { },
       drones = { {x=276, y=564}, {x=516, y=564}, {x=60, y=468}, {x=60, y=492}, {x=660, y=492}, {x=732, y=492}, },
       floorguards = { {x=612, y=570}, {x=180, y=570}, },
@@ -2861,8 +2601,7 @@ levels = {
    },
    ["52-0"] = {
       n_x = 228, n_y = 516,
-      door_x = 60, door_y = 396,
-      doorswitch_x = 348, doorswitch_y = 36,
+      doors = { {x=60, y=396, sx=348, sy=36}, },
       mines = { },
       drones = { {x=132, y=180}, },
       floorguards = { },
@@ -2872,8 +2611,7 @@ levels = {
    },
    ["52-1"] = {
       n_x = 36, n_y = 444,
-      door_x = 744, door_y = 84,
-      doorswitch_x = 252, doorswitch_y = 36,
+      doors = { {x=744, y=84, sx=252, sy=36}, },
       mines = { {x=36, y=372}, {x=60, y=372}, {x=84, y=360}, {x=708, y=252}, {x=684, y=252}, {x=660, y=240}, {x=36, y=132}, {x=60, y=132}, {x=84, y=120}, {x=36, y=516}, {x=36, y=492}, {x=756, y=516}, {x=756, y=492}, {x=756, y=468}, {x=756, y=444}, },
       drones = { {x=132, y=564}, {x=708, y=564}, {x=420, y=564}, {x=492, y=564}, {x=204, y=564}, },
       floorguards = { {x=36, y=570}, {x=756, y=570}, },
@@ -2883,8 +2621,7 @@ levels = {
    },
    ["52-2"] = {
       n_x = 348, n_y = 60,
-      door_x = 600, door_y = 84,
-      doorswitch_x = 192, doorswitch_y = 84,
+      doors = { {x=600, y=84, sx=192, sy=84}, },
       mines = { {x=504, y=540}, {x=288, y=540}, {x=504, y=492}, {x=288, y=444}, {x=504, y=396}, {x=288, y=348}, {x=504, y=300}, {x=288, y=252}, {x=504, y=204}, {x=288, y=156}, {x=504, y=108}, {x=288, y=396}, {x=288, y=300}, {x=288, y=204}, {x=288, y=108}, {x=504, y=156}, {x=504, y=252}, {x=504, y=348}, {x=504, y=444}, {x=288, y=492}, },
       drones = { {x=516, y=516}, {x=516, y=84}, {x=276, y=276}, {x=516, y=420}, {x=516, y=276}, {x=276, y=420}, },
       floorguards = { {x=732, y=570}, {x=60, y=570}, },
@@ -2894,8 +2631,7 @@ levels = {
    },
    ["52-3"] = {
       n_x = 348, n_y = 564,
-      door_x = 636, door_y = 444,
-      doorswitch_x = 636, doorswitch_y = 420,
+      doors = { {x=636, y=444, sx=636, sy=420}, },
       mines = { },
       drones = { {x=732, y=204}, {x=156, y=324}, },
       floorguards = { {x=648, y=570}, {x=132, y=570}, },
@@ -2905,8 +2641,7 @@ levels = {
    },
    ["52-4"] = {
       n_x = 60, n_y = 444,
-      door_x = 228, door_y = 156,
-      doorswitch_x = 756, doorswitch_y = 96,
+      doors = { {x=228, y=156, sx=756, sy=96}, },
       mines = { {x=312, y=468}, {x=432, y=492}, {x=528, y=492}, {x=636, y=468}, {x=720, y=156}, {x=600, y=96}, {x=504, y=84}, {x=360, y=60}, {x=240, y=24}, {x=72, y=96}, {x=72, y=192}, {x=72, y=288}, {x=96, y=384}, {x=168, y=408}, {x=432, y=336}, {x=540, y=336}, {x=504, y=240}, {x=408, y=240}, {x=312, y=264}, },
       drones = { {x=636, y=276}, {x=324, y=180}, {x=108, y=36}, {x=324, y=540}, },
       floorguards = { },
@@ -2916,8 +2651,7 @@ levels = {
    },
    ["53-0"] = {
       n_x = 132, n_y = 468,
-      door_x = 732, door_y = 276,
-      doorswitch_x = 204, doorswitch_y = 132,
+      doors = { {x=732, y=276, sx=204, sy=132}, },
       mines = { {x=372, y=480}, {x=588, y=432}, {x=468, y=384}, },
       drones = { {x=252, y=348}, {x=660, y=156}, },
       floorguards = { },
@@ -2927,8 +2661,7 @@ levels = {
    },
    ["53-1"] = {
       n_x = 60, n_y = 516,
-      door_x = 744, door_y = 516,
-      doorswitch_x = 396, doorswitch_y = 276,
+      doors = { {x=744, y=516, sx=396, sy=276}, },
       mines = { {x=564, y=480}, {x=564, y=504}, {x=564, y=528}, {x=564, y=552}, {x=564, y=456}, {x=396, y=552}, {x=396, y=528}, {x=396, y=504}, {x=396, y=480}, {x=396, y=456}, {x=396, y=432}, {x=228, y=552}, {x=228, y=528}, {x=228, y=504}, {x=228, y=480}, {x=228, y=456}, {x=636, y=564}, {x=612, y=564}, {x=588, y=540}, {x=204, y=540}, {x=180, y=564}, {x=156, y=564}, {x=132, y=564}, {x=120, y=324}, {x=672, y=324}, {x=708, y=180}, {x=696, y=96}, {x=96, y=96}, {x=84, y=180}, {x=708, y=468}, {x=732, y=444}, {x=744, y=408}, {x=744, y=384}, {x=732, y=348}, {x=720, y=324}, {x=696, y=492}, {x=708, y=252}, {x=636, y=252}, {x=156, y=252}, {x=84, y=252}, {x=60, y=396}, {x=180, y=396}, {x=120, y=420}, {x=672, y=420}, },
       drones = { {x=276, y=372}, {x=516, y=252}, {x=444, y=204}, {x=444, y=396}, {x=348, y=348}, {x=396, y=108}, {x=612, y=204}, {x=180, y=156}, },
       floorguards = { },
@@ -2938,8 +2671,7 @@ levels = {
    },
    ["53-2"] = {
       n_x = 456, n_y = 528,
-      door_x = 456, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 384,
+      doors = { {x=456, y=564, sx=396, sy=384}, },
       mines = { },
       drones = { {x=468, y=468}, {x=180, y=468}, {x=588, y=516}, },
       floorguards = { {x=516, y=282}, {x=276, y=282}, {x=180, y=570}, },
@@ -2949,8 +2681,7 @@ levels = {
    },
    ["53-3"] = {
       n_x = 60, n_y = 156,
-      door_x = 72, door_y = 540,
-      doorswitch_x = 732, doorswitch_y = 540,
+      doors = { {x=72, y=540, sx=732, sy=540}, },
       mines = { {x=216, y=564}, {x=576, y=564}, {x=564, y=576}, {x=228, y=576}, {x=252, y=576}, {x=276, y=576}, {x=300, y=576}, {x=324, y=576}, {x=348, y=576}, {x=372, y=576}, {x=396, y=576}, {x=420, y=576}, {x=444, y=576}, {x=468, y=576}, {x=492, y=576}, {x=516, y=576}, {x=540, y=576}, {x=168, y=516}, {x=168, y=492}, {x=168, y=468}, {x=192, y=420}, {x=600, y=420}, {x=600, y=516}, {x=648, y=516}, {x=696, y=516}, {x=744, y=516}, },
       drones = { {x=684, y=372}, {x=108, y=300}, {x=468, y=372}, {x=228, y=300}, },
       floorguards = { },
@@ -2960,8 +2691,7 @@ levels = {
    },
    ["53-4"] = {
       n_x = 60, n_y = 528,
-      door_x = 348, door_y = 564,
-      doorswitch_x = 732, doorswitch_y = 180,
+      doors = { {x=348, y=564, sx=732, sy=180}, },
       mines = { {x=684, y=156}, {x=624, y=576}, {x=576, y=552}, {x=672, y=540}, {x=660, y=480}, {x=588, y=492}, {x=732, y=540}, {x=204, y=360}, {x=372, y=288}, {x=360, y=120}, {x=240, y=156}, {x=396, y=216}, {x=528, y=240}, {x=492, y=324}, {x=732, y=312}, {x=588, y=108}, {x=354, y=438}, {x=420, y=444}, {x=216, y=552}, {x=264, y=552}, {x=36, y=492}, {x=24, y=408}, {x=24, y=288}, {x=36, y=252}, {x=36, y=180}, {x=84, y=84}, {x=264, y=36}, {x=756, y=396}, {x=768, y=468}, {x=768, y=252}, },
       drones = { {x=756, y=204}, {x=540, y=156}, {x=228, y=60}, {x=444, y=372}, {x=396, y=444}, },
       floorguards = { },
@@ -2971,8 +2701,7 @@ levels = {
    },
    ["54-0"] = {
       n_x = 396, n_y = 84,
-      door_x = 396, door_y = 468,
-      doorswitch_x = 396, doorswitch_y = 348,
+      doors = { {x=396, y=468, sx=396, sy=348}, },
       mines = { },
       drones = { {x=492, y=396}, {x=756, y=564}, {x=756, y=36}, {x=36, y=36}, {x=36, y=564}, },
       floorguards = { },
@@ -2982,8 +2711,7 @@ levels = {
    },
    ["54-1"] = {
       n_x = 72, n_y = 36,
-      door_x = 732, door_y = 276,
-      doorswitch_x = 720, doorswitch_y = 504,
+      doors = { {x=732, y=276, sx=720, sy=504}, },
       mines = { {x=228, y=192}, {x=312, y=192}, {x=396, y=192}, {x=480, y=192}, {x=564, y=192}, {x=648, y=192}, {x=732, y=192}, {x=252, y=168}, {x=336, y=168}, {x=372, y=156}, {x=420, y=168}, {x=504, y=168}, {x=540, y=156}, {x=588, y=168}, {x=624, y=156}, {x=672, y=168}, {x=708, y=156}, {x=756, y=168}, },
       drones = { {x=276, y=348}, {x=468, y=324}, {x=660, y=324}, {x=564, y=276}, {x=372, y=276}, },
       floorguards = { },
@@ -2993,8 +2721,7 @@ levels = {
    },
    ["54-2"] = {
       n_x = 48, n_y = 396,
-      door_x = 744, door_y = 396,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=744, y=396, sx=396, sy=60}, },
       mines = { },
       drones = { {x=60, y=468}, },
       floorguards = { {x=300, y=570}, },
@@ -3004,8 +2731,7 @@ levels = {
    },
    ["54-3"] = {
       n_x = 36, n_y = 60.894015,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 132,
+      doors = { {x=396, y=564, sx=756, sy=132}, },
       mines = { {x=660, y=156}, {x=636, y=156}, {x=612, y=156}, {x=564, y=156}, {x=540, y=156}, {x=516, y=156}, {x=132, y=156}, {x=156, y=156}, {x=180, y=156}, {x=228, y=156}, {x=252, y=156}, {x=276, y=156}, {x=348, y=156}, {x=444, y=156}, {x=636, y=360}, {x=156, y=360}, {x=708, y=384}, {x=756, y=384}, {x=756, y=432}, {x=708, y=432}, {x=708, y=480}, {x=756, y=480}, {x=756, y=528}, {x=708, y=528}, {x=84, y=384}, {x=36, y=384}, {x=36, y=432}, {x=84, y=432}, {x=84, y=480}, {x=36, y=480}, {x=36, y=528}, {x=84, y=528}, {x=48, y=564}, {x=744, y=564}, },
       drones = { {x=420, y=324}, {x=564, y=324}, {x=228, y=324}, {x=420, y=180}, },
       floorguards = { },
@@ -3015,8 +2741,7 @@ levels = {
    },
    ["54-4"] = {
       n_x = 60, n_y = 60,
-      door_x = 384, door_y = 216,
-      doorswitch_x = 492, doorswitch_y = 492,
+      doors = { {x=384, y=216, sx=492, sy=492}, },
       mines = { {x=372, y=432}, {x=420, y=432}, {x=468, y=432}, {x=444, y=372}, {x=396, y=372}, {x=348, y=372}, {x=492, y=372}, {x=468, y=312}, {x=420, y=312}, {x=372, y=312}, },
       drones = { {x=708, y=324}, {x=540, y=516}, {x=252, y=492}, },
       floorguards = { },
@@ -3026,8 +2751,7 @@ levels = {
    },
    ["55-0"] = {
       n_x = 48, n_y = 564,
-      door_x = 744, door_y = 564,
-      doorswitch_x = 720, doorswitch_y = 108,
+      doors = { {x=744, y=564, sx=720, sy=108}, },
       mines = { {x=696, y=72}, {x=636, y=72}, {x=576, y=72}, {x=552, y=96}, {x=492, y=96}, {x=432, y=96}, {x=372, y=96}, {x=312, y=96}, {x=720, y=324}, {x=696, y=420}, {x=744, y=228}, {x=408, y=468}, {x=336, y=180}, {x=336, y=156}, },
       drones = { {x=468, y=564}, {x=660, y=444}, {x=516, y=300}, {x=372, y=132}, },
       floorguards = { },
@@ -3037,8 +2761,7 @@ levels = {
    },
    ["55-1"] = {
       n_x = 48, n_y = 528,
-      door_x = 84, door_y = 300,
-      doorswitch_x = 732, doorswitch_y = 132,
+      doors = { {x=84, y=300, sx=732, sy=132}, },
       mines = { },
       drones = { {x=84, y=84}, {x=636, y=180}, {x=396, y=180}, {x=612, y=420}, },
       floorguards = { {x=396, y=570}, },
@@ -3048,8 +2771,7 @@ levels = {
    },
    ["55-2"] = {
       n_x = 396, n_y = 396,
-      door_x = 396, door_y = 396,
-      doorswitch_x = 396, doorswitch_y = 276,
+      doors = { {x=396, y=396, sx=396, sy=276}, },
       mines = { {x=396, y=552}, {x=420, y=288}, {x=372, y=288}, {x=480, y=264}, {x=312, y=264}, {x=396, y=216}, {x=720, y=108}, {x=72, y=108}, {x=612, y=312}, {x=180, y=312}, {x=480, y=120}, {x=312, y=120}, {x=300, y=168}, {x=492, y=168}, {x=48, y=228}, {x=744, y=228}, {x=684, y=324}, {x=108, y=324}, {x=396, y=348}, {x=396, y=60}, {x=456, y=324}, {x=336, y=324}, },
       drones = { },
       floorguards = { {x=228, y=570}, {x=564, y=570}, },
@@ -3059,8 +2781,7 @@ levels = {
    },
    ["55-3"] = {
       n_x = 732, n_y = 516,
-      door_x = 528, door_y = 132,
-      doorswitch_x = 36, doorswitch_y = 60,
+      doors = { {x=528, y=132, sx=36, sy=60}, },
       mines = { {x=468, y=84}, {x=588, y=84}, {x=552, y=72}, {x=504, y=72}, {x=528, y=24}, {x=468, y=24}, {x=588, y=24}, },
       drones = { {x=228, y=492}, {x=324, y=372}, {x=468, y=516}, {x=132, y=204}, },
       floorguards = { },
@@ -3070,8 +2791,7 @@ levels = {
    },
    ["55-4"] = {
       n_x = 108, n_y = 60,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 492,
+      doors = { {x=396, y=564, sx=396, sy=492}, },
       mines = { {x=588, y=468}, {x=540, y=468}, {x=492, y=468}, {x=444, y=468}, {x=396, y=468}, {x=348, y=468}, {x=300, y=468}, {x=252, y=468}, {x=204, y=468}, {x=156, y=468}, {x=252, y=168}, {x=180, y=168}, {x=324, y=168}, {x=396, y=168}, {x=468, y=168}, {x=540, y=168}, {x=612, y=168}, {x=588, y=300}, {x=492, y=300}, {x=396, y=300}, {x=300, y=300}, {x=204, y=300}, {x=588, y=408}, {x=492, y=408}, {x=396, y=408}, {x=300, y=408}, {x=204, y=408}, {x=174, y=372}, {x=138, y=372}, {x=234, y=372}, {x=270, y=372}, {x=330, y=372}, {x=366, y=372}, {x=426, y=372}, {x=462, y=372}, {x=522, y=372}, {x=558, y=372}, {x=618, y=372}, {x=654, y=372}, {x=660, y=252}, {x=636, y=252}, {x=588, y=252}, {x=564, y=252}, {x=516, y=252}, {x=492, y=252}, {x=444, y=252}, {x=420, y=252}, {x=372, y=252}, {x=348, y=252}, {x=300, y=252}, {x=276, y=252}, {x=228, y=252}, {x=204, y=252}, {x=84, y=480}, {x=108, y=480}, {x=636, y=492}, {x=660, y=492}, {x=132, y=252}, {x=156, y=252}, },
       drones = { {x=684, y=204}, {x=204, y=324}, {x=36, y=444}, },
       floorguards = { {x=180, y=570}, },
@@ -3081,8 +2801,7 @@ levels = {
    },
    ["56-0"] = {
       n_x = 348, n_y = 348,
-      door_x = 408, door_y = 420,
-      doorswitch_x = 468, doorswitch_y = 420,
+      doors = { {x=408, y=420, sx=468, sy=420}, },
       mines = { {x=132, y=192}, {x=108, y=48}, {x=192, y=132}, {x=48, y=108}, {x=84, y=144}, {x=156, y=96}, {x=108, y=84}, {x=132, y=156}, {x=156, y=132}, {x=84, y=108}, {x=504, y=144}, {x=504, y=432}, {x=504, y=288}, {x=504, y=216}, {x=504, y=360}, {x=528, y=396}, {x=528, y=324}, {x=528, y=252}, {x=528, y=180}, {x=564, y=108}, {x=600, y=108}, {x=768, y=84}, {x=768, y=300}, {x=768, y=516}, {x=768, y=408}, {x=768, y=192}, {x=744, y=132}, {x=744, y=240}, {x=744, y=348}, {x=744, y=456}, },
       drones = { {x=60, y=276}, {x=84, y=372}, {x=108, y=468}, {x=732, y=36}, {x=564, y=564}, },
       floorguards = { },
@@ -3092,8 +2811,7 @@ levels = {
    },
    ["56-1"] = {
       n_x = 132, n_y = 564,
-      door_x = 420, door_y = 564,
-      doorswitch_x = 372, doorswitch_y = 36,
+      doors = { {x=420, y=564, sx=372, sy=36}, },
       mines = { {x=516, y=228}, {x=516, y=132}, {x=252, y=84}, {x=252, y=180}, {x=252, y=276}, {x=258, y=72}, {x=258, y=168}, {x=258, y=264}, {x=510, y=216}, {x=510, y=120}, {x=504, y=132}, {x=504, y=228}, {x=264, y=276}, {x=264, y=180}, {x=264, y=84}, },
       drones = { {x=468, y=564}, {x=468, y=468}, {x=276, y=372}, {x=660, y=372}, {x=564, y=324}, {x=132, y=324}, },
       floorguards = { },
@@ -3103,8 +2821,7 @@ levels = {
    },
    ["56-2"] = {
       n_x = 672, n_y = 240,
-      door_x = 744, door_y = 516,
-      doorswitch_x = 144, doorswitch_y = 456,
+      doors = { {x=744, y=516, sx=144, sy=456}, },
       mines = { {x=684, y=480}, {x=732, y=480}, },
       drones = { },
       floorguards = { {x=396, y=570}, },
@@ -3114,8 +2831,7 @@ levels = {
    },
    ["56-3"] = {
       n_x = 396, n_y = 492,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=564, sx=396, sy=84}, },
       mines = { {x=396, y=252}, {x=456, y=252}, {x=336, y=252}, {x=396, y=324}, {x=348, y=480}, {x=444, y=480}, {x=480, y=216}, {x=312, y=216}, },
       drones = { {x=396, y=180}, {x=468, y=324}, {x=324, y=324}, },
       floorguards = { {x=252, y=570}, {x=540, y=570}, },
@@ -3125,8 +2841,7 @@ levels = {
    },
    ["56-4"] = {
       n_x = 396, n_y = 60,
-      door_x = 48, door_y = 276,
-      doorswitch_x = 744, doorswitch_y = 180,
+      doors = { {x=48, y=276, sx=744, sy=180}, },
       mines = { {x=480, y=204}, {x=552, y=168}, {x=624, y=132}, {x=696, y=96}, {x=312, y=204}, {x=240, y=168}, {x=168, y=132}, {x=96, y=96}, {x=96, y=24}, {x=168, y=24}, {x=240, y=24}, {x=552, y=24}, {x=624, y=24}, {x=696, y=24}, {x=600, y=48}, {x=192, y=48}, {x=288, y=48}, {x=504, y=48}, {x=264, y=180}, {x=192, y=144}, {x=120, y=108}, {x=528, y=180}, {x=600, y=144}, {x=672, y=108}, },
       drones = { {x=180, y=564}, {x=636, y=564}, {x=564, y=324}, {x=252, y=324}, },
       floorguards = { },
@@ -3136,8 +2851,7 @@ levels = {
    },
    ["57-0"] = {
       n_x = 540, n_y = 564,
-      door_x = 216, door_y = 564,
-      doorswitch_x = 540, doorswitch_y = 48,
+      doors = { {x=216, y=564, sx=540, sy=48}, },
       mines = { {x=528, y=468}, {x=552, y=468}, {x=552, y=372}, {x=528, y=372}, {x=528, y=276}, {x=552, y=276}, {x=552, y=180}, {x=528, y=180}, {x=528, y=84}, {x=552, y=84}, {x=672, y=516}, {x=408, y=516}, {x=408, y=324}, {x=672, y=324}, {x=408, y=132}, {x=672, y=132}, {x=216, y=540}, {x=192, y=540}, {x=240, y=540}, {x=168, y=540}, },
       drones = { },
       floorguards = { {x=36, y=570}, },
@@ -3147,8 +2861,7 @@ levels = {
    },
    ["57-1"] = {
       n_x = 420, n_y = 180,
-      door_x = 588, door_y = 540,
-      doorswitch_x = 228, doorswitch_y = 540,
+      doors = { {x=588, y=540, sx=228, sy=540}, },
       mines = { {x=228, y=432}, {x=228, y=312}, {x=228, y=192}, {x=288, y=132}, {x=408, y=132}, {x=588, y=312}, {x=588, y=432}, },
       drones = { {x=276, y=420}, {x=540, y=516}, {x=636, y=492}, {x=180, y=276}, {x=300, y=84}, {x=540, y=324}, },
       floorguards = { },
@@ -3158,8 +2871,7 @@ levels = {
    },
    ["57-2"] = {
       n_x = 276, n_y = 60,
-      door_x = 132, door_y = 180,
-      doorswitch_x = 324, doorswitch_y = 492,
+      doors = { {x=132, y=180, sx=324, sy=492}, },
       mines = { },
       drones = { {x=660, y=564}, {x=36, y=396}, {x=372, y=180}, {x=588, y=420}, {x=324, y=444}, {x=228, y=372}, {x=468, y=324}, },
       floorguards = { },
@@ -3169,8 +2881,7 @@ levels = {
    },
    ["57-3"] = {
       n_x = 276, n_y = 468,
-      door_x = 576, door_y = 492,
-      doorswitch_x = 612, doorswitch_y = 180,
+      doors = { {x=576, y=492, sx=612, sy=180}, },
       mines = { {x=120, y=192}, {x=168, y=120}, {x=288, y=120}, {x=228, y=144}, {x=228, y=48}, {x=60, y=60}, {x=48, y=156}, {x=96, y=276}, {x=24, y=336}, {x=180, y=420}, {x=144, y=396}, {x=108, y=336}, },
       drones = { },
       floorguards = { {x=300, y=570}, },
@@ -3180,8 +2891,7 @@ levels = {
    },
    ["57-4"] = {
       n_x = 396, n_y = 564,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 744, doorswitch_y = 564,
+      doors = { {x=48, y=564, sx=744, sy=564}, },
       mines = { {x=768, y=180}, {x=720, y=180}, {x=612, y=72}, {x=612, y=24}, {x=180, y=72}, {x=180, y=24}, {x=72, y=180}, {x=24, y=180}, {x=48, y=96}, {x=96, y=48}, {x=696, y=48}, {x=744, y=96}, {x=660, y=132}, {x=132, y=132}, {x=432, y=192}, {x=360, y=192}, {x=564, y=324}, {x=228, y=324}, {x=240, y=456}, {x=552, y=456}, {x=396, y=516}, {x=228, y=228}, {x=564, y=228}, {x=600, y=192}, {x=192, y=192}, {x=504, y=288}, {x=288, y=288}, {x=624, y=432}, {x=168, y=432}, {x=744, y=504}, {x=48, y=504}, {x=420, y=276}, {x=372, y=276}, {x=456, y=336}, {x=336, y=336}, {x=456, y=432}, {x=336, y=432}, },
       drones = { },
       floorguards = { },
@@ -3191,8 +2901,7 @@ levels = {
    },
    ["58-0"] = {
       n_x = 324, n_y = 564,
-      door_x = 396, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 204,
+      doors = { {x=396, y=60, sx=396, sy=204}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -3202,8 +2911,7 @@ levels = {
    },
    ["58-1"] = {
       n_x = 396, n_y = 492,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 108,
+      doors = { {x=396, y=564, sx=396, sy=108}, },
       mines = { {x=228, y=72}, {x=180, y=144}, {x=132, y=156}, {x=144, y=384}, {x=108, y=408}, {x=168, y=408}, {x=144, y=480}, {x=312, y=480}, {x=264, y=528}, {x=252, y=540}, {x=456, y=468}, {x=492, y=480}, {x=528, y=456}, {x=576, y=480}, {x=708, y=396}, {x=660, y=372}, {x=612, y=384}, {x=600, y=360}, {x=600, y=204}, {x=648, y=180}, {x=672, y=156}, {x=444, y=132}, {x=468, y=84}, {x=492, y=60}, {x=492, y=36}, {x=600, y=540}, {x=648, y=480}, {x=180, y=528}, {x=228, y=120}, {x=564, y=360}, {x=540, y=228}, {x=216, y=348}, {x=216, y=384}, {x=300, y=180}, {x=252, y=168}, },
       drones = { {x=636, y=252}, {x=372, y=84}, {x=228, y=204}, },
       floorguards = { },
@@ -3213,8 +2921,7 @@ levels = {
    },
    ["58-2"] = {
       n_x = 36, n_y = 528,
-      door_x = 48, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 300,
+      doors = { {x=48, y=84, sx=396, sy=300}, },
       mines = { {x=180, y=132}, {x=612, y=252}, {x=612, y=492}, {x=180, y=372}, {x=288, y=408}, {x=312, y=408}, {x=336, y=408}, {x=360, y=408}, {x=384, y=408}, {x=408, y=408}, {x=432, y=408}, {x=456, y=408}, {x=480, y=408}, {x=504, y=408}, {x=504, y=288}, {x=480, y=288}, {x=456, y=288}, {x=432, y=288}, {x=408, y=288}, {x=384, y=288}, {x=360, y=288}, {x=336, y=288}, {x=312, y=288}, {x=288, y=288}, {x=288, y=168}, {x=312, y=168}, {x=336, y=168}, {x=360, y=168}, {x=384, y=168}, {x=408, y=168}, {x=432, y=168}, {x=456, y=168}, {x=480, y=168}, {x=504, y=168}, },
       drones = { },
       floorguards = { {x=84, y=570}, {x=708, y=570}, },
@@ -3224,8 +2931,7 @@ levels = {
    },
    ["58-3"] = {
       n_x = 36, n_y = 564,
-      door_x = 708, door_y = 60,
-      doorswitch_x = 336, doorswitch_y = 348,
+      doors = { {x=708, y=60, sx=336, sy=348}, },
       mines = { {x=36, y=516}, {x=36, y=468}, {x=36, y=420}, {x=36, y=372}, {x=36, y=324}, {x=36, y=276}, {x=36, y=228}, {x=36, y=180}, {x=36, y=132}, {x=36, y=84}, {x=36, y=36}, {x=636, y=36}, {x=636, y=84}, {x=636, y=132}, {x=636, y=180}, {x=636, y=228}, {x=636, y=276}, {x=636, y=324}, {x=636, y=372}, {x=636, y=420}, {x=636, y=468}, {x=636, y=516}, },
       drones = { {x=732, y=420}, {x=708, y=300}, {x=732, y=228}, },
       floorguards = { },
@@ -3235,8 +2941,7 @@ levels = {
    },
    ["58-4"] = {
       n_x = 720, n_y = 48,
-      door_x = 276, door_y = 60,
-      doorswitch_x = 300, doorswitch_y = 132,
+      doors = { {x=276, y=60, sx=300, sy=132}, },
       mines = { {x=492, y=252}, {x=492, y=84}, {x=348, y=252}, {x=72, y=516}, {x=24, y=444}, {x=72, y=372}, {x=24, y=312}, {x=72, y=252}, {x=24, y=192}, {x=72, y=144}, {x=24, y=108}, {x=72, y=72}, {x=132, y=72}, {x=192, y=72}, {x=240, y=72}, {x=216, y=24}, {x=132, y=24}, {x=288, y=396}, {x=288, y=300}, {x=120, y=204}, {x=120, y=300}, {x=120, y=396}, {x=528, y=480}, {x=528, y=420}, {x=528, y=360}, {x=528, y=300}, {x=336, y=300}, {x=336, y=360}, {x=336, y=420}, {x=372, y=492}, },
       drones = { {x=420, y=444}, {x=492, y=420}, {x=444, y=156}, {x=588, y=516}, },
       floorguards = { {x=108, y=570}, },
@@ -3246,8 +2951,7 @@ levels = {
    },
    ["59-0"] = {
       n_x = 60, n_y = 444,
-      door_x = 756, door_y = 444,
-      doorswitch_x = 372, doorswitch_y = 300,
+      doors = { {x=756, y=444, sx=372, sy=300}, },
       mines = { {x=444, y=336}, {x=456, y=348}, },
       drones = { },
       floorguards = { },
@@ -3257,8 +2961,7 @@ levels = {
    },
    ["59-1"] = {
       n_x = 756, n_y = 300,
-      door_x = 720, door_y = 324,
-      doorswitch_x = 36, doorswitch_y = 300,
+      doors = { {x=720, y=324, sx=36, sy=300}, },
       mines = { {x=612, y=300}, {x=468, y=300}, {x=324, y=300}, {x=180, y=300}, {x=432, y=336}, {x=360, y=336}, {x=108, y=324}, {x=684, y=324}, {x=540, y=276}, {x=252, y=276}, },
       drones = { {x=156, y=276}, {x=588, y=324}, {x=444, y=276}, {x=396, y=324}, {x=420, y=300}, {x=228, y=300}, },
       floorguards = { {x=132, y=330}, },
@@ -3268,8 +2971,7 @@ levels = {
    },
    ["59-2"] = {
       n_x = 84, n_y = 132,
-      door_x = 48, door_y = 132,
-      doorswitch_x = 48, doorswitch_y = 564,
+      doors = { {x=48, y=132, sx=48, sy=564}, },
       mines = { {x=732, y=300}, {x=684, y=300}, {x=708, y=300}, {x=516, y=432}, {x=612, y=432}, {x=708, y=432}, {x=420, y=432}, {x=324, y=432}, {x=228, y=432}, {x=324, y=300}, {x=348, y=300}, {x=372, y=300}, {x=276, y=300}, {x=252, y=300}, {x=228, y=300}, {x=204, y=300}, {x=180, y=300}, {x=156, y=300}, {x=108, y=444}, {x=84, y=444}, {x=60, y=444}, {x=156, y=492}, {x=204, y=492}, {x=252, y=492}, {x=300, y=492}, {x=348, y=492}, {x=396, y=492}, {x=444, y=492}, {x=492, y=492}, {x=540, y=492}, {x=588, y=492}, {x=636, y=492}, {x=684, y=492}, {x=540, y=324}, {x=564, y=324}, {x=588, y=324}, {x=612, y=324}, {x=636, y=324}, {x=492, y=324}, {x=468, y=324}, {x=420, y=324}, {x=444, y=324}, {x=108, y=168}, {x=132, y=168}, {x=180, y=192}, {x=228, y=180}, {x=348, y=192}, {x=324, y=180}, {x=396, y=204}, {x=420, y=204}, {x=444, y=204}, {x=468, y=204}, {x=492, y=204}, {x=516, y=204}, {x=552, y=204}, {x=576, y=204}, {x=600, y=204}, {x=624, y=216}, {x=300, y=180}, {x=264, y=192}, {x=180, y=492}, {x=564, y=492}, {x=660, y=492}, {x=276, y=492}, {x=468, y=492}, },
       drones = { },
       floorguards = { {x=204, y=570}, {x=300, y=570}, {x=396, y=570}, {x=492, y=570}, {x=588, y=570}, {x=684, y=570}, },
@@ -3279,8 +2981,7 @@ levels = {
    },
    ["59-3"] = {
       n_x = 378, n_y = 384,
-      door_x = 384, door_y = 60,
-      doorswitch_x = 156, doorswitch_y = 60,
+      doors = { {x=384, y=60, sx=156, sy=60}, },
       mines = { {x=768, y=60}, {x=768, y=108}, {x=768, y=156}, {x=768, y=204}, {x=768, y=252}, {x=768, y=300}, {x=768, y=348}, {x=768, y=396}, {x=768, y=444}, {x=768, y=492}, {x=24, y=60}, {x=24, y=108}, {x=24, y=156}, {x=24, y=204}, {x=24, y=252}, {x=24, y=300}, {x=24, y=348}, {x=24, y=396}, {x=24, y=444}, {x=24, y=492}, {x=24, y=540}, },
       drones = { },
       floorguards = { {x=732, y=570}, {x=636, y=570}, {x=564, y=570}, {x=396, y=570}, {x=276, y=570}, {x=132, y=570}, {x=60, y=570}, },
@@ -3290,8 +2991,7 @@ levels = {
    },
    ["59-4"] = {
       n_x = 636, n_y = 132,
-      door_x = 348, door_y = 252,
-      doorswitch_x = 588, doorswitch_y = 420,
+      doors = { {x=348, y=252, sx=588, sy=420}, },
       mines = { {x=708, y=540}, {x=684, y=564}, {x=756, y=300}, {x=660, y=348}, {x=756, y=180}, {x=660, y=204}, {x=756, y=36}, {x=660, y=36}, {x=708, y=60}, {x=708, y=108}, {x=708, y=156}, {x=708, y=204}, {x=36, y=288}, {x=108, y=168}, {x=564, y=84}, {x=564, y=144}, {x=564, y=204}, {x=564, y=264}, {x=564, y=324}, {x=564, y=384}, },
       drones = { {x=300, y=468}, {x=276, y=468}, {x=252, y=468}, {x=156, y=84}, {x=324, y=84}, },
       floorguards = { {x=180, y=426}, {x=372, y=162}, {x=324, y=330}, {x=468, y=450}, },
@@ -3301,8 +3001,7 @@ levels = {
    },
    ["60-0"] = {
       n_x = 696, n_y = 96,
-      door_x = 396, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 552,
+      doors = { {x=396, y=60, sx=396, sy=552}, },
       mines = { },
       drones = { {x=660, y=468}, {x=132, y=300}, {x=516, y=132}, {x=132, y=396}, {x=660, y=444}, {x=612, y=132}, },
       floorguards = { {x=732, y=570}, {x=60, y=570}, },
@@ -3312,8 +3011,7 @@ levels = {
    },
    ["60-1"] = {
       n_x = 156, n_y = 504,
-      door_x = 132, door_y = 540,
-      doorswitch_x = 636, doorswitch_y = 36,
+      doors = { {x=132, y=540, sx=636, sy=36}, },
       mines = { {x=396, y=300}, {x=276, y=420}, {x=516, y=180}, {x=132, y=36}, },
       drones = { {x=132, y=396}, {x=540, y=36}, {x=468, y=36}, {x=132, y=348}, },
       floorguards = { },
@@ -3323,8 +3021,7 @@ levels = {
    },
    ["60-2"] = {
       n_x = 84, n_y = 132,
-      door_x = 180, door_y = 348,
-      doorswitch_x = 684, doorswitch_y = 180,
+      doors = { {x=180, y=348, sx=684, sy=180}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -3334,8 +3031,7 @@ levels = {
    },
    ["60-3"] = {
       n_x = 708, n_y = 84,
-      door_x = 744, door_y = 84,
-      doorswitch_x = 60, doorswitch_y = 468,
+      doors = { {x=744, y=84, sx=60, sy=468}, },
       mines = { },
       drones = { {x=540, y=420}, {x=300, y=516}, {x=564, y=252}, {x=420, y=492}, {x=276, y=108}, },
       floorguards = { {x=516, y=162}, {x=348, y=138}, {x=180, y=282}, {x=204, y=546}, {x=324, y=546}, {x=660, y=522}, {x=516, y=522}, {x=372, y=306}, },
@@ -3345,8 +3041,7 @@ levels = {
    },
    ["60-4"] = {
       n_x = 36, n_y = 528,
-      door_x = 696, door_y = 564,
-      doorswitch_x = 132, doorswitch_y = 72,
+      doors = { {x=696, y=564, sx=132, sy=72}, },
       mines = { {x=72, y=372}, {x=108, y=396}, {x=684, y=252}, {x=708, y=216}, {x=684, y=180}, {x=708, y=144}, {x=684, y=108}, {x=708, y=72}, {x=684, y=36}, {x=708, y=288}, {x=132, y=336}, {x=96, y=312}, {x=156, y=276}, {x=120, y=252}, },
       drones = { {x=204, y=108}, {x=588, y=540}, {x=756, y=444}, {x=132, y=36}, {x=60, y=108}, {x=756, y=540}, {x=588, y=444}, {x=132, y=420}, {x=660, y=300}, {x=732, y=36}, },
       floorguards = { {x=132, y=114}, {x=84, y=426}, {x=708, y=306}, {x=660, y=570}, {x=324, y=570}, },
@@ -3356,8 +3051,7 @@ levels = {
    },
    ["61-0"] = {
       n_x = 276, n_y = 564,
-      door_x = 276, door_y = 108,
-      doorswitch_x = 480, doorswitch_y = 60,
+      doors = { {x=276, y=108, sx=480, sy=60}, },
       mines = { },
       drones = { {x=420, y=564}, {x=492, y=372}, {x=420, y=228}, {x=324, y=36}, },
       floorguards = { },
@@ -3367,8 +3061,7 @@ levels = {
    },
    ["61-1"] = {
       n_x = 396, n_y = 564,
-      door_x = 504, door_y = 516,
-      doorswitch_x = 288, doorswitch_y = 516,
+      doors = { {x=504, y=516, sx=288, sy=516}, },
       mines = { },
       drones = { {x=36, y=516}, {x=756, y=276}, {x=108, y=36}, {x=660, y=516}, {x=132, y=516}, },
       floorguards = { },
@@ -3378,8 +3071,7 @@ levels = {
    },
    ["61-2"] = {
       n_x = 588, n_y = 108,
-      door_x = 204, door_y = 108,
-      doorswitch_x = 396, doorswitch_y = 516,
+      doors = { {x=204, y=108, sx=396, sy=516}, },
       mines = { },
       drones = { {x=756, y=516}, {x=60, y=444}, {x=252, y=36}, {x=108, y=60}, },
       floorguards = { {x=612, y=570}, {x=396, y=570}, {x=180, y=570}, {x=36, y=570}, {x=756, y=570}, },
@@ -3389,8 +3081,7 @@ levels = {
    },
    ["61-3"] = {
       n_x = 588, n_y = 552,
-      door_x = 528, door_y = 564,
-      doorswitch_x = 264, doorswitch_y = 36,
+      doors = { {x=528, y=564, sx=264, sy=36}, },
       mines = { },
       drones = { {x=396, y=492}, {x=204, y=36}, {x=396, y=36}, {x=396, y=396}, },
       floorguards = { },
@@ -3400,8 +3091,7 @@ levels = {
    },
    ["61-4"] = {
       n_x = 396, n_y = 324,
-      door_x = 396, door_y = 348,
-      doorswitch_x = 36, doorswitch_y = 60,
+      doors = { {x=396, y=348, sx=36, sy=60}, },
       mines = { },
       drones = { {x=708, y=36}, {x=84, y=60}, {x=588, y=180}, {x=180, y=156}, },
       floorguards = { },
@@ -3411,8 +3101,7 @@ levels = {
    },
    ["62-0"] = {
       n_x = 552, n_y = 528,
-      door_x = 396, door_y = 492,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=492, sx=396, sy=84}, },
       mines = { },
       drones = { {x=132, y=420}, {x=660, y=420}, },
       floorguards = { {x=660, y=570}, {x=132, y=570}, },
@@ -3422,8 +3111,7 @@ levels = {
    },
    ["62-1"] = {
       n_x = 396, n_y = 492,
-      door_x = 432, door_y = 516,
-      doorswitch_x = 396, doorswitch_y = 132,
+      doors = { {x=432, y=516, sx=396, sy=132}, },
       mines = { },
       drones = { {x=180, y=156}, {x=684, y=204}, {x=84, y=108}, {x=684, y=84}, {x=84, y=372}, {x=540, y=348}, },
       floorguards = { },
@@ -3433,8 +3121,7 @@ levels = {
    },
    ["62-2"] = {
       n_x = 72, n_y = 48,
-      door_x = 732, door_y = 84,
-      doorswitch_x = 384, doorswitch_y = 468,
+      doors = { {x=732, y=84, sx=384, sy=468}, },
       mines = { {x=768, y=492}, {x=768, y=396}, {x=768, y=300}, {x=768, y=204}, {x=24, y=204}, {x=24, y=300}, {x=24, y=396}, {x=24, y=492}, },
       drones = { },
       floorguards = { },
@@ -3444,8 +3131,7 @@ levels = {
    },
    ["62-3"] = {
       n_x = 732, n_y = 60,
-      door_x = 60, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 492,
+      doors = { {x=60, y=60, sx=396, sy=492}, },
       mines = { {x=696, y=516}, {x=696, y=540}, {x=696, y=564}, {x=96, y=516}, {x=96, y=540}, {x=96, y=564}, },
       drones = { {x=732, y=444}, {x=84, y=300}, {x=372, y=204}, {x=660, y=348}, },
       floorguards = { {x=228, y=570}, {x=564, y=570}, },
@@ -3455,8 +3141,7 @@ levels = {
    },
    ["62-4"] = {
       n_x = 744, n_y = 492,
-      door_x = 732, door_y = 84,
-      doorswitch_x = 444, doorswitch_y = 324,
+      doors = { {x=732, y=84, sx=444, sy=324}, },
       mines = { },
       drones = { {x=468, y=252}, {x=156, y=324}, {x=300, y=564}, {x=60, y=276}, {x=84, y=84}, },
       floorguards = { {x=516, y=354}, {x=84, y=570}, {x=516, y=546}, },
@@ -3466,8 +3151,7 @@ levels = {
    },
    ["63-0"] = {
       n_x = 36, n_y = 60,
-      door_x = 396, door_y = 516,
-      doorswitch_x = 744, doorswitch_y = 96,
+      doors = { {x=396, y=516, sx=744, sy=96}, },
       mines = { {x=708, y=384}, {x=660, y=360}, {x=84, y=384}, {x=132, y=360}, {x=228, y=336}, {x=264, y=324}, {x=564, y=336}, {x=528, y=324}, {x=672, y=396}, {x=120, y=396}, {x=732, y=420}, {x=60, y=420}, {x=204, y=360}, {x=588, y=360}, },
       drones = { {x=516, y=564}, {x=276, y=564}, },
       floorguards = { },
@@ -3477,8 +3161,7 @@ levels = {
    },
    ["63-1"] = {
       n_x = 49.1952136183817, n_y = 566,
-      door_x = 492, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 60,
+      doors = { {x=492, y=564, sx=396, sy=60}, },
       mines = { },
       drones = { },
       floorguards = { {x=372, y=570}, },
@@ -3488,8 +3171,7 @@ levels = {
    },
    ["63-2"] = {
       n_x = 252, n_y = 60,
-      door_x = 588, door_y = 180,
-      doorswitch_x = 624, doorswitch_y = 144,
+      doors = { {x=588, y=180, sx=624, sy=144}, },
       mines = { {x=564, y=72}, {x=624, y=24}, {x=684, y=72}, {x=180, y=156}, {x=24, y=204}, {x=24, y=444}, {x=24, y=372}, {x=24, y=276}, {x=612, y=540}, {x=684, y=540}, {x=648, y=540}, {x=252, y=540}, {x=156, y=540}, {x=192, y=540}, {x=216, y=540}, },
       drones = { {x=756, y=228}, {x=36, y=276}, {x=564, y=564}, {x=132, y=564}, },
       floorguards = { {x=204, y=570}, {x=444, y=570}, },
@@ -3499,8 +3181,7 @@ levels = {
    },
    ["63-3"] = {
       n_x = 648, n_y = 108,
-      door_x = 144, door_y = 108,
-      doorswitch_x = 348, doorswitch_y = 468,
+      doors = { {x=144, y=108, sx=348, sy=468}, },
       mines = { {x=36, y=432}, {x=36, y=408}, {x=36, y=384}, {x=36, y=228}, {x=36, y=204}, {x=36, y=180}, {x=756, y=516}, {x=756, y=492}, {x=756, y=468}, {x=756, y=264}, {x=756, y=288}, {x=756, y=312}, {x=756, y=108}, {x=756, y=84}, {x=756, y=60}, },
       drones = { },
       floorguards = { },
@@ -3510,8 +3191,7 @@ levels = {
    },
    ["63-4"] = {
       n_x = 744, n_y = 540,
-      door_x = 744, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 36,
+      doors = { {x=744, y=564, sx=36, sy=36}, },
       mines = { {x=360, y=396}, {x=168, y=300}, {x=552, y=492}, {x=552, y=264}, {x=360, y=168}, {x=720, y=348}, {x=192, y=84}, },
       drones = { {x=60, y=108}, {x=252, y=324}, {x=420, y=228}, {x=300, y=156}, {x=36, y=204}, {x=60, y=36}, },
       floorguards = { },
@@ -3521,8 +3201,7 @@ levels = {
    },
    ["64-0"] = {
       n_x = 732, n_y = 60,
-      door_x = 84, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 540,
+      doors = { {x=84, y=84, sx=396, sy=540}, },
       mines = { {x=360, y=156}, {x=432, y=156}, {x=432, y=228}, {x=360, y=228}, {x=360, y=300}, {x=432, y=300}, {x=432, y=372}, {x=360, y=372}, {x=360, y=444}, {x=432, y=444}, {x=504, y=36}, {x=504, y=72}, {x=504, y=108}, {x=480, y=120}, },
       drones = { },
       floorguards = { {x=396, y=570}, },
@@ -3532,8 +3211,7 @@ levels = {
    },
    ["64-1"] = {
       n_x = 36, n_y = 492,
-      door_x = 756, door_y = 492,
-      doorswitch_x = 264, doorswitch_y = 168,
+      doors = { {x=756, y=492, sx=264, sy=168}, },
       mines = { {x=84, y=228}, {x=96, y=228}, {x=108, y=228}, {x=108, y=240}, {x=96, y=240}, {x=84, y=240}, {x=84, y=252}, {x=96, y=252}, {x=108, y=252}, {x=324, y=228}, {x=336, y=228}, {x=348, y=228}, {x=348, y=240}, {x=348, y=252}, {x=336, y=252}, {x=324, y=252}, {x=324, y=240}, {x=336, y=240}, {x=348, y=120}, {x=336, y=120}, {x=324, y=120}, {x=324, y=108}, {x=324, y=96}, {x=336, y=96}, {x=348, y=96}, {x=348, y=108}, {x=336, y=108}, },
       drones = { {x=756, y=156}, {x=420, y=84}, {x=468, y=228}, {x=36, y=228}, {x=756, y=108}, {x=36, y=132}, {x=756, y=204}, {x=756, y=276}, },
       floorguards = { },
@@ -3543,8 +3221,7 @@ levels = {
    },
    ["64-2"] = {
       n_x = 312, n_y = 564,
-      door_x = 432, door_y = 564,
-      doorswitch_x = 624, doorswitch_y = 84,
+      doors = { {x=432, y=564, sx=624, sy=84}, },
       mines = { {x=756, y=132}, {x=756, y=108}, {x=756, y=84}, {x=36, y=108}, {x=36, y=132}, {x=36, y=156}, {x=36, y=300}, {x=36, y=324}, {x=756, y=252}, {x=756, y=276}, {x=756, y=300}, {x=36, y=348}, {x=36, y=444}, {x=36, y=468}, {x=36, y=492}, {x=756, y=444}, {x=756, y=468}, {x=756, y=492}, },
       drones = { },
       floorguards = { },
@@ -3554,8 +3231,7 @@ levels = {
    },
    ["64-3"] = {
       n_x = 396, n_y = 396,
-      door_x = 396, door_y = 396,
-      doorswitch_x = 396, doorswitch_y = 204,
+      doors = { {x=396, y=396, sx=396, sy=204}, },
       mines = { {x=420, y=264}, {x=372, y=264}, {x=372, y=336}, {x=420, y=336}, {x=504, y=264}, {x=288, y=264}, {x=216, y=264}, {x=576, y=264}, {x=480, y=336}, {x=552, y=336}, {x=312, y=336}, {x=240, y=336}, {x=480, y=180}, {x=552, y=180}, {x=312, y=180}, {x=240, y=180}, {x=240, y=420}, {x=312, y=420}, {x=480, y=420}, {x=552, y=420}, },
       drones = { {x=324, y=276}, {x=204, y=324}, {x=612, y=372}, {x=612, y=252}, },
       floorguards = { },
@@ -3565,8 +3241,7 @@ levels = {
    },
    ["64-4"] = {
       n_x = 396, n_y = 468,
-      door_x = 396, door_y = 492,
-      doorswitch_x = 240, doorswitch_y = 336,
+      doors = { {x=396, y=492, sx=240, sy=336}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -3576,8 +3251,7 @@ levels = {
    },
    ["65-0"] = {
       n_x = 756, n_y = 108,
-      door_x = 732, door_y = 276,
-      doorswitch_x = 36, doorswitch_y = 564,
+      doors = { {x=732, y=276, sx=36, sy=564}, },
       mines = { },
       drones = { },
       floorguards = { {x=300, y=570}, {x=564, y=570}, },
@@ -3587,8 +3261,7 @@ levels = {
    },
    ["65-1"] = {
       n_x = 396, n_y = 528,
-      door_x = 396, door_y = 552,
-      doorswitch_x = 396, doorswitch_y = 48,
+      doors = { {x=396, y=552, sx=396, sy=48}, },
       mines = { {x=156, y=228}, {x=156, y=156}, {x=636, y=156}, {x=636, y=228}, {x=660, y=228}, {x=684, y=228}, {x=708, y=228}, {x=732, y=228}, {x=756, y=228}, {x=132, y=228}, {x=108, y=228}, {x=84, y=228}, {x=60, y=228}, {x=36, y=228}, },
       drones = { },
       floorguards = { },
@@ -3598,8 +3271,7 @@ levels = {
    },
    ["65-2"] = {
       n_x = 288, n_y = 48,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 504, doorswitch_y = 48,
+      doors = { {x=396, y=564, sx=504, sy=48}, },
       mines = { },
       drones = { {x=684, y=444}, {x=588, y=252}, {x=60, y=564}, {x=156, y=348}, {x=252, y=156}, },
       floorguards = { {x=132, y=570}, },
@@ -3609,8 +3281,7 @@ levels = {
    },
    ["65-3"] = {
       n_x = 564, n_y = 84,
-      door_x = 396, door_y = 324,
-      doorswitch_x = 396, doorswitch_y = 492,
+      doors = { {x=396, y=324, sx=396, sy=492}, },
       mines = { },
       drones = { {x=84, y=252}, {x=708, y=396}, {x=636, y=516}, {x=324, y=372}, {x=492, y=228}, },
       floorguards = { },
@@ -3620,8 +3291,7 @@ levels = {
    },
    ["65-4"] = {
       n_x = 300, n_y = 540,
-      door_x = 84, door_y = 132,
-      doorswitch_x = 708, doorswitch_y = 84,
+      doors = { {x=84, y=132, sx=708, sy=84}, },
       mines = { },
       drones = { {x=36, y=60}, {x=660, y=108}, {x=708, y=132}, {x=156, y=132}, },
       floorguards = { },
@@ -3631,8 +3301,7 @@ levels = {
    },
    ["66-0"] = {
       n_x = 396, n_y = 528,
-      door_x = 396, door_y = 540,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=540, sx=396, sy=84}, },
       mines = { {x=120, y=204}, {x=672, y=204}, {x=588, y=192}, {x=504, y=204}, {x=204, y=192}, {x=288, y=204}, {x=204, y=576}, {x=336, y=576}, {x=456, y=576}, {x=588, y=576}, {x=564, y=576}, {x=480, y=576}, {x=312, y=576}, {x=228, y=576}, },
       drones = { },
       floorguards = { {x=516, y=570}, {x=276, y=570}, },
@@ -3642,8 +3311,7 @@ levels = {
    },
    ["66-1"] = {
       n_x = 396, n_y = 420,
-      door_x = 396, door_y = 444,
-      doorswitch_x = 396, doorswitch_y = 228,
+      doors = { {x=396, y=444, sx=396, sy=228}, },
       mines = { {x=576, y=300}, {x=504, y=300}, {x=648, y=300}, {x=288, y=300}, {x=216, y=300}, {x=144, y=300}, },
       drones = { {x=348, y=300}, {x=396, y=252}, {x=444, y=300}, {x=396, y=348}, },
       floorguards = { {x=540, y=474}, {x=252, y=474}, },
@@ -3653,8 +3321,7 @@ levels = {
    },
    ["66-2"] = {
       n_x = 132, n_y = 468,
-      door_x = 216, door_y = 492,
-      doorswitch_x = 48, doorswitch_y = 108,
+      doors = { {x=216, y=492, sx=48, sy=108}, },
       mines = { },
       drones = { {x=396, y=276}, {x=756, y=180}, {x=468, y=516}, },
       floorguards = { {x=348, y=522}, {x=492, y=474}, {x=348, y=570}, {x=132, y=138}, {x=180, y=378}, {x=564, y=378}, {x=204, y=66}, },
@@ -3664,8 +3331,7 @@ levels = {
    },
    ["66-3"] = {
       n_x = 84, n_y = 564,
-      door_x = 756, door_y = 108,
-      doorswitch_x = 600, doorswitch_y = 552,
+      doors = { {x=756, y=108, sx=600, sy=552}, },
       mines = { {x=648, y=276}, {x=636, y=288}, {x=588, y=288}, {x=576, y=288}, {x=540, y=288}, {x=528, y=288}, {x=516, y=288}, {x=504, y=288}, {x=492, y=288}, {x=480, y=288}, {x=468, y=288}, {x=456, y=288}, {x=444, y=288}, {x=432, y=288}, {x=420, y=288}, {x=408, y=288}, {x=360, y=288}, {x=348, y=288}, {x=336, y=288}, {x=324, y=288}, {x=312, y=288}, {x=300, y=288}, {x=288, y=276}, {x=300, y=360}, {x=504, y=528}, {x=480, y=324}, {x=408, y=420}, {x=408, y=432}, {x=408, y=552}, {x=468, y=384}, {x=312, y=540}, },
       drones = { },
       floorguards = { },
@@ -3675,8 +3341,7 @@ levels = {
    },
    ["66-4"] = {
       n_x = 708, n_y = 564,
-      door_x = 684, door_y = 564,
-      doorswitch_x = 48, doorswitch_y = 156,
+      doors = { {x=684, y=564, sx=48, sy=156}, },
       mines = { {x=756, y=564}, {x=636, y=540}, {x=588, y=564}, {x=516, y=540}, {x=468, y=564}, {x=396, y=540}, {x=348, y=564}, {x=276, y=540}, {x=228, y=564}, {x=156, y=540}, {x=108, y=564}, {x=36, y=468}, {x=624, y=492}, {x=636, y=444}, {x=660, y=432}, {x=684, y=432}, {x=708, y=444}, {x=756, y=300}, {x=756, y=252}, {x=756, y=204}, {x=756, y=156}, {x=756, y=108}, {x=756, y=60}, {x=732, y=36}, {x=720, y=72}, {x=684, y=36}, {x=552, y=312}, {x=480, y=336}, {x=312, y=360}, {x=240, y=384}, {x=540, y=192}, {x=468, y=204}, {x=348, y=204}, {x=228, y=204}, {x=108, y=204}, {x=180, y=192}, {x=300, y=192}, {x=420, y=192}, {x=384, y=204}, {x=264, y=204}, {x=144, y=204}, {x=504, y=204}, {x=612, y=288}, {x=540, y=288}, {x=492, y=312}, {x=420, y=312}, {x=372, y=336}, {x=300, y=336}, {x=252, y=360}, {x=180, y=360}, {x=216, y=348}, {x=576, y=276}, {x=456, y=300}, {x=336, y=324}, {x=600, y=324}, {x=432, y=348}, {x=360, y=372}, {x=192, y=396}, },
       drones = { },
       floorguards = { {x=60, y=570}, {x=180, y=570}, {x=300, y=570}, {x=420, y=570}, {x=540, y=570}, },
@@ -3686,8 +3351,7 @@ levels = {
    },
    ["67-0"] = {
       n_x = 60, n_y = 60,
-      door_x = 708, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 540,
+      doors = { {x=708, y=84, sx=396, sy=540}, },
       mines = { {x=360, y=228}, {x=360, y=156}, {x=432, y=156}, {x=432, y=228}, {x=432, y=300}, {x=360, y=300}, {x=360, y=372}, {x=360, y=444}, {x=432, y=444}, {x=432, y=372}, {x=552, y=480}, {x=552, y=408}, {x=552, y=336}, {x=552, y=264}, {x=552, y=192}, {x=552, y=120}, {x=240, y=480}, {x=240, y=408}, {x=240, y=336}, {x=240, y=264}, {x=240, y=192}, {x=240, y=120}, {x=516, y=444}, {x=516, y=372}, {x=516, y=300}, {x=516, y=228}, {x=516, y=156}, },
       drones = { {x=516, y=564}, {x=468, y=36}, },
       floorguards = { {x=396, y=570}, },
@@ -3697,8 +3361,7 @@ levels = {
    },
    ["67-1"] = {
       n_x = 396, n_y = 324,
-      door_x = 396, door_y = 348,
-      doorswitch_x = 396, doorswitch_y = 252,
+      doors = { {x=396, y=348, sx=396, sy=252}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -3708,8 +3371,7 @@ levels = {
    },
    ["67-2"] = {
       n_x = 396, n_y = 252,
-      door_x = 396, door_y = 276,
-      doorswitch_x = 396, doorswitch_y = 516,
+      doors = { {x=396, y=276, sx=396, sy=516}, },
       mines = { {x=588, y=264}, {x=612, y=264}, {x=180, y=264}, {x=204, y=264}, {x=156, y=276}, {x=636, y=276}, {x=648, y=300}, {x=144, y=300}, {x=156, y=528}, {x=180, y=528}, {x=372, y=528}, {x=420, y=528}, {x=612, y=528}, {x=636, y=528}, {x=660, y=540}, {x=588, y=540}, {x=444, y=540}, {x=348, y=540}, {x=204, y=540}, {x=132, y=540}, {x=468, y=264}, {x=444, y=264}, {x=348, y=264}, {x=324, y=264}, },
       drones = { },
       floorguards = { {x=684, y=546}, {x=516, y=546}, {x=276, y=546}, {x=108, y=546}, {x=252, y=282}, {x=540, y=282}, },
@@ -3719,8 +3381,7 @@ levels = {
    },
    ["67-3"] = {
       n_x = 396, n_y = 420,
-      door_x = 396, door_y = 444,
-      doorswitch_x = 396, doorswitch_y = 156,
+      doors = { {x=396, y=444, sx=396, sy=156}, },
       mines = { },
       drones = { {x=420, y=156}, {x=540, y=276}, {x=300, y=204}, {x=276, y=372}, {x=468, y=180}, },
       floorguards = { },
@@ -3730,8 +3391,7 @@ levels = {
    },
    ["67-4"] = {
       n_x = 36, n_y = 492,
-      door_x = 756, door_y = 60,
-      doorswitch_x = 96, doorswitch_y = 396,
+      doors = { {x=756, y=60, sx=96, sy=396}, },
       mines = { {x=300, y=576}, {x=324, y=576}, {x=372, y=576}, {x=468, y=576}, {x=492, y=576}, {x=516, y=576}, {x=564, y=576}, {x=648, y=468}, {x=768, y=396}, {x=672, y=444}, {x=708, y=420}, {x=264, y=252}, {x=300, y=228}, {x=372, y=204}, {x=300, y=144}, {x=360, y=144}, {x=432, y=132}, {x=384, y=72}, {x=456, y=84}, {x=336, y=288}, {x=336, y=72}, {x=420, y=24}, {x=252, y=156}, },
       drones = { {x=252, y=516}, {x=612, y=516}, {x=420, y=564}, },
       floorguards = { {x=648, y=114}, {x=60, y=570}, },
@@ -3741,8 +3401,7 @@ levels = {
    },
    ["68-0"] = {
       n_x = 396, n_y = 444,
-      door_x = 396, door_y = 444,
-      doorswitch_x = 396, doorswitch_y = 108,
+      doors = { {x=396, y=444, sx=396, sy=108}, },
       mines = { },
       drones = { {x=180, y=300}, {x=636, y=228}, {x=300, y=180}, {x=492, y=348}, {x=684, y=60}, {x=180, y=60}, {x=300, y=420}, },
       floorguards = { {x=396, y=570}, },
@@ -3752,8 +3411,7 @@ levels = {
    },
    ["68-1"] = {
       n_x = 60, n_y = 84,
-      door_x = 60, door_y = 108,
-      doorswitch_x = 708, doorswitch_y = 132,
+      doors = { {x=60, y=108, sx=708, sy=132}, },
       mines = { {x=372, y=72}, {x=372, y=24}, {x=468, y=48}, {x=276, y=48}, {x=252, y=120}, {x=372, y=132}, {x=492, y=120}, },
       drones = { {x=684, y=156}, {x=684, y=36}, {x=732, y=108}, {x=516, y=36}, {x=84, y=36}, {x=684, y=108}, },
       floorguards = { },
@@ -3763,8 +3421,7 @@ levels = {
    },
    ["68-2"] = {
       n_x = 168, n_y = 324,
-      door_x = 144, door_y = 324,
-      doorswitch_x = 540, doorswitch_y = 48,
+      doors = { {x=144, y=324, sx=540, sy=48}, },
       mines = { },
       drones = { {x=564, y=228}, {x=228, y=180}, {x=228, y=516}, {x=324, y=276}, {x=420, y=516}, {x=468, y=396}, {x=420, y=108}, },
       floorguards = { {x=540, y=570}, },
@@ -3774,8 +3431,7 @@ levels = {
    },
    ["68-3"] = {
       n_x = 732, n_y = 360,
-      door_x = 648, door_y = 420,
-      doorswitch_x = 756, doorswitch_y = 204,
+      doors = { {x=648, y=420, sx=756, sy=204}, },
       mines = { },
       drones = { {x=420, y=348}, {x=588, y=180}, {x=84, y=348}, {x=324, y=252}, {x=180, y=372}, },
       floorguards = { {x=120, y=426}, {x=636, y=282}, {x=300, y=426}, },
@@ -3785,8 +3441,7 @@ levels = {
    },
    ["68-4"] = {
       n_x = 468, n_y = 72,
-      door_x = 288, door_y = 540,
-      doorswitch_x = 36, doorswitch_y = 276,
+      doors = { {x=288, y=540, sx=36, sy=276}, },
       mines = { {x=132, y=144}, {x=84, y=144}, {x=228, y=144}, {x=276, y=144}, {x=612, y=144}, {x=660, y=144}, {x=324, y=84}, {x=180, y=84}, {x=372, y=144}, {x=564, y=84}, {x=168, y=480}, {x=72, y=480}, {x=120, y=480}, {x=420, y=300}, {x=516, y=252}, {x=636, y=264}, {x=696, y=276}, {x=708, y=312}, {x=552, y=288}, {x=588, y=216}, {x=600, y=312}, {x=480, y=312}, {x=348, y=288}, {x=372, y=240}, {x=444, y=216}, {x=420, y=240}, {x=540, y=228}, },
       drones = { {x=732, y=36}, {x=60, y=132}, {x=252, y=36}, {x=732, y=108}, {x=156, y=36}, },
       floorguards = { {x=132, y=546}, {x=204, y=354}, },
@@ -3796,8 +3451,7 @@ levels = {
    },
    ["69-0"] = {
       n_x = 60, n_y = 564,
-      door_x = 720, door_y = 60,
-      doorswitch_x = 708, doorswitch_y = 300,
+      doors = { {x=720, y=60, sx=708, sy=300}, },
       mines = { {x=444, y=192}, {x=300, y=168}, {x=156, y=144}, {x=564, y=348}, {x=564, y=396}, {x=636, y=420}, {x=636, y=372}, {x=84, y=324}, {x=180, y=276}, {x=156, y=288}, {x=132, y=300}, {x=108, y=312}, },
       drones = { {x=156, y=468}, {x=204, y=516}, {x=108, y=564}, },
       floorguards = { {x=684, y=522}, {x=732, y=570}, },
@@ -3807,8 +3461,7 @@ levels = {
    },
    ["69-1"] = {
       n_x = 72, n_y = 48,
-      door_x = 732, door_y = 84,
-      doorswitch_x = 540, doorswitch_y = 480,
+      doors = { {x=732, y=84, sx=540, sy=480}, },
       mines = { {x=756, y=564}, {x=708, y=564}, {x=660, y=564}, {x=612, y=564}, {x=564, y=564}, {x=516, y=564}, {x=468, y=564}, {x=420, y=564}, {x=372, y=564}, {x=324, y=564}, {x=276, y=564}, {x=228, y=564}, {x=180, y=564}, {x=132, y=564}, {x=84, y=564}, {x=36, y=564}, },
       drones = { },
       floorguards = { },
@@ -3818,8 +3471,7 @@ levels = {
    },
    ["69-2"] = {
       n_x = 756, n_y = 60,
-      door_x = 708, door_y = 84,
-      doorswitch_x = 60, doorswitch_y = 516,
+      doors = { {x=708, y=84, sx=60, sy=516}, },
       mines = { {x=600, y=156}, {x=504, y=180}, {x=408, y=204}, {x=312, y=228}, {x=216, y=252}, {x=120, y=276}, {x=120, y=156}, {x=216, y=132}, {x=312, y=108}, {x=408, y=84}, {x=504, y=60}, {x=600, y=36}, {x=72, y=420}, {x=144, y=420}, {x=216, y=420}, {x=288, y=420}, {x=360, y=420}, {x=432, y=420}, {x=504, y=420}, {x=576, y=420}, {x=648, y=420}, {x=108, y=564}, {x=204, y=564}, {x=300, y=564}, {x=396, y=564}, {x=492, y=564}, {x=588, y=564}, {x=684, y=564}, },
       drones = { {x=660, y=492}, {x=60, y=540}, {x=204, y=396}, {x=492, y=396}, {x=276, y=396}, },
       floorguards = { },
@@ -3829,8 +3481,7 @@ levels = {
    },
    ["69-3"] = {
       n_x = 660, n_y = 396,
-      door_x = 108, door_y = 60,
-      doorswitch_x = 468, doorswitch_y = 528,
+      doors = { {x=108, y=60, sx=468, sy=528}, },
       mines = { {x=492, y=576}, {x=564, y=576}, {x=588, y=576}, {x=612, y=576}, {x=636, y=576}, {x=732, y=576}, {x=708, y=576}, {x=516, y=576}, {x=540, y=576}, {x=660, y=576}, {x=684, y=576}, {x=468, y=120}, {x=756, y=276}, {x=756, y=228}, {x=756, y=180}, {x=756, y=132}, {x=756, y=84}, {x=216, y=132}, {x=288, y=156}, {x=288, y=252}, {x=216, y=228}, {x=216, y=324}, {x=288, y=348}, {x=288, y=444}, {x=216, y=420}, {x=216, y=516}, {x=36, y=204}, {x=36, y=228}, {x=132, y=276}, {x=132, y=300}, {x=36, y=396}, {x=36, y=420}, {x=132, y=468}, {x=132, y=492}, {x=312, y=516}, {x=288, y=576}, {x=312, y=552}, {x=228, y=420}, {x=276, y=444}, {x=264, y=348}, {x=276, y=348}, {x=276, y=252}, {x=240, y=408}, {x=264, y=456}, {x=228, y=516}, {x=240, y=528}, },
       drones = { {x=492, y=180}, {x=684, y=204}, {x=540, y=252}, {x=612, y=180}, {x=108, y=300}, {x=60, y=228}, {x=60, y=396}, {x=60, y=492}, },
       floorguards = { },
@@ -3840,8 +3491,7 @@ levels = {
    },
    ["69-4"] = {
       n_x = 372, n_y = 276,
-      door_x = 36, door_y = 84,
-      doorswitch_x = 492, doorswitch_y = 264,
+      doors = { {x=36, y=84, sx=492, sy=264}, },
       mines = { {x=228, y=252}, {x=516, y=156}, {x=528, y=84}, {x=432, y=84}, {x=636, y=84}, {x=768, y=336}, {x=768, y=264}, {x=336, y=24}, {x=432, y=24}, {x=84, y=192}, {x=84, y=288}, {x=24, y=324}, {x=84, y=384}, {x=156, y=324}, {x=444, y=444}, {x=456, y=372}, {x=444, y=228}, {x=564, y=300}, {x=636, y=252}, {x=636, y=348}, {x=708, y=300}, {x=648, y=312}, {x=216, y=516}, {x=264, y=516}, {x=516, y=444}, {x=372, y=444}, {x=360, y=156}, {x=708, y=396}, {x=708, y=204}, {x=276, y=84}, },
       drones = { },
       floorguards = { {x=228, y=450}, {x=396, y=570}, {x=564, y=570}, {x=252, y=570}, {x=420, y=138}, },
@@ -3851,8 +3501,7 @@ levels = {
    },
    ["70-0"] = {
       n_x = 84, n_y = 528,
-      door_x = 696, door_y = 108,
-      doorswitch_x = 144, doorswitch_y = 108,
+      doors = { {x=696, y=108, sx=144, sy=108}, },
       mines = { {x=588, y=420}, {x=588, y=348}, {x=588, y=300}, {x=588, y=228}, {x=576, y=384}, {x=576, y=264}, {x=108, y=204}, {x=180, y=204}, {x=180, y=324}, {x=108, y=324}, {x=108, y=444}, {x=180, y=444}, },
       drones = { },
       floorguards = { {x=468, y=570}, },
@@ -3862,8 +3511,7 @@ levels = {
    },
    ["70-1"] = {
       n_x = 216, n_y = 492,
-      door_x = 684, door_y = 564,
-      doorswitch_x = 108, doorswitch_y = 204,
+      doors = { {x=684, y=564, sx=108, sy=204}, },
       mines = { {x=36, y=180}, {x=132, y=276}, {x=180, y=324}, {x=228, y=372}, {x=276, y=420}, {x=324, y=468}, {x=372, y=516}, {x=84, y=420}, {x=132, y=468}, {x=180, y=516}, {x=264, y=540}, {x=312, y=540}, {x=288, y=528}, {x=84, y=228}, },
       drones = { },
       floorguards = { {x=60, y=570}, },
@@ -3873,8 +3521,7 @@ levels = {
    },
    ["70-2"] = {
       n_x = 372, n_y = 492,
-      door_x = 252, door_y = 540,
-      doorswitch_x = 252, doorswitch_y = 36,
+      doors = { {x=252, y=540, sx=252, sy=36}, },
       mines = { {x=252, y=516}, {x=240, y=504}, {x=264, y=504}, },
       drones = { {x=756, y=564}, {x=228, y=372}, {x=660, y=36}, {x=228, y=228}, },
       floorguards = { },
@@ -3884,8 +3531,7 @@ levels = {
    },
    ["70-3"] = {
       n_x = 72, n_y = 552,
-      door_x = 432, door_y = 564,
-      doorswitch_x = 432, doorswitch_y = 468,
+      doors = { {x=432, y=564, sx=432, sy=468}, },
       mines = { {x=756, y=552}, {x=120, y=540}, {x=108, y=492}, {x=24, y=468}, {x=36, y=420}, {x=120, y=396}, {x=108, y=348}, {x=24, y=324}, {x=36, y=276}, {x=120, y=252}, {x=108, y=204}, {x=24, y=180}, {x=36, y=132}, {x=24, y=84}, {x=396, y=576}, {x=468, y=576}, {x=516, y=576}, {x=588, y=576}, {x=636, y=576}, {x=348, y=576}, {x=276, y=576}, {x=228, y=576}, {x=696, y=576}, {x=720, y=552}, {x=168, y=576}, {x=144, y=552}, {x=312, y=564}, {x=552, y=564}, {x=252, y=84}, {x=372, y=132}, {x=492, y=132}, {x=612, y=84}, },
       drones = { },
       floorguards = { },
@@ -3895,8 +3541,7 @@ levels = {
    },
    ["70-4"] = {
       n_x = 336, n_y = 504,
-      door_x = 396, door_y = 492,
-      doorswitch_x = 396, doorswitch_y = 132,
+      doors = { {x=396, y=492, sx=396, sy=132}, },
       mines = { },
       drones = { {x=684, y=396}, {x=132, y=204}, {x=444, y=84}, {x=324, y=348}, },
       floorguards = { },
@@ -3906,8 +3551,7 @@ levels = {
    },
    ["71-0"] = {
       n_x = 744, n_y = 60,
-      door_x = 696, door_y = 552,
-      doorswitch_x = 60, doorswitch_y = 42,
+      doors = { {x=696, y=552, sx=60, sy=42}, },
       mines = { {x=228, y=60}, {x=180, y=60}, {x=132, y=60}, {x=84, y=60}, },
       drones = { },
       floorguards = { },
@@ -3917,8 +3561,7 @@ levels = {
    },
    ["71-1"] = {
       n_x = 744, n_y = 372,
-      door_x = 228, door_y = 540,
-      doorswitch_x = 36, doorswitch_y = 396,
+      doors = { {x=228, y=540, sx=36, sy=396}, },
       mines = { {x=204, y=396}, {x=108, y=396}, {x=552, y=432}, {x=480, y=456}, {x=348, y=300}, },
       drones = { },
       floorguards = { },
@@ -3928,8 +3571,7 @@ levels = {
    },
    ["71-2"] = {
       n_x = 744, n_y = 48,
-      door_x = 648, door_y = 372,
-      doorswitch_x = 36, doorswitch_y = 276,
+      doors = { {x=648, y=372, sx=36, sy=276}, },
       mines = { },
       drones = { {x=60, y=228}, {x=324, y=324}, {x=180, y=324}, {x=468, y=348}, {x=564, y=108}, },
       floorguards = { },
@@ -3939,8 +3581,7 @@ levels = {
    },
    ["71-3"] = {
       n_x = 600, n_y = 552,
-      door_x = 384, door_y = 564,
-      doorswitch_x = 384, doorswitch_y = 228,
+      doors = { {x=384, y=564, sx=384, sy=228}, },
       mines = { {x=504, y=480}, {x=504, y=504}, {x=384, y=504}, {x=384, y=480}, {x=264, y=480}, {x=264, y=504}, },
       drones = { {x=132, y=564}, {x=612, y=276}, {x=660, y=180}, {x=108, y=324}, {x=156, y=492}, {x=180, y=36}, },
       floorguards = { },
@@ -3950,8 +3591,7 @@ levels = {
    },
    ["71-4"] = {
       n_x = 48, n_y = 540,
-      door_x = 216, door_y = 228,
-      doorswitch_x = 756, doorswitch_y = 516,
+      doors = { {x=216, y=228, sx=756, sy=516}, },
       mines = { {x=624, y=396}, {x=696, y=336}, {x=684, y=372}, {x=636, y=360}, },
       drones = { {x=156, y=180}, {x=636, y=228}, {x=276, y=108}, },
       floorguards = { {x=660, y=570}, },
@@ -3961,8 +3601,7 @@ levels = {
    },
    ["72-0"] = {
       n_x = 156, n_y = 144,
-      door_x = 96, door_y = 168,
-      doorswitch_x = 744, doorswitch_y = 264,
+      doors = { {x=96, y=168, sx=744, sy=264}, },
       mines = { {x=552, y=408}, {x=480, y=384}, {x=348, y=396}, {x=648, y=384}, {x=684, y=444}, {x=432, y=456}, {x=312, y=528}, {x=420, y=516}, {x=540, y=492}, {x=612, y=504}, {x=744, y=516}, },
       drones = { {x=324, y=444}, {x=708, y=564}, {x=756, y=540}, {x=540, y=468}, },
       floorguards = { {x=684, y=570}, },
@@ -3972,8 +3611,7 @@ levels = {
    },
    ["72-1"] = {
       n_x = 444, n_y = 564,
-      door_x = 60, door_y = 156,
-      doorswitch_x = 396, doorswitch_y = 348,
+      doors = { {x=60, y=156, sx=396, sy=348}, },
       mines = { {x=360, y=552}, {x=456, y=504}, {x=552, y=456}, {x=648, y=408}, {x=120, y=144}, {x=168, y=120}, {x=216, y=96}, {x=264, y=72}, {x=168, y=384}, {x=216, y=360}, {x=264, y=336}, {x=312, y=312}, {x=648, y=144}, {x=600, y=168}, {x=552, y=192}, {x=504, y=216}, {x=456, y=240}, {x=408, y=264}, {x=360, y=288}, {x=120, y=408}, {x=72, y=432}, {x=192, y=504}, {x=288, y=456}, {x=384, y=408}, {x=480, y=360}, {x=576, y=312}, {x=672, y=264}, {x=144, y=264}, {x=240, y=216}, {x=336, y=168}, {x=432, y=120}, {x=528, y=72}, },
       drones = { {x=540, y=36}, {x=84, y=540}, {x=708, y=156}, {x=204, y=540}, {x=204, y=204}, {x=300, y=156}, },
       floorguards = { },
@@ -3983,8 +3621,7 @@ levels = {
    },
    ["72-2"] = {
       n_x = 432, n_y = 552,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=564, sx=396, sy=84}, },
       mines = { {x=468, y=60}, {x=468, y=36}, {x=324, y=60}, {x=324, y=36}, {x=576, y=204}, {x=600, y=204}, {x=192, y=204}, {x=216, y=204}, {x=264, y=228}, {x=528, y=228}, {x=384, y=144}, {x=408, y=144}, {x=408, y=312}, {x=384, y=312}, {x=408, y=240}, {x=384, y=240}, {x=396, y=132}, {x=720, y=204}, {x=72, y=204}, {x=72, y=84}, {x=720, y=84}, {x=504, y=240}, {x=288, y=240}, {x=528, y=144}, {x=552, y=132}, {x=240, y=132}, {x=264, y=144}, {x=552, y=216}, {x=240, y=216}, {x=624, y=216}, {x=168, y=216}, {x=168, y=132}, {x=144, y=144}, {x=144, y=228}, {x=648, y=144}, {x=624, y=132}, {x=648, y=228}, {x=696, y=312}, {x=696, y=336}, {x=96, y=336}, {x=96, y=312}, {x=744, y=192}, {x=48, y=192}, {x=48, y=96}, {x=744, y=96}, {x=696, y=72}, {x=96, y=72}, {x=408, y=384}, {x=384, y=384}, {x=612, y=504}, {x=180, y=504}, },
       drones = { },
       floorguards = { },
@@ -3994,8 +3631,7 @@ levels = {
    },
    ["72-3"] = {
       n_x = 708, n_y = 84,
-      door_x = 756, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 420,
+      doors = { {x=756, y=84, sx=396, sy=420}, {x=36, y=84, sx=396, sy=180}, },
       mines = { {x=720, y=228}, {x=756, y=348}, {x=756, y=396}, {x=708, y=444}, {x=720, y=480}, {x=756, y=540}, {x=696, y=312}, {x=696, y=384}, {x=768, y=192}, {x=768, y=288}, },
       drones = { {x=156, y=84}, {x=636, y=564}, },
       floorguards = { },
@@ -4005,8 +3641,7 @@ levels = {
    },
    ["72-4"] = {
       n_x = 564, n_y = 276,
-      door_x = 216, door_y = 276,
-      doorswitch_x = 732, doorswitch_y = 492,
+      doors = { {x=216, y=276, sx=732, sy=492}, },
       mines = { {x=624, y=468}, {x=360, y=204}, {x=360, y=336}, {x=480, y=456}, {x=504, y=168}, {x=96, y=300}, {x=252, y=480}, {x=252, y=552}, {x=672, y=192}, {x=720, y=192}, {x=708, y=264}, {x=288, y=432}, {x=372, y=480}, {x=228, y=96}, {x=228, y=24}, },
       drones = { {x=300, y=36}, {x=588, y=564}, {x=756, y=492}, {x=492, y=204}, {x=36, y=324}, },
       floorguards = { {x=228, y=546}, },
@@ -4016,8 +3651,7 @@ levels = {
    },
    ["73-0"] = {
       n_x = 276, n_y = 108,
-      door_x = 600, door_y = 228,
-      doorswitch_x = 408, doorswitch_y = 132,
+      doors = { {x=600, y=228, sx=408, sy=132}, },
       mines = { {x=504, y=180}, {x=552, y=228}, {x=684, y=276}, {x=372, y=132}, {x=180, y=156}, {x=48, y=240}, {x=96, y=336}, {x=24, y=396}, {x=24, y=300}, {x=180, y=432}, {x=264, y=564}, {x=288, y=564}, {x=312, y=564}, {x=336, y=564}, {x=360, y=564}, {x=384, y=564}, {x=408, y=564}, {x=432, y=564}, {x=456, y=564}, {x=480, y=576}, {x=504, y=576}, {x=528, y=564}, {x=552, y=564}, {x=576, y=564}, {x=600, y=564}, {x=624, y=564}, {x=648, y=564}, {x=672, y=564}, {x=696, y=564}, {x=720, y=564}, {x=744, y=552}, {x=768, y=540}, {x=216, y=564}, {x=192, y=564}, {x=168, y=564}, {x=144, y=552}, {x=120, y=540}, {x=96, y=540}, {x=72, y=540}, {x=48, y=528}, {x=24, y=516}, {x=756, y=348}, {x=660, y=204}, {x=564, y=156}, {x=696, y=144}, {x=504, y=132}, {x=456, y=132}, {x=444, y=48}, {x=348, y=96}, {x=312, y=48}, {x=228, y=60}, {x=156, y=132}, {x=108, y=120}, {x=72, y=180}, {x=576, y=84}, {x=744, y=60}, {x=756, y=180}, },
       drones = { },
       floorguards = { },
@@ -4027,8 +3661,7 @@ levels = {
    },
    ["73-1"] = {
       n_x = 396, n_y = 372,
-      door_x = 396, door_y = 396,
-      doorswitch_x = 96, doorswitch_y = 48,
+      doors = { {x=396, y=396, sx=96, sy=48}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4038,8 +3671,7 @@ levels = {
    },
    ["73-2"] = {
       n_x = 396, n_y = 540,
-      door_x = 264, door_y = 564,
-      doorswitch_x = 564, doorswitch_y = 360,
+      doors = { {x=264, y=564, sx=564, sy=360}, },
       mines = { {x=564, y=540}, {x=756, y=564}, {x=132, y=552}, {x=348, y=552}, {x=24, y=540}, {x=132, y=444}, {x=564, y=468}, {x=492, y=480}, {x=240, y=492}, {x=660, y=444}, {x=660, y=552}, {x=192, y=564}, },
       drones = { {x=756, y=516}, {x=36, y=468}, {x=492, y=84}, {x=108, y=36}, {x=540, y=516}, {x=156, y=540}, },
       floorguards = { {x=612, y=570}, {x=492, y=570}, {x=72, y=570}, {x=228, y=570}, {x=420, y=378}, },
@@ -4049,8 +3681,7 @@ levels = {
    },
    ["73-3"] = {
       n_x = 396, n_y = 432,
-      door_x = 396, door_y = 444,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=444, sx=396, sy=84}, },
       mines = { },
       drones = { },
       floorguards = { {x=372, y=546}, },
@@ -4060,8 +3691,7 @@ levels = {
    },
    ["73-4"] = {
       n_x = 708, n_y = 540,
-      door_x = 732, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 36,
+      doors = { {x=732, y=564, sx=36, sy=36}, },
       mines = { },
       drones = { {x=468, y=204}, {x=180, y=324}, },
       floorguards = { },
@@ -4071,8 +3701,7 @@ levels = {
    },
    ["74-0"] = {
       n_x = 48, n_y = 216,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 720, doorswitch_y = 48,
+      doors = { {x=48, y=564, sx=720, sy=48}, },
       mines = { {x=96, y=504}, {x=192, y=456}, {x=288, y=408}, {x=384, y=360}, {x=480, y=312}, {x=576, y=264}, {x=672, y=216}, {x=672, y=96}, {x=576, y=144}, {x=480, y=192}, {x=384, y=240}, {x=288, y=288}, {x=192, y=336}, {x=96, y=384}, {x=672, y=156}, {x=576, y=204}, {x=480, y=252}, {x=384, y=300}, {x=288, y=348}, {x=192, y=396}, {x=96, y=444}, },
       drones = { },
       floorguards = { },
@@ -4082,8 +3711,7 @@ levels = {
    },
    ["74-1"] = {
       n_x = 456, n_y = 504,
-      door_x = 324, door_y = 540,
-      doorswitch_x = 396, doorswitch_y = 204,
+      doors = { {x=324, y=540, sx=396, sy=204}, },
       mines = { },
       drones = { {x=276, y=300}, {x=348, y=396}, {x=396, y=348}, {x=420, y=300}, {x=444, y=180}, {x=228, y=180}, {x=204, y=348}, {x=276, y=420}, },
       floorguards = { },
@@ -4093,8 +3721,7 @@ levels = {
    },
    ["74-2"] = {
       n_x = 744, n_y = 48,
-      door_x = 204, door_y = 108,
-      doorswitch_x = 642, doorswitch_y = 540,
+      doors = { {x=204, y=108, sx=642, sy=540}, },
       mines = { {x=156, y=204}, {x=204, y=156}, {x=252, y=204}, {x=444, y=564}, {x=444, y=516}, {x=540, y=576}, {x=540, y=504}, {x=612, y=540}, {x=672, y=540}, {x=180, y=264}, },
       drones = { {x=156, y=348}, {x=636, y=36}, {x=564, y=540}, {x=60, y=348}, },
       floorguards = { },
@@ -4104,8 +3731,7 @@ levels = {
    },
    ["74-3"] = {
       n_x = 36, n_y = 540,
-      door_x = 72, door_y = 72,
-      doorswitch_x = 396, doorswitch_y = 228,
+      doors = { {x=72, y=72, sx=396, sy=228}, },
       mines = { },
       drones = { {x=756, y=84}, {x=60, y=156}, },
       floorguards = { },
@@ -4115,8 +3741,7 @@ levels = {
    },
    ["74-4"] = {
       n_x = 720, n_y = 564,
-      door_x = 60, door_y = 60,
-      doorswitch_x = 756, doorswitch_y = 564,
+      doors = { {x=60, y=60, sx=756, sy=564}, },
       mines = { {x=696, y=324}, {x=696, y=156}, {x=96, y=204}, {x=96, y=396}, {x=96, y=336}, {x=96, y=144}, {x=696, y=264}, {x=696, y=516}, {x=96, y=516}, {x=696, y=456}, },
       drones = { },
       floorguards = { },
@@ -4126,8 +3751,7 @@ levels = {
    },
    ["75-0"] = {
       n_x = 372, n_y = 324,
-      door_x = 360, door_y = 348,
-      doorswitch_x = 624, doorswitch_y = 132,
+      doors = { {x=360, y=348, sx=624, sy=132}, },
       mines = { {x=768, y=288}, {x=756, y=252}, {x=768, y=216}, {x=756, y=180}, {x=768, y=144}, },
       drones = { {x=732, y=60}, {x=60, y=60}, {x=444, y=36}, {x=588, y=324}, {x=108, y=468}, },
       floorguards = { {x=396, y=570}, {x=300, y=570}, {x=228, y=570}, {x=132, y=570}, {x=60, y=570}, {x=732, y=570}, {x=660, y=570}, {x=564, y=570}, {x=492, y=570}, },
@@ -4137,8 +3761,7 @@ levels = {
    },
    ["75-1"] = {
       n_x = 636, n_y = 36,
-      door_x = 396, door_y = 36,
-      doorswitch_x = 156, doorswitch_y = 48,
+      doors = { {x=396, y=36, sx=156, sy=48}, },
       mines = { {x=612, y=540}, {x=588, y=540}, {x=564, y=540}, {x=540, y=540}, {x=516, y=540}, {x=276, y=540}, {x=252, y=540}, {x=228, y=540}, {x=204, y=540}, {x=180, y=540}, },
       drones = { {x=372, y=36}, {x=396, y=468}, {x=156, y=60}, {x=420, y=36}, {x=396, y=564}, {x=684, y=420}, },
       floorguards = { },
@@ -4148,8 +3771,7 @@ levels = {
    },
    ["75-2"] = {
       n_x = 756, n_y = 564,
-      door_x = 396, door_y = 516,
-      doorswitch_x = 228, doorswitch_y = 156,
+      doors = { {x=396, y=516, sx=228, sy=156}, },
       mines = { },
       drones = { {x=396, y=156}, {x=540, y=348}, {x=612, y=492}, },
       floorguards = { {x=204, y=258}, {x=708, y=258}, {x=132, y=258}, },
@@ -4159,8 +3781,7 @@ levels = {
    },
    ["75-3"] = {
       n_x = 744, n_y = 444,
-      door_x = 624, door_y = 348,
-      doorswitch_x = 144, doorswitch_y = 360,
+      doors = { {x=624, y=348, sx=144, sy=360}, },
       mines = { {x=552, y=252}, {x=648, y=168}, {x=240, y=96}, {x=132, y=252}, {x=324, y=204}, {x=228, y=180}, {x=468, y=144}, {x=408, y=192}, {x=420, y=300}, {x=288, y=396}, {x=192, y=384}, {x=180, y=324}, {x=108, y=384}, {x=120, y=324}, {x=72, y=180}, {x=132, y=180}, {x=708, y=276}, {x=528, y=132}, {x=264, y=204}, {x=348, y=120}, {x=492, y=180}, {x=384, y=288}, {x=204, y=264}, {x=192, y=216}, {x=192, y=108}, {x=276, y=144}, {x=348, y=396}, {x=204, y=408}, {x=168, y=360}, {x=72, y=408}, {x=60, y=300}, {x=348, y=240}, {x=300, y=264}, {x=600, y=240}, {x=564, y=192}, {x=384, y=360}, {x=24, y=384}, {x=432, y=384}, {x=480, y=228}, {x=240, y=348}, {x=276, y=372}, {x=252, y=300}, {x=336, y=324}, },
       drones = { },
       floorguards = { },
@@ -4170,8 +3791,7 @@ levels = {
    },
    ["75-4"] = {
       n_x = 648, n_y = 396,
-      door_x = 504, door_y = 396,
-      doorswitch_x = 312, doorswitch_y = 252,
+      doors = { {x=504, y=396, sx=312, sy=252}, },
       mines = { {x=180, y=492}, {x=348, y=492}, {x=264, y=492}, {x=444, y=468}, {x=612, y=468}, {x=528, y=468}, {x=468, y=528}, {x=504, y=528}, {x=552, y=528}, {x=588, y=528}, {x=312, y=528}, {x=300, y=528}, {x=228, y=528}, {x=216, y=528}, {x=576, y=252}, {x=528, y=228}, {x=480, y=204}, {x=408, y=168}, {x=648, y=288}, {x=624, y=228}, {x=684, y=324}, {x=696, y=168}, },
       drones = { {x=204, y=348}, {x=252, y=372}, {x=204, y=420}, {x=708, y=84}, {x=252, y=84}, {x=156, y=276}, },
       floorguards = { {x=396, y=522}, {x=468, y=306}, {x=300, y=162}, },
@@ -4181,8 +3801,7 @@ levels = {
    },
    ["76-0"] = {
       n_x = 36, n_y = 240,
-      door_x = 684, door_y = 276,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=684, y=276, sx=396, sy=84}, },
       mines = { },
       drones = { {x=756, y=180}, {x=180, y=84}, {x=132, y=84}, {x=756, y=108}, },
       floorguards = { },
@@ -4192,8 +3811,7 @@ levels = {
    },
    ["76-1"] = {
       n_x = 732, n_y = 564,
-      door_x = 456, door_y = 540,
-      doorswitch_x = 72, doorswitch_y = 540,
+      doors = { {x=456, y=540, sx=72, sy=540}, },
       mines = { },
       drones = { {x=756, y=60}, {x=36, y=60}, {x=300, y=60}, {x=468, y=60}, {x=156, y=60}, {x=636, y=60}, },
       floorguards = { },
@@ -4203,8 +3821,7 @@ levels = {
    },
    ["76-2"] = {
       n_x = 396, n_y = 156,
-      door_x = 396, door_y = 192,
-      doorswitch_x = 504, doorswitch_y = 72,
+      doors = { {x=396, y=192, sx=504, sy=72}, },
       mines = { {x=414, y=210}, {x=378, y=210}, },
       drones = { },
       floorguards = { },
@@ -4214,8 +3831,7 @@ levels = {
    },
    ["76-3"] = {
       n_x = 36, n_y = 36,
-      door_x = 48, door_y = 564,
-      doorswitch_x = 474, doorswitch_y = 492,
+      doors = { {x=48, y=564, sx=474, sy=492}, },
       mines = { {x=720, y=168}, {x=672, y=168}, {x=624, y=168}, {x=576, y=168}, {x=132, y=576}, {x=132, y=528}, {x=180, y=552}, {x=228, y=528}, {x=228, y=576}, {x=228, y=576}, {x=312, y=528}, {x=312, y=576}, {x=360, y=528}, {x=360, y=576}, {x=384, y=576}, {x=384, y=528}, {x=696, y=276}, {x=432, y=120}, {x=360, y=348}, {x=408, y=504}, {x=420, y=504}, {x=432, y=504}, {x=444, y=504}, {x=456, y=504}, {x=276, y=480}, {x=204, y=456}, {x=132, y=480}, {x=60, y=456}, {x=672, y=420}, {x=492, y=504}, {x=504, y=504}, {x=36, y=348}, {x=72, y=348}, {x=240, y=288}, },
       drones = { },
       floorguards = { },
@@ -4225,8 +3841,7 @@ levels = {
    },
    ["76-4"] = {
       n_x = 36, n_y = 516,
-      door_x = 84, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 84,
+      doors = { {x=84, y=564, sx=36, sy=84}, },
       mines = { {x=576, y=144}, {x=504, y=144}, {x=432, y=144}, {x=360, y=144}, {x=288, y=144}, {x=216, y=144}, {x=216, y=576}, {x=288, y=576}, {x=360, y=576}, {x=432, y=576}, {x=504, y=576}, {x=576, y=576}, {x=576, y=456}, {x=504, y=456}, {x=432, y=456}, {x=360, y=456}, {x=288, y=456}, {x=216, y=456}, {x=768, y=384}, {x=768, y=300}, {x=768, y=216}, {x=648, y=216}, {x=648, y=300}, {x=648, y=384}, {x=576, y=24}, {x=504, y=24}, {x=432, y=24}, {x=360, y=24}, {x=288, y=24}, {x=216, y=24}, },
       drones = { {x=156, y=132}, {x=660, y=396}, {x=612, y=564}, {x=396, y=36}, {x=84, y=108}, {x=468, y=492}, },
       floorguards = { {x=324, y=138}, {x=372, y=570}, },
@@ -4236,8 +3851,7 @@ levels = {
    },
    ["77-0"] = {
       n_x = 744, n_y = 432,
-      door_x = 732, door_y = 60,
-      doorswitch_x = 60, doorswitch_y = 276,
+      doors = { {x=732, y=60, sx=60, sy=276}, },
       mines = { {x=108, y=564}, {x=204, y=564}, {x=300, y=564}, {x=396, y=564}, {x=492, y=564}, {x=588, y=564}, {x=684, y=564}, {x=636, y=552}, {x=540, y=552}, {x=444, y=552}, {x=348, y=552}, {x=252, y=552}, {x=156, y=552}, {x=732, y=552}, {x=60, y=552}, },
       drones = { {x=540, y=36}, {x=36, y=468}, {x=660, y=36}, {x=348, y=564}, {x=36, y=156}, },
       floorguards = { },
@@ -4247,8 +3861,7 @@ levels = {
    },
    ["77-1"] = {
       n_x = 60, n_y = 60.15,
-      door_x = 744, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 540,
+      doors = { {x=744, y=60, sx=396, sy=540}, },
       mines = { {x=36, y=84}, {x=36, y=108}, },
       drones = { {x=684, y=540}, {x=180, y=204}, {x=588, y=252}, {x=324, y=444}, {x=108, y=372}, {x=396, y=180}, },
       floorguards = { },
@@ -4258,8 +3871,7 @@ levels = {
    },
    ["77-2"] = {
       n_x = 756, n_y = 552,
-      door_x = 396, door_y = 492,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=492, sx=396, sy=84}, },
       mines = { },
       drones = { {x=732, y=108}, {x=108, y=204}, {x=60, y=252}, {x=108, y=420}, {x=684, y=276}, },
       floorguards = { {x=300, y=522}, {x=492, y=522}, {x=588, y=402}, {x=444, y=402}, {x=348, y=402}, {x=204, y=402}, {x=228, y=282}, {x=396, y=282}, {x=564, y=282}, {x=396, y=138}, },
@@ -4269,8 +3881,7 @@ levels = {
    },
    ["77-3"] = {
       n_x = 756, n_y = 408,
-      door_x = 72, door_y = 444,
-      doorswitch_x = 120, doorswitch_y = 228,
+      doors = { {x=72, y=444, sx=120, sy=228}, },
       mines = { {x=456, y=456}, {x=324, y=456}, {x=228, y=396}, {x=192, y=216}, {x=444, y=312}, {x=456, y=180}, {x=648, y=192}, {x=600, y=300}, {x=120, y=360}, {x=360, y=312}, {x=588, y=420}, },
       drones = { {x=300, y=180}, {x=60, y=396}, {x=372, y=180}, {x=756, y=324}, },
       floorguards = { },
@@ -4280,8 +3891,7 @@ levels = {
    },
    ["77-4"] = {
       n_x = 444, n_y = 516,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 36,
+      doors = { {x=396, y=564, sx=396, sy=36}, },
       mines = { {x=336, y=132}, {x=456, y=180}, {x=456, y=348}, {x=456, y=300}, {x=336, y=300}, {x=336, y=252}, {x=456, y=84}, {x=336, y=420}, {x=456, y=468}, {x=336, y=516}, },
       drones = { {x=444, y=156}, {x=348, y=420}, {x=372, y=36}, {x=372, y=324}, },
       floorguards = { },
@@ -4291,8 +3901,7 @@ levels = {
    },
    ["78-0"] = {
       n_x = 756, n_y = 372,
-      door_x = 756, door_y = 276,
-      doorswitch_x = 192, doorswitch_y = 456,
+      doors = { {x=756, y=276, sx=192, sy=456}, },
       mines = { {x=528, y=552}, {x=672, y=552}, {x=240, y=552}, {x=144, y=552}, },
       drones = { {x=756, y=180}, {x=36, y=156}, {x=228, y=156}, {x=372, y=36}, {x=204, y=36}, },
       floorguards = { },
@@ -4302,8 +3911,7 @@ levels = {
    },
    ["78-1"] = {
       n_x = 732, n_y = 528,
-      door_x = 708, door_y = 156,
-      doorswitch_x = 84, doorswitch_y = 324,
+      doors = { {x=708, y=156, sx=84, sy=324}, },
       mines = { {x=756, y=156}, {x=768, y=120}, {x=768, y=96}, {x=756, y=60}, {x=660, y=156}, {x=684, y=168}, {x=732, y=168}, {x=648, y=132}, {x=732, y=48}, {x=684, y=48}, {x=708, y=48}, {x=660, y=48}, {x=636, y=48}, {x=432, y=48}, {x=528, y=48}, {x=336, y=48}, {x=240, y=48}, {x=144, y=48}, {x=84, y=84}, {x=144, y=180}, {x=144, y=204}, },
       drones = { },
       floorguards = { {x=660, y=522}, {x=588, y=498}, {x=516, y=474}, {x=444, y=450}, {x=372, y=426}, {x=300, y=402}, {x=228, y=378}, {x=156, y=354}, {x=192, y=186}, {x=288, y=162}, {x=384, y=138}, {x=480, y=114}, {x=588, y=138}, },
@@ -4313,8 +3921,7 @@ levels = {
    },
    ["78-2"] = {
       n_x = 756, n_y = 228,
-      door_x = 744, door_y = 252,
-      doorswitch_x = 756, doorswitch_y = 84,
+      doors = { {x=744, y=252, sx=756, sy=84}, },
       mines = { {x=732, y=156}, {x=756, y=156}, {x=600, y=384}, {x=384, y=384}, {x=408, y=384}, {x=168, y=384}, {x=192, y=408}, {x=360, y=408}, {x=432, y=408}, {x=576, y=408}, {x=516, y=228}, {x=372, y=264}, {x=180, y=192}, {x=228, y=264}, {x=108, y=192}, {x=612, y=168}, {x=684, y=168}, {x=540, y=168}, {x=468, y=168}, {x=396, y=168}, {x=324, y=168}, {x=252, y=168}, {x=180, y=168}, {x=660, y=168}, {x=588, y=168}, {x=516, y=168}, {x=444, y=168}, {x=372, y=168}, {x=300, y=168}, {x=228, y=168}, {x=156, y=168}, {x=60, y=84}, {x=276, y=84}, {x=492, y=84}, {x=636, y=108}, {x=564, y=132}, {x=420, y=132}, {x=348, y=108}, {x=204, y=132}, {x=708, y=288}, {x=636, y=288}, {x=564, y=288}, {x=492, y=288}, {x=420, y=288}, {x=348, y=288}, {x=276, y=288}, {x=204, y=288}, {x=132, y=288}, },
       drones = { {x=156, y=252}, {x=396, y=204}, {x=492, y=132}, {x=420, y=36}, },
       floorguards = { },
@@ -4324,8 +3931,7 @@ levels = {
    },
    ["78-3"] = {
       n_x = 216, n_y = 516,
-      door_x = 672, door_y = 48,
-      doorswitch_x = 300, doorswitch_y = 564,
+      doors = { {x=672, y=48, sx=300, sy=564}, },
       mines = { },
       drones = { {x=348, y=204}, {x=660, y=348}, {x=732, y=84}, {x=300, y=468}, },
       floorguards = { {x=84, y=570}, },
@@ -4335,8 +3941,7 @@ levels = {
    },
    ["78-4"] = {
       n_x = 756, n_y = 540,
-      door_x = 60, door_y = 108,
-      doorswitch_x = 480, doorswitch_y = 108,
+      doors = { {x=60, y=108, sx=480, sy=108}, },
       mines = { {x=720, y=468}, {x=768, y=360}, {x=720, y=252}, {x=768, y=132}, {x=672, y=192}, {x=624, y=300}, {x=672, y=408}, {x=576, y=492}, {x=576, y=300}, {x=576, y=108}, {x=576, y=396}, {x=576, y=204}, {x=456, y=408}, {x=384, y=408}, {x=456, y=168}, {x=384, y=168}, {x=384, y=288}, {x=456, y=288}, {x=312, y=288}, {x=240, y=288}, {x=240, y=168}, {x=312, y=168}, {x=312, y=408}, {x=240, y=408}, {x=312, y=348}, {x=240, y=348}, {x=240, y=228}, {x=312, y=228}, {x=312, y=468}, {x=240, y=468}, {x=276, y=552}, {x=420, y=552}, {x=348, y=552}, {x=660, y=540}, {x=540, y=540}, {x=180, y=540}, {x=60, y=540}, {x=120, y=552}, {x=132, y=492}, {x=192, y=144}, {x=144, y=192}, {x=192, y=240}, {x=144, y=276}, {x=192, y=312}, {x=144, y=360}, {x=192, y=408}, {x=144, y=456}, {x=192, y=504}, {x=144, y=96}, {x=96, y=468}, {x=96, y=444}, {x=48, y=432}, {x=48, y=408}, {x=96, y=384}, {x=96, y=360}, {x=48, y=348}, {x=48, y=324}, {x=96, y=312}, {x=96, y=288}, {x=48, y=276}, {x=48, y=252}, {x=96, y=240}, {x=96, y=216}, {x=48, y=204}, {x=48, y=180}, },
       drones = { {x=60, y=300}, {x=156, y=276}, {x=588, y=540}, {x=396, y=444}, {x=444, y=204}, },
       floorguards = { },
@@ -4346,8 +3951,7 @@ levels = {
    },
    ["79-0"] = {
       n_x = 396, n_y = 564,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 48,
+      doors = { {x=396, y=564, sx=396, sy=48}, },
       mines = { {x=396, y=108}, {x=396, y=156}, {x=396, y=204}, {x=396, y=252}, {x=396, y=300}, {x=396, y=348}, {x=396, y=396}, {x=396, y=444}, {x=396, y=492}, {x=468, y=468}, {x=468, y=420}, {x=468, y=372}, {x=468, y=324}, {x=468, y=276}, {x=468, y=228}, {x=468, y=180}, {x=468, y=132}, {x=324, y=132}, {x=324, y=180}, {x=324, y=228}, {x=324, y=276}, {x=324, y=324}, {x=324, y=372}, {x=324, y=420}, {x=324, y=468}, {x=540, y=444}, {x=540, y=396}, {x=540, y=348}, {x=540, y=300}, {x=540, y=252}, {x=540, y=204}, {x=540, y=156}, {x=252, y=156}, {x=252, y=204}, {x=252, y=252}, {x=252, y=300}, {x=252, y=348}, {x=252, y=396}, {x=252, y=444}, {x=612, y=420}, {x=612, y=372}, {x=612, y=324}, {x=612, y=276}, {x=612, y=228}, {x=612, y=180}, {x=180, y=180}, {x=180, y=228}, {x=180, y=276}, {x=180, y=324}, {x=180, y=372}, {x=180, y=420}, {x=684, y=396}, {x=684, y=348}, {x=684, y=300}, {x=684, y=252}, {x=684, y=204}, {x=108, y=204}, {x=108, y=252}, {x=108, y=300}, {x=108, y=348}, {x=108, y=396}, {x=756, y=372}, {x=756, y=324}, {x=756, y=276}, {x=756, y=228}, {x=36, y=228}, {x=36, y=276}, {x=36, y=324}, {x=36, y=372}, {x=252, y=120}, {x=324, y=96}, {x=468, y=96}, {x=540, y=120}, {x=612, y=144}, {x=684, y=168}, {x=756, y=180}, {x=36, y=180}, {x=108, y=168}, {x=180, y=144}, {x=756, y=420}, {x=36, y=420}, {x=108, y=432}, {x=180, y=456}, {x=252, y=480}, {x=324, y=504}, {x=468, y=504}, {x=540, y=480}, {x=612, y=456}, {x=684, y=432}, {x=756, y=564}, {x=36, y=564}, {x=36, y=492}, {x=756, y=492}, {x=756, y=36}, {x=36, y=36}, {x=36, y=108}, {x=756, y=108}, },
       drones = { },
       floorguards = { },
@@ -4357,8 +3961,7 @@ levels = {
    },
    ["79-1"] = {
       n_x = 636, n_y = 552,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 36,
+      doors = { {x=396, y=564, sx=396, sy=36}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4368,8 +3971,7 @@ levels = {
    },
    ["79-2"] = {
       n_x = 516, n_y = 492,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=564, sx=396, sy=84}, },
       mines = { {x=396, y=516}, {x=420, y=540}, {x=372, y=540}, {x=396, y=204}, {x=396, y=300}, },
       drones = { {x=756, y=252}, {x=36, y=180}, {x=324, y=36}, {x=636, y=36}, },
       floorguards = { },
@@ -4379,8 +3981,7 @@ levels = {
    },
    ["79-3"] = {
       n_x = 504, n_y = 528,
-      door_x = 540, door_y = 564,
-      doorswitch_x = 168, doorswitch_y = 96,
+      doors = { {x=540, y=564, sx=168, sy=96}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4390,8 +3991,7 @@ levels = {
    },
    ["79-4"] = {
       n_x = 204, n_y = 540,
-      door_x = 456, door_y = 84,
-      doorswitch_x = 156, doorswitch_y = 492,
+      doors = { {x=456, y=84, sx=156, sy=492}, },
       mines = { {x=420, y=108}, {x=492, y=108}, {x=420, y=132}, },
       drones = { {x=276, y=276}, {x=132, y=180}, {x=180, y=84}, {x=252, y=180}, {x=132, y=444}, {x=84, y=516}, {x=36, y=348}, },
       floorguards = { },
@@ -4401,8 +4001,7 @@ levels = {
    },
    ["80-0"] = {
       n_x = 756, n_y = 300,
-      door_x = 756, door_y = 300,
-      doorswitch_x = 36, doorswitch_y = 132,
+      doors = { {x=756, y=300, sx=36, sy=132}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4412,8 +4011,7 @@ levels = {
    },
    ["80-1"] = {
       n_x = 108, n_y = 396,
-      door_x = 636, door_y = 384,
-      doorswitch_x = 108, doorswitch_y = 96,
+      doors = { {x=636, y=384, sx=108, sy=96}, },
       mines = { {x=300, y=468}, {x=420, y=564}, {x=516, y=564}, {x=636, y=564}, {x=660, y=468}, {x=612, y=420}, {x=372, y=348}, {x=408, y=396}, {x=204, y=324}, {x=168, y=276}, {x=132, y=324}, {x=156, y=228}, {x=168, y=216}, {x=180, y=228}, {x=216, y=180}, {x=228, y=192}, {x=240, y=180}, {x=456, y=192}, {x=648, y=84}, {x=600, y=84}, {x=516, y=84}, {x=468, y=84}, {x=564, y=36}, {x=276, y=84}, },
       drones = { {x=84, y=492}, {x=300, y=420}, },
       floorguards = { },
@@ -4423,8 +4021,7 @@ levels = {
    },
    ["80-2"] = {
       n_x = 36, n_y = 38,
-      door_x = 180, door_y = 36,
-      doorswitch_x = 756, doorswitch_y = 444,
+      doors = { {x=180, y=36, sx=756, sy=444}, },
       mines = { {x=156, y=192}, {x=144, y=192}, {x=144, y=180}, {x=144, y=168}, {x=144, y=156}, {x=156, y=156}, {x=156, y=144}, {x=156, y=168}, {x=156, y=168}, {x=156, y=180}, {x=156, y=204}, },
       drones = { {x=60, y=420}, {x=708, y=444}, },
       floorguards = { {x=516, y=234}, },
@@ -4434,8 +4031,7 @@ levels = {
    },
    ["80-3"] = {
       n_x = 396, n_y = 564,
-      door_x = 372, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 36,
+      doors = { {x=372, y=564, sx=396, sy=36}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4445,8 +4041,7 @@ levels = {
    },
    ["80-4"] = {
       n_x = 396, n_y = 432,
-      door_x = 60, door_y = 564,
-      doorswitch_x = 276, doorswitch_y = 276,
+      doors = { {x=60, y=564, sx=276, sy=276}, },
       mines = { {x=60, y=264}, {x=120, y=264}, {x=276, y=576}, {x=216, y=576}, {x=480, y=455}, {x=447, y=478}, {x=476, y=506}, {x=521, y=534}, {x=451, y=534}, {x=478, y=566}, {x=558, y=571}, {x=650, y=563}, {x=588, y=492}, {x=622, y=539}, {x=620, y=567}, {x=687, y=566}, {x=637, y=492}, {x=685, y=501}, {x=759, y=565}, {x=559, y=514}, {x=533, y=511}, {x=743, y=546}, {x=725, y=495}, {x=716, y=454}, {x=762, y=435}, {x=696, y=156}, {x=768, y=156}, {x=696, y=240}, {x=768, y=240}, {x=396, y=114}, {x=396, y=30}, {x=276, y=192}, {x=156, y=120}, },
       drones = { {x=708, y=300}, {x=756, y=108}, },
       floorguards = { {x=252, y=186}, {x=156, y=258}, {x=108, y=114}, },
@@ -4456,8 +4051,7 @@ levels = {
    },
    ["81-0"] = {
       n_x = 299, n_y = 158,
-      door_x = 756, door_y = 564,
-      doorswitch_x = 72, doorswitch_y = 312,
+      doors = { {x=756, y=564, sx=72, sy=312}, },
       mines = { },
       drones = { },
       floorguards = { {x=426, y=570}, {x=426, y=570}, },
@@ -4467,8 +4061,7 @@ levels = {
    },
    ["81-1"] = {
       n_x = 108, n_y = 60,
-      door_x = 756, door_y = 60,
-      doorswitch_x = 672, doorswitch_y = 396,
+      doors = { {x=756, y=60, sx=672, sy=396}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4478,8 +4071,7 @@ levels = {
    },
    ["81-2"] = {
       n_x = 396, n_y = 564,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 132,
+      doors = { {x=396, y=564, sx=396, sy=132}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4489,8 +4081,7 @@ levels = {
    },
    ["81-3"] = {
       n_x = 144, n_y = 120,
-      door_x = 144, door_y = 132,
-      doorswitch_x = 648, doorswitch_y = 132,
+      doors = { {x=144, y=132, sx=648, sy=132}, },
       mines = { },
       drones = { {x=156, y=300}, {x=276, y=348}, {x=324, y=204}, {x=660, y=300}, {x=492, y=204}, {x=516, y=348}, },
       floorguards = { },
@@ -4500,8 +4091,7 @@ levels = {
    },
    ["81-4"] = {
       n_x = 36, n_y = 540,
-      door_x = 36, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 564,
+      doors = { {x=36, y=564, sx=756, sy=564}, },
       mines = { {x=240, y=420}, {x=264, y=420}, {x=432, y=420}, {x=456, y=420}, {x=624, y=276}, {x=648, y=276}, {x=720, y=348}, {x=528, y=348}, {x=552, y=348}, {x=156, y=336}, {x=444, y=408}, {x=636, y=264}, {x=252, y=408}, {x=540, y=336}, {x=732, y=336}, {x=60, y=408}, {x=36, y=60}, {x=60, y=60}, {x=84, y=60}, {x=108, y=60}, {x=132, y=60}, {x=156, y=60}, {x=180, y=60}, {x=204, y=60}, {x=228, y=60}, {x=252, y=60}, {x=276, y=60}, {x=300, y=60}, {x=324, y=60}, {x=348, y=60}, {x=372, y=60}, {x=396, y=60}, {x=420, y=60}, {x=444, y=60}, {x=468, y=60}, {x=492, y=60}, {x=516, y=60}, {x=540, y=60}, {x=564, y=60}, {x=588, y=60}, {x=612, y=60}, {x=636, y=60}, {x=660, y=60}, {x=684, y=60}, {x=708, y=60}, {x=732, y=60}, {x=756, y=60}, {x=72, y=408}, {x=144, y=336}, {x=168, y=336}, {x=240, y=408}, {x=264, y=408}, {x=432, y=408}, {x=456, y=408}, {x=144, y=348}, {x=168, y=348}, {x=72, y=420}, {x=528, y=336}, {x=552, y=336}, {x=624, y=264}, {x=648, y=264}, {x=720, y=336}, {x=336, y=348}, {x=336, y=336}, {x=348, y=336}, {x=360, y=336}, {x=360, y=348}, {x=588, y=492}, {x=684, y=492}, {x=492, y=492}, {x=396, y=492}, {x=300, y=492}, {x=204, y=492}, {x=108, y=492}, },
       drones = { {x=36, y=204}, {x=756, y=204}, },
       floorguards = { },
@@ -4511,8 +4101,7 @@ levels = {
    },
    ["82-0"] = {
       n_x = 274, n_y = 110,
-      door_x = 744, door_y = 60,
-      doorswitch_x = 708, doorswitch_y = 60,
+      doors = { {x=744, y=60, sx=708, sy=60}, },
       mines = { {x=24, y=576}, {x=36, y=576}, {x=48, y=576}, {x=48, y=576}, {x=72, y=576}, {x=84, y=576}, {x=72, y=576}, {x=72, y=576}, {x=60, y=576}, {x=72, y=576}, {x=108, y=576}, {x=108, y=576}, {x=84, y=576}, {x=108, y=576}, {x=96, y=576}, {x=108, y=576}, {x=120, y=576}, {x=120, y=576}, {x=132, y=576}, {x=168, y=576}, {x=168, y=576}, {x=144, y=576}, {x=144, y=576}, {x=156, y=576}, {x=180, y=576}, {x=192, y=576}, {x=216, y=576}, {x=204, y=576}, {x=228, y=576}, {x=240, y=576}, {x=240, y=576}, {x=252, y=576}, {x=252, y=576}, {x=276, y=576}, {x=276, y=576}, {x=288, y=576}, {x=264, y=576}, {x=300, y=576}, {x=312, y=576}, {x=312, y=576}, {x=324, y=576}, {x=336, y=576}, {x=348, y=576}, {x=360, y=576}, {x=384, y=576}, {x=384, y=576}, {x=372, y=576}, {x=396, y=576}, {x=408, y=576}, {x=408, y=576}, {x=420, y=576}, {x=432, y=576}, {x=444, y=576}, {x=456, y=576}, {x=456, y=576}, {x=468, y=576}, {x=492, y=576}, {x=480, y=576}, {x=516, y=576}, {x=516, y=576}, {x=540, y=576}, {x=504, y=576}, {x=516, y=576}, {x=528, y=576}, {x=552, y=576}, {x=576, y=576}, {x=564, y=576}, {x=588, y=576}, {x=588, y=576}, {x=600, y=576}, {x=600, y=576}, {x=600, y=576}, {x=612, y=576}, {x=612, y=576}, {x=624, y=576}, {x=624, y=576}, {x=636, y=576}, {x=636, y=576}, {x=648, y=576}, {x=648, y=576}, {x=660, y=576}, {x=660, y=576}, {x=672, y=576}, {x=672, y=576}, {x=684, y=576}, {x=696, y=576}, {x=708, y=576}, {x=720, y=576}, {x=732, y=576}, {x=744, y=576}, {x=756, y=576}, {x=768, y=576}, },
       drones = { },
       floorguards = { },
@@ -4522,8 +4111,7 @@ levels = {
    },
    ["82-1"] = {
       n_x = 60, n_y = 36,
-      door_x = 708, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 36,
+      doors = { {x=708, y=564, sx=756, sy=36}, },
       mines = { },
       drones = { {x=564, y=84}, {x=684, y=468}, {x=204, y=516}, {x=132, y=156}, },
       floorguards = { },
@@ -4533,8 +4121,7 @@ levels = {
    },
    ["82-2"] = {
       n_x = 576, n_y = 564,
-      door_x = 36, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 564,
+      doors = { {x=36, y=564, sx=756, sy=564}, },
       mines = { {x=756, y=546}, {x=36, y=546}, {x=396, y=546}, {x=576, y=546}, {x=216, y=546}, {x=486, y=570}, {x=666, y=570}, {x=306, y=570}, {x=126, y=570}, },
       drones = { },
       floorguards = { {x=396, y=570}, {x=756, y=570}, {x=36, y=570}, },
@@ -4544,8 +4131,7 @@ levels = {
    },
    ["82-3"] = {
       n_x = 468, n_y = 564,
-      door_x = 624, door_y = 252,
-      doorswitch_x = 660, doorswitch_y = 288,
+      doors = { {x=624, y=252, sx=660, sy=288}, },
       mines = { {x=600, y=276}, {x=588, y=228}, {x=480, y=504}, {x=552, y=468}, {x=612, y=504}, {x=600, y=420}, {x=660, y=252}, {x=624, y=156}, {x=516, y=36}, {x=552, y=84}, {x=372, y=72}, {x=324, y=84}, {x=204, y=36}, {x=192, y=96}, {x=168, y=528}, {x=180, y=456}, {x=132, y=372}, {x=144, y=300}, {x=216, y=384}, {x=264, y=492}, {x=168, y=192}, {x=204, y=264}, {x=420, y=516}, {x=660, y=444}, {x=480, y=132}, {x=396, y=192}, {x=492, y=252}, {x=300, y=252}, {x=468, y=372}, {x=324, y=372}, {x=552, y=564}, {x=624, y=360}, },
       drones = { },
       floorguards = { },
@@ -4555,8 +4141,7 @@ levels = {
    },
    ["82-4"] = {
       n_x = 324, n_y = 252,
-      door_x = 420, door_y = 564,
-      doorswitch_x = 492, doorswitch_y = 36,
+      doors = { {x=420, y=564, sx=492, sy=36}, },
       mines = { {x=732, y=84}, {x=720, y=72}, {x=768, y=24}, {x=36, y=240}, {x=528, y=72}, {x=468, y=48}, {x=456, y=60}, {x=528, y=48}, {x=480, y=240}, {x=480, y=216}, {x=456, y=456}, {x=444, y=444}, {x=564, y=456}, {x=588, y=36}, },
       drones = { {x=204, y=84}, {x=732, y=492}, {x=708, y=156}, {x=132, y=396}, },
       floorguards = { },
@@ -4566,8 +4151,7 @@ levels = {
    },
    ["83-0"] = {
       n_x = 276, n_y = 60,
-      door_x = 276, door_y = 60,
-      doorswitch_x = 516, doorswitch_y = 540,
+      doors = { {x=276, y=60, sx=516, sy=540}, },
       mines = { {x=324, y=204}, {x=276, y=300}, {x=420, y=252}, {x=516, y=300}, {x=468, y=396}, {x=372, y=348}, },
       drones = { },
       floorguards = { },
@@ -4577,8 +4161,7 @@ levels = {
    },
    ["83-1"] = {
       n_x = 396, n_y = 84,
-      door_x = 396, door_y = 36,
-      doorswitch_x = 396, doorswitch_y = 168,
+      doors = { {x=396, y=36, sx=396, sy=168}, },
       mines = { },
       drones = { {x=636, y=348}, {x=156, y=348}, {x=396, y=564}, },
       floorguards = { },
@@ -4588,8 +4171,7 @@ levels = {
    },
    ["83-2"] = {
       n_x = 756, n_y = 300,
-      door_x = 756, door_y = 276,
-      doorswitch_x = 708, doorswitch_y = 288,
+      doors = { {x=756, y=276, sx=708, sy=288}, },
       mines = { {x=48, y=564}, {x=72, y=564}, {x=36, y=540}, {x=96, y=564}, {x=120, y=564}, {x=144, y=564}, {x=168, y=564}, {x=192, y=564}, {x=216, y=564}, {x=240, y=564}, {x=264, y=564}, {x=288, y=564}, {x=312, y=564}, {x=336, y=564}, {x=360, y=564}, {x=756, y=540}, {x=744, y=564}, {x=720, y=564}, {x=696, y=564}, {x=672, y=564}, {x=648, y=564}, {x=624, y=564}, {x=600, y=564}, {x=576, y=564}, {x=552, y=564}, {x=528, y=564}, {x=504, y=564}, {x=480, y=564}, {x=456, y=564}, {x=432, y=564}, },
       drones = { },
       floorguards = { },
@@ -4599,8 +4181,7 @@ levels = {
    },
    ["83-3"] = {
       n_x = 36, n_y = 564,
-      door_x = 60, door_y = 540,
-      doorswitch_x = 756, doorswitch_y = 108,
+      doors = { {x=60, y=540, sx=756, sy=108}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4610,8 +4191,7 @@ levels = {
    },
    ["83-4"] = {
       n_x = 396, n_y = 324,
-      door_x = 396, door_y = 36,
-      doorswitch_x = 396, doorswitch_y = 564,
+      doors = { {x=396, y=36, sx=396, sy=564}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4621,8 +4201,7 @@ levels = {
    },
    ["84-0"] = {
       n_x = 36, n_y = 468,
-      door_x = 36, door_y = 468,
-      doorswitch_x = 756, doorswitch_y = 468,
+      doors = { {x=36, y=468, sx=756, sy=468}, },
       mines = { {x=36, y=528}, {x=36, y=552}, {x=36, y=576}, {x=756, y=504}, {x=756, y=528}, {x=756, y=552}, {x=756, y=576}, },
       drones = { },
       floorguards = { },
@@ -4632,8 +4211,7 @@ levels = {
    },
    ["84-1"] = {
       n_x = 228, n_y = 552,
-      door_x = 168, door_y = 84,
-      doorswitch_x = 756, doorswitch_y = 564,
+      doors = { {x=168, y=84, sx=756, sy=564}, },
       mines = { {x=720, y=288}, {x=720, y=240}, {x=720, y=264}, {x=672, y=144}, {x=696, y=180}, {x=708, y=198}, {x=684, y=162}, {x=660, y=126}, {x=660, y=42}, {x=672, y=24}, {x=288, y=492}, {x=288, y=468}, {x=288, y=444}, {x=708, y=528}, {x=684, y=528}, {x=660, y=528}, {x=636, y=528}, {x=564, y=504}, {x=582, y=486}, {x=600, y=468}, {x=618, y=450}, {x=648, y=84}, {x=648, y=108}, {x=648, y=60}, {x=720, y=216}, {x=324, y=360}, {x=372, y=360}, {x=420, y=360}, {x=468, y=360}, {x=516, y=360}, {x=564, y=360}, {x=612, y=360}, },
       drones = { {x=156, y=132}, {x=84, y=108}, {x=60, y=132}, {x=180, y=108}, {x=132, y=108}, {x=108, y=132}, },
       floorguards = { {x=444, y=330}, },
@@ -4643,8 +4221,7 @@ levels = {
    },
    ["84-2"] = {
       n_x = 396, n_y = 540,
-      door_x = 732, door_y = 564,
-      doorswitch_x = 216, doorswitch_y = 108,
+      doors = { {x=732, y=564, sx=216, sy=108}, },
       mines = { },
       drones = { },
       floorguards = { {x=36, y=570}, {x=756, y=570}, },
@@ -4654,8 +4231,7 @@ levels = {
    },
    ["84-3"] = {
       n_x = 756, n_y = 564,
-      door_x = 756, door_y = 492,
-      doorswitch_x = 756, doorswitch_y = 444,
+      doors = { {x=756, y=492, sx=756, sy=444}, },
       mines = { {x=264, y=288}, {x=360, y=144}, {x=408, y=240}, {x=408, y=384}, {x=216, y=384}, {x=660, y=192}, {x=192, y=240}, {x=192, y=432}, {x=240, y=432}, {x=438, y=444}, {x=168, y=192}, {x=384, y=288}, {x=144, y=234}, {x=120, y=276}, {x=96, y=318}, {x=72, y=366}, {x=348, y=360}, {x=324, y=228}, {x=132, y=84}, {x=708, y=192}, {x=468, y=180}, {x=420, y=84}, {x=612, y=60}, {x=300, y=84}, {x=528, y=228}, {x=564, y=132}, },
       drones = { },
       floorguards = { },
@@ -4665,8 +4241,7 @@ levels = {
    },
    ["84-4"] = {
       n_x = 396, n_y = 444,
-      door_x = 396, door_y = 132,
-      doorswitch_x = 396, doorswitch_y = 228,
+      doors = { {x=396, y=132, sx=396, sy=228}, },
       mines = { {x=36, y=372}, {x=72, y=444}, {x=120, y=444}, {x=156, y=372}, {x=72, y=300}, {x=120, y=300}, {x=672, y=300}, {x=720, y=300}, {x=636, y=372}, {x=756, y=372}, {x=672, y=444}, {x=720, y=444}, {x=324, y=132}, {x=348, y=132}, {x=444, y=132}, {x=468, y=132}, },
       drones = { },
       floorguards = { {x=192, y=90}, {x=600, y=90}, },
@@ -4676,8 +4251,7 @@ levels = {
    },
    ["85-0"] = {
       n_x = 612, n_y = 564,
-      door_x = 240, door_y = 444,
-      doorswitch_x = 384, doorswitch_y = 144,
+      doors = { {x=240, y=444, sx=384, sy=144}, },
       mines = { {x=216, y=408}, {x=240, y=408}, {x=264, y=408}, },
       drones = { },
       floorguards = { },
@@ -4687,8 +4261,7 @@ levels = {
    },
    ["85-1"] = {
       n_x = 384, n_y = 36,
-      door_x = 384, door_y = 36,
-      doorswitch_x = 384, doorswitch_y = 564,
+      doors = { {x=384, y=36, sx=384, sy=564}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4698,8 +4271,7 @@ levels = {
    },
    ["85-2"] = {
       n_x = 108, n_y = 252,
-      door_x = 636, door_y = 420,
-      doorswitch_x = 540, doorswitch_y = 432,
+      doors = { {x=636, y=420, sx=540, sy=432}, },
       mines = { {x=96, y=288}, {x=96, y=276}, {x=84, y=276}, {x=84, y=264}, {x=84, y=252}, {x=84, y=240}, {x=96, y=228}, {x=108, y=228}, {x=119, y=223}, {x=128, y=214}, {x=141, y=209}, {x=156, y=207}, {x=165, y=216}, {x=172, y=226}, {x=180, y=237}, {x=187, y=249}, {x=278, y=307}, {x=290, y=314}, {x=301, y=320}, {x=316, y=317}, {x=329, y=307}, {x=343, y=296}, {x=350, y=282}, {x=358, y=272}, {x=366, y=262}, {x=377, y=251}, {x=437, y=269}, {x=441, y=281}, {x=441, y=295}, {x=436, y=306}, {x=430, y=256}, {x=418, y=248}, {x=406, y=246}, {x=392, y=246}, {x=427, y=329}, {x=438, y=339}, {x=448, y=347}, {x=461, y=336}, {x=474, y=324}, {x=487, y=324}, {x=503, y=324}, {x=556, y=367}, {x=564, y=353}, {x=576, y=341}, {x=609, y=312}, {x=426, y=317}, {x=648, y=312}, {x=648, y=348}, {x=648, y=360}, {x=648, y=372}, {x=648, y=384}, {x=648, y=396}, {x=660, y=396}, {x=660, y=408}, {x=660, y=420}, {x=660, y=432}, {x=660, y=444}, {x=648, y=444}, {x=636, y=444}, {x=636, y=303}, {x=622, y=306}, {x=595, y=319}, {x=585, y=328}, {x=264, y=288}, {x=264, y=276}, {x=270, y=300}, {x=197, y=254}, {x=211, y=249}, {x=226, y=243}, {x=237, y=238}, {x=249, y=234}, {x=276, y=276}, {x=276, y=264}, {x=276, y=252}, {x=264, y=232}, {x=273, y=241}, {x=312, y=366}, {x=336, y=366}, {x=324, y=366}, {x=528, y=438}, {x=540, y=438}, {x=552, y=438}, {x=564, y=438}, {x=576, y=438}, {x=504, y=372}, {x=504, y=384}, {x=516, y=390}, {x=531, y=385}, {x=544, y=375}, {x=510, y=336}, {x=510, y=348}, {x=510, y=360}, {x=654, y=336}, {x=654, y=324}, },
       drones = { },
       floorguards = { },
@@ -4709,8 +4281,7 @@ levels = {
    },
    ["85-3"] = {
       n_x = 36, n_y = 564,
-      door_x = 36, door_y = 372,
-      doorswitch_x = 36, doorswitch_y = 36,
+      doors = { {x=36, y=372, sx=36, sy=36}, },
       mines = { },
       drones = { {x=132, y=564}, {x=612, y=564}, {x=660, y=372}, {x=300, y=180}, {x=132, y=36}, {x=492, y=228}, },
       floorguards = { },
@@ -4720,8 +4291,7 @@ levels = {
    },
    ["85-4"] = {
       n_x = 36, n_y = 276,
-      door_x = 36, door_y = 276,
-      doorswitch_x = 756, doorswitch_y = 276,
+      doors = { {x=36, y=276, sx=756, sy=276}, },
       mines = { {x=156, y=276}, {x=276, y=276}, {x=516, y=276}, {x=636, y=276}, {x=396, y=264}, },
       drones = { {x=84, y=300}, {x=204, y=252}, {x=324, y=300}, {x=468, y=252}, {x=588, y=300}, {x=708, y=252}, {x=60, y=276}, {x=732, y=276}, {x=300, y=276}, {x=540, y=276}, },
       floorguards = { },
@@ -4731,8 +4301,7 @@ levels = {
    },
    ["86-0"] = {
       n_x = 372, n_y = 540,
-      door_x = 516, door_y = 468,
-      doorswitch_x = 684, doorswitch_y = 324,
+      doors = { {x=516, y=468, sx=684, sy=324}, },
       mines = { {x=468, y=372}, {x=468, y=360}, {x=468, y=312}, {x=468, y=276}, {x=468, y=300}, {x=468, y=288}, {x=468, y=336}, {x=468, y=324}, {x=468, y=348}, {x=276, y=444}, {x=276, y=432}, {x=276, y=420}, {x=276, y=408}, {x=276, y=396}, {x=336, y=396}, {x=348, y=384}, {x=360, y=372}, {x=552, y=240}, {x=552, y=240}, {x=564, y=240}, {x=564, y=240}, {x=576, y=240}, {x=600, y=240}, {x=600, y=240}, {x=624, y=240}, {x=660, y=252}, {x=696, y=252}, {x=696, y=240}, {x=672, y=252}, {x=660, y=240}, {x=648, y=240}, {x=648, y=240}, {x=636, y=252}, {x=612, y=240}, {x=576, y=240}, {x=576, y=240}, {x=552, y=252}, {x=552, y=252}, {x=564, y=252}, {x=564, y=252}, {x=576, y=252}, {x=588, y=252}, {x=600, y=252}, {x=612, y=252}, {x=624, y=252}, {x=624, y=252}, {x=636, y=252}, {x=648, y=252}, {x=648, y=252}, {x=672, y=252}, {x=684, y=252}, {x=684, y=240}, {x=672, y=240}, {x=660, y=240}, {x=648, y=240}, {x=648, y=240}, {x=636, y=240}, {x=624, y=240}, {x=612, y=240}, {x=588, y=240}, {x=588, y=240}, {x=540, y=240}, {x=528, y=240}, {x=540, y=252}, {x=528, y=252}, {x=516, y=252}, {x=516, y=240}, {x=504, y=240}, {x=504, y=252}, {x=324, y=396}, {x=312, y=408}, {x=300, y=420}, {x=288, y=432}, {x=288, y=420}, {x=300, y=408}, {x=312, y=396}, {x=324, y=408}, {x=336, y=384}, {x=348, y=396}, {x=360, y=384}, {x=348, y=372}, {x=312, y=420}, {x=300, y=432}, {x=288, y=444}, },
       drones = { },
       floorguards = { },
@@ -4742,8 +4311,7 @@ levels = {
    },
    ["86-1"] = {
       n_x = 396, n_y = 564,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 300,
+      doors = { {x=396, y=564, sx=396, sy=300}, },
       mines = { {x=444, y=132}, {x=468, y=156}, {x=492, y=132}, {x=588, y=132}, {x=612, y=156}, {x=636, y=132}, {x=204, y=132}, {x=180, y=156}, {x=156, y=132}, {x=300, y=132}, {x=324, y=156}, {x=432, y=228}, {x=360, y=228}, {x=348, y=132}, },
       drones = { {x=396, y=36}, {x=396, y=36}, {x=324, y=36}, {x=468, y=36}, },
       floorguards = { {x=756, y=570}, {x=36, y=570}, },
@@ -4753,8 +4321,7 @@ levels = {
    },
    ["86-2"] = {
       n_x = 396, n_y = 540,
-      door_x = 396, door_y = 540,
-      doorswitch_x = 408, doorswitch_y = 60,
+      doors = { {x=396, y=540, sx=408, sy=60}, },
       mines = { {x=768, y=84}, {x=768, y=516}, {x=768, y=468}, {x=768, y=420}, {x=768, y=372}, {x=768, y=324}, {x=768, y=276}, {x=768, y=228}, {x=768, y=180}, {x=768, y=132}, {x=24, y=516}, {x=24, y=468}, {x=24, y=420}, {x=24, y=372}, {x=24, y=324}, {x=24, y=276}, {x=24, y=228}, {x=24, y=180}, {x=24, y=132}, {x=24, y=84}, },
       drones = { },
       floorguards = { },
@@ -4764,8 +4331,7 @@ levels = {
    },
    ["86-3"] = {
       n_x = 108, n_y = 108,
-      door_x = 756, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 564,
+      doors = { {x=756, y=564, sx=756, sy=564}, },
       mines = { {x=36, y=96}, {x=36, y=108}, {x=36, y=48}, {x=36, y=36}, {x=48, y=96}, {x=48, y=48}, {x=36, y=180}, {x=36, y=192}, {x=48, y=192}, {x=48, y=240}, {x=36, y=240}, {x=36, y=252}, {x=36, y=324}, {x=36, y=336}, {x=48, y=336}, {x=48, y=384}, {x=36, y=384}, {x=36, y=396}, {x=36, y=468}, {x=36, y=480}, {x=48, y=480}, {x=48, y=528}, {x=36, y=528}, {x=36, y=540}, {x=144, y=456}, {x=168, y=456}, {x=192, y=456}, {x=216, y=456}, {x=240, y=456}, {x=264, y=456}, {x=288, y=456}, {x=312, y=456}, {x=336, y=456}, {x=360, y=456}, {x=384, y=456}, {x=504, y=456}, {x=528, y=456}, {x=552, y=456}, {x=576, y=456}, {x=600, y=456}, {x=624, y=456}, {x=648, y=456}, {x=672, y=456}, {x=744, y=456}, {x=768, y=456}, {x=144, y=552}, {x=168, y=552}, {x=192, y=552}, {x=216, y=552}, {x=240, y=552}, {x=264, y=552}, {x=288, y=552}, {x=312, y=552}, {x=336, y=552}, {x=360, y=552}, {x=384, y=552}, {x=408, y=552}, {x=432, y=552}, {x=456, y=552}, {x=480, y=552}, {x=504, y=552}, {x=528, y=552}, {x=648, y=552}, {x=672, y=552}, {x=696, y=552}, {x=720, y=552}, {x=432, y=528}, {x=456, y=528}, {x=432, y=504}, {x=456, y=504}, {x=552, y=480}, {x=576, y=480}, {x=600, y=480}, {x=624, y=480}, {x=576, y=504}, {x=600, y=504}, {x=264, y=528}, {x=240, y=528}, {x=336, y=504}, {x=168, y=480}, {x=144, y=480}, {x=552, y=552}, {x=576, y=552}, {x=600, y=552}, {x=624, y=552}, {x=480, y=528}, {x=408, y=528}, {x=312, y=480}, {x=336, y=480}, {x=408, y=456}, {x=480, y=456}, {x=720, y=528}, {x=720, y=504}, {x=696, y=528}, {x=696, y=504}, {x=432, y=456}, {x=456, y=456}, {x=696, y=456}, {x=720, y=456}, },
       drones = { },
       floorguards = { },
@@ -4775,8 +4341,7 @@ levels = {
    },
    ["86-4"] = {
       n_x = 48, n_y = 432,
-      door_x = 60, door_y = 564,
-      doorswitch_x = 192, doorswitch_y = 516,
+      doors = { {x=60, y=564, sx=192, sy=516}, },
       mines = { },
       drones = { {x=756, y=396}, {x=132, y=156}, },
       floorguards = { {x=132, y=282}, {x=204, y=210}, {x=420, y=258}, {x=456, y=162}, {x=684, y=186}, {x=624, y=234}, {x=324, y=330}, {x=648, y=306}, {x=492, y=378}, },
@@ -4786,8 +4351,7 @@ levels = {
    },
    ["87-0"] = {
       n_x = 346, n_y = 542,
-      door_x = 348, door_y = 540,
-      doorswitch_x = 504, doorswitch_y = 108,
+      doors = { {x=348, y=540, sx=504, sy=108}, },
       mines = { {x=60, y=516}, {x=60, y=504}, {x=60, y=492}, {x=60, y=480}, {x=60, y=468}, {x=60, y=456}, {x=60, y=444}, {x=72, y=444}, {x=84, y=444}, {x=96, y=444}, {x=108, y=456}, {x=108, y=468}, {x=108, y=480}, {x=96, y=492}, {x=84, y=492}, {x=72, y=492}, {x=60, y=396}, {x=60, y=384}, {x=60, y=372}, {x=60, y=360}, {x=60, y=348}, {x=60, y=336}, {x=72, y=324}, {x=84, y=324}, {x=96, y=324}, {x=108, y=336}, {x=108, y=348}, {x=108, y=360}, {x=108, y=384}, {x=108, y=372}, {x=108, y=396}, {x=96, y=372}, {x=84, y=372}, {x=72, y=372}, {x=60, y=276}, {x=60, y=264}, {x=60, y=252}, {x=60, y=228}, {x=60, y=240}, {x=60, y=216}, {x=60, y=204}, {x=72, y=204}, {x=84, y=204}, {x=96, y=204}, {x=108, y=216}, {x=72, y=252}, {x=84, y=252}, {x=96, y=252}, {x=108, y=264}, {x=108, y=276}, {x=84, y=156}, {x=84, y=144}, {x=84, y=132}, {x=84, y=120}, {x=84, y=108}, {x=84, y=96}, {x=84, y=84}, {x=96, y=84}, {x=108, y=84}, {x=72, y=84}, {x=60, y=84}, },
       drones = { },
       floorguards = { },
@@ -4797,8 +4361,7 @@ levels = {
    },
    ["87-1"] = {
       n_x = 396, n_y = 300,
-      door_x = 649, door_y = 467,
-      doorswitch_x = 144, doorswitch_y = 36,
+      doors = { {x=649, y=467, sx=144, sy=36}, {x=144, y=133, sx=648, sy=564}, },
       mines = { {x=672, y=36}, {x=660, y=24}, {x=132, y=576}, {x=120, y=564}, {x=198, y=534}, {x=246, y=486}, {x=294, y=438}, {x=342, y=390}, {x=306, y=354}, {x=258, y=402}, {x=210, y=450}, {x=162, y=498}, {x=630, y=102}, {x=594, y=66}, {x=546, y=114}, {x=582, y=150}, {x=534, y=198}, {x=498, y=162}, {x=486, y=246}, {x=450, y=210}, },
       drones = { {x=660, y=36}, {x=132, y=564}, },
       floorguards = { },
@@ -4808,8 +4371,7 @@ levels = {
    },
    ["87-2"] = {
       n_x = 396, n_y = 276,
-      door_x = 108, door_y = 300,
-      doorswitch_x = 684, doorswitch_y = 300,
+      doors = { {x=108, y=300, sx=684, sy=300}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4819,8 +4381,7 @@ levels = {
    },
    ["87-3"] = {
       n_x = 396, n_y = 300,
-      door_x = 492, door_y = 300,
-      doorswitch_x = 300, doorswitch_y = 300,
+      doors = { {x=492, y=300, sx=300, sy=300}, },
       mines = { {x=228, y=60}, {x=564, y=540}, },
       drones = { {x=300, y=372}, {x=492, y=228}, {x=348, y=60}, {x=444, y=540}, {x=540, y=420}, {x=252, y=204}, },
       floorguards = { },
@@ -4830,8 +4391,7 @@ levels = {
    },
    ["87-4"] = {
       n_x = 252, n_y = 564,
-      door_x = 120, door_y = 300,
-      doorswitch_x = 624, doorswitch_y = 300,
+      doors = { {x=120, y=300, sx=624, sy=300}, },
       mines = { {x=576, y=192}, {x=600, y=216}, {x=720, y=96}, {x=696, y=72}, {x=576, y=156}, {x=576, y=120}, {x=660, y=72}, {x=624, y=72}, {x=720, y=132}, {x=720, y=168}, {x=636, y=216}, {x=672, y=216}, {x=600, y=384}, {x=576, y=408}, {x=576, y=444}, {x=576, y=480}, {x=696, y=528}, {x=720, y=504}, {x=720, y=468}, {x=720, y=432}, {x=636, y=384}, {x=672, y=384}, {x=660, y=528}, {x=624, y=528}, {x=384, y=240}, {x=408, y=240}, {x=432, y=408}, {x=360, y=408}, {x=432, y=324}, {x=360, y=324}, {x=36, y=360}, {x=48, y=336}, {x=192, y=336}, {x=204, y=360}, {x=48, y=264}, {x=36, y=240}, {x=192, y=264}, {x=204, y=240}, {x=72, y=312}, {x=72, y=288}, {x=168, y=288}, {x=168, y=312}, {x=240, y=96}, {x=336, y=276}, {x=312, y=264}, {x=288, y=240}, {x=264, y=216}, {x=252, y=192}, {x=240, y=168}, {x=240, y=144}, {x=240, y=120}, {x=456, y=276}, {x=480, y=264}, {x=504, y=240}, {x=528, y=216}, {x=540, y=192}, {x=552, y=168}, {x=648, y=240}, {x=624, y=264}, {x=672, y=228}, {x=624, y=336}, {x=648, y=360}, {x=768, y=384}, {x=768, y=216}, {x=768, y=240}, {x=768, y=264}, {x=768, y=288}, {x=768, y=312}, {x=768, y=336}, {x=768, y=360}, {x=552, y=144}, {x=348, y=276}, {x=444, y=276}, },
       drones = { },
       floorguards = { },
@@ -4841,8 +4401,7 @@ levels = {
    },
    ["88-0"] = {
       n_x = 60, n_y = 408,
-      door_x = 396, door_y = 384,
-      doorswitch_x = 732, doorswitch_y = 408,
+      doors = { {x=396, y=384, sx=732, sy=408}, },
       mines = { {x=504, y=504}, {x=456, y=504}, {x=336, y=504}, {x=288, y=504}, {x=120, y=528}, {x=240, y=504}, {x=552, y=504}, {x=672, y=528}, {x=312, y=180}, {x=480, y=180}, {x=528, y=396}, {x=264, y=396}, {x=360, y=372}, {x=432, y=372}, {x=504, y=336}, {x=288, y=336}, },
       drones = { {x=636, y=468}, {x=156, y=468}, {x=276, y=252}, {x=516, y=252}, },
       floorguards = { },
@@ -4852,8 +4411,7 @@ levels = {
    },
    ["88-1"] = {
       n_x = 228, n_y = 492,
-      door_x = 120, door_y = 84,
-      doorswitch_x = 372, doorswitch_y = 540,
+      doors = { {x=120, y=84, sx=372, sy=540}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -4863,8 +4421,7 @@ levels = {
    },
    ["88-2"] = {
       n_x = 396, n_y = 564,
-      door_x = 540, door_y = 564,
-      doorswitch_x = 252, doorswitch_y = 564,
+      doors = { {x=540, y=564, sx=252, sy=564}, },
       mines = { {x=768, y=564}, {x=768, y=540}, {x=768, y=516}, {x=768, y=420}, {x=768, y=396}, {x=768, y=324}, {x=768, y=300}, {x=768, y=228}, {x=768, y=204}, {x=768, y=132}, {x=768, y=108}, {x=768, y=84}, {x=768, y=60}, {x=768, y=36}, {x=24, y=564}, {x=24, y=540}, {x=24, y=516}, {x=24, y=492}, {x=24, y=468}, {x=24, y=420}, {x=24, y=396}, {x=24, y=372}, {x=24, y=324}, {x=24, y=300}, {x=24, y=276}, {x=24, y=228}, {x=24, y=204}, {x=24, y=180}, {x=24, y=132}, {x=24, y=108}, {x=24, y=84}, {x=24, y=60}, {x=24, y=36}, {x=156, y=468}, {x=192, y=372}, {x=192, y=276}, {x=192, y=180}, {x=192, y=84}, {x=600, y=84}, {x=600, y=180}, {x=600, y=276}, {x=600, y=372}, {x=636, y=468}, {x=768, y=468}, {x=768, y=492}, {x=768, y=372}, {x=768, y=276}, {x=768, y=180}, {x=372, y=516}, {x=420, y=516}, },
       drones = { {x=156, y=108}, {x=636, y=108}, {x=564, y=204}, {x=228, y=204}, {x=540, y=300}, {x=660, y=396}, {x=132, y=396}, {x=252, y=300}, },
       floorguards = { },
@@ -4874,8 +4431,7 @@ levels = {
    },
    ["88-3"] = {
       n_x = 36, n_y = 84,
-      door_x = 48, door_y = 180,
-      doorswitch_x = 588, doorswitch_y = 420,
+      doors = { {x=48, y=180, sx=588, sy=420}, },
       mines = { {x=348, y=180}, {x=420, y=156}, {x=384, y=156}, {x=444, y=36}, {x=660, y=108}, {x=672, y=120}, {x=636, y=108}, {x=648, y=132}, {x=684, y=324}, {x=708, y=324}, {x=24, y=48}, {x=36, y=36}, {x=48, y=24}, {x=300, y=540}, {x=252, y=540}, {x=108, y=540}, {x=48, y=540}, {x=24, y=468}, {x=24, y=408}, {x=24, y=348}, {x=24, y=288}, {x=24, y=228}, {x=492, y=492}, {x=516, y=492}, {x=540, y=468}, {x=540, y=444}, {x=540, y=492}, },
       drones = { {x=324, y=132}, {x=516, y=156}, {x=60, y=276}, },
       floorguards = { {x=540, y=570}, },
@@ -4885,8 +4441,7 @@ levels = {
    },
    ["88-4"] = {
       n_x = 48, n_y = 72,
-      door_x = 516, door_y = 324,
-      doorswitch_x = 360, doorswitch_y = 204,
+      doors = { {x=516, y=324, sx=360, sy=204}, },
       mines = { {x=96, y=144}, {x=144, y=144}, {x=168, y=144}, {x=252, y=144}, {x=276, y=144}, {x=384, y=144}, {x=408, y=144}, {x=540, y=144}, {x=516, y=144}, {x=492, y=144}, {x=648, y=144}, {x=672, y=216}, {x=672, y=240}, {x=768, y=240}, {x=768, y=264}, {x=768, y=288}, {x=768, y=312}, {x=672, y=288}, {x=672, y=312}, {x=756, y=348}, {x=756, y=372}, {x=756, y=396}, {x=672, y=408}, {x=672, y=432}, {x=768, y=432}, {x=768, y=456}, {x=768, y=480}, {x=684, y=576}, {x=660, y=576}, {x=636, y=576}, {x=564, y=576}, {x=540, y=576}, {x=432, y=576}, {x=408, y=576}, {x=360, y=576}, {x=336, y=576}, {x=312, y=576}, {x=192, y=576}, {x=168, y=576}, {x=144, y=576}, {x=120, y=576}, {x=120, y=432}, {x=120, y=456}, {x=120, y=480}, {x=36, y=408}, {x=36, y=432}, {x=36, y=456}, {x=36, y=480}, {x=24, y=384}, {x=24, y=360}, {x=120, y=360}, {x=120, y=384}, {x=36, y=312}, {x=36, y=336}, {x=120, y=288}, {x=120, y=312}, {x=24, y=264}, {x=24, y=288}, {x=144, y=240}, {x=168, y=240}, {x=204, y=240}, {x=228, y=240}, {x=288, y=240}, {x=312, y=240}, {x=408, y=240}, {x=432, y=240}, {x=468, y=228}, {x=492, y=228}, {x=648, y=228}, {x=576, y=324}, {x=648, y=324}, {x=648, y=348}, {x=636, y=384}, {x=636, y=408}, {x=576, y=456}, {x=552, y=456}, {x=528, y=456}, {x=504, y=456}, {x=336, y=456}, {x=312, y=456}, {x=288, y=456}, {x=252, y=444}, {x=228, y=444}, {x=204, y=444}, {x=168, y=456}, {x=144, y=456}, {x=144, y=384}, {x=144, y=360}, {x=144, y=336}, {x=144, y=312}, {x=144, y=288}, {x=192, y=360}, {x=216, y=300}, {x=240, y=300}, {x=264, y=300}, {x=300, y=312}, {x=336, y=324}, {x=360, y=324}, {x=384, y=324}, {x=420, y=324}, {x=444, y=324}, {x=468, y=324}, {x=528, y=228}, {x=552, y=228}, {x=636, y=264}, {x=636, y=288}, {x=288, y=564}, {x=264, y=564}, {x=516, y=552}, {x=456, y=552}, {x=72, y=576}, {x=408, y=444}, {x=432, y=444}, {x=456, y=444}, {x=540, y=348}, {x=528, y=348}, {x=552, y=348}, {x=552, y=360}, {x=576, y=384}, },
       drones = { {x=348, y=108}, },
       floorguards = { },
@@ -4896,8 +4451,7 @@ levels = {
    },
    ["89-0"] = {
       n_x = 756, n_y = 468,
-      door_x = 756, door_y = 564,
-      doorswitch_x = 36, doorswitch_y = 492,
+      doors = { {x=756, y=564, sx=36, sy=492}, },
       mines = { {x=60, y=108}, {x=60, y=144}, {x=60, y=180}, },
       drones = { },
       floorguards = { {x=708, y=570}, },
@@ -4907,8 +4461,7 @@ levels = {
    },
    ["89-1"] = {
       n_x = 276, n_y = 240,
-      door_x = 252, door_y = 324,
-      doorswitch_x = 636, doorswitch_y = 492,
+      doors = { {x=252, y=324, sx=636, sy=492}, },
       mines = { {x=180, y=276}, {x=156, y=276}, {x=132, y=276}, {x=60, y=276}, {x=36, y=276}, {x=156, y=108}, {x=276, y=60}, {x=468, y=564}, {x=492, y=564}, {x=516, y=564}, {x=540, y=564}, {x=564, y=564}, {x=588, y=564}, {x=612, y=564}, {x=636, y=564}, {x=660, y=564}, },
       drones = { },
       floorguards = { {x=684, y=570}, },
@@ -4918,8 +4471,7 @@ levels = {
    },
    ["89-2"] = {
       n_x = 60, n_y = 564,
-      door_x = 60, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 108,
+      doors = { {x=60, y=564, sx=756, sy=108}, },
       mines = { {x=288, y=204}, {x=240, y=276}, {x=312, y=396}, {x=216, y=468}, {x=48, y=372}, {x=72, y=180}, {x=456, y=108}, {x=480, y=300}, {x=504, y=324}, {x=672, y=420}, {x=720, y=228}, {x=552, y=132}, {x=600, y=492}, {x=600, y=348}, {x=576, y=396}, {x=576, y=252}, {x=648, y=300}, {x=648, y=156}, {x=624, y=204}, {x=624, y=60}, {x=384, y=36}, {x=384, y=180}, {x=360, y=132}, {x=360, y=276}, {x=408, y=372}, {x=384, y=324}, {x=384, y=468}, {x=144, y=540}, {x=144, y=396}, {x=120, y=444}, {x=120, y=300}, {x=168, y=348}, {x=168, y=204}, {x=144, y=252}, {x=144, y=108}, },
       drones = { },
       floorguards = { },
@@ -4929,8 +4481,7 @@ levels = {
    },
    ["89-3"] = {
       n_x = 396, n_y = 300,
-      door_x = 396, door_y = 300,
-      doorswitch_x = 84, doorswitch_y = 228,
+      doors = { {x=396, y=300, sx=84, sy=228}, },
       mines = { {x=180, y=252}, {x=468, y=252}, {x=612, y=252}, {x=180, y=348}, {x=468, y=348}, {x=612, y=348}, {x=492, y=348}, {x=516, y=348}, {x=636, y=348}, {x=660, y=348}, {x=660, y=252}, {x=636, y=252}, {x=516, y=252}, {x=492, y=252}, {x=300, y=252}, {x=276, y=252}, {x=156, y=252}, {x=132, y=348}, {x=156, y=348}, {x=276, y=348}, {x=300, y=348}, {x=252, y=348}, {x=324, y=348}, {x=204, y=348}, {x=204, y=252}, {x=132, y=252}, {x=324, y=252}, {x=252, y=252}, {x=540, y=252}, {x=588, y=252}, {x=588, y=348}, {x=540, y=348}, },
       drones = { {x=396, y=324}, {x=396, y=276}, {x=108, y=228}, {x=372, y=372}, {x=684, y=372}, {x=420, y=228}, },
       floorguards = { },
@@ -4940,8 +4491,7 @@ levels = {
    },
    ["89-4"] = {
       n_x = 48, n_y = 564,
-      door_x = 36, door_y = 48,
-      doorswitch_x = 708, doorswitch_y = 156,
+      doors = { {x=36, y=48, sx=708, sy=156}, },
       mines = { {x=480, y=156}, {x=480, y=132}, {x=492, y=36}, {x=504, y=60}, {x=516, y=96}, {x=528, y=144}, {x=468, y=192}, {x=492, y=216}, {x=540, y=180}, {x=540, y=60}, {x=564, y=36}, {x=588, y=72}, {x=624, y=36}, {x=444, y=36}, {x=396, y=24}, {x=528, y=24}, {x=420, y=108}, {x=384, y=132}, {x=348, y=36}, {x=624, y=108}, {x=660, y=156}, {x=648, y=60}, {x=684, y=36}, {x=732, y=36}, {x=564, y=72}, {x=468, y=108}, {x=444, y=96}, {x=384, y=48}, {x=468, y=48}, {x=396, y=168}, {x=648, y=192}, {x=624, y=72}, {x=348, y=72}, {x=660, y=228}, {x=672, y=264}, {x=660, y=252}, {x=696, y=276}, {x=708, y=288}, {x=720, y=312}, {x=732, y=336}, {x=744, y=336}, {x=756, y=348}, {x=756, y=336}, {x=768, y=348}, {x=612, y=264}, {x=456, y=276}, {x=516, y=360}, {x=384, y=540}, {x=420, y=360}, {x=384, y=396}, {x=516, y=312}, {x=420, y=312}, {x=624, y=360}, {x=672, y=432}, {x=708, y=468}, {x=708, y=384}, {x=756, y=468}, {x=756, y=552}, {x=684, y=552}, {x=624, y=480}, {x=444, y=492}, {x=528, y=504}, {x=516, y=456}, {x=216, y=492}, {x=312, y=408}, {x=252, y=480}, {x=504, y=564}, {x=324, y=528}, {x=228, y=564}, {x=168, y=564}, {x=372, y=204}, {x=300, y=96}, {x=252, y=168}, {x=252, y=240}, {x=228, y=204}, {x=216, y=288}, {x=312, y=324}, {x=288, y=336}, {x=324, y=312}, {x=300, y=336}, {x=264, y=360}, {x=216, y=408}, {x=156, y=468}, {x=144, y=492}, {x=144, y=516}, {x=144, y=528}, {x=108, y=552}, {x=360, y=264}, {x=408, y=444}, },
       drones = { {x=684, y=564}, {x=420, y=420}, },
       floorguards = { },
@@ -4951,8 +4501,7 @@ levels = {
    },
    ["90-0"] = {
       n_x = 756, n_y = 156,
-      door_x = 744, door_y = 156,
-      doorswitch_x = 48, doorswitch_y = 156,
+      doors = { {x=744, y=156, sx=48, sy=156}, },
       mines = { {x=768, y=228}, {x=768, y=276}, {x=768, y=324}, {x=768, y=372}, {x=768, y=420}, {x=768, y=468}, {x=768, y=516}, {x=768, y=564}, {x=756, y=252}, {x=756, y=300}, {x=756, y=348}, {x=756, y=396}, {x=756, y=444}, {x=756, y=492}, {x=756, y=540}, {x=24, y=228}, {x=24, y=276}, {x=24, y=324}, {x=24, y=372}, {x=24, y=420}, {x=24, y=468}, {x=24, y=516}, {x=24, y=564}, {x=36, y=252}, {x=36, y=300}, {x=36, y=348}, {x=36, y=396}, {x=36, y=444}, {x=36, y=492}, {x=36, y=540}, {x=696, y=180}, {x=96, y=180}, {x=132, y=204}, {x=204, y=204}, {x=276, y=204}, {x=348, y=204}, {x=444, y=204}, {x=516, y=204}, {x=588, y=204}, {x=660, y=204}, },
       drones = { },
       floorguards = { },
@@ -4962,8 +4511,7 @@ levels = {
    },
    ["90-1"] = {
       n_x = 756, n_y = 276,
-      door_x = 48, door_y = 276,
-      doorswitch_x = 324, doorswitch_y = 132,
+      doors = { {x=48, y=276, sx=324, sy=132}, },
       mines = { {x=654, y=324}, {x=702, y=300}, {x=606, y=348}, {x=486, y=324}, {x=438, y=300}, {x=366, y=348}, {x=246, y=300}, {x=198, y=276}, {x=150, y=324}, {x=126, y=276}, {x=174, y=252}, {x=390, y=276}, {x=342, y=300}, {x=318, y=276}, {x=582, y=300}, {x=558, y=300}, },
       drones = { {x=204, y=252}, {x=396, y=228}, {x=84, y=228}, {x=660, y=252}, {x=492, y=276}, },
       floorguards = { },
@@ -4973,8 +4521,7 @@ levels = {
    },
    ["90-2"] = {
       n_x = 120, n_y = 132,
-      door_x = 672, door_y = 132,
-      doorswitch_x = 396, doorswitch_y = 264,
+      doors = { {x=672, y=132, sx=396, sy=264}, },
       mines = { {x=492, y=336}, {x=492, y=300}, {x=300, y=300}, {x=300, y=336}, {x=360, y=348}, {x=444, y=348}, {x=444, y=300}, {x=360, y=300}, {x=252, y=360}, {x=540, y=360}, {x=540, y=300}, {x=252, y=300}, },
       drones = { },
       floorguards = { {x=540, y=378}, {x=252, y=378}, {x=636, y=378}, {x=156, y=378}, },
@@ -4984,8 +4531,7 @@ levels = {
    },
    ["90-3"] = {
       n_x = 132, n_y = 516,
-      door_x = 696, door_y = 444,
-      doorswitch_x = 744, doorswitch_y = 456,
+      doors = { {x=696, y=444, sx=744, sy=456}, },
       mines = { {x=444, y=72}, {x=444, y=24}, {x=348, y=72}, {x=348, y=24}, {x=396, y=36}, {x=396, y=60}, {x=420, y=36}, {x=372, y=36}, },
       drones = { {x=36, y=564}, },
       floorguards = { },
@@ -4995,8 +4541,7 @@ levels = {
    },
    ["90-4"] = {
       n_x = 84, n_y = 300,
-      door_x = 72, door_y = 324,
-      doorswitch_x = 324, doorswitch_y = 300,
+      doors = { {x=72, y=324, sx=324, sy=300}, },
       mines = { {x=516, y=336}, {x=516, y=264}, {x=444, y=264}, {x=444, y=336}, {x=588, y=336}, {x=588, y=264}, {x=660, y=264}, {x=660, y=336}, {x=732, y=264}, {x=732, y=336}, },
       drones = { {x=420, y=156}, {x=372, y=228}, {x=420, y=372}, {x=372, y=492}, },
       floorguards = { },
@@ -5006,8 +4551,7 @@ levels = {
    },
    ["91-0"] = {
       n_x = 708, n_y = 192,
-      door_x = 708, door_y = 204,
-      doorswitch_x = 84, doorswitch_y = 204,
+      doors = { {x=708, y=204, sx=84, sy=204}, },
       mines = { {x=396, y=396}, {x=420, y=420}, {x=372, y=420}, {x=396, y=540}, {x=396, y=492}, {x=396, y=444}, {x=36, y=420}, {x=756, y=420}, },
       drones = { },
       floorguards = { },
@@ -5017,8 +4561,7 @@ levels = {
    },
    ["91-1"] = {
       n_x = 36, n_y = 252,
-      door_x = 84, door_y = 276,
-      doorswitch_x = 708, doorswitch_y = 216,
+      doors = { {x=84, y=276, sx=708, sy=216}, },
       mines = { {x=498, y=288}, {x=486, y=288}, {x=450, y=312}, {x=414, y=312}, {x=438, y=312}, {x=426, y=312}, {x=642, y=288}, {x=630, y=288}, {x=618, y=288}, {x=606, y=288}, {x=594, y=288}, {x=582, y=288}, {x=702, y=288}, {x=714, y=288}, {x=726, y=312}, {x=738, y=312}, {x=738, y=144}, {x=726, y=144}, {x=714, y=144}, {x=702, y=144}, {x=690, y=144}, {x=678, y=144}, {x=666, y=120}, {x=654, y=120}, {x=618, y=144}, {x=606, y=144}, {x=594, y=144}, {x=582, y=144}, {x=522, y=144}, {x=510, y=144}, {x=474, y=120}, {x=462, y=120}, },
       drones = { {x=636, y=108}, {x=684, y=60}, {x=684, y=492}, {x=708, y=564}, {x=708, y=468}, },
       floorguards = { },
@@ -5028,8 +4571,7 @@ levels = {
    },
    ["91-2"] = {
       n_x = 756, n_y = 564,
-      door_x = 588, door_y = 132,
-      doorswitch_x = 228, doorswitch_y = 372,
+      doors = { {x=588, y=132, sx=228, sy=372}, },
       mines = { },
       drones = { {x=540, y=156}, },
       floorguards = { {x=36, y=570}, {x=420, y=114}, },
@@ -5039,8 +4581,7 @@ levels = {
    },
    ["91-3"] = {
       n_x = 60, n_y = 132,
-      door_x = 36, door_y = 156,
-      doorswitch_x = 744, doorswitch_y = 48,
+      doors = { {x=36, y=156, sx=744, sy=48}, },
       mines = { {x=300, y=324}, {x=372, y=252}, {x=324, y=228}, {x=252, y=348}, {x=228, y=372}, {x=204, y=396}, {x=132, y=348}, {x=108, y=372}, {x=420, y=276}, {x=444, y=348}, {x=468, y=444}, {x=492, y=420}, {x=564, y=468}, {x=588, y=516}, {x=540, y=420}, {x=612, y=396}, {x=660, y=444}, {x=708, y=468}, {x=684, y=420}, {x=636, y=372}, {x=732, y=372}, {x=756, y=324}, {x=516, y=324}, {x=396, y=180}, {x=348, y=204}, {x=276, y=276}, {x=156, y=300}, {x=180, y=348}, {x=84, y=324}, },
       drones = { },
       floorguards = { },
@@ -5050,8 +4591,7 @@ levels = {
    },
    ["91-4"] = {
       n_x = 732, n_y = 564,
-      door_x = 756, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 36,
+      doors = { {x=756, y=564, sx=396, sy=36}, },
       mines = { },
       drones = { {x=732, y=36}, {x=60, y=60}, {x=60, y=156}, {x=732, y=252}, {x=732, y=444}, {x=60, y=348}, {x=60, y=516}, },
       floorguards = { },
@@ -5061,8 +4601,7 @@ levels = {
    },
    ["92-0"] = {
       n_x = 504, n_y = 60,
-      door_x = 288, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 564,
+      doors = { {x=288, y=60, sx=396, sy=564}, },
       mines = { {x=492, y=24}, {x=468, y=24}, {x=444, y=24}, {x=420, y=24}, {x=396, y=24}, {x=372, y=24}, {x=348, y=24}, {x=324, y=24}, {x=300, y=24}, {x=480, y=180}, {x=312, y=180}, {x=312, y=420}, {x=480, y=420}, {x=396, y=264}, {x=396, y=336}, },
       drones = { {x=468, y=468}, {x=324, y=300}, {x=324, y=180}, {x=468, y=108}, },
       floorguards = { {x=468, y=570}, {x=324, y=570}, },
@@ -5072,8 +4611,7 @@ levels = {
    },
    ["92-1"] = {
       n_x = 480, n_y = 468,
-      door_x = 336, door_y = 348,
-      doorswitch_x = 336, doorswitch_y = 252,
+      doors = { {x=336, y=348, sx=336, sy=252}, },
       mines = { },
       drones = { {x=36, y=540}, {x=756, y=60}, },
       floorguards = { },
@@ -5083,8 +4621,7 @@ levels = {
    },
    ["92-2"] = {
       n_x = 396, n_y = 540,
-      door_x = 396, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 84,
+      doors = { {x=396, y=564, sx=396, sy=84}, },
       mines = { },
       drones = { },
       floorguards = { {x=396, y=138}, },
@@ -5094,8 +4631,7 @@ levels = {
    },
    ["92-3"] = {
       n_x = 132, n_y = 84,
-      door_x = 96, door_y = 84,
-      doorswitch_x = 420, doorswitch_y = 396,
+      doors = { {x=96, y=84, sx=420, sy=396}, },
       mines = { },
       drones = { {x=684, y=372}, {x=252, y=156}, {x=348, y=60}, {x=660, y=300}, {x=444, y=396}, {x=156, y=396}, },
       floorguards = { {x=252, y=474}, {x=636, y=522}, {x=732, y=474}, {x=180, y=426}, {x=588, y=114}, {x=204, y=258}, {x=372, y=114}, {x=396, y=402}, },
@@ -5105,8 +4641,7 @@ levels = {
    },
    ["92-4"] = {
       n_x = 330, n_y = 360,
-      door_x = 396, door_y = 372,
-      doorswitch_x = 462, doorswitch_y = 234,
+      doors = { {x=396, y=372, sx=462, sy=234}, },
       mines = { },
       drones = { {x=468, y=300}, {x=396, y=228}, {x=324, y=300}, {x=396, y=372}, },
       floorguards = { },
@@ -5116,8 +4651,7 @@ levels = {
    },
    ["93-0"] = {
       n_x = 48, n_y = 504,
-      door_x = 168, door_y = 132,
-      doorswitch_x = 204, doorswitch_y = 216,
+      doors = { {x=168, y=132, sx=204, sy=216}, },
       mines = { },
       drones = { },
       floorguards = { {x=420, y=570}, {x=636, y=474}, {x=396, y=258}, {x=228, y=378}, {x=276, y=546}, {x=180, y=546}, {x=540, y=498}, {x=228, y=234}, {x=564, y=306}, {x=516, y=186}, },
@@ -5127,8 +4661,7 @@ levels = {
    },
    ["93-1"] = {
       n_x = 84, n_y = 60,
-      door_x = 108, door_y = 84,
-      doorswitch_x = 684, doorswitch_y = 132,
+      doors = { {x=108, y=84, sx=684, sy=132}, },
       mines = { {x=96, y=276}, {x=120, y=276}, {x=240, y=276}, {x=264, y=276}, {x=384, y=276}, {x=408, y=276}, {x=528, y=276}, {x=552, y=276}, {x=672, y=276}, {x=696, y=276}, {x=684, y=252}, {x=672, y=204}, {x=696, y=204}, {x=684, y=228}, {x=408, y=180}, {x=384, y=180}, {x=396, y=204}, {x=396, y=228}, {x=396, y=252}, {x=264, y=228}, {x=240, y=228}, {x=252, y=252}, {x=120, y=156}, {x=96, y=156}, {x=108, y=180}, {x=108, y=204}, {x=108, y=228}, {x=108, y=252}, },
       drones = { {x=348, y=132}, {x=300, y=204}, {x=228, y=156}, {x=132, y=156}, {x=84, y=156}, {x=540, y=204}, {x=540, y=276}, {x=660, y=204}, {x=396, y=180}, {x=660, y=132}, },
       floorguards = { {x=660, y=306}, {x=564, y=306}, {x=516, y=306}, {x=708, y=306}, {x=756, y=306}, {x=420, y=306}, {x=372, y=306}, {x=276, y=306}, {x=228, y=306}, {x=132, y=306}, {x=84, y=306}, {x=36, y=306}, },
@@ -5138,8 +4671,7 @@ levels = {
    },
    ["93-2"] = {
       n_x = 750, n_y = 120,
-      door_x = 36, door_y = 420,
-      doorswitch_x = 36, doorswitch_y = 252,
+      doors = { {x=36, y=420, sx=36, sy=252}, },
       mines = { {x=600, y=216}, {x=600, y=384}, {x=600, y=552}, {x=432, y=552}, {x=264, y=552}, {x=96, y=552}, {x=96, y=384}, {x=96, y=216}, {x=96, y=216}, {x=264, y=216}, {x=432, y=216}, {x=264, y=384}, {x=432, y=384}, },
       drones = { },
       floorguards = { },
@@ -5149,8 +4681,7 @@ levels = {
    },
    ["93-3"] = {
       n_x = 516, n_y = 264,
-      door_x = 396, door_y = 420,
-      doorswitch_x = 396, doorswitch_y = 156,
+      doors = { {x=396, y=420, sx=396, sy=156}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -5160,8 +4691,7 @@ levels = {
    },
    ["93-4"] = {
       n_x = 756, n_y = 276,
-      door_x = 732, door_y = 324,
-      doorswitch_x = 60, doorswitch_y = 228,
+      doors = { {x=732, y=324, sx=60, sy=228}, },
       mines = { {x=540, y=168}, {x=636, y=192}, {x=684, y=408}, {x=588, y=432}, {x=444, y=192}, {x=492, y=408}, {x=396, y=480}, {x=348, y=192}, {x=252, y=168}, {x=300, y=408}, {x=204, y=432}, {x=156, y=192}, {x=108, y=408}, },
       drones = { {x=372, y=444}, {x=516, y=324}, {x=708, y=372}, {x=612, y=348}, {x=324, y=300}, {x=180, y=348}, {x=84, y=252}, {x=84, y=348}, },
       floorguards = { },
@@ -5171,8 +4701,7 @@ levels = {
    },
    ["94-0"] = {
       n_x = 48, n_y = 300,
-      door_x = 48, door_y = 372,
-      doorswitch_x = 744, doorswitch_y = 372,
+      doors = { {x=48, y=372, sx=744, sy=372}, },
       mines = { {x=642, y=282}, {x=678, y=318}, {x=546, y=258}, {x=582, y=342}, {x=486, y=366}, {x=450, y=234}, {x=366, y=390}, {x=282, y=210}, {x=270, y=414}, {x=174, y=438}, {x=186, y=186}, {x=90, y=162}, {x=636, y=372}, {x=660, y=372}, {x=564, y=372}, {x=540, y=372}, {x=564, y=228}, {x=588, y=228}, },
       drones = { {x=756, y=300}, {x=660, y=300}, },
       floorguards = { },
@@ -5182,8 +4711,7 @@ levels = {
    },
    ["94-1"] = {
       n_x = 168, n_y = 408,
-      door_x = 324, door_y = 480,
-      doorswitch_x = 480, doorswitch_y = 324,
+      doors = { {x=324, y=480, sx=480, sy=324}, },
       mines = { {x=594, y=120}, {x=522, y=156}, {x=276, y=348}, {x=276, y=468}, {x=450, y=300}, {x=516, y=342}, {x=402, y=306}, {x=258, y=300}, },
       drones = { {x=396, y=276}, {x=468, y=300}, {x=348, y=516}, },
       floorguards = { {x=756, y=570}, {x=36, y=570}, },
@@ -5193,8 +4721,7 @@ levels = {
    },
    ["94-2"] = {
       n_x = 396, n_y = 480,
-      door_x = 396, door_y = 504,
-      doorswitch_x = 396, doorswitch_y = 180,
+      doors = { {x=396, y=504, sx=396, sy=180}, },
       mines = { },
       drones = { {x=516, y=276}, {x=348, y=324}, {x=372, y=252}, {x=420, y=372}, },
       floorguards = { },
@@ -5204,8 +4731,7 @@ levels = {
    },
    ["94-3"] = {
       n_x = 204, n_y = 84,
-      door_x = 588, door_y = 60,
-      doorswitch_x = 396, doorswitch_y = 552,
+      doors = { {x=588, y=60, sx=396, sy=552}, },
       mines = { {x=264, y=108}, {x=144, y=108}, {x=72, y=84}, {x=336, y=360}, {x=264, y=312}, {x=144, y=312}, {x=72, y=324}, {x=336, y=24}, {x=528, y=516}, {x=456, y=198}, {x=528, y=270}, {x=648, y=270}, {x=720, y=246}, {x=720, y=126}, {x=672, y=78}, {x=504, y=78}, {x=456, y=342}, {x=720, y=438}, {x=648, y=462}, {x=528, y=462}, {x=456, y=486}, {x=336, y=462}, {x=264, y=414}, {x=144, y=414}, {x=72, y=426}, {x=144, y=210}, {x=72, y=186}, {x=336, y=114}, {x=264, y=210}, {x=336, y=282}, {x=504, y=132}, {x=456, y=252}, {x=456, y=396}, {x=528, y=324}, {x=648, y=324}, {x=720, y=300}, {x=720, y=492}, {x=648, y=516}, {x=720, y=180}, {x=672, y=132}, },
       drones = { },
       floorguards = { {x=468, y=570}, {x=324, y=570}, },
@@ -5215,8 +4741,7 @@ levels = {
    },
    ["94-4"] = {
       n_x = 72, n_y = 324,
-      door_x = 372, door_y = 540,
-      doorswitch_x = 528, doorswitch_y = 36,
+      doors = { {x=372, y=540, sx=528, sy=36}, },
       mines = { {x=528, y=72}, {x=504, y=96}, {x=516, y=84}, {x=540, y=84}, {x=552, y=96}, {x=360, y=216}, {x=348, y=204}, {x=336, y=192}, {x=348, y=180}, {x=360, y=168}, {x=384, y=288}, {x=372, y=276}, {x=360, y=264}, {x=288, y=240}, {x=276, y=228}, {x=264, y=216}, {x=264, y=168}, {x=276, y=156}, {x=288, y=144}, {x=600, y=264}, {x=612, y=276}, {x=624, y=288}, {x=672, y=288}, {x=684, y=276}, {x=696, y=264}, {x=696, y=192}, {x=684, y=204}, {x=672, y=216}, {x=624, y=216}, {x=612, y=204}, {x=600, y=192}, {x=624, y=480}, {x=612, y=492}, {x=600, y=504}, {x=96, y=480}, {x=108, y=492}, {x=120, y=504}, {x=168, y=504}, {x=180, y=492}, {x=192, y=480}, {x=240, y=432}, {x=252, y=420}, {x=264, y=408}, {x=120, y=96}, {x=108, y=108}, {x=96, y=120}, {x=96, y=144}, {x=108, y=156}, {x=120, y=168}, },
       drones = { {x=732, y=36}, {x=708, y=156}, {x=732, y=180}, },
       floorguards = { {x=156, y=546}, {x=348, y=546}, {x=660, y=546}, {x=444, y=162}, {x=204, y=90}, {x=132, y=210}, {x=372, y=402}, },
@@ -5226,8 +4751,7 @@ levels = {
    },
    ["95-0"] = {
       n_x = 60, n_y = 84,
-      door_x = 96, door_y = 84,
-      doorswitch_x = 720, doorswitch_y = 540,
+      doors = { {x=96, y=84, sx=720, sy=540}, },
       mines = { {x=492, y=348}, {x=312, y=324}, {x=684, y=384}, {x=612, y=360}, {x=540, y=360}, {x=444, y=336}, {x=372, y=336}, {x=252, y=312}, {x=648, y=372}, {x=180, y=312}, {x=36, y=288}, {x=108, y=300}, {x=138, y=324}, {x=66, y=312}, {x=276, y=336}, {x=336, y=348}, {x=462, y=360}, {x=510, y=372}, {x=624, y=378}, {x=660, y=390}, {x=36, y=444}, {x=252, y=444}, {x=444, y=444}, {x=612, y=444}, },
       drones = { {x=756, y=348}, {x=228, y=300}, },
       floorguards = { },
@@ -5237,8 +4761,7 @@ levels = {
    },
    ["95-1"] = {
       n_x = 612, n_y = 528,
-      door_x = 612, door_y = 552,
-      doorswitch_x = 84, doorswitch_y = 84,
+      doors = { {x=612, y=552, sx=84, sy=84}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -5248,8 +4771,7 @@ levels = {
    },
    ["95-2"] = {
       n_x = 348, n_y = 540,
-      door_x = 444, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 36,
+      doors = { {x=444, y=564, sx=396, sy=36}, },
       mines = { {x=456, y=444}, {x=444, y=432}, {x=432, y=444}, {x=444, y=456}, {x=528, y=492}, {x=540, y=480}, {x=552, y=492}, {x=540, y=504}, {x=624, y=444}, {x=636, y=432}, {x=648, y=444}, {x=636, y=456}, {x=720, y=492}, {x=732, y=480}, {x=744, y=492}, {x=732, y=504}, {x=336, y=492}, {x=348, y=480}, {x=360, y=492}, {x=348, y=504}, {x=240, y=444}, {x=252, y=432}, {x=264, y=444}, {x=252, y=456}, {x=168, y=492}, {x=156, y=480}, {x=144, y=492}, {x=156, y=504}, {x=72, y=444}, {x=48, y=444}, {x=60, y=432}, {x=60, y=456}, {x=144, y=396}, {x=168, y=396}, {x=156, y=384}, {x=156, y=408}, {x=72, y=348}, {x=60, y=336}, {x=48, y=348}, {x=60, y=360}, {x=144, y=300}, {x=156, y=288}, {x=168, y=300}, {x=156, y=312}, {x=240, y=348}, {x=252, y=336}, {x=264, y=348}, {x=252, y=360}, {x=336, y=396}, {x=348, y=384}, {x=360, y=396}, {x=348, y=408}, {x=432, y=348}, {x=444, y=336}, {x=456, y=348}, {x=444, y=360}, {x=528, y=396}, {x=540, y=384}, {x=552, y=396}, {x=540, y=408}, {x=624, y=348}, {x=636, y=336}, {x=648, y=348}, {x=636, y=360}, {x=720, y=396}, {x=732, y=384}, {x=744, y=396}, {x=732, y=408}, {x=744, y=300}, {x=732, y=312}, {x=720, y=300}, {x=732, y=288}, {x=552, y=300}, {x=540, y=312}, {x=528, y=300}, {x=540, y=288}, {x=360, y=300}, {x=336, y=300}, {x=348, y=288}, {x=348, y=312}, {x=264, y=252}, {x=252, y=240}, {x=240, y=252}, {x=252, y=264}, {x=168, y=204}, {x=156, y=192}, {x=144, y=204}, {x=156, y=216}, {x=72, y=252}, {x=60, y=240}, {x=48, y=252}, {x=60, y=264}, {x=48, y=156}, {x=60, y=144}, {x=72, y=156}, {x=60, y=168}, {x=144, y=108}, {x=156, y=96}, {x=168, y=108}, {x=156, y=120}, {x=240, y=156}, {x=252, y=144}, {x=264, y=156}, {x=252, y=168}, {x=336, y=204}, {x=348, y=192}, {x=360, y=204}, {x=348, y=216}, {x=432, y=252}, {x=444, y=240}, {x=456, y=252}, {x=444, y=264}, {x=624, y=252}, {x=648, y=252}, {x=636, y=240}, {x=636, y=264}, {x=720, y=204}, {x=732, y=216}, {x=744, y=204}, {x=732, y=192}, {x=732, y=120}, {x=744, y=108}, {x=732, y=96}, {x=720, y=108}, {x=636, y=144}, {x=636, y=168}, {x=648, y=156}, {x=624, y=156}, {x=540, y=192}, {x=552, y=204}, {x=540, y=216}, {x=528, y=204}, {x=456, y=156}, {x=444, y=144}, {x=432, y=156}, {x=444, y=168}, {x=528, y=108}, {x=540, y=96}, {x=552, y=108}, {x=540, y=120}, {x=360, y=108}, {x=348, y=96}, {x=336, y=108}, {x=348, y=120}, {x=768, y=492}, {x=768, y=396}, {x=768, y=300}, {x=768, y=204}, {x=768, y=108}, {x=24, y=156}, {x=24, y=252}, {x=24, y=348}, {x=24, y=444}, },
       drones = { },
       floorguards = { },
@@ -5259,8 +4781,7 @@ levels = {
    },
    ["95-3"] = {
       n_x = 396, n_y = 444,
-      door_x = 396, door_y = 468,
-      doorswitch_x = 396, doorswitch_y = 132,
+      doors = { {x=396, y=468, sx=396, sy=132}, },
       mines = { {x=672, y=156}, {x=120, y=156}, {x=96, y=168}, {x=72, y=180}, {x=48, y=192}, {x=696, y=168}, {x=720, y=180}, {x=744, y=192}, {x=768, y=204}, {x=24, y=204}, {x=480, y=504}, {x=552, y=504}, {x=576, y=504}, {x=600, y=516}, {x=624, y=516}, {x=648, y=504}, {x=672, y=504}, {x=696, y=516}, {x=720, y=516}, {x=240, y=504}, {x=216, y=504}, {x=192, y=516}, {x=168, y=516}, {x=144, y=504}, {x=120, y=504}, {x=96, y=516}, {x=72, y=516}, {x=528, y=492}, {x=504, y=492}, {x=288, y=492}, {x=264, y=492}, {x=312, y=504}, {x=336, y=492}, {x=456, y=492}, {x=648, y=144}, {x=624, y=132}, {x=144, y=144}, {x=168, y=132}, },
       drones = { },
       floorguards = { {x=492, y=570}, {x=756, y=570}, {x=300, y=570}, {x=36, y=570}, },
@@ -5270,8 +4791,7 @@ levels = {
    },
    ["95-4"] = {
       n_x = 60, n_y = 516,
-      door_x = 720, door_y = 564,
-      doorswitch_x = 636, doorswitch_y = 156,
+      doors = { {x=720, y=564, sx=636, sy=156}, },
       mines = { },
       drones = { {x=348, y=444}, {x=444, y=108}, {x=732, y=108}, {x=516, y=156}, {x=444, y=492}, {x=636, y=108}, {x=732, y=60}, {x=540, y=300}, {x=156, y=156}, },
       floorguards = { },
@@ -5281,8 +4801,7 @@ levels = {
    },
    ["96-0"] = {
       n_x = 324, n_y = 120,
-      door_x = 324, door_y = 564,
-      doorswitch_x = 144, doorswitch_y = 192,
+      doors = { {x=324, y=564, sx=144, sy=192}, {x=468, y=564, sx=648, sy=192}, },
       mines = { {x=540, y=240}, {x=540, y=192}, {x=396, y=264}, {x=396, y=216}, {x=252, y=240}, {x=252, y=192}, {x=192, y=300}, {x=144, y=300}, {x=396, y=96}, {x=396, y=48}, {x=600, y=300}, {x=648, y=300}, {x=540, y=384}, {x=540, y=336}, {x=480, y=444}, {x=432, y=444}, {x=360, y=444}, {x=312, y=444}, {x=252, y=384}, {x=252, y=336}, {x=456, y=156}, {x=504, y=156}, },
       drones = { },
       floorguards = { {x=612, y=426}, {x=468, y=282}, {x=324, y=282}, {x=180, y=426}, },
@@ -5292,8 +4811,7 @@ levels = {
    },
    ["96-1"] = {
       n_x = 48, n_y = 36,
-      door_x = 708, door_y = 252,
-      doorswitch_x = 396, doorswitch_y = 552,
+      doors = { {x=708, y=252, sx=396, sy=552}, },
       mines = { {x=396, y=336}, {x=444, y=216}, {x=348, y=216}, {x=516, y=168}, {x=276, y=168}, {x=396, y=144}, {x=396, y=564}, },
       drones = { },
       floorguards = { },
@@ -5303,8 +4821,7 @@ levels = {
    },
    ["96-2"] = {
       n_x = 708, n_y = 60,
-      door_x = 696, door_y = 444,
-      doorswitch_x = 396, doorswitch_y = 468,
+      doors = { {x=696, y=444, sx=396, sy=468}, },
       mines = { {x=396, y=420}, {x=396, y=276}, {x=396, y=132}, },
       drones = { {x=252, y=444}, {x=180, y=300}, {x=108, y=156}, {x=660, y=204}, {x=516, y=492}, {x=588, y=348}, },
       floorguards = { {x=732, y=570}, {x=84, y=114}, {x=156, y=258}, {x=228, y=402}, {x=684, y=162}, {x=612, y=306}, {x=540, y=450}, },
@@ -5314,8 +4831,7 @@ levels = {
    },
    ["96-3"] = {
       n_x = 696, n_y = 144,
-      door_x = 612, door_y = 564,
-      doorswitch_x = 396, doorswitch_y = 300,
+      doors = { {x=612, y=564, sx=396, sy=300}, },
       mines = { {x=600, y=168}, {x=168, y=216}, {x=636, y=348}, {x=660, y=396}, {x=588, y=372}, {x=612, y=420}, {x=156, y=420}, {x=204, y=396}, {x=228, y=444}, {x=180, y=468}, {x=408, y=360}, {x=432, y=372}, {x=456, y=408}, {x=444, y=432}, {x=408, y=456}, {x=384, y=444}, {x=360, y=408}, {x=372, y=384}, {x=384, y=192}, },
       drones = { },
       floorguards = { },
@@ -5325,8 +4841,7 @@ levels = {
    },
    ["96-4"] = {
       n_x = 324, n_y = 408.15,
-      door_x = 336, door_y = 252,
-      doorswitch_x = 420, doorswitch_y = 396,
+      doors = { {x=336, y=252, sx=420, sy=396}, },
       mines = { {x=600, y=264}, {x=528, y=240}, {x=600, y=192}, {x=528, y=168}, {x=456, y=192}, {x=456, y=264}, {x=672, y=240}, {x=684, y=168}, {x=708, y=252}, {x=720, y=288}, {x=708, y=324}, {x=672, y=336}, {x=600, y=360}, {x=600, y=432}, {x=528, y=408}, {x=528, y=336}, {x=456, y=360}, {x=468, y=432}, {x=744, y=192}, {x=696, y=408}, {x=768, y=300}, {x=264, y=336}, {x=192, y=432}, {x=192, y=264}, {x=264, y=168}, {x=336, y=192}, {x=192, y=192}, {x=108, y=168}, {x=120, y=240}, {x=264, y=240}, {x=192, y=360}, {x=264, y=408}, {x=336, y=360}, {x=120, y=336}, },
       drones = { {x=324, y=228}, {x=36, y=252}, {x=132, y=348}, {x=276, y=228}, {x=468, y=228}, {x=540, y=228}, {x=660, y=348}, {x=756, y=252}, },
       floorguards = { },
@@ -5336,8 +4851,7 @@ levels = {
    },
    ["97-0"] = {
       n_x = 624, n_y = 360,
-      door_x = 720, door_y = 564,
-      doorswitch_x = 48, doorswitch_y = 348,
+      doors = { {x=720, y=564, sx=48, sy=348}, },
       mines = { {x=216, y=372}, {x=240, y=216}, {x=324, y=204}, {x=336, y=456}, {x=336, y=336}, {x=408, y=240}, {x=528, y=240}, {x=504, y=336}, {x=468, y=432}, {x=456, y=456}, {x=576, y=408}, {x=600, y=288}, {x=672, y=192}, {x=696, y=240}, {x=744, y=288}, {x=756, y=540}, {x=744, y=564}, {x=696, y=564}, {x=684, y=540}, {x=696, y=516}, {x=720, y=516}, {x=36, y=552}, {x=180, y=552}, {x=600, y=96}, {x=660, y=84}, {x=624, y=72}, {x=732, y=252}, },
       drones = { {x=540, y=132}, {x=372, y=492}, {x=156, y=204}, {x=756, y=468}, {x=492, y=516}, {x=180, y=516}, {x=564, y=444}, },
       floorguards = { {x=468, y=570}, {x=132, y=570}, },
@@ -5347,8 +4861,7 @@ levels = {
    },
    ["97-1"] = {
       n_x = 36, n_y = 540,
-      door_x = 252, door_y = 48,
-      doorswitch_x = 372, doorswitch_y = 48,
+      doors = { {x=252, y=48, sx=372, sy=48}, },
       mines = { {x=156, y=120}, {x=60, y=120}, {x=84, y=96}, {x=156, y=48}, {x=132, y=84}, {x=48, y=84}, {x=192, y=72}, {x=180, y=24}, {x=108, y=24}, {x=24, y=108}, {x=588, y=204}, {x=396, y=216}, {x=660, y=192}, {x=468, y=204}, {x=516, y=132}, {x=444, y=120}, {x=372, y=120}, {x=252, y=120}, {x=312, y=72}, },
       drones = { {x=756, y=108}, {x=132, y=252}, {x=564, y=228}, {x=492, y=348}, {x=36, y=324}, },
       floorguards = { },
@@ -5358,8 +4871,7 @@ levels = {
    },
    ["97-2"] = {
       n_x = 420, n_y = 372,
-      door_x = 420, door_y = 564,
-      doorswitch_x = 648, doorswitch_y = 516,
+      doors = { {x=420, y=564, sx=648, sy=516}, },
       mines = { },
       drones = { {x=228, y=252}, {x=252, y=516}, {x=684, y=300}, },
       floorguards = { {x=432, y=450}, {x=348, y=114}, },
@@ -5369,8 +4881,7 @@ levels = {
    },
    ["97-3"] = {
       n_x = 396, n_y = 420,
-      door_x = 396, door_y = 420,
-      doorswitch_x = 396, doorswitch_y = 156,
+      doors = { {x=396, y=420, sx=396, sy=156}, },
       mines = { },
       drones = { },
       floorguards = { },
@@ -5380,8 +4891,7 @@ levels = {
    },
    ["97-4"] = {
       n_x = 612, n_y = 564,
-      door_x = 180, door_y = 564,
-      doorswitch_x = 144, doorswitch_y = 48,
+      doors = { {x=180, y=564, sx=144, sy=48}, },
       mines = { {x=396, y=72}, {x=252, y=96}, {x=192, y=300}, {x=240, y=300}, {x=168, y=444}, {x=120, y=444}, {x=228, y=420}, {x=132, y=324}, {x=132, y=564}, {x=228, y=468}, {x=228, y=564}, {x=228, y=180}, {x=132, y=276}, {x=168, y=288}, {x=168, y=312}, {x=192, y=432}, {x=192, y=456}, {x=240, y=516}, },
       drones = { {x=660, y=348}, {x=564, y=276}, {x=564, y=396}, {x=636, y=180}, {x=132, y=396}, {x=228, y=348}, {x=132, y=204}, {x=228, y=252}, },
       floorguards = { {x=444, y=138}, {x=348, y=138}, },
@@ -5391,8 +4901,7 @@ levels = {
    },
    ["98-0"] = {
       n_x = 432, n_y = 540,
-      door_x = 456, door_y = 540,
-      doorswitch_x = 138, doorswitch_y = 78,
+      doors = { {x=456, y=540, sx=138, sy=78}, },
       mines = { },
       drones = { {x=252, y=108}, {x=300, y=252}, {x=324, y=324}, {x=372, y=468}, {x=420, y=444}, {x=396, y=372}, {x=348, y=228}, {x=324, y=156}, {x=564, y=108}, {x=372, y=60}, },
       floorguards = { },
@@ -5402,8 +4911,7 @@ levels = {
    },
    ["98-1"] = {
       n_x = 732, n_y = 540,
-      door_x = 312, door_y = 108,
-      doorswitch_x = 36, doorswitch_y = 540,
+      doors = { {x=312, y=108, sx=36, sy=540}, },
       mines = { {x=84, y=564}, {x=372, y=564}, {x=420, y=564}, {x=708, y=564}, {x=756, y=516}, {x=36, y=516}, {x=564, y=552}, {x=564, y=528}, {x=564, y=504}, {x=228, y=552}, {x=228, y=528}, {x=228, y=504}, {x=588, y=480}, {x=540, y=480}, {x=252, y=480}, {x=204, y=480}, },
       drones = { },
       floorguards = { {x=444, y=570}, {x=684, y=570}, {x=348, y=570}, {x=108, y=570}, },
@@ -5413,8 +4921,7 @@ levels = {
    },
    ["98-2"] = {
       n_x = 492, n_y = 108,
-      door_x = 312, door_y = 60,
-      doorswitch_x = 564, doorswitch_y = 384,
+      doors = { {x=312, y=60, sx=564, sy=384}, },
       mines = { {x=360, y=468}, {x=732, y=216}, {x=672, y=60}, {x=276, y=240}, {x=636, y=348}, {x=684, y=372}, {x=564, y=360}, {x=564, y=408}, {x=360, y=408}, {x=672, y=216}, {x=576, y=192}, {x=204, y=108}, {x=192, y=60}, {x=192, y=156}, {x=528, y=192}, {x=348, y=348}, {x=120, y=384}, {x=96, y=348}, {x=96, y=420}, {x=324, y=300}, {x=336, y=216}, {x=552, y=228}, {x=552, y=156}, },
       drones = { {x=252, y=60}, },
       floorguards = { },
@@ -5424,8 +4931,7 @@ levels = {
    },
    ["98-3"] = {
       n_x = 36, n_y = 84,
-      door_x = 36, door_y = 108,
-      doorswitch_x = 756, doorswitch_y = 60,
+      doors = { {x=36, y=108, sx=756, sy=60}, },
       mines = { {x=60, y=132}, {x=84, y=168}, {x=108, y=204}, {x=132, y=240}, {x=156, y=276}, {x=180, y=312}, {x=204, y=348}, {x=228, y=384}, {x=252, y=420}, {x=276, y=456}, {x=300, y=492}, {x=324, y=528}, {x=348, y=564}, {x=444, y=564}, {x=396, y=576}, {x=420, y=564}, {x=372, y=564}, {x=468, y=528}, {x=492, y=492}, {x=516, y=456}, {x=540, y=420}, {x=564, y=384}, {x=588, y=348}, {x=612, y=312}, {x=636, y=276}, {x=660, y=240}, {x=684, y=204}, {x=708, y=168}, {x=732, y=132}, },
       drones = { {x=756, y=36}, },
       floorguards = { },
@@ -5435,8 +4941,7 @@ levels = {
    },
    ["98-4"] = {
       n_x = 636, n_y = 84,
-      door_x = 156, door_y = 84,
-      doorswitch_x = 396, doorswitch_y = 540,
+      doors = { {x=156, y=84, sx=396, sy=540}, },
       mines = { {x=336, y=540}, {x=456, y=540}, {x=600, y=540}, {x=528, y=540}, {x=264, y=540}, {x=192, y=540}, {x=624, y=540}, {x=168, y=540}, {x=120, y=312}, {x=144, y=384}, {x=120, y=456}, {x=144, y=240}, {x=120, y=168}, {x=156, y=276}, {x=108, y=348}, {x=156, y=420}, {x=108, y=492}, {x=108, y=204}, {x=108, y=60}, {x=156, y=60}, {x=132, y=108}, {x=156, y=132}, },
       drones = { {x=684, y=492}, {x=636, y=468}, },
       floorguards = { {x=516, y=570}, {x=420, y=570}, {x=180, y=570}, },
@@ -5446,8 +4951,7 @@ levels = {
    },
    ["99-0"] = {
       n_x = 216, n_y = 48,
-      door_x = 216, door_y = 60,
-      doorswitch_x = 312, doorswitch_y = 528,
+      doors = { {x=216, y=60, sx=312, sy=528}, },
       mines = { {x=264, y=132}, {x=264, y=228}, {x=264, y=324}, {x=264, y=420}, {x=528, y=468}, {x=528, y=372}, {x=528, y=276}, {x=528, y=180}, {x=528, y=84}, {x=276, y=492}, {x=348, y=564}, {x=324, y=552}, {x=288, y=516}, {x=372, y=576}, {x=396, y=576}, {x=420, y=576}, {x=444, y=576}, {x=468, y=576}, },
       drones = { {x=516, y=84}, {x=468, y=132}, {x=420, y=276}, {x=468, y=420}, {x=516, y=468}, {x=372, y=420}, {x=324, y=372}, {x=276, y=228}, {x=324, y=84}, },
       floorguards = { },
@@ -5457,8 +4961,7 @@ levels = {
    },
    ["99-1"] = {
       n_x = 420, n_y = 204,
-      door_x = 492, door_y = 252,
-      doorswitch_x = 84, doorswitch_y = 108,
+      doors = { {x=492, y=252, sx=84, sy=108}, },
       mines = { {x=132, y=396}, {x=204, y=396}, {x=180, y=372}, {x=60, y=396}, {x=84, y=420}, {x=588, y=228}, {x=636, y=252}, {x=648, y=228}, {x=696, y=240}, {x=732, y=468}, {x=732, y=564}, {x=732, y=516}, {x=588, y=516}, {x=456, y=480}, {x=360, y=432}, {x=156, y=108}, {x=156, y=60}, {x=84, y=180}, {x=60, y=180}, {x=108, y=180}, {x=108, y=36}, {x=84, y=36}, {x=60, y=36}, {x=36, y=156}, {x=36, y=60}, {x=312, y=120}, {x=264, y=144}, {x=312, y=48}, {x=192, y=48}, {x=192, y=120}, {x=252, y=84}, {x=336, y=480}, {x=552, y=432}, {x=696, y=120}, {x=684, y=180}, },
       drones = { },
       floorguards = { {x=132, y=450}, {x=540, y=570}, },
@@ -5468,8 +4971,7 @@ levels = {
    },
    ["99-2"] = {
       n_x = 132, n_y = 36,
-      door_x = 36, door_y = 564,
-      doorswitch_x = 420, doorswitch_y = 420,
+      doors = { {x=36, y=564, sx=420, sy=420}, },
       mines = { },
       drones = { {x=348, y=132}, {x=276, y=396}, {x=516, y=276}, {x=588, y=156}, },
       floorguards = { {x=612, y=450}, {x=420, y=66}, {x=756, y=570}, {x=84, y=570}, },
@@ -5479,8 +4981,7 @@ levels = {
    },
    ["99-3"] = {
       n_x = 756, n_y = 132,
-      door_x = 720, door_y = 564,
-      doorswitch_x = 744, doorswitch_y = 348,
+      doors = { {x=720, y=564, sx=744, sy=348}, },
       mines = { {x=648, y=180}, {x=552, y=180}, {x=456, y=180}, {x=360, y=180}, {x=264, y=180}, {x=168, y=180}, {x=216, y=84}, {x=312, y=84}, {x=408, y=84}, {x=504, y=84}, {x=600, y=84}, {x=648, y=444}, {x=600, y=396}, {x=552, y=444}, {x=504, y=396}, {x=456, y=444}, {x=408, y=396}, {x=360, y=444}, {x=312, y=396}, {x=264, y=444}, {x=216, y=396}, {x=168, y=444}, {x=120, y=396}, },
       drones = { },
       floorguards = { {x=516, y=330}, {x=324, y=330}, {x=132, y=330}, {x=636, y=570}, {x=444, y=570}, {x=252, y=570}, {x=156, y=570}, {x=348, y=570}, {x=540, y=570}, {x=612, y=330}, {x=420, y=330}, {x=228, y=330}, },
@@ -5490,8 +4991,7 @@ levels = {
    },
    ["99-4"] = {
       n_x = 756, n_y = 564,
-      door_x = 72, door_y = 564,
-      doorswitch_x = 756, doorswitch_y = 60,
+      doors = { {x=72, y=564, sx=756, sy=60}, },
       mines = { {x=696, y=336}, {x=696, y=264}, {x=696, y=384}, {x=696, y=456}, {x=696, y=504}, {x=696, y=96}, {x=696, y=144}, {x=696, y=216}, {x=96, y=96}, {x=96, y=144}, {x=96, y=216}, {x=96, y=264}, {x=96, y=336}, {x=96, y=384}, {x=96, y=456}, {x=96, y=504}, {x=600, y=96}, {x=600, y=144}, {x=600, y=216}, {x=600, y=264}, {x=600, y=336}, {x=600, y=384}, {x=600, y=456}, {x=600, y=504}, {x=528, y=504}, {x=528, y=456}, {x=528, y=384}, {x=528, y=336}, {x=528, y=264}, {x=528, y=216}, {x=528, y=144}, {x=528, y=96}, {x=432, y=96}, {x=432, y=144}, {x=432, y=216}, {x=432, y=264}, {x=432, y=336}, {x=432, y=384}, {x=432, y=456}, {x=432, y=504}, {x=360, y=504}, {x=360, y=456}, {x=360, y=384}, {x=360, y=336}, {x=360, y=264}, {x=360, y=216}, {x=360, y=144}, {x=360, y=96}, {x=264, y=96}, {x=264, y=144}, {x=264, y=216}, {x=264, y=264}, {x=264, y=336}, {x=264, y=384}, {x=264, y=456}, {x=264, y=504}, {x=192, y=504}, {x=192, y=456}, {x=192, y=384}, {x=192, y=336}, {x=192, y=264}, {x=192, y=216}, {x=192, y=144}, {x=192, y=96}, },
       drones = { },
       floorguards = { },
