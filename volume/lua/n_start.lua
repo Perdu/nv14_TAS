@@ -99,7 +99,7 @@ function display_distance_to_doors(x, y, doors)
       if edge_dist > 0 and edge_dist < 50 then
          local location
          if sw.sy < y then
-            location = sw.sy - 28
+            location = sw.sy - 20
          else
             location = sw.sy + 10
          end
@@ -123,7 +123,13 @@ function display_distance_to_switches(x, y, switches)
 
         if edge_dist > 0 and edge_dist < 50 then
             -- draw the value near the switch
-            gui.text(sw.x - 15, sw.y + 10, string.format("%.2f", edge_dist), 0xff0000ff)  -- blue
+           local location
+           if sw.y < y then
+              location = sw.y - 18
+           else
+              location = sw.y + 10
+           end
+            gui.text(sw.x - 15, location, string.format("%.2f", edge_dist), 0xff0000ff)  -- blue
         end
     end
 end
@@ -321,9 +327,9 @@ function onPaint()
          display_distance_to_doors(x, y, data.doors)
       end
 
---      if levels[level].switches then
---         display_distance_to_switches(x, y, levels[level].switches)
---      end
+      if levels[level].switches then
+         display_distance_to_switches(x, y, levels[level].switches)
+      end
       if memspeed_y ~= "" then
          local y_num = tonumber(memspeed_y, 16)
          local vy = memory.readd(y_num)
