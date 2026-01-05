@@ -97,8 +97,14 @@ function display_distance_to_doors(x, y, doors)
       edge_dist = center_dist - (10 + 6)
 
       if edge_dist > 0 and edge_dist < 50 then
+         local location
+         if sw.sy < y then
+            location = sw.sy - 28
+         else
+            location = sw.sy + 10
+         end
          -- draw the value near the switch
-         gui.text(sw.sx - 15, sw.sy - 20, string.format("%.2f", edge_dist), 0xff0000ff)  -- blue
+         gui.text(sw.sx - 15, location, string.format("%.2f", edge_dist), 0xff0000ff)  -- blue
       end
 
    end
