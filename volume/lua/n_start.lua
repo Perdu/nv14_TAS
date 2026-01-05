@@ -27,6 +27,7 @@ display_hitboxes = true
 draw_gold_hitboxes = false
 display_ghost = true
 display_current_path = true
+display_ghost_moves_under_ghost = false
 
 ghostData = {}      -- frame → {x, y}
 space_frame = -100
@@ -332,14 +333,16 @@ function onPaint()
          end
          gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff, 0, 0, 15)
 
-         if ghost.shift == 1 then
-            gui.text(ghost.x - 14, ghost.y + 13, "J", 0xffffffff)
-         end
-         if ghost.left == 1 then
-            gui.text(ghost.x - 4, ghost.y + 13, "<", 0xffffffff)
-         end
-         if ghost.right == 1 then
-            gui.text(ghost.x + 6, ghost.y + 13, ">", 0xffffffff)
+         if display_ghost_moves_under_ghost then
+            if ghost.shift == 1 then
+               gui.text(ghost.x - 14, ghost.y + 13, "J", 0xffffffff)
+            end
+            if ghost.left == 1 then
+               gui.text(ghost.x - 4, ghost.y + 13, "<", 0xffffffff)
+            end
+            if ghost.right == 1 then
+               gui.text(ghost.x + 6, ghost.y + 13, ">", 0xffffffff)
+            end
          end
       end
 
