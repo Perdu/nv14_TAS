@@ -287,6 +287,11 @@ function draw_velocity_arrows(x, y, vx, vy)
 
 end
 
+local function float_eq(a, b, tol)
+    tol = tol or 1e-5  -- default tolerance
+    return math.abs(a - b) < tol
+end
+
 function onPaint()
    local x = -1
    local y = -1
@@ -356,20 +361,31 @@ function onPaint()
       if a then
          gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffff00)
          gui.text(150, 575, string.format("%f ; %f", a.x, a.y), 0xffffff00, 0, 0, 15)
-         if a.x > x then
-            gui.text(130, 587, "<", 0xffffffff, 0, 0, 15)
-         elseif a.x == x then
-            gui.text(130, 587, "=", 0xffffffff, 0, 0, 15)
-         else
-            gui.text(130, 587, ">", 0xffffffff, 0, 0, 15)
-         end
-         if a.y > y then
-            gui.text(140, 587, "^", 0xffffffff, 0, 0, 15)
-         elseif a.y == y then
-            gui.text(140, 587, "=", 0xffffffff, 0, 0, 15)
-         else
-            gui.text(140, 587, "v", 0xffffffff, 0, 0, 15)
-         end
+      end
+   end
+
+   -- display help comparison to either ghost or best path
+   -- we can only compare 5 first digits as the full value isn't dumped to file
+   compare = nil
+   if bestPath[f] then
+      compare = bestPath[f]
+   elseif space_frame ~= -100 and ghostData[f - space_frame]  then
+      compare = ghostData[f - space_frame]
+   end
+   if compare then
+      if float_eq(compare.x, x, 1e-5) then
+         gui.text(130, 587, "=", 0xffffffff, 0, 0, 15)
+      elseif compare.x > x then
+         gui.text(130, 587, "<", 0xffffffff, 0, 0, 15)
+      else
+         gui.text(130, 587, ">", 0xffffffff, 0, 0, 15)
+      end
+      if float_eq(compare.y, y, 1e-5) then
+         gui.text(140, 587, "=", 0xffffffff, 0, 0, 15)
+      elseif compare.y > y then
+         gui.text(140, 587, "^", 0xffffffff, 0, 0, 15)
+      else
+         gui.text(140, 587, "v", 0xffffffff, 0, 0, 15)
       end
    end
 
