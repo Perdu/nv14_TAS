@@ -115,13 +115,17 @@ if __name__ == "__main__":
     rta_run = False
     hs_run = False
     demo_str = None
+    authors = ""
     if len(sys.argv) > 2:
         if sys.argv[2] == 'rta':
             rta_run = True
         elif sys.argv[2] == 'hs':
             hs_run = True
         elif sys.argv[2] == 'demo':
+            print("Enter demo, then press Ctrl+D:")
             demo_str = sys.stdin.read().strip()
+            print("New authors? (Just press Ctrl+D to keep as-is)")
+            authors = sys.stdin.read().strip()
     libtas_input, nb_frames, markers = build_libtas_input(episode, level, "Speedrun", rta_run, hs_run, demo_str)
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     with open("extract/inputs", "w") as f:
@@ -133,5 +137,7 @@ if __name__ == "__main__":
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     config.read("extract/config.ini")
     with open("extract/config.ini", "w") as f:
+        if authors != "":
+            config["General"]["authors"] = authors
         # config["General"]["rerecord_count"] = "0"
         config.write(f, space_around_delimiters=False)
