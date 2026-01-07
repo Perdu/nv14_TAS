@@ -177,11 +177,15 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
     if level_id in data and score_type in data[level_id]:
         # Recreating a dict to ensure we insert optimization_level at the right place
         # (because order depends on insert in dict)
+        if authors == "zapkt":
+            # Don't override authors list if default
+            new_authors = data[level_id][score_type]["authors"]
+        else:
+            new_authors = authors
         new_dict = {
             "time": score,
             'diff_with_0th': diff_str_total,
-            # Don't override authors list
-            "authors": data[level_id][score_type]["authors"],
+            "authors": new_authors,
             "type": "tas",
             "optimization_level": 2,
             "demo": demo
