@@ -16,6 +16,7 @@ if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1".ltm ]; then
         exit
     else
         # An ltm file already exists, let's use it instead
+        echo "Updating existing ltm file with demo data"
         tar xzf volume/n_levels/"$1".ltm -C extract/
     fi
 fi
