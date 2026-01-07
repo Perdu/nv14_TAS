@@ -268,8 +268,8 @@ function draw_velocity_arrows(x, y, vx, vy)
     end
 
     -- Optional: draw numeric values
-    gui.text(300, 575, string.format("vx: %f", vx), horizontal_color, 0, 0, 15)
-    gui.text(300, 585,  string.format("vy: %f", vy), vertical_color, 0, 0, 15)
+    gui.text(310, 575, string.format("vx: %f", vx), horizontal_color, 0, 0, 15)
+    gui.text(310, 585,  string.format("vy: %f", vy), vertical_color, 0, 0, 15)
 
     -- compute endpoint of combined vector
     local rx = x + vx * scale
@@ -321,7 +321,7 @@ function onPaint()
       if display_hitboxes then
          gui.ellipse(x, y, 10, 10)
       end
-      gui.text(150, 587, string.format("%f ; %f", x, y), 0xffffffff, 0, 0, 15)
+      gui.text(160, 587, string.format("%f ; %f", x, y), 0xffffffff, 0, 0, 15)
       data = levels[level]
       if data.doors then
          display_distance_to_doors(x, y, data.doors)
@@ -348,11 +348,11 @@ function onPaint()
       local ghost = ghostData[f - space_frame]
       if ghost then
          gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
-         local ghost_text_position = 150
+         local ghost_text_position = 160
          local best_path_exists = bestPath[f]
          if best_path_exists then
             -- move ghost text to the right to display best path instead
-            ghost_text_position = 400
+            ghost_text_position = 410
          end
          gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff, 0, 0, 15)
 
@@ -378,7 +378,7 @@ function onPaint()
       local a = bestPath[f]
       if a then
          gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffff00)
-         gui.text(150, 575, string.format("%f ; %f", a.x, a.y), 0xffffff00, 0, 0, 15)
+         gui.text(160, 575, string.format("%f ; %f", a.x, a.y), 0xffffff00, 0, 0, 15)
       end
    end
 
@@ -392,19 +392,21 @@ function onPaint()
    end
    if compare then
       if float_eq(compare.x, x, 1e-5) then
-         gui.text(130, 587, "=", 0xffffffff, 0, 0, 15)
+         sign = "="
       elseif compare.x > x then
-         gui.text(130, 587, "<", 0xffffffff, 0, 0, 15)
+         sign = "<"
       else
-         gui.text(130, 587, ">", 0xffffffff, 0, 0, 15)
+         sign = ">"
       end
+      gui.text(140, 587, sign, 0xffffffff, 0, 0, 15)
       if float_eq(compare.y, y, 1e-5) then
-         gui.text(140, 587, "=", 0xffffffff, 0, 0, 15)
+         sign = "="
       elseif compare.y > y then
-         gui.text(140, 587, "^", 0xffffffff, 0, 0, 15)
+         sign = "^"
       else
-         gui.text(140, 587, "v", 0xffffffff, 0, 0, 15)
+         sign = "v"
       end
+      gui.text(150, 587, sign, 0xffffffff, 0, 0, 15)
    end
 
    if display_current_path then
