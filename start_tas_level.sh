@@ -9,7 +9,6 @@ LTM_FILE="n_base_for_levels.ltm"
 
 mkdir -p $EXTRACT_FOLDER
 
-tar xzf $LTM_FILE -C $EXTRACT_FOLDER
 if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1".ltm ]; then
     if [ "$2" != "demo" ]; then
         echo "$1.ltm already exists, not creating"
@@ -19,6 +18,8 @@ if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1".ltm ]; then
         echo "Updating existing ltm file with demo data"
         tar xzf volume/n_levels/"$1".ltm -C extract/
     fi
+else
+    tar xzf $LTM_FILE -C $EXTRACT_FOLDER
 fi
 
 python start_tas_level.py $@
