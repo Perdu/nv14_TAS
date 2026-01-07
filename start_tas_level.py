@@ -133,5 +133,5 @@ if __name__ == "__main__":
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     config.read("extract/config.ini")
     with open("extract/config.ini", "w") as f:
-        config["General"]["rerecord_count"] = "0"
+        # config["General"]["rerecord_count"] = "0"
         config.write(f, space_around_delimiters=False)
