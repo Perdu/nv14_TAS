@@ -33,7 +33,7 @@ def start_level(episode, level):
     return inputs
 
 
-def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False, add_hs_run=False):
+def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False, add_hs_run=False, demo_str=None):
     nb_frames = 0
     res = ""
     markers = {}
@@ -78,6 +78,10 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False,
             libtas_input_hs, nb_frames_demo_hs = convert_demo_to_libtas(demo_hs)
             res += libtas_input_hs
             nb_frames += nb_frames_demo_hs
+    elif demo_str is not None:
+        libtas_input, nb_frames_demo = convert_demo_to_libtas(demo_str)
+        res += libtas_input
+        nb_frames += nb_frames_demo
     elif level_name in tas_data and score_type in tas_data[level_name]:
         # A TAS already exists
         print("Using existing TAS data")
@@ -110,12 +114,15 @@ if __name__ == "__main__":
     level = sys.argv[1].split('-')[1]
     rta_run = False
     hs_run = False
+    demo_str = None
     if len(sys.argv) > 2:
         if sys.argv[2] == 'rta':
             rta_run = True
         elif sys.argv[2] == 'hs':
             hs_run = True
-    libtas_input, nb_frames, markers = build_libtas_input(episode, level, "Speedrun", rta_run, hs_run)
+        elif sys.argv[2] == 'demo':
+            demo_str = sys.stdin.read().strip()
+    libtas_input, nb_frames, markers = build_libtas_input(episode, level, "Speedrun", rta_run, hs_run, demo_str)
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     with open("extract/inputs", "w") as f:
         print(libtas_input, file=f)
