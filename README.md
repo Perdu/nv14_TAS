@@ -36,6 +36,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [Stumbles](https://discord.com/channels/197765375503368192/199460839252688896/1431062811903266957)
 - [Hitboxes sizes](https://discord.com/channels/197765375503368192/199460839252688896/1437946735665352714)
 - [Finding coordinates for tile bwj](https://discord.com/channels/197765375503368192/199460839252688896/1458230806383427790)
+- [Drone detection](https://discord.com/channels/197765375503368192/199460839252688896/1458621494224490527)
 
 ## Todo
 - speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
