@@ -8,6 +8,7 @@ DOCKER_VOLUME_PATH="volume"
 
 if [ $# -eq 0 ]; then
     echo "Usage: $0 LEVEL AUTHOR"
+    exit
 fi
 
 mkdir -p $EXTRACT_FOLDER
