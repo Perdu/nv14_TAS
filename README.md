@@ -39,8 +39,11 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [Drone detection](https://discord.com/channels/197765375503368192/199460839252688896/1458621494224490527)
 
 ## Todo
+- Add drone detection frame (for 1st chase)
 - speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
 - Sort Readme into several files for better readability
+- Find drone position in memory and draw raycasting on detection frame
+- Figure out something to optimize corner jumps
 - automatically update README with current progress/stats
 - TAS the remaining 388 levels ;)
 
