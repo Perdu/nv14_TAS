@@ -153,6 +153,12 @@ function draw_hitboxes()
       drawList(data.switches, 5, 0, 255, 255)    -- cyan switches
 end
 
+local function display_drone_detection_frame(f)
+   if (f - space_frame) % 14 == 0 then
+      gui.text(80, 580, "Drone!!!", 0xff0000ff)
+   end
+end
+
 local function loadGhost()
     local file = io.open(ghostFilePath, "r")
     if not file then
@@ -432,6 +438,8 @@ function onPaint()
    -- if advance_one_step_after_ramsearch == 2 then
    --   gui.text(120, 580, "Go!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
    -- end
+
+   display_drone_detection_frame(f)
 end
 
 -- This runs each time the game (process) starts.
