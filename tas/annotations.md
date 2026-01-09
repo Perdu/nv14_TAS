@@ -1,4 +1,6 @@
 # 00-0
+rerecords: 12
+
 
 
 # 00-1
@@ -17,7 +19,7 @@ rerecords: 76
 
 
 # 00-4
-rerecords: 169
+rerecords: 184
 
 
 
@@ -179,9 +181,9 @@ With the right angle, you can jump on the top thwump. This is absolutely complet
 It's probably possible to optimize it more but finding the right angle that works is a pain and random
 
 # 04-3
-rerecords: 121
+rerecords: 962
 
-
+I initially had a slightly better way past the drone after the switch (2 pixels), which I had to redo because of earlier drone detection. But it doesn't actually lose a frame on the way to the pipe up, and we're actually faster there. We avoid jumping in the corridor as the better positioning gives us too much speed in the pipe and kills us.
 
 # 04-4
 rerecords: 755
@@ -357,11 +359,109 @@ There are many possible angles on the way up to push us left and land. In fact, 
 Jumping on the left slope instead of doing a turnaround is slower.
 
 # 08-4
+rerecords: 673
+
+On the way from the upper right switch to the doorswitch, cj + cj on the first bb is slightly faster than cj on the 2nd bb. In this path, you sadly can't go directly down without touching the platform on the left 
+
+Slowing down right to slow down on the wall in order not to crash on the way to the switch is slower.
+
+cj on the way up from the switch -> can't get to the lp directly
+slope jump on the way up from the switch -> slower
+
+Branch 8: I tried using 0th' route of taking the top switch on the first way back using the lp (instead of the second way back), but it's overall slower
+
+# 09-0
+rerecords: 169
+
+
+
+# 09-1
+rerecords: 341
+
+We're very very close (0.12 pixels) from saving 1f of jump press to reach the doorswitch (if we jump 1f earlier).
+
+I'm not entirely sure the used strategy of maximizing jumps on the way up is actually faster than rta strategy of slowing down to enter the pipe properly
+
+In the end, we can't do a proper corner push to go down to the door because in all cases, we explode on the ceiling. But even if we slow down by removing 2 walljumps, the corner push does not land on the door and it thus slower.
+
+# 09-2
+rerecords: 224
+
+1f rcj on the first switch doesn't go far enough, and longer rcj get the missile. We have to jump that long unfortunately
+
+The jump above the last drone is very tight and only works on some setups. We can't jump longer beforehand to save 1f
+
+# 09-3
+rerecords: 196
+
+On the way down, grabbing the second platform to gain speed makes us crash on the bb
+
+# 09-4
+rerecords: 120
+
+We can reproduce RTA strategy of using the slope to propel ourselves after the switch, but the turret kills us. If we jump higher, it's slightly lower than current strategy.
+
+# 10-3
+rerecords: 61
+
+0.81 pixels away from saving an additional frame!
+
+# 11-4
+rerecords: 76
+
+kryX-orange's 0th is maxed, I only improved subpixel
+
+# 12-0
+rerecords: 2547
+
+The lpwj at the beginning + cj saves us a whooping 3f over jumping on the wall and jumping from the platform normally
+
+An actual backwards wall jump would be incredible, but I can't pull it off (you probably need more speed)
+
+If we jump 1f earlier after the last lp, we crash on the ceiling
+
+We can't get a better diagonal lp jump by slowing right before landing, except for the one the crashes us on the ceiling.
+
+# 12-1
+rerecords: 228
+
+cj on the top bb is useless
+cj on third bb is useless
+cj on the bb on the way down is useless
+
+My beginning is faster but unfortunately I *have* to slow down for the drone and barely gets a few pixels out of it
+
+For the second switch, going down directly is faster than holding jump to get the push down from the ceiling slope
+
+We can't add 1 more jump before the door
+
+# 12-2
+rerecords: 357
+
+To go up, it doesn't work to:
+- go to the right and do wall and bb jump
+- try to cj on the bb: it's possible but then it doesn't go anywhere (branch 8)
+
+Optimizing the jump over the top without getting zapped is tedious. This weird stumble on the way from the left to the right is better than another example I got
+
+# 12-3
+rerecords: 94
+
+Level is maxed, can only improve subpixel
+
+It *might* be possible to save 1f as I randomly saved 1 pixel, but I'm going a bit blind here
+
+# 12-4
+rerecords: 135
+
+You can jump 1f less for the first switch, which lets you land further to the right, but doesn't allow you to jump earlier
+
+The rcj is really tight and finding a better way to land on the platform is difficult (even getting another one that does is)
+
+# 13-0
 
 
 # 13-1
-rerecords: 155
-
 
 
 # 19-4
@@ -397,6 +497,17 @@ Getting over the first drone to start on the left column is slower (+ we end up 
 
 Slowing down to get detected by the drone we have to avoid on the way up is slower.
 
+# 37-0
+rerecords: 85
+
+Well, kryX-orange's 0th is maxed
+I can get a slight push down, but it's far from being enough to save a frame
+
+# 37-2
+rerecords: 55
+
+This level is maxed out, we're 1.10 pixels away from saving a frame
+
 # 39-4
 rerecords: 991
 
@@ -424,6 +535,12 @@ rerecords: 553
 A very clean one, with a corner jump on the way up (which is slower)
 431:139810|17895680|17895697|97587473|89478485|17896789|17895697|89548397|89478485|18175317|22876433|17895697|17895697|17895697|35791393|35791394|35791394|35791394|35791394|35791394|35790848|35791394|35791394|35791394|35791394|107880994|35808870|35791394|107374306|107374182|107374182|35791394|89478494|22369621|17895697|17895697|17895697|17895697|17895697|235999505|89548390|89478485|89478485|18175317|17895697|107374289|89478485|89478485|17896789|17895697|219222289|90596966|89478485|89478485|17895697|17895697|17895697|17895697|17895697|17898769|17895697|4369
 
+# 46-2
+rerecords: 252
+
+Using the grab-push on the middle platform gives us speed, but I can't find a path that gets to the exit faster.
+I optimize subpixels but I'm still tying 0th, 2.50 pixels away from the door.
+
 # 49-4
 rerecords: 1922
 
@@ -434,6 +551,11 @@ Doing two proper bounce corner jump in the beginning gets us too fast: we end up
 Double corner bounce on lower bb around 820: useless trajectory
 
 Not sure if doing a double bounce block jump in the end like the rta run does would be faster. I don't think it would, and I could not reproduce a proper one a second time. I think current solution is faster anyway. It's slower in rta at least.
+
+# 51-0
+rerecords: 43
+
+
 
 # 53-0
 rerecords: 14
@@ -464,12 +586,60 @@ rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
+# 61-1
+rerecords: 71
+
+Jumping 1f later gives us a little more speed on the left and saves a little bit of time, but not enough to save 1f.
+Jumping 2f later is slower, however long we jump.
+
+I tried jumping short and longer but this is the optimal strategy.
+
+# 61-3
+rerecords: 158
+
+
+
+# 64-4
+rerecords: 238
+
+Jumping just high enough to get to the switch is slower because we fall slower
+
+We can do the rj on the slope 1f earlier if we don't hit the ceiling on the first jump, but then it's slower.
+
+It's possible to jump 1f earlier on the last slope, but then the angle is not as good and we reach the door later
+
+# 67-1
+rerecords: 41
+
+Different strategy from 0th, gets closer to the door but doesn't save 1f.
+
+# 67-3
+rerecords: 87
+
+We delay the jump on the second bb to be have a better angle past the drone (otherwise we hit it)
+
+It's possible to jump on the upper bb side but it's useless
+
+There are many different possibilities to test. For instance, we can hold right longer on the bb. This one seems optimal.
+
+# 69-2
+rerecords: 805
+
+There's a branch in which we avoid the cj on the way up to the middle section, which is slightly faster, to go to the left, but we get a worse angle
+
 # 70-0
 rerecords: 400
 
 Stopping the jump at 147 and left input at 139 is *too fast*: we can't get the thwump corner jump
 
 I can't beat RTA. I need speed information to manage to optimize the beginning.
+
+# 70-1
+rerecords: 314
+
+2 different tying strategies for the end
+
+The slope jumps are a pain to optimize, there may still be room there
 
 # 70-2
 rerecords: 336
@@ -529,12 +699,21 @@ rerecords: 146
 
 Slower than RTA. Annoying.
 
+# 88-0
+rerecords: 85
+
+Doing a rj right of the doorswitch is slower. A wall jump as well
+A wall jump after going over the switch is slower as well
+
 # 90-0
 rerecords: 802
 
 I tried many different strategies for this one. The optimal one seems to be to maximize the number of corner jumps, as long as they don't require pressing opposite directions *too much*. This is why we avoid some of them, and notably the last one, which is too slow.
 
 I tried jumping directly on the first bb on the left by it was slower due to having to press opposite direction
+
+# 91-1
+
 
 # 94-0
 rerecords: 3
@@ -547,4 +726,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 33300
+# Total rerecords: 40773
