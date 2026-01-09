@@ -80,7 +80,7 @@ Didn't work:
 - doing reverse corner jumps between blocks in the middle section (angle are not good for the whole column)
 
 # 02-1
-rerecords: 698
+rerecords: 715
 
 Jumping twice on the wall left or the wall right around 500 is not faster
 
@@ -121,7 +121,7 @@ Beginning is so tight and frame-perfect that I can only copy 0th and not gain an
 The only gain is on the jump over the doorswitch
 
 # 03-2
-rerecords: 469
+rerecords: 477
 
 Straight jump from the top platform (no corner jump): slower
 
@@ -166,12 +166,14 @@ The stumble down is the fastest way
 In the end, being pushed right by the ceiling then doing a regular jump instead of a reverse corner jump is just sliiiightly too slow to get the door on the next frame
 
 # 04-1
-rerecords: 760
+rerecords: 875
 
 Corner jump on the bounceblock on the way down: useless, you have to slow down a lot for it
 In the end, we're going *too fast* and need to slow down or we meet the thwump
 Actually, slowing down in the end before the drone is better as it allows for a better navigation after the slope, which is what ultimately saves time
 Slowing down even more does not appear to save time (the navigation is really tricky... it might be possible to find a best path)
+
+Branch 9: better subpixel on the way to the left, but cannot do a better sequence of cj to the switch
 
 # 04-2
 rerecords: 283
@@ -196,7 +198,7 @@ We can't get a better angle than the one we get. We can press left to get a bett
 We have to slow down a little bit after the doorswitch, otherwise the drone is in a position that prevents us from doing the last jump directly to the door
 
 # 05-0
-rerecords: 1450
+rerecords: 1480
 
 No or single walljump left for the first switch is not faster
 I tried going backwards to do a double rcj on the single-block wall but couldn't make it work (and wasn't sure this would lead to anything anyway)
@@ -204,6 +206,8 @@ I tried going backwards to do a double rcj on the single-block wall but couldn't
 We wait to release the lower drone, but not the upper one. This is frame-perfect.
 
 It does not seem possible to go between the last drone and the slope in the very end
+
+Potential tile bwj to do in the lower section. Not sure it would actually save time as we wait for a drone later on
 
 # 05-1
 rerecords: 900
@@ -359,7 +363,7 @@ There are many possible angles on the way up to push us left and land. In fact, 
 Jumping on the left slope instead of doing a turnaround is slower.
 
 # 08-4
-rerecords: 673
+rerecords: 719
 
 On the way from the upper right switch to the doorswitch, cj + cj on the first bb is slightly faster than cj on the 2nd bb. In this path, you sadly can't go directly down without touching the platform on the left 
 
@@ -726,4 +730,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 40773
+# Total rerecords: 40989
