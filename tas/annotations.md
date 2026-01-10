@@ -166,10 +166,12 @@ The stumble down is the fastest way
 In the end, being pushed right by the ceiling then doing a regular jump instead of a reverse corner jump is just sliiiightly too slow to get the door on the next frame
 
 # 04-1
-rerecords: 1552
+rerecords: 1739
 
 Corner jump on the bounceblock on the way down: useless, you have to slow down a lot for it
 In the end, we're going *too fast* and need to slow down or we meet the thwump (if going right directly)
+
+Branch 9: alt route
 
 # 04-2
 rerecords: 710
@@ -738,4 +740,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 44610
+# Total rerecords: 44797
