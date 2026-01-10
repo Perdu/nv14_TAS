@@ -197,6 +197,14 @@ Then after [TASing a level](#tasing-a-n-level):
 
 When confused, you can get information with `git status`.
 
+## Statistics
+
+Various statistics about the current state of the TAS can be obtained using:
+
+```
+python stats.py
+```
+
 ## Video encoding
 
 - Disable `Settings → Audio → Audio Control → Disable` to have sound in encoding.
