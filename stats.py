@@ -154,8 +154,12 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True):
     
     # Display with bar charts
     unit = "f" if score_type.lower() == "speedrun" else "s"
-    print(f"\nTime differences ({score_type}) — RTA vs TAS:\n")
-    
+    if sort:
+        sort_type_text = "time saved over 0th"
+    else:
+        sort_type_text = "level"
+    print(f"\nTime differences ({score_type}) — RTA vs TAS (sorted by {sort_type_text}):\n")
+
     # Find max difference for scaling bars
     max_diff = max(abs(diff) for _, _, _, diff in results)
     

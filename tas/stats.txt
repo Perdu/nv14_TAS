@@ -2,7 +2,7 @@ Levels already TASed:
 Highscores: 152
 Speedruns: 133
 
-Time differences (Speedrun) — RTA vs TAS:
+Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
 05-0: TAS=1782 f  RTA=2044 f  +262 f (6.550) ████████████████████████████████████████
 69-2: TAS=1136 f  RTA=1358 f  +222 f (5.550) █████████████████████████████████
@@ -143,7 +143,7 @@ Total TAS: 66502 f (27m42.550s)
 Total RTA: 70352 f (29m18.800s)
 Total Δ   = +3850 f (1m36.250s)
 
-Time differences (Speedrun) — RTA vs TAS:
+Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
 00-0: TAS= 337 f  RTA= 343 f    +6 f (0.150) 
 00-1: TAS= 302 f  RTA= 305 f    +3 f (0.075) 
