@@ -424,10 +424,10 @@ function onPaint()
 
          local a = path[fA]
 
-         gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffffff) -- purple-yellow dot
+         gui.ellipse(a.x, a.y, 1, 1, 1, 0x55ffffff)
       end
       if x ~= -1 then
-         gui.ellipse(x, y, 1, 1, 1, 0xffffffff) -- purple-yellow dot
+         gui.ellipse(x, y, 1, 1, 1, 0x55ffffff)
       end
    end
 
