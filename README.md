@@ -60,7 +60,6 @@ And more.
 - speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
 - Find drone position in memory and draw raycasting on detection frame
 - Figure out something to optimize corner jumps
-- automatically update README with current progress/stats
 - TAS the remaining 367 levels ;)
 
 ## Install
@@ -181,6 +180,7 @@ To register yourself as author in a file, use:
 `./update_infos.sh` will automatically:
 - extract annotations from all existing ltm files and place them in [tas/annotations.md](tas/annotations.md) (this will take a few seconds).
 - update [tas/stats.txt](tas/stats.txt)
+- update the number of remaining levels in the Readme
 
 ### Editing ltm files
 
