@@ -112,6 +112,8 @@ docker build --tag libtas .
 docker run -it --rm -e DISPLAY=$DISPLAY -v /mnt/wslg/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw -v $PWD/volume:/home libtas
 ```
 
+Then inside the container, press the up arrow key and you will have the command the run libTAS (you can change the level at the beginning of the line or inside libTAS).
+
 ## Usage
 
 ### Basic libTAS usage
