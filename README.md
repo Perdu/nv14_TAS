@@ -52,7 +52,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - Find drone position in memory and draw raycasting on detection frame
 - Figure out something to optimize corner jumps
 - automatically update README with current progress/stats
-- TAS the remaining 388 levels ;)
+- TAS the remaining 367 levels ;)
 
 ## Install
 
