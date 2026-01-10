@@ -51,12 +51,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - automatically update README with current progress/stats
 - TAS the remaining 388 levels ;)
 
-## Optimization level
-
-Jumping gives slightly more speed than running. As I was not aware that this kind of subpixel optimization was possible in this game (and because it takes a lot of time to optimize), this is not done for a lot of level. I indicate this in the [level demo data](tas/level_data.yml) file, with `optimization_level`:
-- 1 (or nothing): level TASed without subpixel optimization
-- 2: level TASed with subpixel optimization
-
 ## Run
 
 After building the container (`docker build --tag libtas .`) using the [Dockerfile](Dockerfile):
@@ -127,47 +121,15 @@ $ rm ~/.local/share/ruffle/SharedObjects/localhost/n_v14b_userdata.sol
 
 Then see the Usage section
 
-## Framerate
-While the game displays a framerate of 120 (in `exiftool` or ruffle for instance), it's actually *40* since `1/0.025 = 40`.
+## Optimization level in tas/level_data.yml
 
-Using the `Runtime -> Debug -> Uncontrolled time` option in libTAS does give a framerate of around 40, not 120.
+Jumping gives slightly more speed than running. As I was not aware that this kind of subpixel optimization was possible in this game (and because it takes a lot of time to optimize), this is not done for a lot of level. I indicate this in the [level demo data](tas/level_data.yml) file, with `optimization_level`:
+- 1 (or nothing): level TASed without subpixel optimization
+- 2: level TASed with subpixel optimization
 
-Framerate seems to be 60 for Nv2.
+## Technical information for submission
 
-
-## Submission
-https://tasvideos.org/SubmissionInstructions
-
-Approved platform : libTAS + Ruffle https://tasvideos.org/Platforms#AdobeFlash
-
-Attribution could be an issue if we're using submitted runs https://tasvideos.org/MovieRules#MovieMustBeProperlyAttributed
-
-## Checksums
-
-From archive.org:
-```
-$ sha1sum n_v14.exe 
-b74b9c92471ee86b05e6ddaf9199bb2fca50cc34  n_v14.exe
-```
-Matches the metanet-found one.
-
-[Extracted one](external/n_v14.swf):
-```
-$ sha1sum 3.swf
-75a82ce33cda9770e773a64c585c14bb5a8f8478  3.swf
-```
-
-Nreality & n_v14_200_v4b ones:
-```
-$ sha1sum n_v14.swf 
-cf3d9ef6eb5762cbfca362bc72b6ff0c03455c31  n_v14.swf
-```
-
-## libTAS config
-libTAS configs that have to be set for the TAS to run properly (done in [ruffle_desktop.ini](docker/ruffle_desktop.ini)):
-- Frames per second: 40
-- Settings → Runtime → clock_gettime() monotonic
-- Settings → Audio → Audio Control → Disable (to avoid savestates crashes, see below)
+See [doc/technical_info.md](doc/technical_info.md)
 
 ## Video encoding
 
@@ -194,7 +156,7 @@ docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOM
 
 (this is more restrictive as it's not running with root user inside the container)
 
-## Tutorials
+## TAS Tutorials for other games
 - Undertale https://www.youtube.com/watch?v=EFCnTeTdD2k&t=712s
 - HK https://www.youtube.com/watch?v=qQAJk5_LUvg
 
