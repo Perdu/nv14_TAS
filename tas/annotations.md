@@ -166,14 +166,10 @@ The stumble down is the fastest way
 In the end, being pushed right by the ceiling then doing a regular jump instead of a reverse corner jump is just sliiiightly too slow to get the door on the next frame
 
 # 04-1
-rerecords: 875
+rerecords: 1552
 
 Corner jump on the bounceblock on the way down: useless, you have to slow down a lot for it
-In the end, we're going *too fast* and need to slow down or we meet the thwump
-Actually, slowing down in the end before the drone is better as it allows for a better navigation after the slope, which is what ultimately saves time
-Slowing down even more does not appear to save time (the navigation is really tricky... it might be possible to find a best path)
-
-Branch 9: better subpixel on the way to the left, but cannot do a better sequence of cj to the switch
+In the end, we're going *too fast* and need to slow down or we meet the thwump (if going right directly)
 
 # 04-2
 rerecords: 710
@@ -742,4 +738,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 43933
+# Total rerecords: 44610
