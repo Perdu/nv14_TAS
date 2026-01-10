@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys
 import yaml
 import re
 
@@ -64,7 +65,7 @@ def parse_score(value, score_type="Speedrun"):
         return None
 
 # AI-generated
-def display_time_difference(score_type="Speedrun", sort=True):
+def display_time_difference(score_type="Speedrun", sort=True, use_color=True):
     """
     Compare TAS vs RTA scores and display total difference with bar charts.
     - Speedrun: display frames
@@ -115,7 +116,7 @@ def display_time_difference(score_type="Speedrun", sort=True):
         return
     
     # Helper function to create colored bar chart
-    def create_bar(value, max_value, width=40, use_color=False):
+    def create_bar(value, max_value, width=40, use_color_gradient=False, use_color=True):
         """Create a colored horizontal bar based on value magnitude"""
         # Color codes (ANSI)
         GREEN = '\033[92m'
@@ -126,7 +127,7 @@ def display_time_difference(score_type="Speedrun", sort=True):
         
         # Determine color based on value thresholds
         abs_val = abs(value)
-        if use_color:
+        if use_color_gradient:
             if abs_val < max_value * 0.25:
                 color = GREEN
             elif abs_val < max_value * 0.5:
@@ -146,7 +147,10 @@ def display_time_difference(score_type="Speedrun", sort=True):
         bar_length = min(bar_length, width)
         
         bar = '█' * bar_length
-        return f"{color}{bar}{RESET}"
+        if use_color:
+            return f"{color}{bar}{RESET}"
+        else:
+            return f"{bar}"
     
     # Display with bar charts
     unit = "f" if score_type.lower() == "speedrun" else "s"
@@ -172,7 +176,7 @@ def display_time_difference(score_type="Speedrun", sort=True):
         levels = results
     
     for key, tas, rta, diff in levels:
-        bar = create_bar(diff, max_diff)
+        bar = create_bar(diff, max_diff, use_color=use_color)
         
         # Format with fixed widths
         if score_type.lower() == "speedrun":
@@ -247,7 +251,43 @@ def color_for_progress(done, total=5, use_gradient=True):
     return f"\033[38;2;{r};{g};0m"
 
 
-def display_episode_grid(filename, score_type="Speedrun", use_gradient=True):
+def emoji_for_progress(done, total=5, use_gradient=True):
+    """
+    Return an emoji representing progress.
+
+    If use_gradient=True, maps progress smoothly from red → yellow → green emojis.
+    If use_gradient=False, uses simple discrete emojis.
+    """
+
+    # Clamp values to avoid edge cases
+    done = max(0, min(done, total))
+
+    if not use_gradient:
+        if done == 0:
+            return "🔴"   # Red
+        elif done < total:
+            return "🟡"   # Yellow
+        else:
+            return "🟢"   # Green
+
+    # --- Gradient mode ---
+    ratio = done / total if total else 1
+
+    # Ordered from "bad" → "good"
+    gradient = [
+        "🔴",  # 0%
+        "🟥",
+        "🟧",
+        "🟨",
+        "🟩",
+        "🟢",  # 100%
+    ]
+
+    index = int(ratio * (len(gradient) - 1))
+    return gradient[index]
+
+
+def display_episode_grid(filename, score_type="Speedrun", use_gradient=True, github=False):
     """
     Display a grid of episodes (00–99), colored according to how many levels (0–4)
     have the given score_type ("Speedrun" or "Highscore").
@@ -281,15 +321,23 @@ def display_episode_grid(filename, score_type="Speedrun", use_gradient=True):
                 display = ep
             else:
                 done = sum(episodes[ep])
-                color = color_for_progress(done, total=5, use_gradient=use_gradient)
-                display = f"{color}{ep}{RESET}"
+                if github:
+                    emoji = emoji_for_progress(done, total=5, use_gradient=use_gradient)
+                    display = f"{emoji}{ep}"
+                else:
+                    color = color_for_progress(done, total=5, use_gradient=use_gradient)
+                    display = f"{color}{ep}{RESET}"
             line.append(display)
         print(" ".join(line))
 
     print("\nLegend:")
     for i in range(6):
-        color = color_for_progress(i, total=5, use_gradient=use_gradient)
-        print(f"{color}{i}/5{RESET}", end=" ")
+        if github:
+            emoji = emoji_for_progress(i, total=5, use_gradient=use_gradient)
+            print(f"{emoji}{i}/5", end=" ")
+        else:
+            color = color_for_progress(i, total=5, use_gradient=use_gradient)
+            print(f"{color}{i}/5{RESET}", end=" ")
     print(f"→ levels with {score_type}")
 
 
@@ -299,7 +347,14 @@ if __name__ == "__main__":
     print("Levels already TASed:")
     print(f"Highscores: {highscores}")
     print(f"Speedruns: {speedruns}")
-    display_time_difference("Speedrun", sort=True)
-    display_time_difference("Speedrun", sort=False)
-    display_episode_grid(filename, "Highscore", use_gradient=False)
-    display_episode_grid(filename, "Speedrun", use_gradient=False)
+    github = False
+    if len(sys.argv) > 1 and sys.argv[1] == "github":
+        github = True
+    if github:
+        use_color = False
+    else:
+        use_color = True
+    display_time_difference("Speedrun", sort=True, use_color=use_color)
+    display_time_difference("Speedrun", sort=False, use_color=use_color)
+    display_episode_grid(filename, "Highscore", use_gradient=False, github=github)
+    display_episode_grid(filename, "Speedrun", use_gradient=False, github=github)
