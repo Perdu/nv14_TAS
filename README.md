@@ -51,9 +51,18 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - automatically update README with current progress/stats
 - TAS the remaining 388 levels ;)
 
-## Run
+## Install
 
-After building the container (`docker build --tag libtas .`) using the [Dockerfile](Dockerfile):
+### Linux
+
+Just build the docker container using the [Dockerfile](Dockerfile):
+
+```
+docker build --tag libtas .
+```
+
+#### Run
+
 ```
 docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/volume:/home/ libtas
 ```
@@ -63,6 +72,30 @@ Inside container:
 /root/src/libTAS/build/AppDir/usr/bin/libTAS /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &
 ```
 (Or just press up arrow, as these commands are saved as previous command in bash history)
+
+### Windows
+
+In order to make it possible to TAS any game, libTAS uses tools that do not work properly in Windows. For that reason, it only works on Linux. If you're on Windows, you can use the Windows Subsystem for Linux (WSL) to run libTAS.
+
+To install WSL for libTAS, please follow Step 1 of this guide: https://clementgallet.github.io/libTAS/guides/wsl/
+
+Once you have WSL set up, install git to be able to clone this repository:
+
+```
+git clone https://github.com/Perdu/nv14_TAS.git
+```
+
+Then run the script to install everything:
+
+```
+./nv14_TAS/install_windows_wsl.sh
+```
+
+#### Run
+
+```
+/home/$(whoami)/libTAS/build/AppDir/usr/bin/libTAS /home/$(whoami)/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/$(whoami)/nv14_TAS/volume/n_v14.swf &
+```
 
 ## Usage
 https://github.com/clementgallet/libTAS?tab=readme-ov-file#run
