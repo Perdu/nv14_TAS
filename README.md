@@ -117,46 +117,6 @@ https://clementgallet.github.io/libTAS/guides/format/
 
 Extracting save file: `tar xzf n.ltm`
 
-## Game source
-### n v1.4
-https://archive.org/details/n_v1pc → .zip with a .exe
-
-or here: https://www.thewayoftheninja.org/n_history.html
-
-Or the .swf directly from NReality: https://n.infunity.com/
-
-### n v2
-https://www.thewayoftheninja.org/n.html -> the Linux download contains a .swf
-
-## Extraction
-https://flashpointarchive.org/datahub/Extracting_Flash_Games
-
-```
-ffdec n_v14.exe
-```
-
-Click on the file on the left, the Save as...
-
-## Running (without Docker)
-I used ruffle-nightly-bin from AUR. Guidelines require to use nightly build: https://tasvideos.org/EmulatorResources/Ruffle
-
-I used libtas-git
-
-Procedure:
-- Ensure you have no .sol file (careful: this is your save file, you probably want to back it up as the following command deletes it):
-```
-$ rm ~/.local/share/ruffle/SharedObjects/localhost/n_v14b_userdata.sol
-
-```
-- libTAS. Set executable to `/bin/ruffle` and CLI options to `--no-gui /<path>/n_v14.swf`
-- in libTAS, `clock_gettime() monotonic` must be enabled in Runtime->Time tracking for Ruffle to work in libTAS
-- Set up the Movie recording section
-- Movie->Input Editor
-- Pause
-- Start !!!
-
-Then see the Usage section
-
 ## Optimization level in tas/level_data.yml
 
 Jumping gives slightly more speed than running. As I was not aware that this kind of subpixel optimization was possible in this game (and because it takes a lot of time to optimize), this is not done for a lot of level. I indicate this in the [level demo data](tas/level_data.yml) file, with `optimization_level`:

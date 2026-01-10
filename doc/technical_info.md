@@ -44,3 +44,23 @@ Nreality & n_v14_200_v4b ones:
 $ sha1sum n_v14.swf 
 cf3d9ef6eb5762cbfca362bc72b6ff0c03455c31  n_v14.swf
 ```
+
+## Game source
+### n v1.4
+https://archive.org/details/n_v1pc → .zip with a .exe
+
+or here: https://www.thewayoftheninja.org/n_history.html
+
+Or the .swf directly from NReality: https://n.infunity.com/
+
+### n v2
+https://www.thewayoftheninja.org/n.html -> the Linux download contains a .swf
+
+## Extraction
+https://flashpointarchive.org/datahub/Extracting_Flash_Games
+
+```
+ffdec n_v14.exe
+```
+
+Click on the file on the left, the Save as...
