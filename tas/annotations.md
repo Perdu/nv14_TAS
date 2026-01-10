@@ -166,7 +166,7 @@ The stumble down is the fastest way
 In the end, being pushed right by the ceiling then doing a regular jump instead of a reverse corner jump is just sliiiightly too slow to get the door on the next frame
 
 # 04-1
-rerecords: 1739
+rerecords: 1745
 
 Corner jump on the bounceblock on the way down: useless, you have to slow down a lot for it
 In the end, we're going *too fast* and need to slow down or we meet the thwump (if going right directly)
@@ -464,7 +464,7 @@ rerecords: 345
 
 
 # 13-1
-rerecords: 569
+rerecords: 684
 
 We *can* save time on the way down with a stumble. However, if we arrive too early, the drone chases us on the left instead of up and gets in the way. We *need* to be slow for that.
 There may be an optimization to do to find a better beginning
@@ -633,9 +633,11 @@ It's possible to jump on the upper bb side but it's useless
 There are many different possibilities to test. For instance, we can hold right longer on the bb. This one seems optimal.
 
 # 69-2
-rerecords: 805
+rerecords: 809
 
 There's a branch in which we avoid the cj on the way up to the middle section, which is slightly faster, to go to the left, but we get a worse angle
+
+Branch 9: alt route jumping lower on the way back to the middle section, the walljumping on the left. The way to the left is faster, but walljumps lose time.
 
 # 70-0
 rerecords: 400
@@ -645,11 +647,13 @@ Stopping the jump at 147 and left input at 139 is *too fast*: we can't get the t
 I can't beat RTA. I need speed information to manage to optimize the beginning.
 
 # 70-1
-rerecords: 314
+rerecords: 316
 
 2 different tying strategies for the end
 
 The slope jumps are a pain to optimize, there may still be room there
+
+Branches 8 and 9: alt routes on the way down, same score (jump directly to the door, jump a bit further)
 
 # 70-2
 rerecords: 336
@@ -740,4 +744,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 44797
+# Total rerecords: 44924
