@@ -153,6 +153,23 @@ To register yourself as author in a file, use:
 - `./change_author.sh 00-0 "zapkt and Raif"` to change the authorship in the ltm file
 - `python sol_to_demo.py -a "zapkt and Raif" --save 00-0` to change the authorship in [tas/level_data.yml](tas/level_data.yml) when getting the demo string.
 
+### Updating annotations
+
+`./get_annotations.sh` will automatically extract annotations from all existing ltm files and place them in [tas/annotations.md](tas/annotations.md) (this will take a few seconds).
+
+### Editing ltm files
+
+ltm files are zip archives. If for any reason you need to manually edit their content, you can extract them using (you might need to create the extract folder first):
+
+```
+tar xzf volume/n_levels/00-0.ltm -C extract/
+```
+Edit the files in the extract folder, then recompress the archive using:
+
+```
+tar czf volume/n_levels/00-0.ltm -C extract . --transform='s|^\./||'
+```
+
 ## Optimization level in tas/level_data.yml
 
 Jumping gives slightly more speed than running. As I was not aware that this kind of subpixel optimization was possible in this game (and because it takes a lot of time to optimize), this is not done for a lot of level. I indicate this in the [level demo data](tas/level_data.yml) file, with `optimization_level`:
