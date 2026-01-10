@@ -33,7 +33,7 @@ I changed route over the MBD: at the top of the level, I do a stumble instead of
 The angle to land on the slope is extremly tight and we need to jump sufficiently long during the cj to land it. There is some angle for which that works with a stumble instead of a cj up there, but it ends up not being faster as the cj makes us hit the ceiling and fall faster.
 
 # 01-1
-rerecords: 265
+rerecords: 507
 
 Didn't work:
 - Using the one-way platforms in the beginning to slow descent down
@@ -744,4 +744,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 45059
+# Total rerecords: 45301
