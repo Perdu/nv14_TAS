@@ -40,6 +40,9 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [Metanet tutorial on N physical collision system](https://edelkas.github.io/n/index/docs.html)
 - [Nclone, Python emulator of the N++ engine (some parts are similar to N v1.4)](https://github.com/SimonV42/nclone)
 - [Nclone: Part handling ceiling crushing](https://github.com/SimonV42/nclone/blob/842190b2a216579b5b5c551e0a0b4505fc3381cc/nsim.py#L299-L302)
+### TAS Tutorials for other games
+- Undertale https://www.youtube.com/watch?v=EFCnTeTdD2k&t=712s
+- HK https://www.youtube.com/watch?v=qQAJk5_LUvg
 
 ## Todo
 - Make script to display information for finale encode: TAS and 0th author, frames and time gain
@@ -160,10 +163,6 @@ Jumping gives slightly more speed than running. As I was not aware that this kin
 - 1 (or nothing): level TASed without subpixel optimization
 - 2: level TASed with subpixel optimization
 
-## Technical information for submission
-
-See [doc/technical_info.md](doc/technical_info.md)
-
 ## Video encoding
 
 I used default settings for encoding.
@@ -178,27 +177,21 @@ This significantly *reduced* the size of the video because the fixed bitrate is 
 
 Disable Settings → Audio → Audio Control → Disable to have sound in encoding.
 
-## Sound
-Getting sound to work in libTAS is not really useful, as you don't need sound during the TASing process (it breaks savestates) and sound in encoding will work regardless.
-
-If you want it regardless, you can use the [Dockerfile_sound](Dockerfile_sound) I made and run it with:
-
-```
-docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/volume:/home/taser/tas/ -v /run/user/$UID/pulse:/run/user/$UID/pulse -e PULSE_SERVER=unix:/run/user/$UID/pulse/native -v /etc/machine-id:/etc/machine-id:ro --group-add audio --cap-add=cap_checkpoint_restore libtas_sound
-```
-
-(this is more restrictive as it's not running with root user inside the container)
-
-## TAS Tutorials for other games
-- Undertale https://www.youtube.com/watch?v=EFCnTeTdD2k&t=712s
-- HK https://www.youtube.com/watch?v=qQAJk5_LUvg
-
 ## Known issues
 
 Troubleshooting: see [troubleshoot.md](doc/troubleshoot.md)
 
+No sound: this is normal and you don't need it. See [sound.md](doc/sound.md) if you really want it.
+
 ### Texture problem
 Reported [here](https://github.com/ruffle-rs/ruffle/issues/21776)
-Ruffle does not properly display all textures
-Adding -g gl removes error in stdout, but doesn't solve the issue
+
+Ruffle does not properly display all textures.
+
+Adding `-g gl` removes error in stdout, but doesn't solve the issue.
+
 N2 (swf Linux version) does not have the issue
+
+## Technical information for submission
+
+See [doc/technical_info.md](doc/technical_info.md)
