@@ -283,6 +283,7 @@ Time differences (Speedrun) — RTA vs TAS:
 Total TAS: 66502 f (27m42.550s)
 Total RTA: 70352 f (29m18.800s)
 Total Δ   = +3850 f (1m36.250s)
+
 Episode Highscore Grid:
 
 🟢00 🟡10 🟡20 🟡30 🟡40 🔴50 🟡60 🟡70 🟡80 🟡90
@@ -298,6 +299,7 @@ Episode Highscore Grid:
 
 Legend:
 🔴0/5 🟡1/5 🟡2/5 🟡3/5 🟡4/5 🟢5/5 → levels with Highscore
+
 Episode Speedrun Grid:
 
 🟢00 🟡10 🟡20 🔴30 🔴40 🔴50 🟡60 🟢70 🟡80 🟡90

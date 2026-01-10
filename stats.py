@@ -356,5 +356,7 @@ if __name__ == "__main__":
         use_color = True
     display_time_difference("Speedrun", sort=True, use_color=use_color)
     display_time_difference("Speedrun", sort=False, use_color=use_color)
+    print()
     display_episode_grid(filename, "Highscore", use_gradient=False, github=github)
+    print()
     display_episode_grid(filename, "Speedrun", use_gradient=False, github=github)
