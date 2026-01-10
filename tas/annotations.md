@@ -1,5 +1,5 @@
 # 00-0
-rerecords: 12
+rerecords: 0
 
 
 
@@ -463,10 +463,20 @@ You can jump 1f less for the first switch, which lets you land further to the ri
 The rcj is really tight and finding a better way to land on the platform is difficult (even getting another one that does is)
 
 # 13-0
+rerecords: 345
+
 
 
 # 13-1
+rerecords: 569
 
+We *can* save time on the way down with a stumble. However, if we arrive too early, the drone chases us on the left instead of up and gets in the way. We *need* to be slow for that.
+There may be an optimization to do to find a better beginning
+
+We can get pushed when entering the doorswitch room to jump on the opposite wall 1f earlier. But it's a bit sower overall as we get less height.
+
+On the way up to the door, getting wallpushed slows us down (lower height)
+On the way up to the door, we can do a full jump, then wall jump and slope jump on the way to the lp, but it's slightly slower.
 
 # 19-4
 rerecords: 453
@@ -717,7 +727,11 @@ I tried many different strategies for this one. The optimal one seems to be to m
 I tried jumping directly on the first bb on the left by it was slower due to having to press opposite direction
 
 # 91-1
+rerecords: 100
 
+We're 0.18 pixels away from saving 1f. We can't make the third pipe jump earlier as all possible angles lead to an unclean landing
+
+I can't land a proper cj on the way to the switch that's actually faster
 
 # 94-0
 rerecords: 3
@@ -730,4 +744,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 41684
+# Total rerecords: 42686
