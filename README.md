@@ -192,17 +192,33 @@ Jumping gives slightly more speed than running. As I was not aware that this kin
 
 ## Video encoding
 
+- Disable `Settings → Audio → Audio Control → Disable` to have sound in encoding.
+- Configure destination in `Tools → Configure encode...`
+- Start encoding: `Tools → Start encode`
+- Then run the level(s) until the end and close
+
+### Adding ghost
+
+- Load the lua [n_ghost.lua](volume/lua/n_ghost.lua) script
+- in libTAS, go to `Settings -> Video` and activate "Lua on video encode"
+
+### Record demo for one or several episodes
+
+- Build the demo data: `./build_demo.sh -s 0 -e 9`
+- In libTAS, configure options for recording (see above)
+- load the `n_recomp_rta_speedrun.ltm` file
+
+### Upscaling
+
 I used default settings for encoding.
 
-Since youtube will downgrade videos smaller than 720p to 30fps, I upscaled the video to ensure it stays in 60fps:
+Since youtube will downgrade videos smaller than 720p to 30fps, I adding an upscaling setting to ensure it stays in 60fps. it can be redone manually on other videos:
 
 ```
 ffmpeg -i 'n_rta_hs.mkv' -vf scale=-1:720 'n_rta_hs_upscaled.mkv'
 ```
 
-This significantly *reduced* the size of the video because the fixed bitrate is removed.
-
-Disable Settings → Audio → Audio Control → Disable to have sound in encoding.
+This significantly *reduced* the size of the video because the fixed bitrate is removed (although... Sometimes. Not always).
 
 ## Known issues
 
