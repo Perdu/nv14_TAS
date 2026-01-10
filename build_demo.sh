@@ -7,8 +7,7 @@ cd "$SCRIPT_DIR"
 
 EXTRACT_FOLDER="extract"  # also change in builder.py for markers
 DOCKER_VOLUME_PATH="volume"
-# LTM_FILE="n_recomp.ltm"
-LTM_FILE="n_recomp_rta_speedrun.ltm"
+LTM_FILE="n_speedrun.ltm"
 
 mkdir -p $EXTRACT_FOLDER
 

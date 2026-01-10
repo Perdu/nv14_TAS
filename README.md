@@ -213,7 +213,7 @@ When confused, you can get information with `git status`.
 
 - Build the demo data: `./build_demo.sh -s 0 -e 9`
 - In libTAS, configure options for recording (see above)
-- load the `n_recomp_rta_speedrun.ltm` file
+- load the `n_speedrun.ltm` file
 
 ### Upscaling
 
