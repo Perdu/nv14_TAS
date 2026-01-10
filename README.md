@@ -101,6 +101,9 @@ Then run the script to install everything:
 ```
 
 ## Usage
+
+### Basic libTAS usage
+
 https://github.com/clementgallet/libTAS?tab=readme-ov-file#run
 
 https://tasvideos.org/EmulatorResources/LibTAS/Usage
@@ -109,6 +112,8 @@ https://tasvideos.org/EmulatorResources/LibTAS/Usage
 - fast forward, using the tab key
 
 Use Shift+F1-10 to save state and F1-10 to reload state.
+
+Use Ctrl+F1-10 to reload a *branch*. A branch is created automatically when creating the associated savestate. Basically, this allows you to reload inputs the way they were defined when you made the savestate (be careful to make a savestate before loading a branch to avoid losing your progress).
 
 You can press on individual frames to go there, provided you have a saved state before
 
