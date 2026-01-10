@@ -176,9 +176,11 @@ To register yourself as author in a file, use:
 - `./change_author.sh 00-0 "zapkt and Raif"` to change the authorship in the ltm file
 - `python sol_to_demo.py -a "zapkt and Raif" --save 00-0` to change the authorship in [tas/level_data.yml](tas/level_data.yml) when getting the demo string.
 
-### Updating annotations
+### Updating infos
 
-`./get_annotations.sh` will automatically extract annotations from all existing ltm files and place them in [tas/annotations.md](tas/annotations.md) (this will take a few seconds).
+`./update_infos.sh` will automatically:
+- extract annotations from all existing ltm files and place them in [tas/annotations.md](tas/annotations.md) (this will take a few seconds).
+- update [tas/stats.txt](tas/stats.txt)
 
 ### Editing ltm files
 
