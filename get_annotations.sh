@@ -10,8 +10,10 @@ OUTPUT_FILE="tas/annotations.md"
 
 mkdir -p extract
 
-# Empty or create the output file
-> "$OUTPUT_FILE"
+if [ "$1" != "--check" ]; then
+    # Empty or create the output file
+    > "$OUTPUT_FILE"
+fi
 
 total_rerecords=0
 
@@ -62,7 +64,9 @@ for file in "$ROOT_DIR"/*-*.ltm; do
     fi
 done
 
-echo "# Total rerecords: $total_rerecords" >> "$OUTPUT_FILE"
+if [ "$1" != "--check" ]; then
+    echo "# Total rerecords: $total_rerecords" >> "$OUTPUT_FILE"
 
-echo "Annotations extracted to $OUTPUT_FILE"
-echo "Total rerecords: $total_rerecords"
+    echo "Annotations extracted to $OUTPUT_FILE"
+    echo "Total rerecords: $total_rerecords"
+fi
