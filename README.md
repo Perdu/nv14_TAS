@@ -48,7 +48,6 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - Make script to display information for finale encode: TAS and 0th author, frames and time gain
 - Add drone detection frame (for 1st chase)
 - speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
-- Sort Readme into several files for better readability
 - Find drone position in memory and draw raycasting on detection frame
 - Figure out something to optimize corner jumps
 - automatically update README with current progress/stats
