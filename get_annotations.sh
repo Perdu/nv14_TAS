@@ -15,16 +15,23 @@ mkdir -p extract
 
 total_rerecords=0
 
+if [ "$1" == "--help" -o "$1" == "-h" ]; then
+    echo "Usage: $0 [--check]"
+    exit 0
+fi
+
 # Loop through all .ltm files matching the pattern
 for file in "$ROOT_DIR"/*-*.ltm; do
     # Extract the base filename (e.g., 00-0.ltm -> 00-0)
     base=$(basename "$file" .ltm)
     
     if [[ $base =~ ^[0-9]{2}-[0-9]$ ]]; then
-        # To verify broken archives:
-        # echo "$base"
-        # tar tzf "$file" | grep './'
-        # continue
+        if [ "$1" == "--check" ]; then
+            # To verify broken archives:
+            echo "$base"
+            tar tzf "$file" | grep './'
+            continue
+        fi
 
         # Extract annotations content from the .ltm file
         # Assuming annotations are stored in a file named "annotations" inside the .ltm archive (zip format)
