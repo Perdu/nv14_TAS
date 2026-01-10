@@ -21,6 +21,11 @@ for file in "$ROOT_DIR"/*-*.ltm; do
     base=$(basename "$file" .ltm)
     
     if [[ $base =~ ^[0-9]{2}-[0-9]$ ]]; then
+        # To verify broken archives:
+        # echo "$base"
+        # tar tzf "$file" | grep './'
+        # continue
+
         # Extract annotations content from the .ltm file
         # Assuming annotations are stored in a file named "annotations" inside the .ltm archive (zip format)
         if tar xOzf "$file" annotations.txt &>/dev/null; then
