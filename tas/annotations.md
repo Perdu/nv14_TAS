@@ -289,7 +289,7 @@ I tried:
 - jumping directly from first switch to second one: it is just barely not enough. There is one situation in which we can manage to be high enough to do a cj, but it's much slower
 
 # 07-1
-rerecords: 141
+rerecords: 290
 
 cj on last bb is not faster
 
@@ -744,4 +744,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 42686
+# Total rerecords: 42835
