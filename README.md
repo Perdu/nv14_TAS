@@ -19,7 +19,7 @@ Videos produced with this tool:
 - [Lua script to display overlay information](display_infos.lua.template) (demo information, real-time inputs)
 - [Other Lua scripts to help TASing](volume/lua)
 - [Python script to get demo data from .sol file](sol_to_demo.py)
-- [Python script to get statistics about current state of the TAS](stats.py)
+- [Python script to get statistics about current state of the TAS](stats.py) -> produces [tas/stats.txt](tas/stats.txt)
 - [Notes for each TASed level](tas/annotations.md)
 - [A dockerfile to build the TASing environment](Dockerfile)
 - [Other tools and informations from external sources](external/)
