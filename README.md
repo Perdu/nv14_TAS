@@ -112,11 +112,6 @@ Use Shift+F1-10 to save state and F1-10 to reload state.
 
 You can press on individual frames to go there, provided you have a saved state before
 
-## Movie format
-https://clementgallet.github.io/libTAS/guides/format/
-
-Extracting save file: `tar xzf n.ltm`
-
 ## Optimization level in tas/level_data.yml
 
 Jumping gives slightly more speed than running. As I was not aware that this kind of subpixel optimization was possible in this game (and because it takes a lot of time to optimize), this is not done for a lot of level. I indicate this in the [level demo data](tas/level_data.yml) file, with `optimization_level`:
