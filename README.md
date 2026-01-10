@@ -141,6 +141,12 @@ Once you're done and want to obtain the demo data:
 - *Inside the docker container*, run: `./get_sol_file.sh` (this copies the sol file in a place we can get it from outside of the container)
 - in the repository folder, run: `python sol_to_demo.py --save 00-0`. This will obtain the demo data and place it corectly in [tas/level_data.yml](tas/level_data.yml).
 
+### Overriding .sol file
+
+If the current demo did not override the score in the .sol file (for instance because it didn't save a frame) but you want to get the demo string anyway, you can:
+- inside the docker container, run `./use_sol_file.sh --override` (this will place a .sol file with low scores at the right place)
+- restart the game and run it through the end
+
 ### Changing authors
 
 To register yourself as author in a file, use:
