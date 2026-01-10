@@ -82,22 +82,34 @@ In order to make it possible to TAS any game, libTAS uses tools that do not work
 
 To install WSL for libTAS, please follow Step 1 of this guide: https://clementgallet.github.io/libTAS/guides/wsl/
 
-Once you have WSL set up, install git to be able to clone this repository:
+Once you have WSL set up, [install docker desktop](https://docs.docker.com/desktop/setup/install/windows-install/) on Windows.
 
+Then, inside WSL, install some necessary tools:
+```
+sudo apt-get install git docker
+```
+
+Clone the repository:
 ```
 git clone https://github.com/Perdu/nv14_TAS.git
 ```
 
-Then run the script to install everything:
+Move to the repository:
 
 ```
-./nv14_TAS/install_windows_wsl.sh
+cd nv14_TAS
+```
+
+Then build the docker image (this will take a long time as it's rebuilding ruffle and libTAS from source):
+
+```
+docker build --tag libtas .
 ```
 
 #### Run
 
 ```
-/home/$(whoami)/libTAS/build/AppDir/usr/bin/libTAS /home/$(whoami)/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/$(whoami)/nv14_TAS/volume/n_v14.swf &
+docker run -it --rm -e DISPLAY=$DISPLAY -v /mnt/wslg/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw -v $PWD/volume:/home libtas
 ```
 
 ## Usage
