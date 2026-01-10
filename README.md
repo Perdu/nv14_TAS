@@ -117,6 +117,36 @@ Use Ctrl+F1-10 to reload a *branch*. A branch is created automatically when crea
 
 You can press on individual frames to go there, provided you have a saved state before
 
+One useful trick to compare several paths is to set options in the menu editor "disable autoscrolling" and "rewind seeks to current frame". Place yourself at a given frame, then edit earlier frames to see where that lands on current frame. This is very useful for micro-optimizations.
+
+### TASing a N level
+
+If no `.ltm` file already exist for that level (in [volume/n_levels/](volume/n_levels/)), create one using either:
+- `./start_tas_level.sh 00-0` to create an empty one with no input
+- `./start_tas_level.sh 00-0 rta` to create one with inputs from the 0th preloaded
+- `./start_tas_level.sh 00-0 hs` to create one with inputs from the highscore TAS (if one exists)
+- `./start_tas_level.sh 00-0 demo` to create one with inputs from a demo string (you will be prompted for it)
+
+You can then proceed with TASing the level.
+
+Upon launching the level, the script will perform automatic actions to extract valuable information from memory. Let it load until it's settled.
+
+Place your notes in `Movies -> Annotations...`. Write things you tested that didn't work so that others know they're empty routes.
+
+If you have an alt route that you want to keep, place it in a savestate (e.g. 9) and write it in the annotations.
+
+To register a position (and try to beat it with other routes), place a space key on the frame before it, then advance one frame. The script will delete the space key, create a savestate, and save the position. You should now see a yellow circle indicating that best position, and the position of this path compared to the position of the current route at the bottom of the screen. Small indicators on the left show whether current path compares to that best path (as in being more to the left or right, up or down).
+
+Once you're done and want to obtain the demo data:
+- *Inside the docker container*, run: `./get_sol_file.sh` (this copies the sol file in a place we can get it from outside of the container)
+- in the repository folder, run: `python sol_to_demo.py --save 00-0`. This will obtain the demo data and place it corectly in [tas/level_data.yml](tas/level_data.yml).
+
+### Changing authors
+
+To register yourself as author in a file, use:
+- `./change_author.sh 00-0 "zapkt and Raif"` to change the authorship in the ltm file
+- `python sol_to_demo.py -a "zapkt and Raif" --save 00-0` to change the authorship in [tas/level_data.yml](tas/level_data.yml) when getting the demo string.
+
 ## Optimization level in tas/level_data.yml
 
 Jumping gives slightly more speed than running. As I was not aware that this kind of subpixel optimization was possible in this game (and because it takes a lot of time to optimize), this is not done for a lot of level. I indicate this in the [level demo data](tas/level_data.yml) file, with `optimization_level`:
