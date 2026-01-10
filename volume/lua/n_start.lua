@@ -471,7 +471,7 @@ end
 
 -- Detect Space key press
 function onInput()
-    if input.getKey(KEY_SPACE) ~= 0 and memy ~= "" and not triggered then
+    if input.getKey(KEY_SPACE) ~= 0 and memy ~= "" and not triggered and movie.currentFrame() ~= space_frame - 1 then
        input.setKey(KEY_SPACE, 0)
        -- if movie.getMarker() ~= "" then
        --    movie.setMarker("best")
