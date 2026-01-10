@@ -105,7 +105,7 @@ https://github.com/clementgallet/libTAS?tab=readme-ov-file#run
 
 https://tasvideos.org/EmulatorResources/LibTAS/Usage
 - frame advancing, using the V key
-- pause/play, using the pause key
+- pause/play, using the C key
 - fast forward, using the tab key
 
 Use Shift+F1-10 to save state and F1-10 to reload state.
