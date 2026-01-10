@@ -15,4 +15,4 @@ mkdir -p $EXTRACT_FOLDER
 
 tar xzf volume/n_levels/"$1".ltm -C extract/
 sed -i "s/authors=.*/authors=$2/" extract/config.ini
-tar czf $DOCKER_VOLUME_PATH/n_levels/"$1".ltm -C $EXTRACT_FOLDER .
+tar czf $DOCKER_VOLUME_PATH/n_levels/"$1".ltm -C $EXTRACT_FOLDER . --transform='s|^\./||'
