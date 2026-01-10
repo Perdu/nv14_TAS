@@ -4,6 +4,10 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 
 ![Screenshot of N running in libTAS](screenshot.png)
 
+Videos produced with this tool:
+- Videos compiling [Speedrun](https://www.youtube.com/watch?v=ABvl85d5Nic&t=664s) and [Highscore](https://www.youtube.com/watch?v=StWH8q4TDDU&t=10s) 0th (RTA scores)
+- [Column 0 TAS](https://www.youtube.com/watch?v=SDcWJzEX7LY)
+
 ## What this repository contains
 
 - Information about TASing N v1.4 (this file)
