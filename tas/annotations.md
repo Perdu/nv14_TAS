@@ -176,11 +176,9 @@ Slowing down even more does not appear to save time (the navigation is really tr
 Branch 9: better subpixel on the way to the left, but cannot do a better sequence of cj to the switch
 
 # 04-2
-rerecords: 283
+rerecords: 710
 
 With the right angle, you can jump on the top thwump. This is absolutely completely useless as it speeds you downwards
-
-It's probably possible to optimize it more but finding the right angle that works is a pain and random
 
 # 04-3
 rerecords: 962
@@ -744,4 +742,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 42835
+# Total rerecords: 43262
