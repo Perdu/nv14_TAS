@@ -39,7 +39,7 @@ Info & tooling for making a Tool-Assisted Speedrun (TAS) for the popular 1.4 ver
 - [Drone detection](https://discord.com/channels/197765375503368192/199460839252688896/1458621494224490527)
 - [Metanet tutorial on N physical collision system](https://edelkas.github.io/n/index/docs.html)
 - [Nclone, Python emulator of the N++ engine (some parts are similar to N v1.4)](https://github.com/SimonV42/nclone)
-- [Nclone: Part handling ceiling crushing](https://github.com/SimonV42/nclone/blob/842190b2a216579b5b5c551e0a0b4505fc3381cc/nsim.py#L299-L302)
+  - [Nclone: Part handling ceiling crushing](https://github.com/SimonV42/nclone/blob/842190b2a216579b5b5c551e0a0b4505fc3381cc/nsim.py#L299-L302)
 ### TAS Tutorials for other games
 - Undertale https://www.youtube.com/watch?v=EFCnTeTdD2k&t=712s
 - HK https://www.youtube.com/watch?v=qQAJk5_LUvg
