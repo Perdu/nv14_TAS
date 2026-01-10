@@ -170,6 +170,20 @@ Edit the files in the extract folder, then recompress the archive using:
 tar czf volume/n_levels/00-0.ltm -C extract . --transform='s|^\./||'
 ```
 
+### Contributing to this repository
+
+If you want to be able to push directly to this repository, you need to:
+- [create a github account](https://github.com/signup)
+- ask me to give you write permission on the repository
+- Optionnally, to avoid having to enter credentials every time, you may want to [create an SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent), set it up [here](https://github.com/settings/keys), then clone the repository using `git clone git@github.com:Perdu/nv14_TAS.git` instead of the HTTPS method you most probably used.
+
+Then after TASing a level:
+- Add the newly created ltm file: `git add volume/n_levels/00-0.ltm`
+- Create a *commit* with a indicating what you did: `git commit -am "Add 00-0, 100f faster than 0th"`
+- Push the commit to the repository: `git push`
+
+When confused, you can get information with `git status`.
+
 ## Optimization level in tas/level_data.yml
 
 Jumping gives slightly more speed than running. As I was not aware that this kind of subpixel optimization was possible in this game (and because it takes a lot of time to optimize), this is not done for a lot of level. I indicate this in the [level demo data](tas/level_data.yml) file, with `optimization_level`:
