@@ -92,7 +92,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
                 lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"{level_data[score_type]['authors']}, {level_data[score_type]['time']}, {date}\"}},\n"
             else:
                 diff_with_rta = int(data_rta[level_name][score_type]['time']) - int(level_data[score_type]['time'].replace(' f', ''))
-                lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"TAS: {level_data[score_type]['authors']}, {level_data[score_type]['time']} ({diff_with_rta} f better than 0th)\"}},\n"
+                lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"TAS: {level_data[score_type]['authors']}, {level_data[score_type]['time']}\",\"0th: {data_rta[level_name][score_type]['authors']}, {data_rta[level_name][score_type]['time']} f\", \"- {diff_with_rta} f\"}},\n"
             res += libtas_input
             for i in range(nb_frames_demo):
                 output_ghost.writerow([nb_frames + i] + ghost_data[i][1:])
