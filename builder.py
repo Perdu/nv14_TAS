@@ -45,6 +45,9 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
         level_data_file="tas/level_data_rta.yml"
     else:
         level_data_file="tas/level_data.yml"
+        level_data_file_rta = "tas/level_data_rta.yml"
+        with open(level_data_file_rta, "r", encoding="utf-8") as f:
+            data_rta = yaml.safe_load(f)
     with open(level_data_file, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     with open("tas/loading_times.yml", "r", encoding="utf-8") as f:
@@ -80,12 +83,16 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
             markers[f"{nb_markers}\\text"] = level_name
             demo_str = level_data[score_type]["demo"]
             libtas_input, nb_frames_demo = convert_demo_to_libtas(demo_str)
-            try:
-                date = level_data[score_type]['time'].strftime("%Y-%m-%d")
-            except AttributeError:
-                # for the kryX-orange 25-2 case, which is not a date
-                date = level_data[score_type]['time']
-            lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"{level_data[score_type]['authors']}, {level_data[score_type]['time']}, {date}\"}},\n"
+            if rta:
+                try:
+                    date = level_data[score_type]['time'].strftime("%Y-%m-%d")
+                except AttributeError:
+                    # for the kryX-orange 25-2 case, which is not a date
+                    date = level_data[score_type]['time']
+                lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"{level_data[score_type]['authors']}, {level_data[score_type]['time']}, {date}\"}},\n"
+            else:
+                diff_with_rta = int(data_rta[level_name][score_type]['time']) - int(level_data[score_type]['time'].replace(' f', ''))
+                lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"TAS: {level_data[score_type]['authors']}, {level_data[score_type]['time']} ({diff_with_rta} f better than 0th)\"}},\n"
             res += libtas_input
             for i in range(nb_frames_demo):
                 output_ghost.writerow([nb_frames + i] + ghost_data[i][1:])
