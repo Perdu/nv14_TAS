@@ -7,10 +7,11 @@ cd "$SCRIPT_DIR"
 
 EXTRACT_FOLDER="extract"  # also change in builder.py for markers
 DOCKER_VOLUME_PATH="volume"
+BASE_LTM_FILE="n_base_for_levels.ltm"
 LTM_FILE="n_speedrun.ltm"
 
 mkdir -p $EXTRACT_FOLDER
 
-tar xzf $DOCKER_VOLUME_PATH/$LTM_FILE -C $EXTRACT_FOLDER
+tar xzf $BASE_LTM_FILE -C $EXTRACT_FOLDER
 python builder.py $@
 tar czf $DOCKER_VOLUME_PATH/$LTM_FILE -C $EXTRACT_FOLDER .
