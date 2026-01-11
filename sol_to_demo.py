@@ -21,14 +21,15 @@ SOL_FILE_LOCATION = 'volume/n_tas.sol'
 DEMO_DATA_FILE = 'tas/level_data.yml'
 RTA_DEMO_DATA_FILE = 'tas/level_data_rta.yml'
 LEVEL_DATA_FILE = 'external/level_build_data.yml'
-OPTIMIZATION_LEVEL = 2
+DEFAULT_OPTIMIZATION_LEVEL = 2
 
 def usage(ret_code):
-    print(f"Usage: python {sys.argv[0]} [-h|-s|--save|-g|--highscore|-a|--authors] LEVEL")
+    print(f"Usage: python {sys.argv[0]} [-h|-s|--save|-g|--highscore] [-a|--authors AUTHORS] [-o|--optimization-level LEVEL] LEVEL")
     print("-h: print this help")
     print("-s|--save: save extracted demo data to tas/level_data.yml")
     print("-g|--highscore: save as highscore instead of speedrun")
     print("-a|--authors AUTHORS: change authors")
+    print("-o|--optimization-level LEVEL: change optimization level")
     sys.exit(ret_code)
 
 
@@ -150,7 +151,7 @@ def readSolFile():
         raise NHighError('Error reading .sol file')
 
 
-def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
+def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt', optimization_level=None):
     yaml = YAML()
     yaml.preserve_quotes = True  # keep existing quoting
     yaml.width = 8192  # prevent line wrapping
@@ -182,12 +183,16 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
             new_authors = data[level_id][score_type]["authors"]
         else:
             new_authors = authors
+        if optimization_level is not None:
+            new_optimization_level = optimization_level
+        else:
+            new_optimization_level = data[level_id][score_type]["optimization_level"]
         new_dict = {
             "time": score,
             'diff_with_0th': diff_str_total,
             "authors": new_authors,
             "type": "tas",
-            "optimization_level": 2,
+            "optimization_level": new_optimization_level,
             "demo": demo
         }
         saved_score = int(data[level_id][score_type]["time"].split()[0])
@@ -200,7 +205,11 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt'):
             level_data = data[level_id]
         else:
             level_data = {}
-        level_data[score_type] = {'time': score, 'diff_with_0th': diff_str_total, 'authors': authors, 'type': 'tas', 'optimization_level': OPTIMIZATION_LEVEL, 'demo': demo}
+        if optimization_level is not None:
+            new_optimization_level = optimization_level
+        else:
+            new_optimization_level = DEFAULT_OPTIMIZATION_LEVEL
+        level_data[score_type] = {'time': score, 'diff_with_0th': diff_str_total, 'authors': authors, 'type': 'tas', 'optimization_level': new_optimization_level, 'demo': demo}
         data[level_id] = level_data
 
     data = {k: data[k] for k in sorted(data.keys())}
@@ -245,8 +254,9 @@ if __name__ == "__main__":
     save = False
     score_type = "Speedrun"
     authors = 'zapkt'
+    optimization_level = DEFAULT_OPTIMIZATION_LEVEL
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'a:ghs', ["save", "highscore", 'author=', 'authors='])
+        opts, args = getopt.getopt(sys.argv[1:], 'a:ghso:', ["save", "highscore", 'author=', 'authors=', 'optimization-level='])
     except getopt.GetoptError as err:
         print("Error: ", str(err))
         sys.exit(1)
@@ -259,6 +269,8 @@ if __name__ == "__main__":
             score_type = "Highscore"
         elif o == '-a' or o =='--author' or o == '--authors':
             authors = arg
+        elif o == '-o' or o == 'optimization-level':
+            optimization_level = int(arg)
     if not args:
         usage(1)
     episode = args[0].split("-")[0]
@@ -272,4 +284,4 @@ if __name__ == "__main__":
     print(demo_full)
     print_to_tmp(demo_full, episode, level)
     if save:
-        save_demo(demo_full, episode, level, score_type=score_type, authors=authors)
+        save_demo(demo_full, episode, level, score_type=score_type, authors=authors, optimization_level=optimization_level)
