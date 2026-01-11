@@ -392,9 +392,11 @@ rerecords: 224
 The jump above the last drone is very tight and only works on some setups. We can't jump longer beforehand to save 1f
 
 # 09-3
-rerecords: 196
+rerecords: 337
 
 On the way down, grabbing the second platform to gain speed makes us crash on the bb
+
+Grabbing the second platform on the way down in the end surprisingly doesn't give an additional speed boost
 
 # 09-4
 rerecords: 120
@@ -764,4 +766,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 46962
+# Total rerecords: 47103
