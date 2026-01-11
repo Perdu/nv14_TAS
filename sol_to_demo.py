@@ -254,7 +254,7 @@ if __name__ == "__main__":
         if o == '-h':
             usage(0)
         elif o == '-s' or o == '--save':
-           save = True
+            save = True
         elif o == '-g' or o =='--highscore':
             score_type = "Highscore"
         elif o == '-a' or o =='--author' or o == '--authors':
