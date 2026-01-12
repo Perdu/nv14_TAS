@@ -194,7 +194,7 @@ if search_for_drones_position and ramsearch_done and not ramsearch_drones_done t
          print(string.format("Drone %d: %d candidates", drone_i, nb_stored))
       end
 
-   elseif f == space_frame + 2 then
+   elseif f == space_frame + 4 then
       drones_mem = {}
 
       for drone_i, candidates in pairs(drones_candidates) do
@@ -205,8 +205,9 @@ if search_for_drones_position and ramsearch_done and not ramsearch_drones_done t
             local y = memory.readd(c.y_addr)
 
             -- compare against known initial values
-            if not float_eq(x, target.x, 1e-5)
-               or not float_eq(y, target.y, 1e-5) then
+            if (math.abs(x - target.x) > 0 and math.abs(x - target.x) < 4)
+               or (math.abs(y - target.y) > 0 and math.abs(y - target.y) < 4)
+            then
                drones_mem[drone_i] = c
                drones_memx[drone_i] = c.x_addr
                print(string.format("Confirmed drone %d @ %s",

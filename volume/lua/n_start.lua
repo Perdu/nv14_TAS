@@ -29,7 +29,7 @@ draw_gold_hitboxes = false
 display_ghost = true
 display_current_path = true
 display_ghost_moves_under_ghost = false
-search_for_drones_position = false
+search_for_drones_position = true
 
 ghostData = {}      -- frame → {x, y}
 space_frame = -100
@@ -319,8 +319,8 @@ function display_drones_number()
       local x = memory.readd(drones_memx[i])
       local y = memory.readd(drones_memx[i] + 56)
       if x and y then
-         gui.ellipse(x, y, 6, 6, 1, 0xffff0000)
-         gui.text(x, y, string.format("%d", i))
+         -- gui.ellipse(x, y, 6, 6, 1, 0xffff0000)
+         gui.text(x - 4, y - 8, string.format("%d", i))
       end
    end
 end
