@@ -18,6 +18,7 @@ level = nil
 ghostFilePath = nil
 memy=""
 memspeed_y=""
+drones_memx = {}
 levels = dofile("/home/lua/levels.lua")
 dofile("/home/lua/lib/grounded_levels.lua")
 shift_pressed = false
@@ -28,11 +29,13 @@ draw_gold_hitboxes = false
 display_ghost = true
 display_current_path = true
 display_ghost_moves_under_ghost = false
+search_for_drones_position = false
 
 ghostData = {}      -- frame → {x, y}
 space_frame = -100
 pos_found = false
 ramsearch_done = false
+ramsearch_drones_done = false
 advance_one_step_after_ramsearch = 2
 max_x = 0
 max_y = 0
@@ -311,6 +314,19 @@ function draw_velocity_arrows(x, y, vx, vy)
 
 end
 
+function display_drones_number()
+   for i = 1, #drones_memx do
+      local x_num = tonumber(drones_memx[i], 16)
+      local x = memory.readd(x_num)
+      local y_num = x_num + 56
+      local y = memory.readd(y_num)
+      if x and y then
+         gui.ellipse(x, y, 6, 6, 1, 0xffff0000)
+         gui.text(x, y, string.format("%d", i))
+      end
+   end
+end
+
 local function float_eq(a, b, tol)
     tol = tol or 1e-5  -- default tolerance
     return math.abs(a - b) < tol
@@ -440,6 +456,8 @@ function onPaint()
    -- end
 
    display_drone_detection_frame(f)
+
+   display_drones_number()
 end
 
 -- This runs each time the game (process) starts.
@@ -449,6 +467,7 @@ function onStartup()
     triggered = false
     pos_found = false
     ramsearch_done = false
+    ramsearch_drones_done = false
     advance_one_step_after_ramsearch = 2
     space_frame = -100
     max_x = 0

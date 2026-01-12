@@ -162,3 +162,36 @@ if not ramsearch_done then
       end
    end
 end
+
+if search_for_drones_position and ramsearch_done and not ramsearch_drones_done then
+   local f = movie.currentFrame()
+   if f == space_frame + 1 then
+      print("Searching for drones position...")
+      for ramsearch_cur_drone = 1,#levels[level].drones,1 do
+         print(string.format("Searching for drone %d", ramsearch_cur_drone))
+         -- Fortunately, in N base levels, they're always starting with integer values
+         local i = ramsearch.newsearch(9, 0, 1, levels[level].drones[ramsearch_cur_drone].x, "==")
+         if dbg then
+            print(string.format("nb_results newsearch for drone %d: %d", ramsearch_cur_drone, i))
+            for j = 0,i-1,1
+            do
+               local v = ramsearch.get_current_value(j)
+               local addr = ramsearch.get_address(j)
+               local addr_y = tonumber(addr, 16) + 56
+               local y = memory.readd(addr_y)
+               -- if dbg then
+               --   print(string.format("Value %d: %f @%s", j, v, addr))
+               --   print(string.format("Corresponding y value: %f", y))
+               -- end
+               if y == levels[level].drones[ramsearch_cur_drone].y then
+                  -- we finally found the right one
+                  drones_memx[ramsearch_cur_drone] = ramsearch.get_address(j)
+                  print(string.format("Found drone %d!", ramsearch_cur_drone))
+                  -- break
+               end
+            end
+         end
+      end
+      ramsearch_drones_done = true
+   end
+end
