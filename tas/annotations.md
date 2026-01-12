@@ -24,7 +24,7 @@ rerecords: 184
 
 
 # 01-0
-rerecords: 562
+rerecords: 855
 
 It's possible to do a cj on the bb in the beginning. It's slightly faster, but we don't have a good angle to land and start the rcj
 
@@ -32,8 +32,10 @@ I changed route over the MBD: at the top of the level, I do a stumble instead of
 
 The angle to land on the slope is extremly tight and we need to jump sufficiently long during the cj to land it. There is some angle for which that works with a stumble instead of a cj up there, but it ends up not being faster as the cj makes us hit the ceiling and fall faster.
 
+Branch 9: 1f earlier to the switch wall jump, but can't make anything out of it
+
 # 01-1
-rerecords: 526
+rerecords: 837
 
 Didn't work:
 - Using the one-way platforms in the beginning to slow descent down
@@ -222,11 +224,14 @@ rerecords: 29
 
 
 # 05-3
-rerecords: 517
+rerecords: 1621
 
 We can take the doorswitch without falling down (there's a 1-frame moment where we can jump), but it's useless as there's a drone that get in the way to get right directly.
 We cannot get a cj on the thwump protecting the doorswitch.
 We cannot beat the drone after the second switch (going directly up)
+
+Turning around at the first doorswitch then activating the thwump and getting the key is few frames slower
+Entering the key section after going all the way to the left wall and then waiting for the thwump is also a few frames slower
 
 # 05-4
 rerecords: 526
@@ -243,9 +248,9 @@ I tried many strategies in the end:
 - getting less height on the right wall to be able to go directly up
 
 # 06-0
-rerecords: 225
+rerecords: 269
 
-
+For the walljumps on the way to the exit, I get some subpixels but they get cancelled. Last jump still gets subpixels
 
 # 06-1
 rerecords: 229
@@ -766,4 +771,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 47103
+# Total rerecords: 48855
