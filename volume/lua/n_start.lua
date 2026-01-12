@@ -316,10 +316,8 @@ end
 
 function display_drones_number()
    for i = 1, #drones_memx do
-      local x_num = tonumber(drones_memx[i], 16)
-      local x = memory.readd(x_num)
-      local y_num = x_num + 56
-      local y = memory.readd(y_num)
+      local x = memory.readd(drones_memx[i])
+      local y = memory.readd(drones_memx[i] + 56)
       if x and y then
          gui.ellipse(x, y, 6, 6, 1, 0xffff0000)
          gui.text(x, y, string.format("%d", i))
@@ -327,7 +325,7 @@ function display_drones_number()
    end
 end
 
-local function float_eq(a, b, tol)
+function float_eq(a, b, tol)
     tol = tol or 1e-5  -- default tolerance
     return math.abs(a - b) < tol
 end

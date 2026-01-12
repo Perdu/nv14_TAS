@@ -165,33 +165,57 @@ end
 
 if search_for_drones_position and ramsearch_done and not ramsearch_drones_done then
    local f = movie.currentFrame()
+
    if f == space_frame + 1 then
+      drones_candidates = {}
       print("Searching for drones position...")
-      for ramsearch_cur_drone = 1,#levels[level].drones,1 do
-         print(string.format("Searching for drone %d", ramsearch_cur_drone))
-         -- Fortunately, in N base levels, they're always starting with integer values
-         local i = ramsearch.newsearch(9, 0, 1, levels[level].drones[ramsearch_cur_drone].x, "==")
-         if dbg then
-            print(string.format("nb_results newsearch for drone %d: %d", ramsearch_cur_drone, i))
-            for j = 0,i-1,1
-            do
-               local v = ramsearch.get_current_value(j)
-               local addr = ramsearch.get_address(j)
-               local addr_y = tonumber(addr, 16) + 56
-               local y = memory.readd(addr_y)
-               -- if dbg then
-               --   print(string.format("Value %d: %f @%s", j, v, addr))
-               --   print(string.format("Corresponding y value: %f", y))
-               -- end
-               if y == levels[level].drones[ramsearch_cur_drone].y then
-                  -- we finally found the right one
-                  drones_memx[ramsearch_cur_drone] = ramsearch.get_address(j)
-                  print(string.format("Found drone %d!", ramsearch_cur_drone))
-                  -- break
-               end
+
+      for drone_i = 1, #levels[level].drones do
+         drones_candidates[drone_i] = {}
+         local target = levels[level].drones[drone_i]
+
+         local i = ramsearch.newsearch(9, 0, 1, target.x, "==")
+
+         local nb_stored = 0
+         for j = 0, i - 1 do
+            local addr_x = tonumber(ramsearch.get_address(j), 16)
+            local addr_y = addr_x + 56
+
+            local y = memory.readd(addr_y)
+            -- print(string.format("%f %f", y, target.y))
+            if y == target.y then
+               table.insert(drones_candidates[drone_i], {
+                               x_addr = addr_x,
+                               y_addr = addr_y
+               })
+               nb_stored = nb_stored + 1
             end
          end
+         print(string.format("Drone %d: %d candidates", drone_i, nb_stored))
       end
-      ramsearch_drones_done = true
+
+   elseif f == space_frame + 2 then
+      drones_mem = {}
+
+      for drone_i, candidates in pairs(drones_candidates) do
+         local target = levels[level].drones[drone_i]
+
+         for _, c in ipairs(candidates) do
+            local x = memory.readd(c.x_addr)
+            local y = memory.readd(c.y_addr)
+
+            -- compare against known initial values
+            if not float_eq(x, target.x, 1e-5)
+               or not float_eq(y, target.y, 1e-5) then
+               drones_mem[drone_i] = c
+               drones_memx[drone_i] = c.x_addr
+               print(string.format("Confirmed drone %d @ %s",
+                                   drone_i, c.x_addr))
+               break
+            end
+         end
+         ramsearch_drones_done = true
+
+      end
    end
 end
