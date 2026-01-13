@@ -248,7 +248,7 @@ I tried many strategies in the end:
 - getting less height on the right wall to be able to go directly up
 
 # 06-0
-rerecords: 269
+rerecords: 958
 
 For the walljumps on the way to the exit, I get some subpixels but they get cancelled. Last jump still gets subpixels
 
@@ -781,4 +781,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 49149
+# Total rerecords: 49838
