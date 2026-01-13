@@ -8,6 +8,14 @@ KEY_SPACE = 0x020        -- X11 keysym for Space
 KEY_SHIFT = 0xffe1
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
+-- https://discord.com/channels/197765375503368192/199460839252688896/1437946735665352714
+HITBOX_PLAYER = 10
+HITBOX_EXIT = 12
+HITBOX_EXIT_SWITCH = 6
+HITBOX_SWITCH = 5
+HITBOX_DRONE = 9
+HITBOX_MINE = 4
+HITBOX_GOLD = 6
 
 -- Session state
 done = false
@@ -134,18 +142,18 @@ function draw_hitboxes()
       if not data then return end
 
       for _, e in ipairs(data.doors) do
-         gui.ellipse(e.x, e.y, 12, 12, 1)
-         gui.ellipse(e.sx, e.sy, 6, 6, 1)
+         gui.ellipse(e.x, e.y, HITBOX_EXIT, HITBOX_EXIT, 1)
+         gui.ellipse(e.sx, e.sy, HITBOX_EXIT_SWITCH, HITBOX_EXIT_SWITCH, 1)
       end
 
-      drawList(data.mines, 4, 255, 0, 0)         -- red mines
+      drawList(data.mines, HITBOX_MINE, 255, 0, 0)         -- red mines
       -- drawList(data.drones, 9, 0, 0, 255)
       -- drawList(data.floorguards, 6, 0, 0, 0)
       if draw_gold_hitboxes then
-         drawList(data.gold, 6, 255, 255, 0)
+         drawList(data.gold, HITBOX_GOLD, 255, 255, 0)
       end
       -- drawList(data.launchpads, 6, 255, 0, 255) -- magenta launchpads
-      drawList(data.switches, 5, 0, 255, 255)    -- cyan switches
+      drawList(data.switches, HITBOX_SWITCH, 0, 255, 255)    -- cyan switches
 end
 
 local function loadGhost()
@@ -313,7 +321,7 @@ function display_drones_number()
       x_target = memory.readd(drones_target_memx[i])
       y_target = memory.readd(drones_target_memx[i] + 56)
       if display_drones_targets and x_target and y_target then
-         gui.ellipse(x_target, y_target, 9, 9, 1, 0xffff0000)
+         gui.ellipse(x_target, y_target, HITBOX_DRONE, HITBOX_DRONE, 1, 0xffff0000)
          gui.text(x_target - 4, y_target - 8, string.format("%d", i), 0xff0000ff)
       end
       if display_drones_raycasts and player_x and player_y then
@@ -349,7 +357,7 @@ function onPaint()
    if memy ~= "" then
       x, y = get_player_position()
       if display_hitboxes then
-         gui.ellipse(x, y, 10, 10)
+         gui.ellipse(x, y, HITBOX_PLAYER, HITBOX_PLAYER)
       end
       gui.text(160, 587, string.format("%f ; %f", x, y), 0xffffffff, 0, 0, 15)
       data = levels[level]
@@ -377,7 +385,7 @@ function onPaint()
    if space_frame ~= - 100 then
       local ghost = ghostData[f - space_frame]
       if ghost then
-         gui.ellipse(ghost.x, ghost.y, 10, 10, 1, 0xffff00ff)
+         gui.ellipse(ghost.x, ghost.y, HITBOX_PLAYER, HITBOX_PLAYER, 1, 0xffff00ff)
          local ghost_text_position = 160
          local best_path_exists = bestPath[f]
          if best_path_exists then
@@ -403,7 +411,7 @@ function onPaint()
    end
 
    if max_x > 0 and max_y > 0 then
-      gui.ellipse(max_x, max_y, 10, 10, 1, 0xffffff00)
+      gui.ellipse(max_x, max_y, HITBOX_PLAYER, HITBOX_PLAYER, 1, 0xffffff00)
       -- draw position of best path
       local a = bestPath[f]
       if a then
