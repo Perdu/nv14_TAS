@@ -32,7 +32,7 @@ display_current_path = true
 display_ghost_moves_under_ghost = false
 search_for_drones_position = true
 display_drones_targets = true
-display_drones_raycasts = false
+display_drones_raycasts = true
 
 ghostData = {}      -- frame → {x, y}
 space_frame = -100
