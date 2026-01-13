@@ -195,7 +195,6 @@ if search_for_drones_position and ramsearch_done and not ramsearch_drones_done t
       end
 
    elseif f == space_frame + 4 then
-      drones_mem = {}
 
       for drone_i, candidates in pairs(drones_candidates) do
          local target = levels[level].drones[drone_i]
@@ -208,11 +207,14 @@ if search_for_drones_position and ramsearch_done and not ramsearch_drones_done t
             if (math.abs(x - target.x) > 0 and math.abs(x - target.x) < 4)
                or (math.abs(y - target.y) > 0 and math.abs(y - target.y) < 4)
             then
-               drones_mem[drone_i] = c
                drones_memx[drone_i] = c.x_addr
                print(string.format("Confirmed drone %d @ %s",
                                    drone_i, c.x_addr))
-               break
+            elseif (math.abs(x - target.x) > 0)
+               or (math.abs(y - target.y) > 0)
+            then
+               drones_target_memx[drone_i] = c.x_addr
+               print(string.format("Confirmed drone %d target", drone_i))
             end
          end
          ramsearch_drones_done = true

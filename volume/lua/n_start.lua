@@ -19,6 +19,7 @@ ghostFilePath = nil
 memy=""
 memspeed_y=""
 drones_memx = {}
+drones_target_memx = {}
 levels = dofile("/home/lua/levels.lua")
 dofile("/home/lua/lib/grounded_levels.lua")
 shift_pressed = false
@@ -30,6 +31,7 @@ display_ghost = true
 display_current_path = true
 display_ghost_moves_under_ghost = false
 search_for_drones_position = true
+display_drones_targets = false
 
 ghostData = {}      -- frame → {x, y}
 space_frame = -100
@@ -322,6 +324,14 @@ function display_drones_number()
          -- gui.ellipse(x, y, 6, 6, 1, 0xffff0000)
          gui.text(x - 4, y - 8, string.format("%d", i))
       end
+      if display_drones_targets then
+         x = memory.readd(drones_target_memx[i])
+         y = memory.readd(drones_target_memx[i] + 56)
+         if x and y then
+            gui.ellipse(x, y, 9, 9, 1, 0xffff0000)
+            gui.text(x - 4, y - 8, string.format("%d", i), 0xff0000ff)
+         end
+      end
    end
 end
 
@@ -484,6 +494,8 @@ function onStartup()
     knownFrames = {}
     memy = ""
     memspeed_y = ""
+    drones_memx = {}
+    drones_target_memx = {}
 end
 
 -- Detect Space key press
