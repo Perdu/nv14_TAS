@@ -48,6 +48,8 @@ path = {}
 knownFrames = {}   -- sorted list of frames already stored
 bestPath = {}
 
+dofile("/home/lua/lib/utils.lua")
+
 -- Insert or update path at a specific frame
 local function recordFrame(frame, x, y)
     if not path[frame] then
@@ -55,19 +57,6 @@ local function recordFrame(frame, x, y)
         table.sort(knownFrames)
     end
     path[frame] = {x = x, y = y}
-end
-
--- Convert r,g,b to 0xAARRGGBB color
-local function rgb(r,g,b,a)
-    a = a or 255
-    return (a << 24) | (r << 16) | (g << 8) | b
-end
-
-function drawList(list, size, r, g, b)
-   -- print(list)
-   for _, e in ipairs(list) do
-      gui.ellipse(e.x, e.y, size, size, 1, rgb(r, g, b))
-   end
 end
 
 function display_distance_to_doors(x, y, doors)
@@ -351,23 +340,6 @@ end
 local function display_drone_detection_frame(f)
    if (f - space_frame) % 14 == 0 then
       gui.text(80, 580, "Drone!!!", 0xff0000ff)
-   end
-end
-
-function float_eq(a, b, tol)
-    tol = tol or 1e-5  -- default tolerance
-    return math.abs(a - b) < tol
-end
-
-function get_player_position()
-   if memy ~= "" then
-      local y_num = tonumber(memy, 16)
-      y = memory.readd(y_num)
-      local x_num = y_num - 56
-      x = memory.readd(x_num)
-      return x, y
-   else
-      return nil
    end
 end
 

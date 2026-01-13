@@ -1,0 +1,29 @@
+function get_player_position()
+   if memy ~= "" then
+      local y_num = tonumber(memy, 16)
+      y = memory.readd(y_num)
+      local x_num = y_num - 56
+      x = memory.readd(x_num)
+      return x, y
+   else
+      return nil
+   end
+end
+
+function float_eq(a, b, tol)
+    tol = tol or 1e-5  -- default tolerance
+    return math.abs(a - b) < tol
+end
+
+-- Convert r,g,b to 0xAARRGGBB color
+function rgb(r,g,b,a)
+    a = a or 255
+    return (a << 24) | (r << 16) | (g << 8) | b
+end
+
+function drawList(list, size, r, g, b)
+   -- print(list)
+   for _, e in ipairs(list) do
+      gui.ellipse(e.x, e.y, size, size, 1, rgb(r, g, b))
+   end
+end
