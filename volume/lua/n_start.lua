@@ -317,8 +317,8 @@ function display_drones_number()
          gui.text(x_target - 4, y_target - 8, string.format("%d", i), 0xff0000ff)
       end
       if display_drones_raycasts and player_x and player_y then
-         -- print(string.format("%f, %f", math.abs(x - x_target), math.abs(y - y_target)))
-         if float_eq(x, x_target, 1e-2) and float_eq(y, y_target, 1e-2) then
+         print(string.format("D%d: %f, %f", i, math.abs(x - x_target), math.abs(y - y_target)))
+         if math.abs(x - x_target) < 2 and math.abs(y - y_target) < 2 then
             print(string.format("Drone %d is detecting", i))
             if player_y < y then
                gui.line(x, 0, x, y, 0xff0000ff)   -- up
