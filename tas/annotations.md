@@ -295,11 +295,14 @@ rerecords: 290
 cj on last bb is not faster
 
 # 07-2
-rerecords: 551
+rerecords: 695
 
 We can jump one frame earlier in the beginning, but then we don't get good enough angles
 
 Mayyybe avoiding the first drone to detect us in the beginning could save a few frames in the end, to avoid having to jump over it. But I'm not redoing everything...
+
+Branch 9: a start avoiding detection by drone 2. This needs redoing the bwj...
+Branch 8: last jump if drone was not there (only gains 2f)
 
 # 07-3
 rerecords: 342
@@ -771,4 +774,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 48855
+# Total rerecords: 48999
