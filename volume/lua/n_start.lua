@@ -333,17 +333,27 @@ function display_drones_number()
             local y_dist_to_player = math.abs(player_y - y)
 
             if x_dist_to_player < MAX_DIST_RAYCAST_DISPLAY then
+               if x_dist_to_player < HITBOX_PLAYER then
+                  color = 0xffff0000
+               else
+                  color = 0xff0000ff
+               end
                if player_y < y then
-                  gui.line(x, 0, x, y, 0xff0000ff)   -- up
+                  gui.line(x, 0, x, y, color)   -- up
                elseif player_y > y then
-                  gui.line(x, y, x, screen_h, 0xff0000ff) -- down
+                  gui.line(x, y, x, screen_h, color) -- down
                end
             end
             if y_dist_to_player < MAX_DIST_RAYCAST_DISPLAY then
+               if y_dist_to_player < HITBOX_PLAYER then
+                  color = 0xffff0000
+               else
+                  color = 0xff0000ff
+               end
                if player_x < x then
-                  gui.line(0, y, x, y, 0xff0000ff)   -- left
+                  gui.line(0, y, x, y, color)   -- left
                elseif player_x > x then
-                  gui.line(x, y, screen_w, y, 0xff0000ff) -- right
+                  gui.line(x, y, screen_w, y, color) -- right
                end
             end
             -- gui.line(x, 0, x, 600, 0xff0000ff)
