@@ -41,6 +41,7 @@ display_ghost_moves_under_ghost = false
 search_for_drones_position = true
 display_drones_targets = true
 display_drones_raycasts = true
+MAX_DIST_RAYCAST_DISPLAY = 20
 
 ghostData = {}      -- frame → {x, y}
 space_frame = -100
@@ -328,15 +329,22 @@ function display_drones_number()
          print(string.format("D%d: %f, %f", i, math.abs(x - x_target), math.abs(y - y_target)))
          if math.abs(x - x_target) < 2 and math.abs(y - y_target) < 2 then
             print(string.format("Drone %d is detecting", i))
-            if player_y < y then
-               gui.line(x, 0, x, y, 0xff0000ff)   -- up
-            elseif player_y > y then
-               gui.line(x, y, x, screen_h, 0xff0000ff) -- down
+            local x_dist_to_player = math.abs(player_x - x)
+            local y_dist_to_player = math.abs(player_y - y)
+
+            if x_dist_to_player < MAX_DIST_RAYCAST_DISPLAY then
+               if player_y < y then
+                  gui.line(x, 0, x, y, 0xff0000ff)   -- up
+               elseif player_y > y then
+                  gui.line(x, y, x, screen_h, 0xff0000ff) -- down
+               end
             end
-            if player_x < x then
-               gui.line(0, y, x, y, 0xff0000ff)   -- left
-            elseif player_x > x then
-               gui.line(x, y, screen_w, y, 0xff0000ff) -- right
+            if y_dist_to_player < MAX_DIST_RAYCAST_DISPLAY then
+               if player_x < x then
+                  gui.line(0, y, x, y, 0xff0000ff)   -- left
+               elseif player_x > x then
+                  gui.line(x, y, screen_w, y, 0xff0000ff) -- right
+               end
             end
             -- gui.line(x, 0, x, 600, 0xff0000ff)
             -- gui.line(0, y, 792, y, 0xff0000ff)
