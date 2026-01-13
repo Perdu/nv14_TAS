@@ -31,7 +31,8 @@ display_ghost = true
 display_current_path = true
 display_ghost_moves_under_ghost = false
 search_for_drones_position = true
-display_drones_targets = false
+display_drones_targets = true
+display_drones_raycasts = false
 
 ghostData = {}      -- frame → {x, y}
 space_frame = -100
@@ -156,12 +157,6 @@ function draw_hitboxes()
       end
       -- drawList(data.launchpads, 6, 255, 0, 255) -- magenta launchpads
       drawList(data.switches, 5, 0, 255, 255)    -- cyan switches
-end
-
-local function display_drone_detection_frame(f)
-   if (f - space_frame) % 14 == 0 then
-      gui.text(80, 580, "Drone!!!", 0xff0000ff)
-   end
 end
 
 local function loadGhost()
@@ -317,6 +312,8 @@ function draw_velocity_arrows(x, y, vx, vy)
 end
 
 function display_drones_number()
+   local player_x, player_y = get_player_position()
+   local screen_w, screen_h = 792, 600
    for i = 1, #drones_memx do
       local x = memory.readd(drones_memx[i])
       local y = memory.readd(drones_memx[i] + 56)
@@ -324,14 +321,36 @@ function display_drones_number()
          -- gui.ellipse(x, y, 6, 6, 1, 0xffff0000)
          gui.text(x - 4, y - 8, string.format("%d", i))
       end
-      if display_drones_targets then
-         x = memory.readd(drones_target_memx[i])
-         y = memory.readd(drones_target_memx[i] + 56)
-         if x and y then
-            gui.ellipse(x, y, 9, 9, 1, 0xffff0000)
-            gui.text(x - 4, y - 8, string.format("%d", i), 0xff0000ff)
+      x_target = memory.readd(drones_target_memx[i])
+      y_target = memory.readd(drones_target_memx[i] + 56)
+      if display_drones_targets and x_target and y_target then
+         gui.ellipse(x_target, y_target, 9, 9, 1, 0xffff0000)
+         gui.text(x_target - 4, y_target - 8, string.format("%d", i), 0xff0000ff)
+      end
+      if display_drones_raycasts and player_x and player_y then
+         -- print(string.format("%f, %f", math.abs(x - x_target), math.abs(y - y_target)))
+         if float_eq(x, x_target, 1e-2) and float_eq(y, y_target, 1e-2) then
+            print(string.format("Drone %d is detecting", i))
+            if player_y < y then
+               gui.line(x, 0, x, y, 0xff0000ff)   -- up
+            elseif player_y > y then
+               gui.line(x, y, x, screen_h, 0xff0000ff) -- down
+            end
+            if player_x < x then
+               gui.line(0, y, x, y, 0xff0000ff)   -- left
+            elseif player_x > x then
+               gui.line(x, y, screen_w, y, 0xff0000ff) -- right
+            end
+            -- gui.line(x, 0, x, 600, 0xff0000ff)
+            -- gui.line(0, y, 792, y, 0xff0000ff)
          end
       end
+   end
+end
+
+local function display_drone_detection_frame(f)
+   if (f - space_frame) % 14 == 0 then
+      gui.text(80, 580, "Drone!!!", 0xff0000ff)
    end
 end
 
@@ -340,14 +359,23 @@ function float_eq(a, b, tol)
     return math.abs(a - b) < tol
 end
 
-function onPaint()
-   local x = -1
-   local y = -1
+function get_player_position()
    if memy ~= "" then
       local y_num = tonumber(memy, 16)
       y = memory.readd(y_num)
       local x_num = y_num - 56
       x = memory.readd(x_num)
+      return x, y
+   else
+      return nil
+   end
+end
+
+function onPaint()
+   local x = -1
+   local y = -1
+   if memy ~= "" then
+      x, y = get_player_position()
       if display_hitboxes then
          gui.ellipse(x, y, 10, 10)
       end
@@ -511,10 +539,7 @@ function onInput()
 
     if display_current_path and memy ~= "" then
        local f = movie.currentFrame()
-       local y_num = tonumber(memy, 16)
-       local y = memory.readd(y_num)
-       local x_num = y_num - 56
-       local x = memory.readd(x_num)
+       local x, y = get_player_position()
        recordFrame(f, x, y)
     end
 
@@ -561,12 +586,9 @@ function onFrame()
    end
 
    if save_best_position then
-       local y_num = tonumber(memy, 16)
-       local y = memory.readd(y_num)
-       local x_num = y_num - 56
-       local x = memory.readd(x_num)
-       max_x = x
-       max_y = y
+      local x, y = get_player_position()
+      max_x = x
+      max_y = y
 
        -- copy path into bestPath
        for frame, pos in pairs(path) do
