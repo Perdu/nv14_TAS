@@ -375,12 +375,6 @@ function display_drones_number()
    end
 end
 
-local function display_drone_detection_frame(f)
-   if (f - space_frame) % 14 == 0 then
-      gui.text(80, 580, "Drone!!!", 0xff0000ff)
-   end
-end
-
 function onPaint()
    local x = -1
    local y = -1
@@ -500,8 +494,6 @@ function onPaint()
    -- if advance_one_step_after_ramsearch == 2 then
    --   gui.text(120, 580, "Go!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
    -- end
-
-   display_drone_detection_frame(f)
 
    display_drones_number()
 end
