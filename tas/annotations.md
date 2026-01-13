@@ -411,6 +411,13 @@ rerecords: 120
 
 We can reproduce RTA strategy of using the slope to propel ourselves after the switch, but the turret kills us. If we jump higher, it's slightly lower than current strategy.
 
+# 10-1
+rerecords: 150
+
+The best setup for the lpwj gets us too much to the left and we stumble over the platform, which makes us die later. We have to slow a little bit by removing a left frame.
+
+We're still 2.65 pixels from the door, I don't think it's possible to save one more frame
+
 # 10-3
 rerecords: 61
 
@@ -774,4 +781,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 48999
+# Total rerecords: 49149
