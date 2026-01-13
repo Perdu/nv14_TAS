@@ -39,7 +39,7 @@ display_ghost = true
 display_current_path = true
 display_ghost_moves_under_ghost = false
 search_for_drones_position = true
-display_drones_targets = true
+display_drones_targets = false
 display_drones_raycasts = true
 MAX_DIST_RAYCAST_DISPLAY = 30
 
