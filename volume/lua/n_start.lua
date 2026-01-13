@@ -57,6 +57,8 @@ path = {}
 knownFrames = {}   -- sorted list of frames already stored
 bestPath = {}
 
+remove_drone = 0
+
 dofile("/home/lua/lib/utils.lua")
 
 -- Insert or update path at a specific frame

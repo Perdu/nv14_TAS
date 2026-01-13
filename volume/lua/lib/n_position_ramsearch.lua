@@ -215,6 +215,9 @@ if search_for_drones_position and ramsearch_done and not ramsearch_drones_done t
             then
                drones_target_memx[drone_i] = c.x_addr
                print(string.format("Confirmed drone %d target", drone_i))
+               if remove_drone == drone_i then
+                  memory.writed(c.x_addr, 0)
+               end
             end
          end
          ramsearch_drones_done = true
