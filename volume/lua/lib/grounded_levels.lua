@@ -9,3 +9,4 @@ grounded_levels = {
    ["82-0"] = true,
    ["87-0"] = true
 }
+return grounded_levels

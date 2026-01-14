@@ -1,6 +1,12 @@
 -- Some parts are AI-generated
 -- libTAS Lua Script
 
+dofile("/home/lua/lib/utils.lua")
+dofile("/home/lua/lib/hitboxes.lua")
+dofile("/home/lua/lib/keysyms.lua")
+grounded_levels = dofile("/home/lua/lib/grounded_levels.lua")
+levels = dofile("/home/lua/levels.lua")
+
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 
@@ -15,8 +21,6 @@ memy=""
 memspeed_y=""
 drones_memx = {}
 drones_target_memx = {}
-levels = dofile("/home/lua/levels.lua")
-dofile("/home/lua/lib/grounded_levels.lua")
 shift_pressed = false
 original_input_modified = false
 dbg = true
@@ -45,10 +49,6 @@ knownFrames = {}   -- sorted list of frames already stored
 bestPath = {}
 
 remove_drone = 0
-
-dofile("/home/lua/lib/utils.lua")
-dofile("/home/lua/lib/hitboxes.lua")
-dofile("/home/lua/lib/keysyms.lua")
 
 -- Insert or update path at a specific frame
 local function recordFrame(frame, x, y)
