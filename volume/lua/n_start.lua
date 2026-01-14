@@ -7,22 +7,7 @@ dofile("/home/lua/lib/keysyms.lua")
 grounded_levels = dofile("/home/lua/lib/grounded_levels.lua")
 levels = dofile("/home/lua/levels.lua")
 
-SAVE_SLOT = 1             -- Save slot number (1–10)
-ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
-
--- Session state
-done = false
-triggered = false
-need_unpause = false
-
-level = nil
-ghostFilePath = nil
-memy=""
-memspeed_y=""
-drones_memx = {}
-drones_target_memx = {}
-shift_pressed = false
-original_input_modified = false
+---- Parameters
 dbg = true
 display_hitboxes = true
 draw_gold_hitboxes = false
@@ -33,7 +18,25 @@ search_for_drones_position = true
 display_drones_targets = false
 display_drones_raycasts = true
 MAX_DIST_RAYCAST_DISPLAY = 30
+-- set the number of the drone you want removed (it will go through walls)
+remove_drone = 0
 
+---- Constants
+SAVE_SLOT = 1             -- Save slot number (1–10)
+ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
+
+---- Session state
+done = false
+triggered = false
+need_unpause = false
+level = nil
+ghostFilePath = nil
+memy=""
+memspeed_y=""
+drones_memx = {}
+drones_target_memx = {}
+shift_pressed = false
+original_input_modified = false
 ghostData = {}      -- frame → {x, y}
 space_frame = -100
 pos_found = false
@@ -42,13 +45,11 @@ ramsearch_drones_done = false
 advance_one_step_after_ramsearch = 2
 max_x = 0
 max_y = 0
-save_best_position = false
-
 path = {}
 knownFrames = {}   -- sorted list of frames already stored
+save_best_position = false
 bestPath = {}
 
-remove_drone = 0
 
 -- Insert or update path at a specific frame
 local function recordFrame(frame, x, y)
