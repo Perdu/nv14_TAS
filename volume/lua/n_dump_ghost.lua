@@ -3,10 +3,6 @@
 -- Starts unpaused (if needed), waits for first Space press, saves a state, pauses,
 -- and permanently disables itself *per game session*.
 
-KEY_SPACE = 0x020        -- X11 keysym for Space
-KEY_LEFT  = 0xff51   -- XK_Left
-KEY_RIGHT = 0xff53   -- XK_Right
-KEY_SHIFT = 0xffe1   -- XK_Shift_L (or 0xffe2 for right shift)
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 
@@ -30,6 +26,8 @@ space_frame = -100
 pos_found = false
 ramsearch_done = false
 pre_reload_skipped = false
+
+dofile("/home/lua/lib/keysyms.lua")
 
 function onPaint()
    if memy ~= "" then

@@ -14,7 +14,7 @@ local display_inputs = false
 local display_position = false
 local case = ""
 
-local KEY_SPACE = 0x020        -- X11 keysym for Space
+dofile("/home/lua/lib/keysyms.lua")
 
 -- ------------------------------
 -- Reads CSV file into ghostData

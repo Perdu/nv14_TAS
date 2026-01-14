@@ -1,8 +1,6 @@
 -- Some parts are AI-generated
 -- libTAS Lua Script
 
-KEY_SPACE = 0x020        -- X11 keysym for Space
-KEY_SHIFT = 0xffe1
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 
@@ -50,6 +48,7 @@ remove_drone = 0
 
 dofile("/home/lua/lib/utils.lua")
 dofile("/home/lua/lib/hitboxes.lua")
+dofile("/home/lua/lib/keysyms.lua")
 
 -- Insert or update path at a specific frame
 local function recordFrame(frame, x, y)
