@@ -8,14 +8,6 @@ KEY_SPACE = 0x020        -- X11 keysym for Space
 KEY_SHIFT = 0xffe1
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
--- https://discord.com/channels/197765375503368192/199460839252688896/1437946735665352714
-HITBOX_PLAYER = 10
-HITBOX_EXIT = 12
-HITBOX_EXIT_SWITCH = 6
-HITBOX_SWITCH = 5
-HITBOX_DRONE = 9
-HITBOX_MINE = 4
-HITBOX_GOLD = 6
 
 -- Session state
 done = false
@@ -60,6 +52,7 @@ bestPath = {}
 remove_drone = 0
 
 dofile("/home/lua/lib/utils.lua")
+dofile("/home/lua/lib/hitboxes.lua")
 
 -- Insert or update path at a specific frame
 local function recordFrame(frame, x, y)
