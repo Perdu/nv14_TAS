@@ -1,10 +1,7 @@
--- AI-generated
+-- Some parts are AI-generated
 -- libTAS Lua Script
--- Starts unpaused (if needed), waits for first Space press, saves a state, pauses,
--- and permanently disables itself *per game session*.
 
 KEY_SPACE = 0x020        -- X11 keysym for Space
--- KEY_S = 0x073            -- X11 keysym for s
 KEY_SHIFT = 0xffe1
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
