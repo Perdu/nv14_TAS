@@ -132,13 +132,11 @@ Somehow I can't reproduce the RTA jump... It's faster, but I can't reproduce it 
 That said, even if I reach the doorswitch faster, I struggle doing a score as good as the current TAS
 
 # 03-3
-rerecords: 867
+rerecords: 1035
 
-Can't beat the drone in the beginning
+Can't beat the drone in the beginning (except if jumping, but it's then slower)
 Going after the drone without jumping on the wall in the beginning is a bit slower (reaching platform on frame 273 instead of 267)
 Jumping on the left wall around 320 to get detected by the drone -> slower
-
-Being detected by drone around 300 is extremely random. The earlier we slow down, the more frame we can gain
 
 Jumping right directly around 780 is half a frame faster than the classic right - left - right
 
@@ -148,7 +146,7 @@ I also tried some tricks for the hs TAS:
 - going left in the beginning to double-jump in the middle: slower, even if we get detected by the drone
 - not jumping around 600: slower
 
-Lost markers for some reason
+Perhaps going to the right in the outer section could avoid because slower by drone 4 (todo)
 
 # 03-4
 rerecords: 143
@@ -295,14 +293,12 @@ rerecords: 290
 cj on last bb is not faster
 
 # 07-2
-rerecords: 695
+rerecords: 2200
 
 We can jump one frame earlier in the beginning, but then we don't get good enough angles
 
-Mayyybe avoiding the first drone to detect us in the beginning could save a few frames in the end, to avoid having to jump over it. But I'm not redoing everything...
-
-Branch 9: a start avoiding detection by drone 2. This needs redoing the bwj...
-Branch 8: last jump if drone was not there (only gains 2f)
+(Branch 9: a start avoiding detection by drone 2. This needs redoing the bwj...
+Branch 8: last jump if drone was not there (only gains 2f))
 
 # 07-3
 rerecords: 342
@@ -410,6 +406,14 @@ Grabbing the second platform on the way down in the end surprisingly doesn't giv
 rerecords: 120
 
 We can reproduce RTA strategy of using the slope to propel ourselves after the switch, but the turret kills us. If we jump higher, it's slightly lower than current strategy.
+
+# 10-0
+rerecords: 330
+
+Branch 9: optimized first jump
+Branch 8: stlightly better walljump but the stumble is worse
+
+The stumble saves 1 pixel
 
 # 10-1
 rerecords: 150
@@ -781,4 +785,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 49838
+# Total rerecords: 51841
