@@ -408,7 +408,7 @@ rerecords: 120
 We can reproduce RTA strategy of using the slope to propel ourselves after the switch, but the turret kills us. If we jump higher, it's slightly lower than current strategy.
 
 # 10-0
-rerecords: 330
+rerecords: 359
 
 Branch 9: optimized first jump
 Branch 8: stlightly better walljump but the stumble is worse
@@ -534,6 +534,11 @@ rerecords: 140
 
 
 
+# 25-2
+rerecords: 262
+
+
+
 # 35-3
 rerecords: 43
 
@@ -619,9 +624,11 @@ rerecords: 40
 Doing frame-perfect jumps in the doorswitch pipe kills us lmao
 
 # 59-0
-rerecords: 117
+rerecords: 175
 
-This level is maxed out already.
+This level is maxed out already... Or not???
+
+Branch 8: 1st walljump optim, but slower afterwards (1.55)
 
 # 59-4
 rerecords: 862
@@ -785,4 +792,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 51841
+# Total rerecords: 52190
