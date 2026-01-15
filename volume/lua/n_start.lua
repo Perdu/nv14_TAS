@@ -481,9 +481,10 @@ function onPaint()
       gui.text(80, 580, "Waiting...")
    end
 
-   -- if advance_one_step_after_ramsearch == 2 then
-   --   gui.text(120, 580, "Go!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-   -- end
+   if advance_one_step_after_ramsearch == 3 then
+      advance_one_step_after_ramsearch = advance_one_step_after_ramsearch + 1
+      gui.text(80, 580, "Loaded.")
+    end
 
    display_drones_number()
 end
@@ -573,6 +574,7 @@ function onFrame()
    if advance_one_step_after_ramsearch < 2 then
       advance_one_step_after_ramsearch = advance_one_step_after_ramsearch + 1
       if advance_one_step_after_ramsearch == 2 then
+         advance_one_step_after_ramsearch = advance_one_step_after_ramsearch + 1
          runtime.playPause()
       end
    end
