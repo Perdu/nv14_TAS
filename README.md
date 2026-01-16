@@ -169,12 +169,6 @@ If the current demo did not override the score in the .sol file (for instance be
 - inside the docker container, run `./use_sol_file.sh --override` (this will place a .sol file with low scores at the right place)
 - restart the game and run it through the end
 
-### Changing authors
-
-To register yourself as author in a file, use:
-- `./change_author.sh 00-0 "zapkt and Raif"` to change the authorship in the ltm file
-- `python sol_to_demo.py -a "zapkt and Raif" --save 00-0` to change the authorship in [tas/level_data.yml](tas/level_data.yml) when getting the demo string.
-
 ### Updating infos
 
 `./update_infos.sh` will automatically:
