@@ -166,11 +166,12 @@ The stumble down is the fastest way
 In the end, being pushed right by the ceiling then doing a regular jump instead of a reverse corner jump is just sliiiightly too slow to get the door on the next frame
 
 # 04-1
-rerecords: 1745
+rerecords: 1850
 
 Corner jump on the bounceblock on the way down: useless, you have to slow down a lot for it
 In the end, we're going *too fast* and need to slow down or we meet the thwump (if going right directly)
 
+Branch 8: thwump cj at the top
 Branch 9: alt route
 
 # 04-2
@@ -408,7 +409,7 @@ rerecords: 120
 We can reproduce RTA strategy of using the slope to propel ourselves after the switch, but the turret kills us. If we jump higher, it's slightly lower than current strategy.
 
 # 10-0
-rerecords: 359
+rerecords: 738
 
 Branch 9: optimized first jump
 Branch 8: stlightly better walljump but the stumble is worse
@@ -426,6 +427,11 @@ We're still 2.65 pixels from the door, I don't think it's possible to save one m
 rerecords: 61
 
 0.81 pixels away from saving an additional frame!
+
+# 10-4
+rerecords: 121
+
+
 
 # 11-4
 rerecords: 76
@@ -624,7 +630,7 @@ rerecords: 40
 Doing frame-perfect jumps in the doorswitch pipe kills us lmao
 
 # 59-0
-rerecords: 175
+rerecords: 180
 
 This level is maxed out already... Or not???
 
@@ -737,6 +743,16 @@ Can't find a path that gets a good corner jump around 210 without slowing a lot
 Can't get a corner jump around 160
 Can't get above the mine around 430 directly after the first land. Manage to do it once after a jump (don't remember which) but it was slower and now I can't reproduce it
 
+# 74-1
+rerecords: 506
+
+
+
+# 74-3
+rerecords: 656
+
+cj -> cj (instead of cj -> wj -> wj) couldn't get high enough
+
 # 74-4
 rerecords: 727
 
@@ -792,4 +808,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 52190
+# Total rerecords: 53962
