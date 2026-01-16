@@ -12,6 +12,8 @@ import sys
 import struct
 import getopt
 import re
+import tarfile
+import configparser
 from ruamel.yaml import YAML
 
 from converter import extract_chunks
@@ -250,11 +252,23 @@ def get_level_data(episode, level):
         data = yaml.load(f)
     return data[f"{episode}-{level}"]
 
+
+def get_authors_from_ltm_file(level):
+    config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
+    # Read ltm file without extracting to disk with tarfile
+    with tarfile.open(f"volume/n_levels/{level}.ltm", "r:gz") as tar:
+        member = tar.getmember("config.ini")
+        with tar.extractfile(member) as f:
+            config_data = f.read().decode("utf-8")
+    config.read_string(config_data)
+    return config["General"]["authors"]
+
+
 if __name__ == "__main__":
     save = False
     score_type = "Speedrun"
-    authors = 'zapkt'
     optimization_level = DEFAULT_OPTIMIZATION_LEVEL
+    authors = None
     try:
         opts, args = getopt.getopt(sys.argv[1:], 'a:ghso:', ["save", "highscore", 'author=', 'authors=', 'optimization-level='])
     except getopt.GetoptError as err:
@@ -275,6 +289,8 @@ if __name__ == "__main__":
         usage(1)
     episode = args[0].split("-")[0]
     level = args[0].split("-")[1]
+    if authors is None:
+        authors = get_authors_from_ltm_file(args[0])
     solData = readSolFile()
     demo = solData['persBest'][int(episode)]['lev'][int(level)]['demo']
     print(demo)
