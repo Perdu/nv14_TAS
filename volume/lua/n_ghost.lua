@@ -139,7 +139,7 @@ end
 
 function onStartup()
    ltmfile = movie.getMovieFileName()
-   if ltmfile == "/home/n_recomp_rta_speedrun.ltm" then
+   if ltmfile == "/home/n_speedrun.ltm" then
       case = "combined"
       ghostFilePath = "/home/n_recomp_rta_speedrun_ghost.csv"
       triggered = true
