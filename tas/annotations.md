@@ -764,7 +764,7 @@ rerecords: 656
 cj -> cj (instead of cj -> wj -> wj) couldn't get high enough
 
 # 74-4
-rerecords: 727
+rerecords: 1922
 
 Doing an amazing series of jumps on bounceblocks using corners on the way up, we get so much speed that we crash on the ceiling :(
 
@@ -818,4 +818,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 54489
+# Total rerecords: 55684
