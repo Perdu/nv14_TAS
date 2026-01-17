@@ -213,6 +213,27 @@ python stats.py
 
 ## Video encoding
 
+### Automated method
+
+There's a docker image with the correct options already configured to record. To build it:
+
+```
+docker build -f Dockerfile_recording --tag libtas_recording .
+```
+
+To run it:
+
+```
+docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whami/nv14_TAS/volume:/home/ libtas_recording
+```
+
+It will also be launched automatically if you use:
+```
+./build_demo.sh -s 0 -e 0 --record
+```
+
+### Manual method
+
 - Disable `Settings → Audio → Audio Control → Disable` to have sound in encoding.
 - Configure destination in `Tools → Configure encode...`
 - Start encoding: `Tools → Start encode`
