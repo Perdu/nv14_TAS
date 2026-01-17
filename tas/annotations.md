@@ -440,6 +440,17 @@ rerecords: 121
 
 
 
+# 11-1
+rerecords: 469
+
+I tried turning right in the very beginning before goign left but it wasn't really giving anything better. I land the fastest this way (and cj don't give a good enough angle)
+
+Double jump on the bb is faster than simple jump
+
+Jumping later after the fall to double jump earlier gives a poor angle
+
+Double cj on bb on the way up to the exit -> useless (branch 9)
+
 # 11-4
 rerecords: 76
 
@@ -825,4 +836,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 56271
+# Total rerecords: 56740
