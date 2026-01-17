@@ -229,7 +229,7 @@ docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOM
 
 It will also be launched automatically if you use:
 ```
-./build_demo.sh -s 0 -e 0 --record
+./build_demo.sh -s 0 --record
 ```
 
 ### Manual method

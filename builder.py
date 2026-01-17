@@ -114,7 +114,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
 
 def parse_args():
     starting_episode = 0
-    end_episode = 99
+    end_episode = None
     rta = False
     try:
         opts, args = getopt.getopt(sys.argv[1:], 'e:hrs:')
@@ -131,6 +131,8 @@ def parse_args():
             starting_episode = int(arg)
         if o == '-h':
             usage()
+    if end_episode is None:
+        end_episode = starting_episode
     return starting_episode, end_episode, rta
 
 
