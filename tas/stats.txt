@@ -121,6 +121,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 70-3: TAS= 279 f  RTA= 281 f    +2 f (0.050) 
 71-0: TAS= 331 f  RTA= 333 f    +2 f (0.050) 
 00-2: TAS= 343 f  RTA= 344 f    +1 f (0.025) 
+03-4: TAS= 558 f  RTA= 559 f    +1 f (0.025) 
 10-1: TAS= 266 f  RTA= 267 f    +1 f (0.025) 
 11-3: TAS= 437 f  RTA= 438 f    +1 f (0.025) 
 13-4: TAS= 248 f  RTA= 249 f    +1 f (0.025) 
@@ -129,7 +130,6 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-2: TAS= 473 f  RTA= 474 f    +1 f (0.025) 
 90-3: TAS= 163 f  RTA= 164 f    +1 f (0.025) 
 91-0: TAS= 301 f  RTA= 302 f    +1 f (0.025) 
-03-4: TAS= 559 f  RTA= 559 f    +0 f (0.000) 
 05-2: TAS= 283 f  RTA= 283 f    +0 f (0.000) 
 11-4: TAS= 144 f  RTA= 144 f    +0 f (0.000) 
 12-3: TAS= 240 f  RTA= 240 f    +0 f (0.000) 
@@ -149,9 +149,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 26-1: TAS= 201 f  RTA= 200 f    -1 f (-0.025) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 69811 f (29m05.275s)
+Total TAS: 69810 f (29m05.250s)
 Total RTA: 74052 f (30m51.300s)
-Total Δ   = +4241 f (1m46.025s)
+Total Δ   = +4242 f (1m46.050s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -174,7 +174,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 03-1: TAS= 462 f  RTA= 465 f    +3 f (0.075) 
 03-2: TAS= 532 f  RTA= 540 f    +8 f (0.200) █
 03-3: TAS=1198 f  RTA=1233 f   +35 f (0.875) █████
-03-4: TAS= 559 f  RTA= 559 f    +0 f (0.000) 
+03-4: TAS= 558 f  RTA= 559 f    +1 f (0.025) 
 04-0: TAS= 473 f  RTA= 477 f    +4 f (0.100) 
 04-1: TAS= 637 f  RTA= 677 f   +40 f (1.000) ██████
 04-2: TAS= 235 f  RTA= 267 f   +32 f (0.800) ████
@@ -300,9 +300,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 291 f  RTA= 296 f    +5 f (0.125) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 69811 f (29m05.275s)
+Total TAS: 69810 f (29m05.250s)
 Total RTA: 74052 f (30m51.300s)
-Total Δ   = +4241 f (1m46.025s)
+Total Δ   = +4242 f (1m46.050s)
 
 Episode Highscore Grid:
 

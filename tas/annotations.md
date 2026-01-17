@@ -158,10 +158,10 @@ Anyway, by random tries, this is the fastest I went to the door, which is *half*
 
 Additional notes after further optimisation:
 
-Couldn't save a frame on either the top section or the bottom section.
+Couldn't save an additional frame on either the top section or the bottom section.
 
-The bottom section is 0.18 px away from being able walljump one frame earlier and save a frame.
-The top section 0.05 px away from entering the exit one frame earlier.
+The bottom section is 0.18 px away from being able walljump one frame earlier and save an additional frame.
+The top section 0.05 px away from entering the exit an additional frame earlier.
 
 # 04-0
 rerecords: 745
