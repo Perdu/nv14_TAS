@@ -149,12 +149,19 @@ I also tried some tricks for the hs TAS:
 Perhaps going to the right in the outer section could avoid because slower by drone 4 (todo)
 
 # 03-4
-rerecords: 143
+rerecords: 730
 
 Jumping longer or shorter around 100 is slower (or not faster for longer jumps)
 
 It's hard to understand how much the timing of the jump influence the last turnaround.
 Anyway, by random tries, this is the fastest I went to the door, which is *half* a frame faster than rta (which doesn't save a frame)
+
+Additional notes after further optimisation:
+
+Couldn't save a frame on either the top section or the bottom section.
+
+The bottom section is 0.18 px away from being able walljump one frame earlier and save a frame.
+The top section 0.05 px away from entering the exit one frame earlier.
 
 # 04-0
 rerecords: 745
@@ -818,4 +825,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 55684
+# Total rerecords: 56271
