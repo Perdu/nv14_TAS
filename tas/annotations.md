@@ -691,7 +691,7 @@ Doing bwj after the rcj doesn't get high enough
 # 63-3
 rerecords: 133
 
-
+rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
 
 # 64-4
 rerecords: 238
