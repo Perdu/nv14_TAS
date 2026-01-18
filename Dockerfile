@@ -65,7 +65,7 @@ FROM debian:12
   # Fixing the determinism bug: by adding the libopenh264 file manually, we avoid having to open ruffle manually every time
   COPY external/libopenh264-2.4.1-linux64.7.so /root/.cache/ruffle/video/
   # Use the .sol file. Remove for encoding
-  COPY volume/n_tas.sol /root/.local/share/ruffle/SharedObjects/localhost/n_v14b_userdata.sol
+  COPY volume/n_tas_lowscores.sol /root/.local/share/ruffle/SharedObjects/localhost/n_v14b_userdata.sol
 
 # run
   WORKDIR /home
