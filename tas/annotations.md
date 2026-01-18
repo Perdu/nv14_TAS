@@ -686,7 +686,7 @@ rerecords: 158
 # 62-3
 rerecords: 197
 
-
+Doing bwj after the rcj doesn't get high enough
 
 # 64-4
 rerecords: 238
