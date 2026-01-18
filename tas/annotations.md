@@ -712,7 +712,7 @@ There's a branch in which we avoid the cj on the way up to the middle section, w
 Branch 9: alt route jumping lower on the way back to the middle section, the walljumping on the left. The way to the left is faster, but walljumps lose time.
 
 # 70-0
-rerecords: 400
+rerecords: 599
 
 Stopping the jump at 147 and left input at 139 is *too fast*: we can't get the thwump corner jump
 
@@ -851,4 +851,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 57385
+# Total rerecords: 57584
