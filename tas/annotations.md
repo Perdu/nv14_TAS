@@ -841,7 +841,7 @@ We're 0.18 pixels away from saving 1f. We can't make the third pipe jump earlier
 I can't land a proper cj on the way to the switch that's actually faster
 
 # 94-0
-rerecords: 3
+rerecords: 279
 
 
 
@@ -851,4 +851,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 57584
+# Total rerecords: 57860
