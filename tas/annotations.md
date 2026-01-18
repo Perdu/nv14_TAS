@@ -728,13 +728,15 @@ The slope jumps are a pain to optimize, there may still be room there
 Branches 8 and 9: alt routes on the way down, same score (jump directly to the door, jump a bit further)
 
 # 70-2
-rerecords: 336
+rerecords: 552
 
 Cornerjump on the third square on the right -> slower to reach the doorswitch by 13 frames
 
 Can't get pushed down on the square at 205 because we can't turn left without landing on the lower square
 
 Can't beat rta, nor improve it
+
+For the 4 cj route replacing the second cj with a wj seemed to be equal or slower
 
 # 70-3
 rerecords: 318
@@ -851,4 +853,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 57860
+# Total rerecords: 58076
