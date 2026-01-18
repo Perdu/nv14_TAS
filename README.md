@@ -55,8 +55,9 @@ And more.
 - HK https://www.youtube.com/watch?v=qQAJk5_LUvg
 
 ## Todo
-- Make script to display information for finale encode: TAS and 0th author, frames and time gain
-- Add drone detection frame (for 1st chase)
+- Bruteforcer for walljumps
+- Bruteforcer for cj and rcj
+- Bruteforcer for double bb jump
 - speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
 - Find drone position in memory and draw raycasting on detection frame
 - Figure out something to optimize corner jumps
