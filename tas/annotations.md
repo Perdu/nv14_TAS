@@ -441,7 +441,7 @@ rerecords: 121
 
 
 # 11-1
-rerecords: 698
+rerecords: 894
 
 I tried turning right in the very beginning before goign left but it wasn't really giving anything better. I land the fastest this way (and cj don't give a good enough angle)
 
@@ -450,6 +450,8 @@ Double jump on the bb is faster than simple jump
 Jumping later after the fall to double jump earlier gives a poor angle
 
 Double cj on bb on the way up to the exit -> useless (branch 9)
+Branch 8: using a corner shove to take the top door instead of the lower one. Unfortunately, you can't leave the exit section
+Branch 7: original run with bwj
 
 # 11-4
 rerecords: 76
@@ -769,7 +771,7 @@ rerecords: 91
 Don't think there's any hope of saving a frame here
 
 # 73-1
-rerecords: 185
+rerecords: 215
 
 
 
@@ -853,4 +855,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 58076
+# Total rerecords: 58302
