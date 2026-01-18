@@ -761,6 +761,11 @@ Can't find a path that gets a good corner jump around 210 without slowing a lot
 Can't get a corner jump around 160
 Can't get above the mine around 430 directly after the first land. Manage to do it once after a jump (don't remember which) but it was slower and now I can't reproduce it
 
+# 73-0
+rerecords: 91
+
+Don't think there's any hope of saving a frame here
+
 # 74-0
 rerecords: 267
 
@@ -841,4 +846,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 57109
+# Total rerecords: 57200
