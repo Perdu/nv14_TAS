@@ -441,7 +441,7 @@ rerecords: 121
 
 
 # 11-1
-rerecords: 469
+rerecords: 698
 
 I tried turning right in the very beginning before goign left but it wasn't really giving anything better. I land the fastest this way (and cj don't give a good enough angle)
 
@@ -788,6 +788,11 @@ Doing an amazing series of jumps on bounceblocks using corners on the way up, we
 
 Corner jump on the top bounce on the right (the one in the middle) gives us an angle a little bit too low, we hit the edge and stumble way too much
 
+# 75-0
+rerecords: 140
+
+
+
 # 78-4
 rerecords: 1050
 
@@ -836,4 +841,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 56740
+# Total rerecords: 57109
