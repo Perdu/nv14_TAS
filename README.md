@@ -91,12 +91,7 @@ In order to make it possible to TAS any game, libTAS uses tools that do not work
 
 To install WSL for libTAS, please follow Step 1 of this guide: https://clementgallet.github.io/libTAS/guides/wsl/
 
-Once you have WSL set up, [install docker desktop](https://docs.docker.com/desktop/setup/install/windows-install/) on Windows.
-
-Then, inside WSL, install some necessary tools:
-```
-sudo apt-get install git docker
-```
+Once you have WSL set up, [install docker desktop](https://docs.docker.com/desktop/setup/install/windows-install/) on Windows. Inside docker desktop, check "Use WSL 2 based engine" is active in settings (it should be checked by default).
 
 Clone the repository:
 ```
