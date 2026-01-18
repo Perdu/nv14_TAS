@@ -688,6 +688,11 @@ rerecords: 197
 
 Doing bwj after the rcj doesn't get high enough
 
+# 63-3
+rerecords: 31
+
+
+
 # 64-4
 rerecords: 238
 
@@ -860,4 +865,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 58499
+# Total rerecords: 58530
