@@ -499,7 +499,7 @@ Level is maxed, can only improve subpixel
 It *might* be possible to save 1f as I randomly saved 1 pixel, but I'm going a bit blind here
 
 # 12-4
-rerecords: 135
+rerecords: 462
 
 You can jump 1f less for the first switch, which lets you land further to the right, but doesn't allow you to jump earlier
 
@@ -865,4 +865,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 58632
+# Total rerecords: 58959
