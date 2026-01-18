@@ -766,6 +766,11 @@ rerecords: 91
 
 Don't think there's any hope of saving a frame here
 
+# 73-1
+rerecords: 185
+
+
+
 # 74-0
 rerecords: 267
 
@@ -846,4 +851,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 57200
+# Total rerecords: 57385
