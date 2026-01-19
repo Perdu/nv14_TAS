@@ -27,7 +27,7 @@ done
 mkdir -p $EXTRACT_FOLDER
 
 tar xzf $BASE_LTM_FILE -C $EXTRACT_FOLDER
-python builder.py "${PASSTHROUGH_ARGS[@]}"
+python3 builder.py "${PASSTHROUGH_ARGS[@]}"
 tar czf $DOCKER_VOLUME_PATH/$LTM_FILE -C $EXTRACT_FOLDER .
 
 if [ "$RECORD" = true ]; then
