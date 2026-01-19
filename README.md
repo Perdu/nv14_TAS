@@ -87,7 +87,7 @@ Inside container:
 
 In order to make it possible to TAS any game, libTAS uses tools that do not work properly in Windows. For that reason, it only works on Linux. If you're on Windows, you can use the Windows Subsystem for Linux (WSL) to run libTAS.
 
-To install WSL for libTAS, please follow Step 1 of this guide: https://clementgallet.github.io/libTAS/guides/wsl/
+To install WSL for libTAS, please follow Step 1 of this guide: https://clementgallet.github.io/libTAS/guides/wsl/ . If you're on Windows 10, you will also need to follow step 3 (installing VcXsrv).
 
 Once you have WSL set up, [install docker desktop](https://docs.docker.com/desktop/setup/install/windows-install/) on Windows. Inside docker desktop, check "Use WSL 2 based engine" is active in settings (it should be checked by default).
 
