@@ -575,6 +575,11 @@ rerecords: 404
 
 I tried so hard to jump 1f earlier on the left wall, but could not find any workable path in >350 rerecords
 
+# 28-1
+rerecords: 53
+
+
+
 # 35-3
 rerecords: 43
 
@@ -658,6 +663,11 @@ Optimal
 rerecords: 40
 
 Doing frame-perfect jumps in the doorswitch pipe kills us lmao
+
+# 54-0
+rerecords: 0
+
+
 
 # 59-0
 rerecords: 180
@@ -875,4 +885,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 59452
+# Total rerecords: 59505
