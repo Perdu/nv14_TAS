@@ -665,7 +665,12 @@ rerecords: 40
 Doing frame-perfect jumps in the doorswitch pipe kills us lmao
 
 # 54-0
-rerecords: 283
+rerecords: 284
+
+
+
+# 55-2
+rerecords: 165
 
 
 
@@ -885,4 +890,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 59788
+# Total rerecords: 59954
