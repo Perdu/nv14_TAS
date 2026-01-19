@@ -105,9 +105,10 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True):
             continue
         
         diff = rta_score - tas_score  # Positive = RTA is slower
+        perc_diff =  ((rta_score - tas_score)/rta_score) * 100
         total_tas += tas_score
         total_rta += rta_score
-        results.append((key, tas_score, rta_score, diff))
+        results.append((key, tas_score, rta_score, diff, perc_diff))
     
     if not results:
         print("No valid entries found.")
@@ -161,31 +162,32 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True):
     print(f"\nTime differences ({score_type}) — RTA vs TAS (sorted by {sort_type_text}):\n")
 
     # Find max difference for scaling bars
-    max_diff = max(abs(diff) for _, _, _, diff in results)
+    max_diff = max(abs(diff) for _, _, _, diff, _ in results)
     
     # Find max widths for alignment
-    max_key_len = max(len(key) for key, _, _, _ in results)
+    max_key_len = max(len(key) for key, _, _, _, _ in results)
     if score_type.lower() == "speedrun":
-        max_tas_len = max(len(str(int(tas))) for _, tas, _, _ in results)
-        max_rta_len = max(len(str(int(rta))) for _, _, rta, _ in results)
-        max_diff_len = max(len(str(int(abs(diff)))) for _, _, _, diff in results)
+        max_tas_len = max(len(str(int(tas))) for _, tas, _, _, _ in results)
+        max_rta_len = max(len(str(int(rta))) for _, _, rta, _, _ in results)
+        max_diff_len = max(len(str(int(abs(diff)))) for _, _, _, diff, _ in results)
+        perc_diff_len = max(len(f"{abs(perc_diff):.2f}") for _, _, _, _, perc_diff in results)
     else:
-        max_tas_len = max(len(f"{tas:.3f}") for _, tas, _, _ in results)
-        max_rta_len = max(len(f"{rta:.3f}") for _, _, rta, _ in results)
-        max_diff_len = max(len(f"{abs(diff):.3f}") for _, _, _, diff in results)
+        max_tas_len = max(len(f"{tas:.3f}") for _, tas, _, _, _ in results)
+        max_rta_len = max(len(f"{rta:.3f}") for _, _, rta, _, _ in results)
+        max_diff_len = max(len(f"{abs(diff):.3f}") for _, _, _, diff, _ in results)
     
     if sort:
         levels = sorted(results, key=lambda x: x[3], reverse=True)
     else:
         levels = results
     
-    for key, tas, rta, diff in levels:
+    for key, tas, rta, diff, perc_diff in levels:
         bar = create_bar(diff, max_diff, use_color=use_color)
         
         # Format with fixed widths
         if score_type.lower() == "speedrun":
             diff_s = 0.025 * diff
-            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}} {unit}  RTA={rta:>{max_rta_len}} {unit}  {diff:>+{max_diff_len+1}} {unit} ({diff_s:.3f})"
+            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}} {unit}  RTA={rta:>{max_rta_len}} {unit}  {diff:>+{max_diff_len+1}} {unit} ({diff_s:.3f}) (-{perc_diff:>{perc_diff_len}.2f}%)"
         else:
             original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}.3f} {unit}  RTA={rta:>{max_rta_len}.3f} {unit}  {diff:>+{max_diff_len+1}.3f} {unit}"
         
