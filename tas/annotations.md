@@ -546,6 +546,11 @@ rerecords: 219
 
 
 
+# 18-0
+rerecords: 198
+
+
+
 # 19-4
 rerecords: 453
 
@@ -578,6 +583,9 @@ I tried so hard to jump 1f earlier on the left wall, but could not find any work
 # 28-1
 rerecords: 53
 
+
+
+# 30-2
 
 
 # 35-3
@@ -649,6 +657,11 @@ Double corner bounce on lower bb around 820: useless trajectory
 
 Not sure if doing a double bounce block jump in the end like the rta run does would be faster. I don't think it would, and I could not reproduce a proper one a second time. I think current solution is faster anyway. It's slower in rta at least.
 
+# 50-4
+rerecords: 526
+
+It is faster to do a wj instead of the last rcj but this results in not attracting the drone near the exit and it is blocking the exit by the time you get to it
+
 # 51-0
 rerecords: 43
 
@@ -665,7 +678,7 @@ rerecords: 40
 Doing frame-perfect jumps in the doorswitch pipe kills us lmao
 
 # 54-0
-rerecords: 284
+rerecords: 283
 
 
 
@@ -890,4 +903,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 59954
+# Total rerecords: 60677
