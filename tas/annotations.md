@@ -547,9 +547,15 @@ rerecords: 219
 
 
 # 18-0
-rerecords: 198
+rerecords: 461
 
+Walljump after the switch is faster than turnaround
 
+Can't seem to do a bwj on the trapdoor, which would be faster is possible
+
+Branch 7: on the way down, use two stumbles instead of catching the wall
+
+I have to jump that high to the exit switch, otherwise I don't land right enough to slow down on the wall
 
 # 19-4
 rerecords: 453
@@ -583,9 +589,6 @@ I tried so hard to jump 1f earlier on the left wall, but could not find any work
 # 28-1
 rerecords: 53
 
-
-
-# 30-2
 
 
 # 35-3
@@ -903,4 +906,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 60677
+# Total rerecords: 60940
