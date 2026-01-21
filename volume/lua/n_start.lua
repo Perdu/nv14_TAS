@@ -322,7 +322,7 @@ function display_drones_number()
       if display_drones_raycasts and player_x and player_y then
          -- print(string.format("D%d: %f, %f", i, math.abs(x - x_target), math.abs(y - y_target)))
          if math.abs(x - x_target) < 2 and math.abs(y - y_target) < 2 then
-            print(string.format("Drone %d is detecting", i))
+            -- print(string.format("Drone %d is detecting", i))
             local x_dist_to_player = math.abs(player_x - x) - HITBOX_PLAYER
             local y_dist_to_player = math.abs(player_y - y) - HITBOX_PLAYER
 
