@@ -228,14 +228,19 @@ function display_ghost_history(ghost, f)
    end
 end
 
-function draw_velocity_arrows(x, y, vx, vy)
-    -- scale speed so arrows stay readable
-    local scale = 4     -- adjust if arrows feel too long/short
+function get_speed_color(vx, vy)
     local horizontal_color = 0xffff0000
     local vertical_color = 0xff0000ff
     if vy >= 7.00 or vy <= -7.00 then
        vertical_color = 0xffff0000
     end
+    return horizontal_color, vertical_color
+end
+
+function draw_velocity_arrows(x, y, vx, vy)
+    local horizontal_color, vertical_color = get_speed_color(vx, vy)
+    -- scale speed so arrows stay readable
+    local scale = 4     -- adjust if arrows feel too long/short
 
     -- horizontal arrow
     local hx = x + vx * scale
@@ -263,10 +268,6 @@ function draw_velocity_arrows(x, y, vx, vy)
         gui.line(x, hy, x - 3, hy - 4 * dir, vertical_color)
         gui.line(x, hy, x + 3, hy - 4 * dir, vertical_color)
     end
-
-    -- Optional: draw numeric values
-    gui.text(310, 575, string.format("vx: %f", vx), horizontal_color, 0, 0, 15)
-    gui.text(310, 585,  string.format("vy: %f", vy), vertical_color, 0, 0, 15)
 
     -- compute endpoint of combined vector
     local rx = x + vx * scale
@@ -383,12 +384,17 @@ function onPaint()
       if levels[level].switches then
          display_distance_to_switches(x, y, levels[level].switches)
       end
-      if display_arrows and memspeed_y ~= "" then
+      if memspeed_y ~= "" then
          local y_num = tonumber(memspeed_y, 16)
          local vy = memory.readd(y_num)
          local x_num = y_num - 56
          local vx = memory.readd(x_num)
-         draw_velocity_arrows(x, y, vx, vy)
+         local horizontal_color, vertical_color = get_speed_color(vx, vy)
+         gui.text(310, 575, string.format("vx: %f", vx), horizontal_color, 0, 0, 15)
+         gui.text(310, 585, string.format("vy: %f", vy), vertical_color, 0, 0, 15)
+         if display_arrows then
+            draw_velocity_arrows(x, y, vx, vy)
+         end
       end
    end
 
