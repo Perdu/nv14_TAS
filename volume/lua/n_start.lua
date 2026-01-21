@@ -4,6 +4,7 @@
 dofile("/home/lua/lib/utils.lua")
 dofile("/home/lua/lib/hitboxes.lua")
 dofile("/home/lua/lib/keysyms.lua")
+dofile("/home/lua/lib/bruteforcers/rcj.lua")
 grounded_levels = dofile("/home/lua/lib/grounded_levels.lua")
 levels = dofile("/home/lua/levels.lua")
 
@@ -25,6 +26,7 @@ remove_drone = 0
 ---- Constants
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
+BRUTEFORCER_SAVESTATE = 7
 
 ---- Session state
 done = false
@@ -49,6 +51,7 @@ max_y = 0
 path = {}
 knownFrames = {}   -- sorted list of frames already stored
 save_best_position = false
+bruteforce_rcj = false
 bestPath = {}
 
 
@@ -524,6 +527,8 @@ function onStartup()
     memspeed_y = ""
     drones_memx = {}
     drones_target_memx = {}
+
+    bruteforce_rcj = false
 end
 
 -- Detect Space key press
@@ -535,6 +540,13 @@ function onInput()
        -- end
        -- do it on next frame so it's on the savestate frame
        save_best_position = true
+    end
+
+    if input.getKey(KEY_r) ~= 0 and memy ~= "" then
+       bruteforce_rcj_x = true
+    end
+    if bruteforce_rcj_x then
+       rcj("x")
     end
 
     if display_current_path and memy ~= "" then
