@@ -18,6 +18,7 @@ search_for_drones_position = true
 display_drones_targets = false
 display_drones_raycasts = true
 MAX_DIST_RAYCAST_DISPLAY = 30
+display_arrows = false
 -- set the number of the drone you want removed (it will go through walls)
 remove_drone = 0
 
@@ -382,7 +383,7 @@ function onPaint()
       if levels[level].switches then
          display_distance_to_switches(x, y, levels[level].switches)
       end
-      if memspeed_y ~= "" then
+      if display_arrows and memspeed_y ~= "" then
          local y_num = tonumber(memspeed_y, 16)
          local vy = memory.readd(y_num)
          local x_num = y_num - 56
