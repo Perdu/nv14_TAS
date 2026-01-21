@@ -484,7 +484,7 @@ function onPaint()
 
    if advance_one_step_after_ramsearch == 3 then
       advance_one_step_after_ramsearch = advance_one_step_after_ramsearch + 1
-      gui.text(80, 580, "Loaded.")
+      gui.text(80, 580, "Loaded.", 0xff00ff00)
     end
 
    display_drones_number()
