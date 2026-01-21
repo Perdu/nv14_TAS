@@ -668,6 +668,11 @@ Double corner bounce on lower bb around 820: useless trajectory
 
 Not sure if doing a double bounce block jump in the end like the rta run does would be faster. I don't think it would, and I could not reproduce a proper one a second time. I think current solution is faster anyway. It's slower in rta at least.
 
+# 50-2
+rerecords: 316
+
+Only got subpixel improvement on the bb jump and tile push section. Trajectory of fall is subpixel dependent and hard to optimise.
+
 # 50-3
 rerecords: 700
 
@@ -919,4 +924,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 62028
+# Total rerecords: 62344
