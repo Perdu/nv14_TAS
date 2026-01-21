@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 152
-Speedruns: 153
+Speedruns: 154
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -25,6 +25,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 12-4: TAS= 356 f  RTA= 416 f   -60 f (1.500) (-14.42%) █████████
 08-4: TAS=1049 f  RTA=1105 f   -56 f (1.400) (- 5.07%) ████████
 74-3: TAS= 240 f  RTA= 294 f   -54 f (1.350) (-18.37%) ████████
+50-3: TAS= 383 f  RTA= 436 f   -53 f (1.325) (-12.16%) ████████
 02-1: TAS= 609 f  RTA= 661 f   -52 f (1.300) (- 7.87%) ███████
 91-3: TAS= 404 f  RTA= 455 f   -51 f (1.275) (-11.21%) ███████
 01-4: TAS= 827 f  RTA= 877 f   -50 f (1.250) (- 5.70%) ███████
@@ -159,9 +160,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 72637 f (30m15.925s)
-Total RTA: 77153 f (32m08.825s)
-Total Δ   = +4516 f (1m52.900s)
+Total TAS: 73020 f (30m25.500s)
+Total RTA: 77589 f (32m19.725s)
+Total Δ   = +4569 f (1m54.225s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -260,6 +261,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 43-1: TAS= 420 f  RTA= 447 f   -27 f (0.675) (- 6.04%) ████
 46-2: TAS= 128 f  RTA= 128 f     0 f (0.000) (- 0.00%) 
 49-4: TAS=1321 f  RTA=1443 f  -122 f (3.050) (- 8.45%) ██████████████████
+50-3: TAS= 383 f  RTA= 436 f   -53 f (1.325) (-12.16%) ████████
 50-4: TAS= 325 f  RTA= 369 f   -44 f (1.100) (-11.92%) ██████
 51-0: TAS= 116 f  RTA= 116 f     0 f (0.000) (- 0.00%) 
 53-0: TAS= 565 f  RTA= 571 f    -6 f (0.150) (- 1.05%) 
@@ -320,9 +322,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 291 f  RTA= 296 f    -5 f (0.125) (- 1.69%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 72637 f (30m15.925s)
-Total RTA: 77153 f (32m08.825s)
-Total Δ   = +4516 f (1m52.900s)
+Total TAS: 73020 f (30m25.500s)
+Total RTA: 77589 f (32m19.725s)
+Total Δ   = +4569 f (1m54.225s)
 
 Episode Highscore Grid:
 

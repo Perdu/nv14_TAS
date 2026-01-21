@@ -591,6 +591,9 @@ rerecords: 53
 
 
 
+# 30-2
+
+
 # 35-3
 rerecords: 43
 
@@ -659,6 +662,11 @@ Doing two proper bounce corner jump in the beginning gets us too fast: we end up
 Double corner bounce on lower bb around 820: useless trajectory
 
 Not sure if doing a double bounce block jump in the end like the rta run does would be faster. I don't think it would, and I could not reproduce a proper one a second time. I think current solution is faster anyway. It's slower in rta at least.
+
+# 50-3
+rerecords: 700
+
+
 
 # 50-4
 rerecords: 526
@@ -906,4 +914,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 60940
+# Total rerecords: 61640
