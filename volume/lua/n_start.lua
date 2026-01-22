@@ -27,6 +27,7 @@ remove_drone = 0
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 BRUTEFORCER_SAVESTATE = 7
+GHOST_COLOR = 0xffff00ff
 
 ---- Session state
 done = false
@@ -161,14 +162,16 @@ local function loadGhost()
     end
 
     for line in file:lines() do
-        local frame, x, y, shift, left, right = line:match("(%d+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+)")
+        local frame, x, y, shift, left, right, vx, vy = line:match("(%d+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+)")
         if frame and x and y then
            ghostData[tonumber(frame)] = {
               x = tonumber(x),
               y = tonumber(y),
               shift = tonumber(shift),
               left = tonumber(left),
-              right = tonumber(right)
+              right = tonumber(right),
+              vx = tonumber(vx),
+              vy = tonumber(vy)
            }
         end
     end
@@ -412,15 +415,17 @@ function onPaint()
    if space_frame ~= - 100 then
       local ghost = ghostData[f - space_frame]
       if ghost then
-         gui.ellipse(ghost.x, ghost.y, HITBOX_PLAYER, HITBOX_PLAYER, 1, 0xffff00ff)
+         gui.ellipse(ghost.x, ghost.y, HITBOX_PLAYER, HITBOX_PLAYER, 1, GHOST_COLOR)
          local ghost_text_position = 160
          local best_path_exists = bestPath[f]
          if best_path_exists then
             -- move ghost text to the right to display best path instead
-            ghost_text_position = 410
+            ghost_text_position = 610
          end
-         gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), 0xffff00ff, 0, 0, 15)
-
+         gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), GHOST_COLOR, 0, 0, 15)
+         -- speed
+         gui.text(415, 575, string.format("vx: %f", ghost.vx), GHOST_COLOR, 0, 0, 15)
+         gui.text(415, 585, string.format("vy: %f", ghost.vy), GHOST_COLOR, 0, 0, 15)
          if display_ghost_moves_under_ghost then
             if ghost.shift == 1 then
                gui.text(ghost.x - 14, ghost.y + 13, "J", 0xffffffff)
