@@ -57,12 +57,12 @@ bestPath = {}
 
 
 -- Insert or update path at a specific frame
-local function recordFrame(frame, x, y)
+local function recordFrame(frame, x, y, vx, vy)
     if not path[frame] then
         table.insert(knownFrames, frame)
         table.sort(knownFrames)
     end
-    path[frame] = {x = x, y = y}
+    path[frame] = {x = x, y = y, vx = vx, vy = vy}
 end
 
 function display_distance_to_doors(x, y, doors)
@@ -399,10 +399,7 @@ function onPaint()
          display_distance_to_switches(x, y, levels[level].switches)
       end
       if memspeed_y ~= "" then
-         local y_num = tonumber(memspeed_y, 16)
-         local vy = memory.readd(y_num)
-         local x_num = y_num - 56
-         local vx = memory.readd(x_num)
+         local vx, vy = get_player_speed()
          local horizontal_color, vertical_color = get_speed_color(vx, vy)
          gui.text(310, 575, string.format("vx: %f", vx), horizontal_color, 0, 0, 15)
          gui.text(310, 585, string.format("vy: %f", vy), vertical_color, 0, 0, 15)
@@ -425,7 +422,7 @@ function onPaint()
          local best_path_exists = bestPath[f]
          if best_path_exists then
             -- move ghost text to the right to display best path instead
-            ghost_text_position = 610
+            ghost_text_position = 600
          end
          gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), GHOST_COLOR, 0, 0, 15)
          -- speed
@@ -455,6 +452,12 @@ function onPaint()
          gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffff00)
          gui.text(160, 575, string.format("%f ; %f", a.x, a.y), 0xffffff00, 0, 0, 15)
       end
+   end
+
+   if bestPath[f] then
+      print(bestPath)
+      gui.text(505, 575, string.format("vx: %f", bestPath[f].vx), 0xffffff00, 0, 0, 15)
+      gui.text(505, 585, string.format("vy: %f", bestPath[f].vy), 0xffffff00, 0, 0, 15)
    end
 
    -- display help comparison to either ghost or best path
@@ -535,6 +538,7 @@ function onStartup()
 
     path = {}
     bestPath = {}
+    bestPath_speed = {}
     knownFrames = {}
     memy = ""
     memspeed_y = ""
@@ -565,7 +569,8 @@ function onInput()
     if display_current_path and memy ~= "" then
        local f = movie.currentFrame()
        local x, y = get_player_position()
-       recordFrame(f, x, y)
+       local vx, vy = get_player_speed()
+       recordFrame(f, x, y, vx, vy)
     end
 
     if not done then
@@ -613,16 +618,17 @@ function onFrame()
 
    if save_best_position then
       local x, y = get_player_position()
+      local vx, vy = get_player_speed()
       max_x = x
       max_y = y
 
        -- copy path into bestPath
        for frame, pos in pairs(path) do
           -- print(string.format("%d: %f ; %f", frame, pos.x, pos.y))
-          bestPath[frame] = { x = pos.x, y = pos.y }
+          bestPath[frame] = { x = pos.x, y = pos.y, vx = pos.vx, vy = pos.vy }
        end
        -- current frame
-       bestPath[movie.currentFrame()] = { x = x, y = y }
+       bestPath[movie.currentFrame()] = { x = x, y = y, vx = vx, vy = vy }
        print("Position saved")
 
       runtime.saveState(10)

@@ -10,6 +10,18 @@ function get_player_position()
    end
 end
 
+function get_player_speed()
+   if memspeed_y ~= "" then
+      local y_num = tonumber(memspeed_y, 16)
+      local vy = memory.readd(y_num)
+      local x_num = y_num - 56
+      local vx = memory.readd(x_num)
+      return vx, vy
+   else
+      return nil
+   end
+end
+
 function float_eq(a, b, tol)
     tol = tol or 1e-5  -- default tolerance
     return math.abs(a - b) < tol
