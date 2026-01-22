@@ -238,7 +238,7 @@ function get_speed_color(vx, vy)
     local horizontal_color = 0xffff5500
     local vertical_color = 0xff0000ff
     if vy >= 7.00 or vy <= -7.00 then
-       vertical_color = 0xffff0000
+       vertical_color = 0xffff2200
     end
     return horizontal_color, vertical_color
 end
@@ -380,7 +380,7 @@ function onPaint()
    gui.rectangle(410, 577, 380, 22, 1, 0xff797988, 1)
 
    -- for placement during dev
-   -- gui.text(315, 575, "toto", 0xffff5500, 0, 0, 15)
+   -- gui.text(315, 575, "toto", 0xffff2200, 0, 0, 15)
    -- gui.text(515, 585, "toto", GHOST_COLOR, 0, 0, 15)
 
    gui.text(760, 5, level)
