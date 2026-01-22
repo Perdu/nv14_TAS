@@ -235,7 +235,7 @@ function display_ghost_history(ghost, f)
 end
 
 function get_speed_color(vx, vy)
-    local horizontal_color = 0xffff0000
+    local horizontal_color = 0xffff5500
     local vertical_color = 0xff0000ff
     if vy >= 7.00 or vy <= -7.00 then
        vertical_color = 0xffff0000
