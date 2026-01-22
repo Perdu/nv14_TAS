@@ -374,7 +374,7 @@ function onPaint()
    local x = -1
    local y = -1
    -- override episode name to be able to display info
-   gui.rectangle(410, 577, 300, 22, 1, 0xff797988, 1)
+   gui.rectangle(410, 577, 380, 22, 1, 0xff797988, 1)
    gui.text(760, 5, level)
    if memy ~= "" then
       x, y = get_player_position()
