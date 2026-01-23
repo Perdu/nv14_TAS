@@ -673,6 +673,23 @@ rerecords: 817
 
 For exit key lp was tied with jump into chimney, for exit lp was 1 frame slower than jump into chimney
 
+# 50-1
+rerecords: 2038
+
+Thwump jump at start: not enough height, waiting for thwump to come up high enough wastes too much time
+
+Couldn't beat drone even with improvement to the start
+
+Entrance into upper section: cj to walljump off thwump was slower than current method. Could only get a small boost from the thwump.
+
+Top right corner: Jumping to ceiling and turning around slower than corner shove
+
+Launchpad/locked door key section: Wallsliding to the floor and doing a wj into the chimney was slower than current method of using the lp. Wallsliding to the floor then doing a turnaround back to the lp is also slower.
+
+Exit key section: Bb double was slower. Jumping to celing was slower (in both directions).
+
+Exit: Single jump slower than 3-jump chimney
+
 # 50-2
 rerecords: 553
 
@@ -931,4 +948,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 63398
+# Total rerecords: 65436
