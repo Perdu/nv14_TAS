@@ -604,6 +604,9 @@ rerecords: 53
 
 
 
+# 30-2
+
+
 # 31-4
 rerecords: 388
 
@@ -745,7 +748,7 @@ rerecords: 207
 # 51-3
 rerecords: 160
 
-
+Jumping to the ceiling is slower for collecting first locked door switch
 
 # 53-0
 rerecords: 14
