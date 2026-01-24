@@ -191,6 +191,7 @@ If you want to be able to push directly to this repository, you need to:
 - Optionnally, to avoid having to enter credentials every time, you may want to [create an SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent), set it up [here](https://github.com/settings/keys), then clone the repository using `git clone git@github.com:Perdu/nv14_TAS.git` instead of the HTTPS method you most probably used.
 
 Then after [TASing a level](#tasing-a-n-level):
+- run `git pull` to avoid potential conflicts
 - Add the newly created ltm file: `git add volume/n_levels/00-0.ltm`
 - Create a *commit* with a message indicating what you did: `git commit -am "Add 00-0, 100f faster than 0th"`
 - Push the commit to the repository: `git push`
