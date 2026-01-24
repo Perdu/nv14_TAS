@@ -564,6 +564,11 @@ rerecords: 219
 
 
 
+# 16-3
+rerecords: 79
+
+0th is maxed, I could barely get a few subpixel (0.something)
+
 # 18-0
 rerecords: 461
 
@@ -988,4 +993,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 69267
+# Total rerecords: 69346
