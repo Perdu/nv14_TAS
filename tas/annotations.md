@@ -712,6 +712,21 @@ rerecords: 43
 
 
 
+# 51-1
+rerecords: 2345
+
+Double rcj after the bb doesn't leave a good angle for the next one.
+
+Doing an rcj to enter the exit key section and collect it before the locked door key is slower.
+
+There doesn't seem to be anyway to go over the laser drone on the way to the second locked door key. And doesn't seem to be any way to stop it from the second time either.
+
+Running off the platform beneath the drone is slower than the current method of jumping.
+
+Didn't test cj for going back through middle section as it would seems like it would need too much slowing down,
+
+Rcj at the end couldn't get high enough to avoid the double wj.
+
 # 53-0
 rerecords: 14
 
@@ -948,4 +963,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 65714
+# Total rerecords: 68059
