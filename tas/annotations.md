@@ -453,6 +453,19 @@ Double cj on bb on the way up to the exit -> useless (branch 9)
 Branch 8: using a corner shove to take the top door instead of the lower one. Unfortunately, you can't leave the exit section
 Branch 7: original run with bwj
 
+# 11-2
+rerecords: 566
+
+We can do a bigger jump in the beginning and land on the next platform, but we don't get a good angle to get directly to the switch without touching the third platform (branch 8)
+
+We can also get a bump that avoid the 2nd platform, but landing on the third is a bit slower (branch 9)
+
+Branches 6 & 7: other paths that don't work
+
+Branch 5: alt route with cj that doesn't work
+
+We can walljump after rcj on the way up but it's useless
+
 # 11-4
 rerecords: 76
 
@@ -589,9 +602,6 @@ I tried so hard to jump 1f earlier on the left wall, but could not find any work
 # 28-1
 rerecords: 53
 
-
-
-# 30-2
 
 
 # 31-4
@@ -973,4 +983,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 68426
+# Total rerecords: 68992
