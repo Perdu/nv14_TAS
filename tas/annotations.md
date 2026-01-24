@@ -727,6 +727,11 @@ Didn't test cj for going back through middle section as it would seems like it w
 
 Rcj at the end couldn't get high enough to avoid the double wj.
 
+# 51-2
+rerecords: 207
+
+
+
 # 53-0
 rerecords: 14
 
@@ -963,4 +968,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 68059
+# Total rerecords: 68266
