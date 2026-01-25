@@ -736,7 +736,7 @@ rerecords: 43
 
 
 # 51-1
-rerecords: 2345
+rerecords: 2902
 
 Double rcj after the bb doesn't leave a good angle for the next one.
 
@@ -749,6 +749,8 @@ Running off the platform beneath the drone is slower than the current method of 
 Didn't test cj for going back through middle section as it would seems like it would need too much slowing down,
 
 Rcj at the end couldn't get high enough to avoid the double wj.
+
+Cwj can be cleaned but when you have only 0.1 px in both x and y to work with it's ridiculously hard
 
 # 51-2
 rerecords: 207
@@ -812,6 +814,9 @@ A simple jump on the left wall in the end is equally fast but way less cool ;)
 rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
+
+# 60-2
+
 
 # 61-1
 rerecords: 71
@@ -1013,4 +1018,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 71024
+# Total rerecords: 71581
