@@ -985,6 +985,11 @@ I tried many different strategies for this one. The optimal one seems to be to m
 
 I tried jumping directly on the first bb on the left by it was slower due to having to press opposite direction
 
+# 91-0
+rerecords: 386
+
+
+
 # 91-1
 rerecords: 100
 
@@ -1003,4 +1008,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 70195
+# Total rerecords: 70581

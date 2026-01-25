@@ -132,6 +132,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 53-2: TAS= 267 f  RTA= 270 f    -3 f (0.075) (- 1.11%) 
 60-1: TAS= 280 f  RTA= 283 f    -3 f (0.075) (- 1.06%) 
 77-4: TAS= 186 f  RTA= 189 f    -3 f (0.075) (- 1.59%) 
+91-0: TAS= 299 f  RTA= 302 f    -3 f (0.075) (- 0.99%) 
 00-4: TAS= 162 f  RTA= 164 f    -2 f (0.050) (- 1.22%) 
 01-2: TAS= 413 f  RTA= 415 f    -2 f (0.050) (- 0.48%) 
 15-4: TAS= 196 f  RTA= 198 f    -2 f (0.050) (- 1.01%) 
@@ -152,7 +153,6 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 67-3: TAS= 161 f  RTA= 162 f    -1 f (0.025) (- 0.62%) 
 82-2: TAS= 473 f  RTA= 474 f    -1 f (0.025) (- 0.21%) 
 90-3: TAS= 163 f  RTA= 164 f    -1 f (0.025) (- 0.61%) 
-91-0: TAS= 301 f  RTA= 302 f    -1 f (0.025) (- 0.33%) 
 05-2: TAS= 283 f  RTA= 283 f     0 f (0.000) (- 0.00%) 
 11-4: TAS= 144 f  RTA= 144 f     0 f (0.000) (- 0.00%) 
 12-3: TAS= 240 f  RTA= 240 f     0 f (0.000) (- 0.00%) 
@@ -171,9 +171,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 78988 f (32m54.700s)
+Total TAS: 78986 f (32m54.650s)
 Total RTA: 84027 f (35m00.675s)
-Total Δ   = +5039 f (2m05.975s)
+Total Δ   = +5041 f (2m06.025s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -337,16 +337,16 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 89-4: TAS= 870 f  RTA=1062 f  -192 f (4.800) (-18.08%) █████████████████████████████
 90-0: TAS= 310 f  RTA= 316 f    -6 f (0.150) (- 1.90%) 
 90-3: TAS= 163 f  RTA= 164 f    -1 f (0.025) (- 0.61%) 
-91-0: TAS= 301 f  RTA= 302 f    -1 f (0.025) (- 0.33%) 
+91-0: TAS= 299 f  RTA= 302 f    -3 f (0.075) (- 0.99%) 
 91-1: TAS= 322 f  RTA= 326 f    -4 f (0.100) (- 1.23%) 
 91-3: TAS= 404 f  RTA= 455 f   -51 f (1.275) (-11.21%) ███████
 94-0: TAS= 346 f  RTA= 369 f   -23 f (0.575) (- 6.23%) ███
 99-0: TAS= 291 f  RTA= 296 f    -5 f (0.125) (- 1.69%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 78988 f (32m54.700s)
+Total TAS: 78986 f (32m54.650s)
 Total RTA: 84027 f (35m00.675s)
-Total Δ   = +5039 f (2m05.975s)
+Total Δ   = +5041 f (2m06.025s)
 
 Episode Highscore Grid:
 
