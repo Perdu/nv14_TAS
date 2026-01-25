@@ -519,7 +519,7 @@ You can jump 1f less for the first switch, which lets you land further to the ri
 The rcj is really tight and finding a better way to land on the platform is difficult (even getting another one that does is)
 
 # 13-0
-rerecords: 345
+rerecords: 390
 
 
 
@@ -1008,4 +1008,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 70581
+# Total rerecords: 70626
