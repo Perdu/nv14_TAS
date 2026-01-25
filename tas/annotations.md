@@ -782,6 +782,11 @@ rerecords: 283
 
 
 
+# 54-3
+rerecords: 398
+
+Probably not optimised, seems to be a matter of optimising y-subpixel and jumping as high as you can without slowing down too much
+
 # 55-2
 rerecords: 165
 
@@ -1008,4 +1013,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 70626
+# Total rerecords: 71024

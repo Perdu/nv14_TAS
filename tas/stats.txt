@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 152
-Speedruns: 165
+Speedruns: 166
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -80,6 +80,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 06-4: TAS= 479 f  RTA= 495 f   -16 f (0.400) (- 3.23%) ██
 13-1: TAS= 725 f  RTA= 741 f   -16 f (0.400) (- 2.16%) ██
 71-1: TAS= 499 f  RTA= 515 f   -16 f (0.400) (- 3.11%) ██
+54-3: TAS= 579 f  RTA= 594 f   -15 f (0.375) (- 2.53%) ██
 89-3: TAS=1135 f  RTA=1150 f   -15 f (0.375) (- 1.30%) ██
 07-4: TAS= 944 f  RTA= 958 f   -14 f (0.350) (- 1.46%) ██
 02-0: TAS= 233 f  RTA= 246 f   -13 f (0.325) (- 5.28%) █
@@ -171,9 +172,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 78978 f (32m54.450s)
-Total RTA: 84027 f (35m00.675s)
-Total Δ   = +5049 f (2m06.225s)
+Total TAS: 79557 f (33m08.925s)
+Total RTA: 84621 f (35m15.525s)
+Total Δ   = +5064 f (2m06.600s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -289,6 +290,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 53-0: TAS= 565 f  RTA= 571 f    -6 f (0.150) (- 1.05%) 
 53-2: TAS= 267 f  RTA= 270 f    -3 f (0.075) (- 1.11%) 
 54-0: TAS= 106 f  RTA= 106 f     0 f (0.000) (- 0.00%) 
+54-3: TAS= 579 f  RTA= 594 f   -15 f (0.375) (- 2.53%) ██
 55-2: TAS= 186 f  RTA= 195 f    -9 f (0.225) (- 4.62%) █
 59-0: TAS= 212 f  RTA= 212 f     0 f (0.000) (- 0.00%) 
 59-1: TAS= 373 f  RTA= 391 f   -18 f (0.450) (- 4.60%) ██
@@ -344,9 +346,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 291 f  RTA= 296 f    -5 f (0.125) (- 1.69%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 78978 f (32m54.450s)
-Total RTA: 84027 f (35m00.675s)
-Total Δ   = +5049 f (2m06.225s)
+Total TAS: 79557 f (33m08.925s)
+Total RTA: 84621 f (35m15.525s)
+Total Δ   = +5064 f (2m06.600s)
 
 Episode Highscore Grid:
 
