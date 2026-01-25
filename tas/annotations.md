@@ -214,7 +214,7 @@ It does not seem possible to go between the last drone and the slope in the very
 Potential tile bwj to do in the lower section. Not sure it would actually save time as we wait for a drone later on
 
 # 05-1
-rerecords: 900
+rerecords: 1695
 
 In the beginning, we can get a bit of advance over 0th by corner jumping on the 3rd bit, but then we cannot reproduce the second corner jump with gain much more time
 I had to copy the exact path of the 0th
@@ -223,6 +223,12 @@ Jumping left around 490 isn't faster
 You can do a reverse corner jump around 595, and jump on the whole on the left... But there's no way you beat the thwump
 
 Using the pipe in the end is faster than turning around (by about 10f)
+
+Further optimisation:
+1f saved from extra ck on bottom section
+10f saved from faster method of getting past thwump
+1f saved from jumping left before going to the second thwump
+2f saved from cks across the top section
 
 # 05-2
 rerecords: 29
@@ -1018,4 +1024,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 71581
+# Total rerecords: 72376
