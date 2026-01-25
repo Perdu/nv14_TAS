@@ -614,6 +614,9 @@ rerecords: 53
 
 
 
+# 30-2
+
+
 # 31-4
 rerecords: 388
 
@@ -756,6 +759,13 @@ rerecords: 207
 rerecords: 160
 
 Jumping to the ceiling is slower for collecting first locked door switch
+
+# 51-4
+rerecords: 749
+
+Bbcj at start doesn't lead to anything useful
+
+Tile corner jump coming back from the locked door key on top right can't make up for the slowdown needed to do it
 
 # 53-0
 rerecords: 14
@@ -993,4 +1003,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 69346
+# Total rerecords: 70095
