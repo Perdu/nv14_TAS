@@ -599,6 +599,13 @@ Branch 7: on the way down, use two stumbles instead of catching the wall
 
 I have to jump that high to the exit switch, otherwise I don't land right enough to slow down on the wall
 
+# 18-4
+rerecords: 262
+
+I tried rcj and cj in the very beginning but there's no interesting path
+
+Branch 9: I tried optimizing the beginning, but it turned out to be slower than 0th
+
 # 19-4
 rerecords: 453
 
@@ -1041,4 +1048,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 73861
+# Total rerecords: 74123
