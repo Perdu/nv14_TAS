@@ -575,6 +575,19 @@ rerecords: 79
 
 0th is maxed, I could barely get a few subpixel (0.something)
 
+# 17-1
+rerecords: 574
+
+Can't find a path with a jump first that saves time
+
+A second thwump cj on the way left crushes you against the wall (branch 9)
+
+Thwump cj on the most-left thwump on the way back: useless (branch 7)
+
+Thwump cj on the way back on the second row of thwumps : slower, we can't immediately land on the upper section after a single wj (branch 6)
+
+Branch 5: alt route using corner push (2f slower)
+
 # 18-0
 rerecords: 461
 
@@ -618,9 +631,6 @@ I tried so hard to jump 1f earlier on the left wall, but could not find any work
 # 28-1
 rerecords: 53
 
-
-
-# 30-2
 
 
 # 31-4
@@ -831,9 +841,6 @@ rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
-# 60-2
-
-
 # 61-1
 rerecords: 71
 
@@ -1034,4 +1041,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 73287
+# Total rerecords: 73861
