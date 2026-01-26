@@ -9,9 +9,6 @@ if not ramsearch_done and grounded_levels[level] and not original_input_modified
 elseif ramsearch_done and grounded_levels[level] and original_input_modified then
    runtime.playPause()
    if movie.currentFrame() == space_frame + 1 then
-      -- put original value back
-      print("Putting back shift value:", shift_pressed)
-      input.setKey(KEY_SHIFT, shift_pressed)
       original_input_modified = false
       runtime.loadState(SAVE_SLOT)
    end
