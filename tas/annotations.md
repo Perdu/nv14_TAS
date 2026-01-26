@@ -576,7 +576,7 @@ rerecords: 79
 0th is maxed, I could barely get a few subpixel (0.something)
 
 # 17-1
-rerecords: 574
+rerecords: 807
 
 Can't find a path with a jump first that saves time
 
@@ -638,6 +638,9 @@ I tried so hard to jump 1f earlier on the left wall, but could not find any work
 # 28-1
 rerecords: 53
 
+
+
+# 30-2
 
 
 # 31-4
@@ -848,6 +851,9 @@ rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
+# 60-2
+
+
 # 61-1
 rerecords: 71
 
@@ -865,6 +871,9 @@ rerecords: 158
 rerecords: 197
 
 Doing bwj after the rcj doesn't get high enough
+
+# 63-1
+
 
 # 63-3
 rerecords: 133
@@ -1048,4 +1057,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 74123
+# Total rerecords: 74356
