@@ -576,7 +576,7 @@ rerecords: 79
 0th is maxed, I could barely get a few subpixel (0.something)
 
 # 17-1
-rerecords: 807
+rerecords: 893
 
 Can't find a path with a jump first that saves time
 
@@ -1057,4 +1057,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 74356
+# Total rerecords: 74442
