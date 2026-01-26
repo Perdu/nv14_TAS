@@ -122,10 +122,8 @@ if __name__ == "__main__":
         elif sys.argv[2] == 'hs':
             hs_run = True
         elif sys.argv[2] == 'demo':
-            print("Enter demo, then press Ctrl+D:")
-            demo_str = sys.stdin.read().strip()
-            print("New authors? (Just press Ctrl+D to keep as-is)")
-            authors = sys.stdin.read().strip()
+            demo_str = input("Enter demo: ")
+            authors = input("New authors? (leave empty to keep as-is): ")
     libtas_input, nb_frames, markers = build_libtas_input(episode, level, "Speedrun", rta_run, hs_run, demo_str)
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     with open("extract/inputs", "w") as f:
