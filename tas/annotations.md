@@ -600,9 +600,11 @@ Branch 7: on the way down, use two stumbles instead of catching the wall
 I have to jump that high to the exit switch, otherwise I don't land right enough to slow down on the wall
 
 # 18-4
-rerecords: 262
+rerecords: 853
 
 I tried rcj and cj in the very beginning but there's no interesting path
+
+Quad on the lower left bounceblock followed by jumps on two bbs above gets you to the top faster than rta, but is slower across the top because you can't get a good bbcj
 
 Branch 9: I tried optimizing the beginning, but it turned out to be slower than 0th
 
@@ -1057,4 +1059,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 74442
+# Total rerecords: 75033
