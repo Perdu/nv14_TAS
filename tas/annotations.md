@@ -588,6 +588,11 @@ Thwump cj on the way back on the second row of thwumps : slower, we can't immedi
 
 Branch 5: alt route using corner push (2f slower)
 
+# 17-3
+rerecords: 720
+
+
+
 # 18-0
 rerecords: 461
 
@@ -1058,4 +1063,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 74643
+# Total rerecords: 75363
