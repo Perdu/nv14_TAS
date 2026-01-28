@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 152
-Speedruns: 172
+Speedruns: 173
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -118,6 +118,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 53-0: TAS= 565 f  RTA= 571 f    -6 f (0.150) (- 1.05%) 
 70-1: TAS= 340 f  RTA= 346 f    -6 f (0.150) (- 1.73%) 
 70-4: TAS= 196 f  RTA= 202 f    -6 f (0.150) (- 2.97%) 
+72-0: TAS= 278 f  RTA= 284 f    -6 f (0.150) (- 2.11%) 
 90-0: TAS= 310 f  RTA= 316 f    -6 f (0.150) (- 1.90%) 
 07-3: TAS= 273 f  RTA= 278 f    -5 f (0.125) (- 1.80%) 
 08-0: TAS= 444 f  RTA= 449 f    -5 f (0.125) (- 1.11%) 
@@ -178,9 +179,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 82265 f (34m16.625s)
-Total RTA: 87645 f (36m31.125s)
-Total Δ   = +5380 f (2m14.500s)
+Total TAS: 82543 f (34m23.575s)
+Total RTA: 87929 f (36m38.225s)
+Total Δ   = +5386 f (2m14.650s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -324,6 +325,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 70-4: TAS= 196 f  RTA= 202 f    -6 f (0.150) (- 2.97%) 
 71-0: TAS= 331 f  RTA= 333 f    -2 f (0.050) (- 0.60%) 
 71-1: TAS= 499 f  RTA= 515 f   -16 f (0.400) (- 3.11%) ██
+72-0: TAS= 278 f  RTA= 284 f    -6 f (0.150) (- 2.11%) 
 72-2: TAS= 350 f  RTA= 360 f   -10 f (0.250) (- 2.78%) █
 73-0: TAS=  91 f  RTA=  91 f     0 f (0.000) (- 0.00%) 
 73-1: TAS= 212 f  RTA= 219 f    -7 f (0.175) (- 3.20%) █
@@ -358,9 +360,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 291 f  RTA= 296 f    -5 f (0.125) (- 1.69%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 82265 f (34m16.625s)
-Total RTA: 87645 f (36m31.125s)
-Total Δ   = +5380 f (2m14.500s)
+Total TAS: 82543 f (34m23.575s)
+Total RTA: 87929 f (36m38.225s)
+Total Δ   = +5386 f (2m14.650s)
 
 Episode Highscore Grid:
 

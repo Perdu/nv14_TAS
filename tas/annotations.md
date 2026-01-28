@@ -711,6 +711,11 @@ rerecords: 553
 A very clean one, with a corner jump on the way up (which is slower)
 431:139810|17895680|17895697|97587473|89478485|17896789|17895697|89548397|89478485|18175317|22876433|17895697|17895697|17895697|35791393|35791394|35791394|35791394|35791394|35791394|35790848|35791394|35791394|35791394|35791394|107880994|35808870|35791394|107374306|107374182|107374182|35791394|89478494|22369621|17895697|17895697|17895697|17895697|17895697|235999505|89548390|89478485|89478485|18175317|17895697|107374289|89478485|89478485|17896789|17895697|219222289|90596966|89478485|89478485|17895697|17895697|17895697|17895697|17895697|17898769|17895697|4369
 
+# 46-1
+rerecords: 276
+
+
+
 # 46-2
 rerecords: 252
 
@@ -968,6 +973,11 @@ Can't find a path that gets a good corner jump around 210 without slowing a lot
 Can't get a corner jump around 160
 Can't get above the mine around 430 directly after the first land. Manage to do it once after a jump (don't remember which) but it was slower and now I can't reproduce it
 
+# 72-0
+rerecords: 173
+
+
+
 # 73-0
 rerecords: 91
 
@@ -1063,4 +1073,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 75363
+# Total rerecords: 75812
