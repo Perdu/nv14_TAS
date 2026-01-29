@@ -626,6 +626,11 @@ rerecords: 140
 
 
 
+# 23-4
+rerecords: 713
+
+
+
 # 24-3
 rerecords: 463
 
@@ -1032,6 +1037,14 @@ Not faster:
 Did not work:
 - use the small portion of the slope next to the mines to land on the previous-to-last row. It's possible on the second row (but slower), but somehow I can't get it to work on the other one, because the drone restrict possible trajectories
 
+# 82-0
+
+
+# 84-2
+rerecords: 152
+
+
+
 # 86-3
 rerecords: 146
 
@@ -1073,4 +1086,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 75812
+# Total rerecords: 76677
