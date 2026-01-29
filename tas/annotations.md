@@ -816,6 +816,11 @@ Bbcj at start doesn't lead to anything useful
 
 Tile corner jump coming back from the locked door key on top right can't make up for the slowdown needed to do it
 
+# 52-0
+rerecords: 18
+
+
+
 # 53-0
 rerecords: 14
 
@@ -1040,6 +1045,9 @@ Did not work:
 # 82-0
 
 
+# 84-0
+
+
 # 84-2
 rerecords: 152
 
@@ -1086,4 +1094,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 76677
+# Total rerecords: 76695
