@@ -59,7 +59,7 @@ And more.
 - Bruteforcer for cj and rcj
 - Bruteforcer for double bb jump
 - speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
-- TAS the remaining 323 levels ;)
+- TAS the remaining 322 levels ;)
 
 ## Install
 

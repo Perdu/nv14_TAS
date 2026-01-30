@@ -446,6 +446,11 @@ rerecords: 121
 
 
 
+# 11-0
+rerecords: 692
+
+heightless cj coming down on the left was one frame slower
+
 # 11-1
 rerecords: 894
 
@@ -1102,4 +1107,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 76971
+# Total rerecords: 77663
