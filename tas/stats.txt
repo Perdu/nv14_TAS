@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 152
-Speedruns: 183
+Speedruns: 184
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -106,6 +106,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 78-1: TAS= 347 f  RTA= 359 f   -12 f (0.300) (- 3.34%) █
 02-2: TAS= 518 f  RTA= 529 f   -11 f (0.275) (- 2.08%) █
 12-2: TAS= 579 f  RTA= 590 f   -11 f (0.275) (- 1.86%) █
+66-1: TAS= 162 f  RTA= 173 f   -11 f (0.275) (- 6.36%) █
 51-2: TAS= 550 f  RTA= 560 f   -10 f (0.250) (- 1.79%) █
 72-2: TAS= 350 f  RTA= 360 f   -10 f (0.250) (- 2.78%) █
 88-0: TAS= 257 f  RTA= 267 f   -10 f (0.250) (- 3.75%) █
@@ -189,9 +190,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 86472 f (36m01.800s)
-Total RTA: 92495 f (38m32.375s)
-Total Δ   = +6023 f (2m30.575s)
+Total TAS: 86634 f (36m05.850s)
+Total RTA: 92668 f (38m36.700s)
+Total Δ   = +6034 f (2m30.850s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -332,6 +333,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 64-0: TAS= 285 f  RTA= 289 f    -4 f (0.100) (- 1.38%) 
 64-4: TAS= 166 f  RTA= 166 f     0 f (0.000) (- 0.00%) 
 66-0: TAS= 264 f  RTA= 265 f    -1 f (0.025) (- 0.38%) 
+66-1: TAS= 162 f  RTA= 173 f   -11 f (0.275) (- 6.36%) █
 67-0: TAS= 309 f  RTA= 318 f    -9 f (0.225) (- 2.83%) █
 67-1: TAS= 101 f  RTA= 101 f     0 f (0.000) (- 0.00%) 
 67-3: TAS= 161 f  RTA= 162 f    -1 f (0.025) (- 0.62%) 
@@ -380,9 +382,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 291 f  RTA= 296 f    -5 f (0.125) (- 1.69%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 86472 f (36m01.800s)
-Total RTA: 92495 f (38m32.375s)
-Total Δ   = +6023 f (2m30.575s)
+Total TAS: 86634 f (36m05.850s)
+Total RTA: 92668 f (38m36.700s)
+Total Δ   = +6034 f (2m30.850s)
 
 Episode Highscore Grid:
 
