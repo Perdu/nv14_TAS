@@ -936,6 +936,11 @@ We can do the rj on the slope 1f earlier if we don't hit the ceiling on the firs
 
 It's possible to jump 1f earlier on the last slope, but then the angle is not as good and we reach the door later
 
+# 66-0
+rerecords: 213
+
+
+
 # 67-0
 rerecords: 237
 
@@ -1130,4 +1135,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 79904
+# Total rerecords: 80117
