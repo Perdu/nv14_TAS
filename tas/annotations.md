@@ -442,7 +442,7 @@ rerecords: 61
 0.81 pixels away from saving an additional frame!
 
 # 10-4
-rerecords: 121
+rerecords: 321
 
 
 
@@ -654,6 +654,9 @@ I tried so hard to jump 1f earlier on the left wall, but could not find any work
 # 28-1
 rerecords: 53
 
+
+
+# 29-4
 
 
 # 30-2
@@ -1107,4 +1110,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 77663
+# Total rerecords: 77863
