@@ -922,6 +922,11 @@ rerecords: 133
 
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
 
+# 64-0
+rerecords: 153
+
+
+
 # 64-4
 rerecords: 238
 
@@ -1120,4 +1125,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 79514
+# Total rerecords: 79667
