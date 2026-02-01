@@ -1110,6 +1110,15 @@ rerecords: 85
 Doing a rj right of the doorswitch is slower. A wall jump as well
 A wall jump after going over the switch is slower as well
 
+# 88-3
+rerecords: 570
+
+For the first locked door swith jumping on the right then jumping on the left was slower
+
+When falling from the top section jumping was overall slower
+
+For the third locked door key jumping on the lower slope was slower
+
 # 88-4
 rerecords: 1219
 
@@ -1150,4 +1159,4 @@ rerecords: 246
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 81709
+# Total rerecords: 82279
