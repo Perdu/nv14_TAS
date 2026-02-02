@@ -1110,6 +1110,11 @@ rerecords: 85
 Doing a rj right of the doorswitch is slower. A wall jump as well
 A wall jump after going over the switch is slower as well
 
+# 88-1
+rerecords: 1362
+
+
+
 # 88-3
 rerecords: 570
 
@@ -1159,4 +1164,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 82501
+# Total rerecords: 83863
