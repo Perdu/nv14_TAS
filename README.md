@@ -74,7 +74,7 @@ docker build --tag libtas .
 #### Run
 
 ```
-docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/volume:/home/ libtas
+docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/volume:/home/ libtas_n
 ```
 
 Inside container:
@@ -111,7 +111,7 @@ docker build --tag libtas .
 #### Run
 
 ```
-docker run -it --rm -e DISPLAY=$DISPLAY -v /mnt/wslg/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw -v $PWD/volume:/home libtas
+docker run -it --rm -e DISPLAY=$DISPLAY -v /mnt/wslg/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw -v $PWD/volume:/home libtas_n
 ```
 
 Then inside the container, press the up arrow key and you will have the command the run libTAS (you can change the level at the beginning of the line or inside libTAS).

@@ -1,4 +1,4 @@
-FROM libtas_perdu
+FROM libtas_n
 
 # n-related commands
   # ENV OUTFILE="ep"
