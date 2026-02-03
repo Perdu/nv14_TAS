@@ -1,3 +1,3 @@
-FROM libtas_recording
+FROM libtas_n_recording
 
 RUN sed -i 's/^ffmpegoptions=.*/ffmpegoptions=-c:v libx264 -b:v 4000k -c:a aac -b:a 128k -vf scale=-1:720/' /root/.config/libTAS/ruffle_desktop.ini

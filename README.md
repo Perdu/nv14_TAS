@@ -213,13 +213,13 @@ python stats.py
 There's a docker image with the correct options already configured to record. To build it:
 
 ```
-docker build -f Dockerfile_recording --tag libtas_recording .
+docker build -f Dockerfile_recording --tag libtas_n_recording .
 ```
 
 To run it:
 
 ```
-docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whami/nv14_TAS/volume:/home/ libtas_recording
+docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whami/nv14_TAS/volume:/home/ libtas_n_recording
 ```
 
 It will also be launched automatically if you use:

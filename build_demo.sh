@@ -36,9 +36,9 @@ tar czf $DOCKER_VOLUME_PATH/$LTM_FILE -C $EXTRACT_FOLDER .
 
 if [ "$RECORD" -eq 1 ]; then
     if [ "$YOUTUBE" -eq 1 ]; then
-        IMAGE="libtas_recording_youtube"
+        IMAGE="libtas_n_recording_youtube"
     else
-        IMAGE="libtas_recording"
+        IMAGE="libtas_n_recording"
     fi
     docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v $SCRIPT_DIR/volume:/home/ $IMAGE
 fi
