@@ -1116,7 +1116,7 @@ rerecords: 1362
 
 
 # 88-3
-rerecords: 570
+rerecords: 777
 
 For the first locked door swith jumping on the right then jumping on the left was slower
 
@@ -1164,4 +1164,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 83863
+# Total rerecords: 84070
