@@ -1,4 +1,3 @@
-```js
 movie 'D:\Documentos\N\Flash\n_v14.swf' {
 // flash 6, total frames: 1, frame rate: 120 fps, 792x600 px, compressed
 
@@ -24322,4 +24321,3 @@ movie 'D:\Documentos\N\Flash\n_v14.swf' {
     InitApp();
   }
 }
-```
