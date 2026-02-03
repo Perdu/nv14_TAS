@@ -41,7 +41,7 @@ function drawList(list, size, r, g, b)
 end
 
 -- Insert or update path at a specific frame
-local function recordFrame(frame, x, y, vx, vy)
+function recordFrame(frame, x, y, vx, vy)
     if not path[frame] then
         table.insert(knownFrames, frame)
         table.sort(knownFrames)
