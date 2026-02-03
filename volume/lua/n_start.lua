@@ -325,7 +325,3 @@ function onFrame()
 
    dofile("/home/lua/lib/n_position_ramsearch.lua")
 end
-
--- Register callbacks
-callback.onStartup(onStartup)
-callback.onFrame(onFrame)
