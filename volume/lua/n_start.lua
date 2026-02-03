@@ -59,7 +59,9 @@ save_best_position = false
 bruteforce_rcj = false
 bestPath = {}
 
+
 ---- Callbacks
+
 function onPaint()
    local x = -1
    local y = -1
@@ -203,7 +205,7 @@ function onPaint()
    display_drones_number()
 end
 
--- This runs each time the game (process) starts.
+
 function onStartup()
     -- Reset session variables (important when restarting the game)
     done = false
@@ -236,7 +238,7 @@ function onStartup()
     bruteforce_rcj = false
 end
 
--- Detect Space key press
+
 function onInput()
     if input.getKey(KEY_SPACE) ~= 0 and memy ~= "" and not triggered and movie.currentFrame() ~= space_frame - 1 then
        input.setKey(KEY_SPACE, 0)
@@ -287,6 +289,7 @@ function onInput()
     end
 
 end
+
 
 -- Perform runtime actions (must be done in onFrame)
 function onFrame()
