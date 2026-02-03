@@ -31,6 +31,7 @@ SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 BRUTEFORCER_SAVESTATE = 7
 GHOST_COLOR = 0xffff00ff
+BEST_POSITION_COLOR = 0xffffff00
 
 ---- Session state
 done = false
@@ -132,19 +133,19 @@ function onPaint()
    end
 
    if max_x > 0 and max_y > 0 then
-      gui.ellipse(max_x, max_y, HITBOX_PLAYER, HITBOX_PLAYER, 1, 0xffffff00)
+      gui.ellipse(max_x, max_y, HITBOX_PLAYER, HITBOX_PLAYER, 1, BEST_POSITION_COLOR)
       -- draw position of best path
       local a = bestPath[f]
       if a then
-         gui.ellipse(a.x, a.y, 1, 1, 1, 0xffffff00)
-         gui.text(160, 575, string.format("%f ; %f", a.x, a.y), 0xffffff00, 0, 0, 15)
+         gui.ellipse(a.x, a.y, 1, 1, 1, BEST_POSITION_COLOR)
+         gui.text(160, 575, string.format("%f ; %f", a.x, a.y), BEST_POSITION_COLOR, 0, 0, 15)
       end
    end
 
    if bestPath[f] then
       print(bestPath)
-      gui.text(505, 575, string.format("vx: %f", bestPath[f].vx), 0xffffff00, 0, 0, 15)
-      gui.text(505, 585, string.format("vy: %f", bestPath[f].vy), 0xffffff00, 0, 0, 15)
+      gui.text(505, 575, string.format("vx: %f", bestPath[f].vx), BEST_POSITION_COLOR, 0, 0, 15)
+      gui.text(505, 585, string.format("vy: %f", bestPath[f].vy), BEST_POSITION_COLOR, 0, 0, 15)
    end
 
    -- display help comparison to either ghost or best path
