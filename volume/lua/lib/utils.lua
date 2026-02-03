@@ -39,3 +39,12 @@ function drawList(list, size, r, g, b)
       gui.ellipse(e.x, e.y, size, size, 1, rgb(r, g, b))
    end
 end
+
+-- Insert or update path at a specific frame
+local function recordFrame(frame, x, y, vx, vy)
+    if not path[frame] then
+        table.insert(knownFrames, frame)
+        table.sort(knownFrames)
+    end
+    path[frame] = {x = x, y = y, vx = vx, vy = vy}
+end
