@@ -65,16 +65,24 @@ And more.
 
 ### Linux
 
-Just build the docker container using the [Dockerfile](Dockerfile):
+Just pull the docker images:
 
 ```
-docker build --tag libtas .
+docker pull cmatteperdu/libtas_n:latest
+docker pull cmatteperdu/libtas_n_recording:latest
+```
+
+Or, if you want to build the docker images yourself (much slower: this will take a long time as it's rebuilding ruffle and libTAS from source):
+
+```
+docker build --tag libtas_n .
+docker build -f Dockerfile_recording --tag libtas_n_recording .
 ```
 
 #### Run
 
 ```
-docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/volume:/home/ libtas_n
+docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whoami/nv14_TAS/volume:/home/ cmatteperdu/libtas_n
 ```
 
 Inside container:
@@ -102,16 +110,17 @@ Move to the repository:
 cd nv14_TAS
 ```
 
-Then build the docker image (this will take a long time as it's rebuilding ruffle and libTAS from source):
+Then pull the docker images (to rebuild them, see the Linux section):
 
 ```
-docker build --tag libtas .
+docker pull cmatteperdu/libtas_n:latest
+docker pull cmatteperdu/libtas_n_recording:latest
 ```
 
 #### Run
 
 ```
-docker run -it --rm -e DISPLAY=$DISPLAY -v /mnt/wslg/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw -v $PWD/volume:/home libtas_n
+docker run -it --rm -e DISPLAY=$DISPLAY -v /mnt/wslg/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw -v $PWD/volume:/home cmatteperdu/libtas_n
 ```
 
 Then inside the container, press the up arrow key and you will have the command the run libTAS (you can change the level at the beginning of the line or inside libTAS).
@@ -219,7 +228,7 @@ docker build -f Dockerfile_recording --tag libtas_n_recording .
 To run it:
 
 ```
-docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whami/nv14_TAS/volume:/home/ libtas_n_recording
+docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v /home/$whami/nv14_TAS/volume:/home/ cmatteperdu/libtas_n_recording
 ```
 
 It will also be launched automatically if you use:
