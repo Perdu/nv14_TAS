@@ -17,7 +17,7 @@ jobs:
       - name: Get modified level
         id: level
         run: |
-          FILE=$(jq -r '[.head_commit.added // [], .head_commit.modified // []] | add | map(select(type=="string")) | map(select(startswith("volume/n_levels/") and endswith(".ltm"))) | .[0] // ""' "$GITHUB_EVENT_PATH")
+          FILE=$(git show --name-only --pretty="" ${{ github.sha }} | grep '^volume/n_levels/.*\.ltm$' | head -n 1)
 
           if [ -z "$FILE" ]; then
             echo "No level modified"
