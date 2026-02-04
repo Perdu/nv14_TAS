@@ -1,8 +1,11 @@
--- AI-generated
--- libTAS Lua Script
--- Starts unpaused (if needed), waits for first Space press, saves a state, pauses,
--- and permanently disables itself *per game session*.
+-- Mostly AI-generated
+-- Looks for ghost position in memory and dump it to the correct CSV file
 
+dofile("/home/lua/lib/keysyms.lua")
+levels = dofile("/home/lua/data/levels.lua")
+grounded_levels = dofile("/home/lua/data/grounded_levels.lua")
+
+---- Constants
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 
@@ -10,24 +13,19 @@ ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 done = false
 triggered = false
 need_unpause = false
-
 level = nil
 memy=""
 memspeed_y=""
-levels = dofile("/home/lua/data/levels.lua")
-dofile("/home/lua/data/grounded_levels.lua")
 shift_pressed = false
 original_input_modified = false
 dbg = true
 ghostFilePath = nil
 ghostFile = nil
-
 space_frame = -100
 pos_found = false
 ramsearch_done = false
 pre_reload_skipped = false
 
-dofile("/home/lua/lib/keysyms.lua")
 
 function onPaint()
    if memy ~= "" then
