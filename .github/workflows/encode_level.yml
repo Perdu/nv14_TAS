@@ -17,8 +17,7 @@ jobs:
       - name: Get modified level
         id: level
         run: |
-          # Combine added + modified files as plain space-separated strings
-          FILE=$(grep -o 'volume/n_levels/[^"]*\.ltm' "$GITHUB_EVENT_PATH" | head -n 1)
+          FILE=$(cat "$GITHUB_EVENT_PATH" | jq -r '[.head_commit.added[], .head_commit.modified[]] | .[] | select(startswith("volume/n_levels/") and endswith(".ltm")) | first')
 
           if [ -z "$FILE" ]; then
             echo "No level modified"
