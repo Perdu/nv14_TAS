@@ -276,7 +276,7 @@ This significantly *reduced* the size of the video because the fixed bitrate is 
 
 Troubleshooting: see [troubleshoot.md](doc/troubleshoot.md)
 
-No sound: this is normal and you don't need it. See [sound.md](doc/sound.md) if you really want it.
+No sound: this is normal and you don't need it. See [sound/README.md](sound/README.md) if you really want it.
 
 ### Texture problem
 Reported [here](https://github.com/ruffle-rs/ruffle/issues/21776)
