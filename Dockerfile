@@ -49,9 +49,8 @@ FROM debian:12
 
   # libTAS
     # RUN cd /root/src && git clone https://github.com/clementgallet/libTAS.git
-    ARG CACHEBREAK=0
-    RUN echo "CACHEBREAK=$CACHEBREAK" && cd /root/src && git clone https://github.com/Perdu/libTAS.git
-    RUN cd /root/src/libTAS
+    ARG LIBTAS_VERSION=a6748b4f0c943fc1fc4b71c74b51b3be8aac0ac8
+    RUN cd /root/src && git clone https://github.com/Perdu/libTAS.git && cd /root/src/libTAS && git checkout $LIBTAS_VERSION
     # RUN cd /root/src/libTAS && git fetch origin pull/667/head:pr-667 && git checkout pr-667
     # RUN cd /root/src/libTAS && git checkout v1.4.7
     RUN cd /root/src/libTAS && ./build.sh --with-i386
