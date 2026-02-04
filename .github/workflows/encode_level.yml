@@ -35,6 +35,10 @@ jobs:
           do
             sleep 1
           done
+
+      - name: Upload produced video
+        if: steps.level.outputs.level != ''
+        uses: actions/upload-artifact@v4
         with:
           name: encoded-video
           path: *.mp4
