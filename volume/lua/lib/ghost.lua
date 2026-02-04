@@ -1,4 +1,4 @@
-local function loadGhost()
+function loadGhost()
     local file = io.open(ghostFilePath, "r")
     if not file then
         print("ERROR: Could not open ghost CSV file!")
