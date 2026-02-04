@@ -18,17 +18,7 @@ jobs:
         id: level
         run: |
           # Combine added + modified files as plain space-separated strings
-          FILES="${{ github.event.head_commit.added }} ${{ github.event.head_commit.modified }}"
-
-          # Find the first .ltm file in volume/n_levels
-          for f in $FILES; do
-            case "$f" in
-              volume/n_levels/*.ltm)
-                FILE="$f"
-                break
-                ;;
-            esac
-          done
+          FILE=$(grep -o 'volume/n_levels/[^"]*\.ltm' "$GITHUB_EVENT_PATH" | head -n 1)
 
           if [ -z "$FILE" ]; then
             echo "No level modified"
