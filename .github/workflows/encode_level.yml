@@ -17,6 +17,7 @@ jobs:
       - name: Get modified level
         id: level
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           FILE=$(git show --name-only --pretty="" ${{ github.sha }} | grep '^volume/n_levels/.*\.ltm$' | head -n 1)
 
           if [ -z "$FILE" ]; then
