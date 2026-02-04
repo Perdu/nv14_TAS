@@ -18,7 +18,7 @@ jobs:
         id: level
         run: |
           # Combine added + modified files and parse JSON to extract .ltm
-          FILE=$(jq -r '[.head_commit.added[], .head_commit.modified[]] | .[] | select(startswith("volume/n_levels/") and endswith(".ltm")) | first' <<< "${GITHUB_EVENT_PATH}")
+          FILE=$(cat "$GITHUB_EVENT_PATH" | jq -r '[.head_commit.added[], .head_commit.modified[]] | .[] | select(startswith("volume/n_levels/") and endswith(".ltm")) | first')
           if [ -z "$FILE" ]; then
             echo "No level modified"
             exit 0
