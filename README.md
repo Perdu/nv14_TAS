@@ -79,7 +79,7 @@ docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOM
 
 Inside container:
 ```
-/root/src/libTAS/build/AppDir/usr/bin/libTAS /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui /home/n_v14.swf &
+libTAS /usr/local/bin/ruffle_desktop -g gl --no-gui /home/n_v14.swf &
 ```
 (Or just press up arrow, as these commands are saved as previous command in bash history)
 
