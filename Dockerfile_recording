@@ -2,7 +2,7 @@ FROM libtas_n
 
 # n-related commands
   # ENV OUTFILE="ep"
-  RUN echo "LEVEL='00-0' ; /root/src/libTAS/build/AppDir/usr/bin/libTAS -i -r /home/n_levels/\$LEVEL.ltm --lua /home/lua/n_start.lua /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf &\nLEVEL='00-0'; /root/src/libTAS/build/AppDir/usr/bin/libTAS -n -r /home/n_levels/\${LEVEL}_rta.ltm --lua /home/lua/n_ghost.lua -d /home/n_demos/\${LEVEL}.mp4 /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf\nOUTFILE='ep' ; /root/src/libTAS/build/AppDir/usr/bin/libTAS -n -r /home/n_speedrun.ltm --lua /home/lua/n_ghost.lua -d /home/n_demos/\${OUTFILE}.mp4 /root/src/ruffle/target/release/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf" > /root/.bash_history
+  RUN echo "LEVEL='00-0' ; libTAS -i -r /home/n_levels/\$LEVEL.ltm --lua /home/lua/n_start.lua /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf &\nLEVEL='00-0'; libTAS -n -r /home/n_levels/\${LEVEL}_rta.ltm --lua /home/lua/n_ghost.lua -d /home/n_demos/\${LEVEL}.mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf\nOUTFILE='ep' ; libTAS -n -r /home/n_speedrun.ltm --lua /home/lua/n_ghost.lua -d /home/n_demos/\${OUTFILE}.mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf" > /root/.bash_history
   COPY docker/ruffle_desktop_recording.ini /root/.config/libTAS/ruffle_desktop.ini
   COPY docker/libTAS.ini /root/.config/libTAS/
 
