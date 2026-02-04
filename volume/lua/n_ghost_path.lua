@@ -13,7 +13,8 @@ ghostFilePath = nil
 sortedFrames = {}   -- ordered list of frame numbers
 space_frame = -100
 triggered = false
-display_ghost_full_path = true
+display_ghost_path = true
+display_ghost_full_path = false
 
 -- ------------------------------
 -- Draw full path always, dots only up to current frame
@@ -21,29 +22,18 @@ display_ghost_full_path = true
 function onPaint()
     local f = movie.currentFrame()
 
-    -- ---- Full line always ----
-    for i = 1, #sortedFrames - 1 do
-        local a = ghostData[sortedFrames[i]]
-        local b = ghostData[sortedFrames[i+1]]
-        gui.line(a.x, a.y, b.x, b.y, 0xffff00ff)
-    end
-
-    -- ---- Dots only up to CURRENT frame ----
     if triggered then
---       for i = 1, #sortedFrames do
---          local frame = sortedFrames[i]
---          if frame > f then
---             break   -- stop once we pass current frame
---          end
---
---          local p = ghostData[frame - space_frame]
---
---          -- round to nearest pixel (required for gui.pixel)
---          local x = math.floor(p.x + 0.5)
---          local y = math.floor(p.y + 0.5)
---
---          gui.ellipse(p.x, p.y, 1, 1, 1, 0xffffff00) -- yellow dot
---       end
+       if display_ghost_full_path then
+          limit = #sortedFrames - 1
+       else
+          limit = f - 1 - space_frame
+       end
+
+       for i = 1, limit do
+          local a = ghostData[sortedFrames[i]]
+          local b = ghostData[sortedFrames[i+1]]
+          gui.line(a.x, a.y, b.x, b.y, 0xffff00ff)
+       end
 
        -- Optional: display ghost coords at current frame
        local ghost = ghostData[f - space_frame]

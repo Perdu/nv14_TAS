@@ -17,14 +17,14 @@ function loadGhost()
               vx = tonumber(vx),
               vy = tonumber(vy)
            }
-           if display_ghost_full_path then
+           if display_ghost_path then
               table.insert(sortedFrames, tonumber(frame))
            end
         end
     end
 
     file:close()
-    if display_ghost_full_path then
+    if display_ghost_path then
        table.sort(sortedFrames)
     end
     print("Ghost loaded: " .. tostring(#ghostData) .. " frames")
