@@ -7,15 +7,22 @@
 dofile("/home/lua/lib/keysyms.lua")
 dofile("/home/lua/lib/ghost.lua")
 
-ghostData = {}      -- frame → {x, y}
-level = nil
-ghostFilePath = nil
-space_frame = -100
-triggered = false
+---- Parameters
+display_ghost_path = false
+display_ghost_full_path = false
 display_history = false
 display_inputs = false
 display_position = false
+
+---- Session state
+ghostData = {}
+level = nil
+ghostFilePath = nil
+sortedFrames = {}   -- ordered list of frame numbers
+space_frame = -100
+triggered = false
 case = ""
+
 
 function onPaint()
    local f = movie.currentFrame()
@@ -48,6 +55,20 @@ function onPaint()
 
       if display_history then
          display_ghost_history(ghost, f)
+      end
+
+      if display_ghost_path then
+         if display_ghost_full_path then
+            limit = #sortedFrames - 1
+         else
+            limit = f - 1 - space_frame
+         end
+
+         for i = 1, limit do
+            local a = ghostData[sortedFrames[i]]
+            local b = ghostData[sortedFrames[i+1]]
+            gui.line(a.x, a.y, b.x, b.y, 0xffff00ff)
+         end
       end
    end
 end
