@@ -17,7 +17,7 @@ jobs:
       - name: Get modified level
         id: level
         run: |
-          FILE=$(cat "$GITHUB_EVENT_PATH" | jq -r '[.head_commit.added // [], .head_commit.modified // []] | .[] | select(startswith("volume/n_levels/") and endswith(".ltm")) | first')
+          FILE=$(jq -r '[.head_commit.added // [], .head_commit.modified // []] | add | map(select(type=="string")) | map(select(startswith("volume/n_levels/") and endswith(".ltm"))) | .[0] // ""' "$GITHUB_EVENT_PATH")
 
           if [ -z "$FILE" ]; then
             echo "No level modified"
