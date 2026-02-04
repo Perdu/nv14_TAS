@@ -4,39 +4,16 @@
 -- Full line always, dots up to current frame
 -- ==============================
 
-local ghostData = {}      -- frame → {x, y}
-local level = nil
-local ghostFilePath = nil
-local sortedFrames = {}   -- ordered list of frame numbers
-local space_frame = -100
-local triggered = false
+dofile("/home/lua/lib/keysyms.lua")
+dofile("/home/lua/lib/ghost.lua")
 
-local KEY_SPACE = 0x020        -- X11 keysym for Space
-
--- ------------------------------
--- Reads CSV file into ghostData
--- ------------------------------
-local function loadGhost()
-    local file = io.open(ghostFilePath, "r")
-    if not file then
-        print("ERROR: Could not open ghost CSV file!")
-        return
-    end
-
-    for line in file:lines() do
-        local frame, x, y = line:match("(%d+),([^,]+),([^,]+)")
-        if frame and x and y then
-            frame = tonumber(frame)
-            ghostData[frame] = { x = tonumber(x), y = tonumber(y) }
-            table.insert(sortedFrames, frame)
-        end
-    end
-
-    file:close()
-    table.sort(sortedFrames)
-
-    print("Ghost loaded: " .. tostring(#sortedFrames) .. " frames")
-end
+ghostData = {}      -- frame → {x, y}
+level = nil
+ghostFilePath = nil
+sortedFrames = {}   -- ordered list of frame numbers
+space_frame = -100
+triggered = false
+display_ghost_full_path = true
 
 -- ------------------------------
 -- Draw full path always, dots only up to current frame
@@ -77,7 +54,7 @@ function onPaint()
     end
 end
 
-function onFrame()
+function onInput()
     if not triggered and input.getKey(KEY_SPACE) ~= 0 then
        space_frame = movie.currentFrame()
        triggered = true
