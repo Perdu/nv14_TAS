@@ -37,6 +37,8 @@ jobs:
           xvfb-run -a libTAS -n -r /home/n_levels/"${{ steps.level.outputs.level }}".ltm --lua /home/lua/n_ghost.lua -d output/"${{ steps.level.outputs.level }}".mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf
           while ffprobe output/"${{ steps.level.outputs.level }}".mp4 2>&1 | grep -q 'moov atom not found'
           do
+            echo "Encoding..."
+            ls -alh "${{ steps.level.outputs.level }}".mp4
             sleep 1
           done
 
