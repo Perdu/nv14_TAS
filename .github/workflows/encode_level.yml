@@ -1,0 +1,35 @@
+name: Encode Modified Level
+
+on:
+  push:
+    paths:
+      - 'volume/n_levels/*.ltm'
+
+jobs:
+  encode:
+    runs-on: ubuntu-latest
+    container:
+      image: cmatteperdu/libtas_n_recording:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get modified level
+        id: level
+        run: |
+          FILE=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} -- 'volume/n_levels/*.ltm')
+          if [ -z "$FILE" ]; then
+            echo "No level modified"
+            exit 0
+          fi
+          # Extract LEVEL from volume/n_levels/LEVEL.ltm
+          LEVEL=$(basename "$FILE" .ltm)
+          echo "Modified level: $LEVEL"
+          echo "level=$LEVEL" >> $GITHUB_OUTPUT
+
+      - name: Encode level
+        if: steps.level.outputs.level != ''
+        run: libTAS -n -r /home/n_levels/"${{ steps.level.outputs.level }}".ltm --lua /home/lua/n_ghost.lua -d "${{ steps.level.outputs.level }}".mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf ; while ffprobe "${{ steps.level.outputs.level }}".mp4 2>&1 | grep -q 'moov atom not found'; do sleep 1 ; done
+        with:
+          name: encoded-video
+          path: *.mp4
