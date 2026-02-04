@@ -17,8 +17,19 @@ jobs:
       - name: Get modified level
         id: level
         run: |
-          # Combine added + modified files and parse JSON to extract .ltm
-          FILE=$(cat "$GITHUB_EVENT_PATH" | jq -r '[.head_commit.added[], .head_commit.modified[]] | .[] | select(startswith("volume/n_levels/") and endswith(".ltm")) | first')
+          # Combine added + modified files as plain space-separated strings
+          FILES="${{ github.event.head_commit.added }} ${{ github.event.head_commit.modified }}"
+
+          # Find the first .ltm file in volume/n_levels
+          for f in $FILES; do
+            case "$f" in
+              volume/n_levels/*.ltm)
+                FILE="$f"
+                break
+                ;;
+            esac
+          done
+
           if [ -z "$FILE" ]; then
             echo "No level modified"
             exit 0
