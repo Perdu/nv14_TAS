@@ -33,7 +33,8 @@ jobs:
         if: steps.level.outputs.level != ''
         run: |
           mkdir -p output
-          libTAS -n -r /home/n_levels/"${{ steps.level.outputs.level }}".ltm --lua /home/lua/n_ghost.lua -d output/"${{ steps.level.outputs.level }}".mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf
+          apt-get update && apt-get install -y xvfb
+          xvfb-run -a libTAS -n -r /home/n_levels/"${{ steps.level.outputs.level }}".ltm --lua /home/lua/n_ghost.lua -d output/"${{ steps.level.outputs.level }}".mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf
           while ffprobe output/"${{ steps.level.outputs.level }}".mp4 2>&1 | grep -q 'moov atom not found'
           do
             sleep 1
