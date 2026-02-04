@@ -227,6 +227,12 @@ It will also be launched automatically if you use:
 ./build_demo.sh -s 0 --record
 ```
 
+Or even more straightforward, for a single level:
+
+```
+./encode.sh --ghost 00-0
+```
+
 ### Manual method
 
 - Disable `Settings → Audio → Audio Control → Disable` to have sound in encoding.
