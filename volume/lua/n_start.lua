@@ -8,8 +8,8 @@ dofile("/home/lua/lib/ghost.lua")
 dofile("/home/lua/lib/speed.lua")
 dofile("/home/lua/lib/drones.lua")
 dofile("/home/lua/lib/bruteforcers/rcj.lua")
-grounded_levels = dofile("/home/lua/lib/grounded_levels.lua")
-levels = dofile("/home/lua/levels.lua")
+grounded_levels = dofile("/home/lua/data/grounded_levels.lua")
+levels = dofile("/home/lua/data/levels.lua")
 
 ---- Parameters
 dbg = true

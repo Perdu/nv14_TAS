@@ -14,8 +14,8 @@ need_unpause = false
 level = nil
 memy=""
 memspeed_y=""
-levels = dofile("/home/lua/levels.lua")
-dofile("/home/lua/lib/grounded_levels.lua")
+levels = dofile("/home/lua/data/levels.lua")
+dofile("/home/lua/data/grounded_levels.lua")
 shift_pressed = false
 original_input_modified = false
 dbg = true
