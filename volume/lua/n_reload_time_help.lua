@@ -1,3 +1,5 @@
+-- This was another script I used to find loading time of each level
+
 -- CONFIGURATION -----------------------------------
 local trigger_key = 32              -- Space key
 local addr_check = 0x5639bae6f760

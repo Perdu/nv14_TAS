@@ -2,6 +2,7 @@
 -- ==============================
 -- Ghost display for libTAS
 -- Reads CSV and draws 10px circle
+-- + There's a parameter to display the ghost path
 -- ==============================
 
 dofile("/home/lua/lib/keysyms.lua")
