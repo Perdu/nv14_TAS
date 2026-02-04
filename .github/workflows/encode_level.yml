@@ -35,10 +35,7 @@ jobs:
           mkdir -p output
           apt-get update && apt-get install -y xvfb
           echo "debug: ${{ steps.level.outputs.level }}".ltm
-          ls -alh /home/
-          ls -alh $GITHUB_WORKSPACE
-          echo xvfb-run -a libTAS -n -r $GITHUB_WORKSPACE/n_levels/"${{ steps.level.outputs.level }}".ltm --lua $GITHUB_WORKSPACE/lua/n_ghost.lua -d output/"${{ steps.level.outputs.level }}".mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf
-          exit
+          xvfb-run -a libTAS -n -r $GITHUB_WORKSPACE/n_levels/"${{ steps.level.outputs.level }}".ltm --lua $GITHUB_WORKSPACE/lua/n_ghost.lua -d output/"${{ steps.level.outputs.level }}".mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf
           while ffprobe output/"${{ steps.level.outputs.level }}".mp4 2>&1 | grep -q 'moov atom not found'
           do
             echo "Encoding..."
