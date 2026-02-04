@@ -17,7 +17,7 @@ jobs:
       - name: Get modified level
         id: level
         run: |
-          FILE=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} -- 'volume/n_levels/*.ltm')
+          FILE=$(echo "${{ github.event.head_commit.added[*] }}" "${{ github.event.head_commit.modified[*] }}" | tr ' ' '\n' | grep '^volume/n_levels/.*\.ltm$' | head -n 1)
           if [ -z "$FILE" ]; then
             echo "No level modified"
             exit 0
