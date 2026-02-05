@@ -11,7 +11,7 @@ YOUTUBE=0
 GHOST=0
 OPEN_MPV=0
 LOCAL=0
-HEADLESS=0
+HEADLESS=""
 PASSTHROUGH_ARGS=()
 # extract --record or -r from arguments
 for arg in "$@"; do
