@@ -5,8 +5,8 @@
 -- + There's a parameter to display the ghost path
 -- ==============================
 
-dofile("/home/lua/lib/keysyms.lua")
-dofile("/home/lua/lib/ghost.lua")
+dofile("lua/lib/keysyms.lua")
+dofile("lua/lib/ghost.lua")
 
 ---- Parameters
 display_ghost_path = false
