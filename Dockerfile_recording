@@ -1,7 +1,7 @@
 FROM libtas_n
 
 # recording tool + git for github action
-  RUN apt-get update && apt-get install -y ffmpeg git
+  RUN apt-get update && apt-get install -y ffmpeg git xvfb
 
 # n-related commands
   # ENV OUTFILE="ep"
