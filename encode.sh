@@ -11,6 +11,7 @@ YOUTUBE=0
 GHOST=0
 OPEN_MPV=0
 LOCAL=0
+HEADLESS=0
 PASSTHROUGH_ARGS=()
 # extract --record or -r from arguments
 for arg in "$@"; do
@@ -27,6 +28,9 @@ for arg in "$@"; do
         --local|-l)
             LOCAL=1
             ;;
+        --headless|--no-ui|--noui|-n)
+            HEADLESS="xvfb-run -a"
+            ;;
         *)
             LEVEL="$arg"
             ;;
@@ -34,7 +38,7 @@ for arg in "$@"; do
 done
 
 if [ "$LEVEL" == "" ]; then
-    echo "Usage: $0 [--youtube|-y] [--ghost|-g] [--mpv|--open-mpv|-m] LEVEL"
+    echo "Usage: $0 [--youtube|-y] [--ghost|-g] [--mpv|--open-mpv|-m] [--local|-l] [--headless|--no-ui|--noui|-n] LEVEL"
     exit 1
 fi
 
@@ -51,7 +55,7 @@ else
         IMAGE="cmatteperdu/libtas_n_recording"
     fi
 fi
-docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v $SCRIPT_DIR/volume:/home/ $IMAGE bash -c "libTAS -n -r /home/n_levels/$LEVEL.ltm --lua /home/lua/n_ghost.lua -d /home/n_demos/$LEVEL.mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf ; while ffprobe /home/n_demos/$LEVEL.mp4 2>&1 | grep -q 'moov atom not found'; do sleep 1 ; done "
+docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v $SCRIPT_DIR/volume:/home/ $IMAGE bash -c "$HEADLESS libTAS -n -r /home/n_levels/$LEVEL.ltm --lua /home/lua/n_ghost.lua -d /home/n_demos/$LEVEL.mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf ; while ffprobe /home/n_demos/$LEVEL.mp4 2>&1 | grep -q 'moov atom not found'; do sleep 1 ; done "
 
 if [ $OPEN_MPV -eq 1 ]; then
     mpv volume/n_demos/$LEVEL.mp4
