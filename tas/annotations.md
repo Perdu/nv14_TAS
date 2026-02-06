@@ -286,7 +286,7 @@ rerecords: 261
 All this all new strategy in the beginning to barely be any faster
 
 # 06-4
-rerecords: 605
+rerecords: 905
 
 That double thwump cj is incredibly frame-perfect and hard to find. Hopefully I don't have to redo it because of earlier optimization
 
@@ -1194,4 +1194,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 90308
+# Total rerecords: 90608
