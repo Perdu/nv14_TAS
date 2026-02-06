@@ -15,7 +15,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 59-4: TAS= 803 f  RTA= 980 f  -177 f (4.425) (-18.06%) ████████████████
 74-4: TAS= 860 f  RTA=1018 f  -158 f (3.950) (-15.52%) ███████████████
 07-2: TAS= 691 f  RTA= 844 f  -153 f (3.825) (-18.13%) ██████████████
-08-3: TAS= 691 f  RTA= 836 f  -145 f (3.625) (-17.34%) █████████████
+08-3: TAS= 687 f  RTA= 836 f  -149 f (3.725) (-17.82%) ██████████████
 11-0: TAS= 857 f  RTA= 997 f  -140 f (3.500) (-14.04%) █████████████
 88-1: TAS=1191 f  RTA=1328 f  -137 f (3.425) (-10.32%) █████████████
 50-1: TAS=1041 f  RTA=1170 f  -129 f (3.225) (-11.03%) ████████████
@@ -200,9 +200,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 93461 f (38m56.525s)
+Total TAS: 93457 f (38m56.425s)
 Total RTA: 100471 f (41m51.775s)
-Total Δ   = +7010 f (2m55.250s)
+Total Δ   = +7014 f (2m55.350s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -249,7 +249,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 08-0: TAS= 444 f  RTA= 449 f    -5 f (0.125) (- 1.11%) 
 08-1: TAS=1301 f  RTA=1403 f  -102 f (2.550) (- 7.27%) █████████
 08-2: TAS= 921 f  RTA= 992 f   -71 f (1.775) (- 7.16%) ██████
-08-3: TAS= 691 f  RTA= 836 f  -145 f (3.625) (-17.34%) █████████████
+08-3: TAS= 687 f  RTA= 836 f  -149 f (3.725) (-17.82%) ██████████████
 08-4: TAS=1049 f  RTA=1105 f   -56 f (1.400) (- 5.07%) █████
 09-0: TAS= 358 f  RTA= 370 f   -12 f (0.300) (- 3.24%) █
 09-1: TAS= 713 f  RTA= 746 f   -33 f (0.825) (- 4.42%) ███
@@ -402,9 +402,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 280 f  RTA= 296 f   -16 f (0.400) (- 5.41%) █
 
 ────────────────────────────────────────────────────────────
-Total TAS: 93461 f (38m56.525s)
+Total TAS: 93457 f (38m56.425s)
 Total RTA: 100471 f (41m51.775s)
-Total Δ   = +7010 f (2m55.250s)
+Total Δ   = +7014 f (2m55.350s)
 
 Episode Highscore Grid:
 

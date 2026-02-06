@@ -362,7 +362,7 @@ Triple jump around 550: doesn't lead anywhere
 For the end, instead of using the launchpad, I initially did a rcj then jumped on the bb, then a cj to reach to door. The launchpad is 16 frames faster
 
 # 08-3
-rerecords: 2394
+rerecords: 3331
 
 That skip took me 4-5 hours to pull off.
 
@@ -676,6 +676,12 @@ rerecords: 53
 
 
 
+# 29-4
+
+
+# 30-2
+
+
 # 31-4
 rerecords: 388
 
@@ -742,6 +748,11 @@ rerecords: 553
 
 A very clean one, with a corner jump on the way up (which is slower)
 431:139810|17895680|17895697|97587473|89478485|17896789|17895697|89548397|89478485|18175317|22876433|17895697|17895697|17895697|35791393|35791394|35791394|35791394|35791394|35791394|35790848|35791394|35791394|35791394|35791394|107880994|35808870|35791394|107374306|107374182|107374182|35791394|89478494|22369621|17895697|17895697|17895697|17895697|17895697|235999505|89548390|89478485|89478485|18175317|17895697|107374289|89478485|89478485|17896789|17895697|219222289|90596966|89478485|89478485|17895697|17895697|17895697|17895697|17895697|17898769|17895697|4369
+
+# 46-1
+rerecords: 276
+
+
 
 # 46-2
 rerecords: 252
@@ -848,6 +859,9 @@ rerecords: 276
 
 
 
+# 52-3
+
+
 # 53-0
 rerecords: 14
 
@@ -899,6 +913,9 @@ rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
+# 60-2
+
+
 # 61-1
 rerecords: 71
 
@@ -916,6 +933,9 @@ rerecords: 158
 rerecords: 197
 
 Doing bwj after the rcj doesn't get high enough
+
+# 63-1
+
 
 # 63-3
 rerecords: 133
@@ -1098,6 +1118,12 @@ rerecords: 1183
 
 
 
+# 82-0
+
+
+# 84-0
+
+
 # 84-2
 rerecords: 152
 
@@ -1168,4 +1194,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 89095
+# Total rerecords: 90308
