@@ -55,7 +55,7 @@ And more.
 - HK https://www.youtube.com/watch?v=qQAJk5_LUvg
 
 ## Todo
-- Extract ninja state
+- Extract ninja state https://discord.com/channels/197765375503368192/199460839252688896/1465895994767183942
 - Project tile penetration for cj optimization
 - Bruteforcer for walljumps
 - Bruteforcer for cj and rcj
