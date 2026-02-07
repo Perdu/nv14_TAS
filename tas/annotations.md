@@ -246,7 +246,7 @@ Turning around at the first doorswitch then activating the thwump and getting th
 Entering the key section after going all the way to the left wall and then waiting for the thwump is also a few frames slower
 
 # 05-4
-rerecords: 935
+rerecords: 961
 
 The turnaround to reach the switch is painful to optimize.
 0th does a jump that's slower but does not stumble on landing. Current solution is slightly better.
@@ -1200,4 +1200,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 93644
+# Total rerecords: 93670
