@@ -2,7 +2,7 @@ Discord conversations: [1](https://discord.com/channels/197765375503368192/19946
 
 Open map editor, place the ninja in the position you think would work.
 
-Edit ninja position in the level string. Replace the demo string with `#99:192`. Be careful about empty lines in the end, otherwise the game won't jump.
+Edit ninja position in the level string (after `5^`). Replace the demo string with `#99:192`. Be careful about empty lines in the end, otherwise the game won't jump.
 
 Some quotes of Raif explaining the process:
 > place the ninja is different positions and try jumping the second frame
