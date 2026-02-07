@@ -58,7 +58,7 @@ knownFrames = {}   -- sorted list of frames already stored
 save_best_position = false
 bruteforce_rcj = false
 bestPath = {}
-
+drones_candidates = {}
 
 ---- Callbacks
 
@@ -234,6 +234,7 @@ function onStartup()
     memspeed_y = ""
     drones_memx = {}
     drones_target_memx = {}
+    drones_candidates = {}
 
     bruteforce_rcj = false
 end
