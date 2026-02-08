@@ -5,22 +5,24 @@ from dataclasses import dataclass
 TILE_X_WIDTH = 12
 NINJA_RADIUS = TILE_X_WIDTH * 0.8333333333333334
 MAX_SPEED_AIR = NINJA_RADIUS * 0.5
-AIR_ACCELERATION = 0.099    # This should be 0.1, but it only works if I set it to 0.099
+AIR_ACCELERATION = 0.1
 DRAG = 0.99
 
 def step_air(x: float, old_x: float, input_: int) -> tuple[float, float]:
-    # PlayerObject.prototype.TickNormal equivalent
-    v6 = old_x
-    old_x = x
-    x += DRAG * (x - v6)
-
     # PlayerObject.prototype.Think equivalent
     vx = x - old_x
     new_vx = vx + input_ * AIR_ACCELERATION
     if abs(new_vx) < MAX_SPEED_AIR:
         vx = new_vx
 
-    return old_x + vx, old_x
+    old_x = x - vx
+
+    # PlayerObject.prototype.TickNormal equivalent
+    v6 = old_x
+    old_x = x
+    x += DRAG * (x - v6)
+
+    return x, old_x
 
 @dataclass(frozen=True)
 class State:
@@ -30,12 +32,12 @@ class State:
     seq: str
 
 def bruteforce(
-    x: float,
     old_x: float,
+    x: float,
     target_x: tuple[float, float],
     start_frame: int,
     end_frame: int,
-    input_sequence: str = "",
+    input_sequence: str,
 ) -> list[tuple[float, str]]:
     successful: list[tuple[float, str]] = []
 
@@ -85,11 +87,11 @@ def process_results(result: list[tuple[float, str]]) -> None:
 
 if __name__ == "__main__":
     result = bruteforce(
-        x=36.985,               # x-position for 2nd frame
-        old_x=35.5,             # x-position for 1st frame
+        old_x=35.5,               # x-position for 1st frame +3
+        x=36.985,             # x-position for 2nd frame +3
         target_x=(34.0, 34.1),  # target range of x-positions
-        start_frame=49,         # frame number for old_x
-        end_frame=79,           # frame number one frame BEFORE the desired position is reached
-        input_sequence="LL",    # input sequence for the first two frames (info only)
+        start_frame=49,         # frame number for 1st frame
+        end_frame=79,           # frame number when the desired position should be reached
+        input_sequence='LL'
     )
     process_results(result)
