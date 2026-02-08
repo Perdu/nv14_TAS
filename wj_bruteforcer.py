@@ -87,8 +87,8 @@ def process_results(result: list[tuple[float, str]]) -> None:
 
 if __name__ == "__main__":
     result = bruteforce(
-        old_x=35.5,               # x-position for 1st frame +3
-        x=36.985,             # x-position for 2nd frame +3
+        old_x=35.5,             # x-position for 1st frame
+        x=36.985,               # x-position for 2nd frame
         target_x=(34.0, 34.1),  # target range of x-positions
         start_frame=49,         # frame number for 1st frame
         end_frame=79,           # frame number when the desired position should be reached
