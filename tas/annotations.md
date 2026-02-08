@@ -132,7 +132,7 @@ Somehow I can't reproduce the RTA jump... It's faster, but I can't reproduce it 
 That said, even if I reach the doorswitch faster, I struggle doing a score as good as the current TAS
 
 # 03-3
-rerecords: 1035
+rerecords: 1530
 
 Can't beat the drone in the beginning (except if jumping, but it's then slower)
 Going after the drone without jumping on the wall in the beginning is a bit slower (reaching platform on frame 273 instead of 267)
@@ -1200,4 +1200,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 93670
+# Total rerecords: 94165
