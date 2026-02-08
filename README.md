@@ -23,6 +23,7 @@ Videos produced with this tool:
 - [Notes for each TASed level](tas/annotations.md)
 - [A dockerfile to build the TASing environment](Dockerfile)
 - [Other tools and informations from external sources](external/)
+- [Information extracted from code digging](doc/code_digging.md)
 
 And more.
 
