@@ -2,7 +2,7 @@
 
 ## Shift held and triggered
 
-Internally, jump is considered differently if jump was just triggered, or maintained pressed. This can be used to produce glitched demo strings that jump once per frame.
+Internally, jump is considered differently if jump was just triggered, or maintained pressed. This can be used to produce glitched demo strings that attempts to jump once per frame (which does not allow for one jump per frame, however).
 
 I digged into the code to check whether this can be done with inputs, but it's not the case. [Relevant part of the code](../external/n_v14_codedump.as#L11709-L11711):
 ```
