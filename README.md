@@ -36,6 +36,8 @@ And more.
 - https://github.com/clementgallet/libTAS
 - https://github.com/clementgallet/libTAS/issues
 - https://github.com/ruffle-rs/ruffle/issues
+- [JPEXS](https://github.com/jindrapetrik/jpexs-decompiler) (flash decompiler)
+- [Flare](http://www.nowrap.de/flare.html) (another flash decompiler) -> used to dump the whole code in a single file
 ### Forums
 - [Discord channel where we discuss this TAS](https://discord.com/channels/197765375503368192/199460839252688896)
 - [TAS thread on N forum](https://forum.droni.es/viewtopic.php?f=20&t=4468&p=177293&sid=6f5f179201d5b44d889afbe5865cb685#p177293)
@@ -50,9 +52,14 @@ And more.
 - [Metanet tutorial on N physical collision system](https://edelkas.github.io/n/index/docs.html)
 - [Nclone, Python emulator of the N++ engine (some parts are similar to N v1.4)](https://github.com/SimonV42/nclone)
   - [Nclone: Part handling ceiling crushing](https://github.com/SimonV42/nclone/blob/842190b2a216579b5b5c551e0a0b4505fc3381cc/nsim.py#L299-L302)
+- [Float-precise trick giving pj on flat ground in N++](https://discord.com/channels/197765375503368192/199460839252688896/1469859845107876041)
+- [Slipping through one-ways](https://forum.droni.es/viewtopic.php?f=17&t=9096)
 ### TAS Tutorials for other games
 - Undertale https://www.youtube.com/watch?v=EFCnTeTdD2k&t=712s
 - HK https://www.youtube.com/watch?v=qQAJk5_LUvg
+### Bruteforcers from other games
+- [jaffarPlus](https://github.com/SergioMartin86/jaffarPlus) (can work with libTAS)
+- [Trackmania's bruteforce](https://donadigo.com/tminterface/what-is-bf)
 
 ## Todo
 - Extract ninja state https://discord.com/channels/197765375503368192/199460839252688896/1465895994767183942
