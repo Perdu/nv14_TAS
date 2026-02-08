@@ -23,15 +23,15 @@ def bruteforce(x, old_x, target_x, start_frame, end_frame, input_sequence='??', 
 
         # Calculate maximum possible displacement in remaining frames using s = ut + 0.5at^2 and discard paths
         # where it is no longer possible to reach the target. Overestimated by using air acceleration = 0.11.
-        frames_remaining = end_frame - start_frame
+        frames_remaining = end_frame - frame
         vx = x - old_x
         max_displacement_left = vx * frames_remaining + 0.5 * -0.11 * frames_remaining ** 2
         max_displacement_right = vx * frames_remaining + 0.5 * 0.11 * frames_remaining ** 2
 
         if max(target_x) - x < 0 and max(target_x) < x + max_displacement_left:
-            return
+            return succcessful_sequences
         if min(target_x) - x > 0 and min(target_x) > x + max_displacement_right:
-            return
+            return succcessful_sequences
 
         if target_x[0] <= x <= target_x[1]:
             print(x, input_sequence)
