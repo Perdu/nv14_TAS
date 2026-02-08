@@ -16,7 +16,7 @@ Manual tests have shown that this code is only called once per frame. Increasing
 ## Why we can't jump on every frame
 
 There are two layers of protections against jumping on every frame:
-- when registering inputs ([here]() and [here in demos](../external/n_v14_codedump.as#L12208))
+- when registering inputs ([here](../external/n_v14_codedump.as#L11709-L11711) and [here in demos](../external/n_v14_codedump.as#L12208))
 - when using inputs to estimate whether to jump or not: logic returns if ninja is already in the jumping state ([here](../external/n_v14_codedump.as#L10908))
 
 The consequence of this is that even if we found some kind of pause-buffering trick to bypass the first layer, we would still be blocked by the second layer. One frame has to pass for the ninja state to change.
