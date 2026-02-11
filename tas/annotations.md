@@ -710,6 +710,11 @@ Getting over the first drone to start on the left column is slower (+ we end up 
 
 Slowing down to get detected by the drone we have to avoid on the way up is slower.
 
+# 36-4
+rerecords: 446
+
+
+
 # 37-0
 rerecords: 85
 
@@ -748,7 +753,7 @@ rerecords: 291
 
 
 # 42-3
-rerecords: 9
+rerecords: 833
 
 
 
@@ -1203,4 +1208,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 94908
+# Total rerecords: 96178
