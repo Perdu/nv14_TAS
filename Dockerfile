@@ -66,7 +66,9 @@ FROM debian:12-slim
     libqt5core5a \
     libqt5network5 \
     libqt5x11extras5 \
-    liblua5.4-0
+    liblua5.4-0 \
+  # util
+    xvfb
 
   COPY --from=ruffle-builder /root/src/ruffle/target/release/ruffle_desktop /usr/local/bin/ruffle_desktop
   COPY --from=libtas-builder /root/src/libTAS/build/AppDir/usr/bin/libTAS /usr/local/bin/libTAS
