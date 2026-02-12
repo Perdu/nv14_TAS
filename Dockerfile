@@ -76,7 +76,7 @@ FROM debian:12-slim
 
   # n-related commands
     COPY external/n_v14.swf /home/
-    RUN echo "/usr/local/bin/ruffle_desktop -g gl /home/n_v14.swf\nlibTAS -i -n -L -r /home/n_levels/\${LEVEL}_rta.ltm --lua /home/lua/n_dump_ghost.lua /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf &\nLEVEL='00-0' ; libTAS -i -r /home/n_levels/\$LEVEL.ltm --lua /home/lua/n_start.lua /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf &" > /root/.bash_history
+    RUN echo "/usr/local/bin/ruffle_desktop -g gl /home/n_v14_patched.swf\nlibTAS -i -n -L -r /home/n_levels/\${LEVEL}_rta.ltm --lua /home/lua/n_dump_ghost.lua /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf &\nLEVEL='00-0' ; libTAS -i -r /home/n_levels/\$LEVEL.ltm --lua /home/lua/n_start.lua /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14_patched.swf &" > /root/.bash_history
     COPY docker/ruffle_desktop.ini /root/.config/libTAS/
     COPY docker/libTAS.ini /root/.config/libTAS/
     # Fixing the determinism bug: by adding the libopenh264 file manually, we avoid having to open ruffle manually every time
