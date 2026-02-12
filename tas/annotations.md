@@ -192,7 +192,7 @@ rerecords: 962
 I initially had a slightly better way past the drone after the switch (2 pixels), which I had to redo because of earlier drone detection. But it doesn't actually lose a frame on the way to the pipe up, and we're actually faster there. We avoid jumping in the corridor as the better positioning gives us too much speed in the pipe and kills us.
 
 # 04-4
-rerecords: 755
+rerecords: 1579
 
 Reused the beginning from Raif et al
 Not getting the stumble around 210 is not faster
@@ -1208,4 +1208,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 96178
+# Total rerecords: 97002
