@@ -116,7 +116,7 @@ rerecords: 331
 It might be able to crame 1 or 2 additional frames, but it's hell to optimize
 
 # 03-1
-rerecords: 308
+rerecords: 1616
 
 Beginning is so tight and frame-perfect that I can only copy 0th and not gain any millimeter
 
@@ -1208,4 +1208,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 97190
+# Total rerecords: 98498
