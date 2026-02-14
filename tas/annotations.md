@@ -82,7 +82,7 @@ Didn't work:
 - doing reverse corner jumps between blocks in the middle section (angle are not good for the whole column)
 
 # 02-1
-rerecords: 715
+rerecords: 1258
 
 Jumping twice on the wall left or the wall right around 500 is not faster
 
@@ -1208,4 +1208,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 98498
+# Total rerecords: 99041
