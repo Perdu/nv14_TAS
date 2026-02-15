@@ -89,7 +89,7 @@ Jumping twice on the wall left or the wall right around 500 is not faster
 Jumping to get down before the doorswitch does not save any frame, it's just for style
 
 # 02-2
-rerecords: 567
+rerecords: 719
 
 I tried doing a corner jump on the thwump to jump-start the jumps but it didn't work
 
@@ -1208,4 +1208,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 99041
+# Total rerecords: 99193
