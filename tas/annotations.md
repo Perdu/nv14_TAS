@@ -125,7 +125,7 @@ Beginning is so tight and frame-perfect that I can only copy 0th and not gain an
 The only gain is on the jump over the doorswitch
 
 # 03-2
-rerecords: 477
+rerecords: 927
 
 Straight jump from the top platform (no corner jump): slower
 
@@ -1210,4 +1210,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 100128
+# Total rerecords: 100578
