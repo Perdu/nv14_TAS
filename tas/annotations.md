@@ -97,7 +97,7 @@ The frame-perfect chimney jump does not save any frame over rta.
 I just saved one frame by entering the chimney with a slightly better angle
 
 # 02-3
-rerecords: 190
+rerecords: 441
 
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
@@ -1208,4 +1208,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 99193
+# Total rerecords: 99444
