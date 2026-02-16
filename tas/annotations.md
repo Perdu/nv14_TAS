@@ -102,15 +102,13 @@ rerecords: 441
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 1946
+rerecords: 1521
 
 Jumping to go down small paths does not save any frame, it's just for style
 
 Stumbling near the end is faster
 
 Calculating the best path to slow down and jump down tubes is a pain and may still be improvable
-
-Chimneying through locked door at end and surviving is not possible
 
 # 03-0
 rerecords: 590
@@ -391,7 +389,7 @@ slope jump on the way up from the switch -> slower
 Branch 8: I tried using 0th' route of taking the top switch on the first way back using the lp (instead of the second way back), but it's overall slower
 
 # 09-0
-rerecords: 169
+rerecords: 922
 
 
 
@@ -735,6 +733,11 @@ This level is maxed out, we're 1.10 pixels away from saving a frame
 
 # 38-0
 rerecords: 265
+
+
+
+# 39-3
+rerecords: 419
 
 
 
@@ -1215,4 +1218,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 100921
+# Total rerecords: 101668
