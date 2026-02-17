@@ -747,7 +747,7 @@ rerecords: 419
 
 
 # 39-4
-rerecords: 1772
+rerecords: 1874
 
 Doesn't work:
 - starting on the left slope
@@ -1223,4 +1223,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 102699
+# Total rerecords: 102801
