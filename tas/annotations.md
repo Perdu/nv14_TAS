@@ -959,7 +959,7 @@ Jumping 2f later is slower, however long we jump.
 I tried jumping short and longer but this is the optimal strategy.
 
 # 61-3
-rerecords: 158
+rerecords: 64
 
 
 
@@ -994,6 +994,11 @@ It's possible to jump 1f earlier on the last slope, but then the angle is not as
 rerecords: 639
 
 running back across the bottom and cj to door is slower
+
+# 65-4
+rerecords: 1509
+
+
 
 # 66-0
 rerecords: 213
@@ -1135,6 +1140,11 @@ rerecords: 140
 
 
 
+# 77-1
+rerecords: 197
+
+
+
 # 78-4
 rerecords: 1050
 
@@ -1228,4 +1238,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 104204
+# Total rerecords: 105816
