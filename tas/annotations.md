@@ -1104,7 +1104,7 @@ Can't get a corner jump around 160
 Can't get above the mine around 430 directly after the first land. Manage to do it once after a jump (don't remember which) but it was slower and now I can't reproduce it
 
 # 71-4
-rerecords: 482
+rerecords: 524
 
 
 
@@ -1253,4 +1253,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 106796
+# Total rerecords: 106838
