@@ -394,7 +394,7 @@ rerecords: 922
 
 
 # 09-1
-rerecords: 341
+rerecords: 910
 
 We're very very close (0.12 pixels) from saving 1f of jump press to reach the doorswitch (if we jump 1f earlier).
 
@@ -1253,4 +1253,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 106838
+# Total rerecords: 107407
