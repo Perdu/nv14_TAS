@@ -641,6 +641,13 @@ Quad on the lower left bounceblock followed by jumps on two bbs above gets you t
 
 Branch 9: I tried optimizing the beginning, but it turned out to be slower than 0th
 
+# 19-0
+rerecords: 498
+
+Branch 9: attempt at slowing earlier on the way down
+Branch 8: using a cj for the way to the doorswitch
+Branch 7: faster beginning, but lost due to subpixel positionning stuff. Could save a drone framerule
+
 # 19-4
 rerecords: 453
 
@@ -976,6 +983,9 @@ rerecords: 133
 
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
 
+# 63-4
+
+
 # 64-0
 rerecords: 153
 
@@ -1092,6 +1102,11 @@ rerecords: 712
 Can't find a path that gets a good corner jump around 210 without slowing a lot
 Can't get a corner jump around 160
 Can't get above the mine around 430 directly after the first land. Manage to do it once after a jump (don't remember which) but it was slower and now I can't reproduce it
+
+# 71-4
+rerecords: 482
+
+
 
 # 72-0
 rerecords: 173
@@ -1238,4 +1253,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 105816
+# Total rerecords: 106796
