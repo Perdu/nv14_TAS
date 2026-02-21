@@ -403,7 +403,7 @@ I'm not entirely sure the used strategy of maximizing jumps on the way up is act
 In the end, we can't do a proper corner push to go down to the door because in all cases, we explode on the ceiling. But even if we slow down by removing 2 walljumps, the corner push does not land on the door and it thus slower.
 
 # 09-2
-rerecords: 457
+rerecords: 1016
 
 1f rcj on the first switch doesn't go far enough, and longer rcj get the missile. We have to jump that long unfortunately
 
@@ -1253,4 +1253,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 107640
+# Total rerecords: 108199
