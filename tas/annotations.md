@@ -642,7 +642,7 @@ Quad on the lower left bounceblock followed by jumps on two bbs above gets you t
 Branch 9: I tried optimizing the beginning, but it turned out to be slower than 0th
 
 # 19-0
-rerecords: 1488
+rerecords: 2458
 
 Branch 9: attempt at slowing earlier on the way down
 Branch 8: using a cj for the way to the doorswitch
@@ -1251,4 +1251,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 109325
+# Total rerecords: 110295
