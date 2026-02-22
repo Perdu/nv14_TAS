@@ -315,7 +315,7 @@ We can jump one frame earlier in the beginning, but then we don't get good enoug
 Branch 8: last jump if drone was not there (only gains 2f))
 
 # 07-3
-rerecords: 342
+rerecords: 632
 
 We need the missing to explodeon the platform ceiling, and for this we can't land too much on the left and jump to fast
 
@@ -693,6 +693,11 @@ rerecords: 53
 
 
 # 29-4
+
+
+# 30-1
+rerecords: 617
+
 
 
 # 30-2
@@ -1251,4 +1256,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 110295
+# Total rerecords: 111202
