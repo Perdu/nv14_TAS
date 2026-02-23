@@ -320,7 +320,7 @@ rerecords: 632
 We need the missing to explodeon the platform ceiling, and for this we can't land too much on the left and jump to fast
 
 # 07-4
-rerecords: 498
+rerecords: 2816
 
 Adding another jump on the slope of the way up from the bowl is not faster because the bb on the way down slows us down
 Double jumping on the bb on the lower left corner instead of reverse slope jump is not faster
@@ -1175,6 +1175,9 @@ Not faster:
 Did not work:
 - use the small portion of the slope next to the mines to land on the previous-to-last row. It's possible on the second row (but slower), but somehow I can't get it to work on the other one, because the drone restrict possible trajectories
 
+# 80-3
+
+
 # 81-1
 rerecords: 1183
 
@@ -1256,4 +1259,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 111202
+# Total rerecords: 113520
