@@ -726,7 +726,7 @@ rerecords: 250
 
 
 # 35-3
-rerecords: 43
+rerecords: 225
 
 Seems already optimal
 
@@ -1201,6 +1201,9 @@ rerecords: 152
 
 
 
+# 85-3
+
+
 # 86-3
 rerecords: 146
 
@@ -1266,4 +1269,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 115190
+# Total rerecords: 115372
