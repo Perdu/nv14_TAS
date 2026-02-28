@@ -377,7 +377,7 @@ There are many possible angles on the way up to push us left and land. In fact, 
 Jumping on the left slope instead of doing a turnaround is slower.
 
 # 08-4
-rerecords: 719
+rerecords: 1552
 
 On the way from the upper right switch to the doorswitch, cj + cj on the first bb is slightly faster than cj on the 2nd bb. In this path, you sadly can't go directly down without touching the platform on the left 
 
@@ -1294,4 +1294,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 117708
+# Total rerecords: 118541
