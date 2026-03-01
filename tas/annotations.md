@@ -116,11 +116,13 @@ rerecords: 590
 It might be able to crame 1 or 2 additional frames, but it's hell to optimize
 
 # 03-1
-rerecords: 1616
+rerecords: 1619
 
 Beginning is so tight and frame-perfect that I can only copy 0th and not gain any millimeter
 
 The only gain is on the jump over the doorswitch
+
+Branch 9: attempt to pass the door via thwump push (not working)
 
 # 03-2
 rerecords: 927
@@ -677,6 +679,11 @@ rerecords: 140
 
 
 
+# 21-2
+rerecords: 304
+
+
+
 # 23-4
 rerecords: 713
 
@@ -998,9 +1005,12 @@ Jumping 2f later is slower, however long we jump.
 I tried jumping short and longer but this is the optimal strategy.
 
 # 61-3
-rerecords: 64
+rerecords: 494
 
-
+Branch 6: chaining bb cj to the top. This doesn't work because you can't turn right to the doorswitch and it's slower
+Branch 9: fast bb cj that can't avoid the drone. Reaches for the left, but is slower.
+Branch 8: attempt at going right
+Branch 7: rta route, faster beginning but slower slope jumps
 
 # 62-3
 rerecords: 197
@@ -1294,4 +1304,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 118541
+# Total rerecords: 119278
