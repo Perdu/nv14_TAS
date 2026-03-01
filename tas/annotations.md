@@ -330,7 +330,7 @@ Corner jump on the bb on the way up is not faster
 Not jumping in the end is not faster
 
 # 08-0
-rerecords: 347
+rerecords: 1258
 
 If very precisely timed, we can make a second jump on a bb on the left - but it's useless
 The second jump we make on the way up makes us land later, but more to the right. It's better to get detected by the drone earlier!
@@ -1304,4 +1304,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 119278
+# Total rerecords: 120189
