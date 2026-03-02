@@ -166,7 +166,7 @@ The bottom section is 0.18 px away from being able walljump one frame earlier an
 The top section 0.05 px away from entering the exit an additional frame earlier.
 
 # 04-0
-rerecords: 745
+rerecords: 1515
 
 In the beginning, there doesn't appear to be a way to get in the ceiling hole with a walljump without using the thwump
 Waiting for the jump out of the ceiling hole is faster than stumbling out
@@ -676,6 +676,11 @@ Stumble in the end is faster with subpixel optimization
 
 # 20-4
 rerecords: 140
+
+
+
+# 21-1
+rerecords: 698
 
 
 
@@ -1304,4 +1309,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 120189
+# Total rerecords: 121657
