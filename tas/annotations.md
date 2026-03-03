@@ -592,6 +592,11 @@ rerecords: 498
 
 
 
+# 15-2
+rerecords: 264
+
+Branch 9: thwump cj
+
 # 15-3
 rerecords: 246
 
@@ -1279,4 +1284,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 121900
+# Total rerecords: 122164
