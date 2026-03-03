@@ -582,6 +582,11 @@ rerecords: 432
 
 
 
+# 15-0
+rerecords: 339
+
+I tried many strategies for the end. A ceiling push and no middle bb jump is slower than current strategy.
+
 # 15-1
 rerecords: 498
 
@@ -595,9 +600,6 @@ rerecords: 246
 # 15-4
 rerecords: 89
 
-
-
-# 16-0
 
 
 # 16-1
@@ -714,9 +716,6 @@ rerecords: 53
 
 
 
-# 29-4
-
-
 # 30-1
 rerecords: 1468
 
@@ -824,13 +823,8 @@ rerecords: 553
 A very clean one, with a corner jump on the way up (which is slower)
 431:139810|17895680|17895697|97587473|89478485|17896789|17895697|89548397|89478485|18175317|22876433|17895697|17895697|17895697|35791393|35791394|35791394|35791394|35791394|35791394|35790848|35791394|35791394|35791394|35791394|107880994|35808870|35791394|107374306|107374182|107374182|35791394|89478494|22369621|17895697|17895697|17895697|17895697|17895697|235999505|89548390|89478485|89478485|18175317|17895697|107374289|89478485|89478485|17896789|17895697|219222289|90596966|89478485|89478485|17895697|17895697|17895697|17895697|17895697|17898769|17895697|4369
 
-# 44-0
-rerecords: 142
-
-
-
-# 46-1
-rerecords: 276
+# 45-0
+rerecords: 322
 
 
 
@@ -939,9 +933,6 @@ rerecords: 276
 
 
 
-# 52-3
-
-
 # 53-0
 rerecords: 14
 
@@ -998,9 +989,6 @@ rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
-# 60-2
-
-
 # 61-1
 rerecords: 71
 
@@ -1022,16 +1010,10 @@ rerecords: 197
 
 Doing bwj after the rcj doesn't get high enough
 
-# 63-1
-
-
 # 63-3
 rerecords: 133
 
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
-
-# 63-4
-
 
 # 64-0
 rerecords: 153
@@ -1222,26 +1204,14 @@ Not faster:
 Did not work:
 - use the small portion of the slope next to the mines to land on the previous-to-last row. It's possible on the second row (but slower), but somehow I can't get it to work on the other one, because the drone restrict possible trajectories
 
-# 80-3
-
-
 # 81-1
 rerecords: 1183
 
 
 
-# 82-0
-
-
-# 84-0
-
-
 # 84-2
 rerecords: 152
 
-
-
-# 85-3
 
 
 # 86-3
@@ -1309,4 +1279,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 121657
+# Total rerecords: 121900
