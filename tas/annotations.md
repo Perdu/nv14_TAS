@@ -593,9 +593,12 @@ rerecords: 498
 
 
 # 15-2
-rerecords: 264
+rerecords: 747
 
 Branch 9: thwump cj
+Branch 8: attempt at getting directly under drone 3
+Branch 7: currently fastest approach to attempt to beat drone 2.
+Branch 6: branch 7 but turnaround is optimized, which gains 2 pixels. Slower thwump cj that loses some frames.
 
 # 15-3
 rerecords: 246
@@ -1278,10 +1281,15 @@ rerecords: 906
 
 
 
+# 97-3
+rerecords: 197
+
+
+
 # 99-0
 rerecords: 468
 
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 122164
+# Total rerecords: 122844
