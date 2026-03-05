@@ -593,12 +593,10 @@ rerecords: 498
 
 
 # 15-2
-rerecords: 747
+rerecords: 1298
 
-Branch 9: thwump cj
 Branch 8: attempt at getting directly under drone 3
-Branch 7: currently fastest approach to attempt to beat drone 2.
-Branch 6: branch 7 but turnaround is optimized, which gains 2 pixels. Slower thwump cj that loses some frames.
+Branch 9: 4 pixels gain lost to the slope jump before the thwump. Potential for optimization.
 
 # 15-3
 rerecords: 246
@@ -619,6 +617,11 @@ rerecords: 219
 rerecords: 79
 
 0th is maxed, I could barely get a few subpixel (0.something)
+
+# 16-4
+rerecords: 240
+
+Branch 9: jumping earlier, then jumping to get the switch and fall directly. Slower.
 
 # 17-1
 rerecords: 893
@@ -1292,4 +1295,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 122844
+# Total rerecords: 123635
