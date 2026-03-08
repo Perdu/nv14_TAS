@@ -11,6 +11,9 @@ Videos produced with this tool:
 ## What this repository contains
 
 - Information about TASing N v1.4 (this file)
+- [Demo strings for all levels already TASed](tas/level_data.yml)
+- [Documentation about all techniques and links](techniques/README.md)
+- [Python script to get statistics about current state of the TAS](stats.py) -> produces [tas/stats.txt](tas/stats.txt)
 - [python script to convert N demos into libTAS inputs](converter.py)
 - [bash](build_demo.sh) and [python](builder.py) scripts working together to recreate the libTAS demo from [level demo data](tas/level_data.yml)
 - [Data to build the TAS](tas/): info for each level (including demos), loading times, click coordinates
@@ -19,7 +22,6 @@ Videos produced with this tool:
 - [Lua script to display overlay information](display_infos.lua.template) (demo information, real-time inputs)
 - [Other Lua scripts to help TASing](volume/lua)
 - [Python script to get demo data from .sol file](sol_to_demo.py)
-- [Python script to get statistics about current state of the TAS](stats.py) -> produces [tas/stats.txt](tas/stats.txt)
 - [Notes for each TASed level](tas/annotations.md)
 - [A dockerfile to build the TASing environment](Dockerfile)
 - [Other tools and informations from external sources](external/)
@@ -44,8 +46,6 @@ And more.
 - [TAS thread on N forum](https://forum.droni.es/viewtopic.php?f=20&t=4468&p=177293&sid=6f5f179201d5b44d889afbe5865cb685#p177293)
 - [tasvideos.org: N TAS](https://tasvideos.org/Forum/Topics/9371)
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
-### Documentation
-- [All techniques and links](techniques/README.md)
 ### TAS Tutorials for other games
 - Undertale https://www.youtube.com/watch?v=EFCnTeTdD2k&t=712s
 - HK https://www.youtube.com/watch?v=qQAJk5_LUvg
