@@ -619,7 +619,7 @@ rerecords: 79
 0th is maxed, I could barely get a few subpixel (0.something)
 
 # 16-4
-rerecords: 240
+rerecords: 296
 
 Branch 9: jumping earlier, then jumping to get the switch and fall directly. Slower.
 
@@ -673,6 +673,15 @@ Branch 9: attempt at slowing earlier on the way down
 Branch 8: using a cj for the way to the doorswitch
 Branch 7: faster beginning, but lost due to subpixel positionning stuff. Could save a drone framerule
 
+# 19-1
+rerecords: 1403
+
+Branch 9: reverse slope jump
+Branch 8: triple bb
+Branch 7: bbbwj off the top cj
+Branch 6: delaying drone with triple, 2f faster 0th
+Branch 4: triple on lowest bb (idk I was desperate to try anything at that point)
+
 # 19-4
 rerecords: 453
 
@@ -686,6 +695,11 @@ Didn't work:
 Somehow, the stumble on the middle rectangle make us gain 1 frame when reaching the launchpad on the left. We get faster to the third square because of the exact angle of the bounceblock jump: the ceiling pushes us slightly downwards.
 
 Stumble in the end is faster with subpixel optimization
+
+# 20-1
+rerecords: 179
+
+I tried various stuff, notably to keep going left, then hold right while jumping (see branch 9).
 
 # 20-4
 rerecords: 140
@@ -703,10 +717,11 @@ rerecords: 304
 
 
 # 23-3
-rerecords: 329
+rerecords: 363
 
 Branch 9: crazy thwump push
 Branch 8: path with a thwump push
+Branch 7: attempt at using the first (right-most) thwump for jump
 
 Haven't found some workable thing do to with thwumps. I tried jumping on the one before the two switches at the top but that didn't work out. I tried jumping earlier to take the upper switch first but that was slower as well.
 
@@ -1287,6 +1302,12 @@ rerecords: 279
 
 
 
+# 94-1
+rerecords: 154
+
+F5: Hold jump longer to get higher up thwump
+F6: Min hold, max thwump speed. 
+
 # 96-4
 rerecords: 906
 
@@ -1303,4 +1324,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 123964
+# Total rerecords: 125790
