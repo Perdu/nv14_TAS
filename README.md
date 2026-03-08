@@ -45,18 +45,7 @@ And more.
 - [tasvideos.org: N TAS](https://tasvideos.org/Forum/Topics/9371)
 - [tasvideos.org: Running Flash games in libTAS](https://tasvideos.org/Forum/Topics/20547)
 ### Documentation
-- [Thread on air speed](https://forum.droni.es/viewtopic.php?f=20&t=10336&sid=569eab4beeecd814135f67b0fa574a3a)
-- [Stumbles](https://discord.com/channels/197765375503368192/199460839252688896/1431062811903266957)
-- [Hitboxes sizes](https://discord.com/channels/197765375503368192/199460839252688896/1437946735665352714)
-- [All techniques](techniques/README.md)
-- [Finding coordinates for tile bwj](techniques/bwj.md)
-- [Drone detection](https://discord.com/channels/197765375503368192/199460839252688896/1458621494224490527)
-- [Metanet tutorial on N physical collision system](https://edelkas.github.io/n/index/docs.html)
-- [Nclone, Python emulator of the N++ engine (some parts are similar to N v1.4)](https://github.com/SimonV42/nclone)
-  - [Nclone: Part handling ceiling crushing](https://github.com/SimonV42/nclone/blob/842190b2a216579b5b5c551e0a0b4505fc3381cc/nsim.py#L299-L302)
-- [Float-precise trick giving pj on flat ground in N++](https://discord.com/channels/197765375503368192/199460839252688896/1469859845107876041)
-- [Slipping through one-ways](https://forum.droni.es/viewtopic.php?f=17&t=9096). [Map](https://www.nmaps.net/218275)
-- [superpowered launchpads + surviving falls from launchpad height](https://discord.com/channels/197765375503368192/199460839252688896/1477389682181668915)
+- [All techniques and links](techniques/README.md)
 ### TAS Tutorials for other games
 - Undertale https://www.youtube.com/watch?v=EFCnTeTdD2k&t=712s
 - HK https://www.youtube.com/watch?v=qQAJk5_LUvg
