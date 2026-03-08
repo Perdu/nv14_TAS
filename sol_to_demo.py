@@ -261,7 +261,7 @@ def get_authors_from_ltm_file(level):
         with tar.extractfile(member) as f:
             config_data = f.read().decode("utf-8")
     config.read_string(config_data)
-    return config["General"]["authors"]
+    return config["General"]["authors"].strip('"')
 
 
 if __name__ == "__main__":
