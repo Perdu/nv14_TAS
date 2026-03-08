@@ -29,6 +29,9 @@ Links:
 ### Triple bb
 ### Double bb w/ bwj
 ### Triple bb w/ bwj
+
+(actually TAS only but it doesn't make sense to separate explanations. Categories could be reworked or we could have a whole bounceblock category)
+
 ### Sideways double/triple bb
 ### chimney jumps
 ### ceiling push
