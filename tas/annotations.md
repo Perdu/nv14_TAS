@@ -701,6 +701,15 @@ rerecords: 179
 
 I tried various stuff, notably to keep going left, then hold right while jumping (see branch 9).
 
+# 20-2
+rerecords: 661
+
+Branch 8: RTA route a bit more optimized for the beginning
+
+It might be possible to still save frames on the descent on the way to the doorswitch (+ way back up)
+
+Also, possible tile jump on the way up, on the tile we use to get pushed right?
+
 # 20-4
 rerecords: 140
 
@@ -1324,4 +1333,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 125790
+# Total rerecords: 126451
