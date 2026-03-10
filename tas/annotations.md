@@ -710,6 +710,11 @@ It might be possible to still save frames on the descent on the way to the doors
 
 Also, possible tile jump on the way up, on the tile we use to get pushed right?
 
+# 20-3
+rerecords: 231
+
+Branch 9: attempt at starting with a cj
+
 # 20-4
 rerecords: 140
 
@@ -1333,4 +1338,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 126451
+# Total rerecords: 126682

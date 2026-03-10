@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 154
-Speedruns: 221
+Speedruns: 222
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -204,6 +204,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 13-4: TAS= 248 f  RTA= 249 f    -1 f (0.025) (- 0.40%) 
 14-4: TAS= 587 f  RTA= 588 f    -1 f (0.025) (- 0.17%) 
 20-1: TAS= 171 f  RTA= 172 f    -1 f (0.025) (- 0.58%) 
+20-3: TAS= 214 f  RTA= 215 f    -1 f (0.025) (- 0.47%) 
 26-1: TAS= 199 f  RTA= 200 f    -1 f (0.025) (- 0.50%) 
 66-0: TAS= 264 f  RTA= 265 f    -1 f (0.025) (- 0.38%) 
 67-3: TAS= 161 f  RTA= 162 f    -1 f (0.025) (- 0.62%) 
@@ -227,9 +228,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 104844 f (43m41.100s)
-Total RTA: 113730 f (47m23.250s)
-Total Δ   = +8886 f (3m42.150s)
+Total TAS: 105058 f (43m46.450s)
+Total RTA: 113945 f (47m28.625s)
+Total Δ   = +8887 f (3m42.175s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -327,6 +328,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 19-4: TAS= 566 f  RTA= 585 f   -19 f (0.475) (- 3.25%) █
 20-1: TAS= 171 f  RTA= 172 f    -1 f (0.025) (- 0.58%) 
 20-2: TAS= 593 f  RTA= 660 f   -67 f (1.675) (-10.15%) ████
+20-3: TAS= 214 f  RTA= 215 f    -1 f (0.025) (- 0.47%) 
 20-4: TAS= 323 f  RTA= 353 f   -30 f (0.750) (- 8.50%) ██
 21-1: TAS= 284 f  RTA= 313 f   -29 f (0.725) (- 9.27%) ██
 21-2: TAS= 190 f  RTA= 194 f    -4 f (0.100) (- 2.06%) 
@@ -456,9 +458,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 280 f  RTA= 296 f   -16 f (0.400) (- 5.41%) █
 
 ────────────────────────────────────────────────────────────
-Total TAS: 104844 f (43m41.100s)
-Total RTA: 113730 f (47m23.250s)
-Total Δ   = +8886 f (3m42.150s)
+Total TAS: 105058 f (43m46.450s)
+Total RTA: 113945 f (47m28.625s)
+Total Δ   = +8887 f (3m42.175s)
 
 Episode Highscore Grid:
 
