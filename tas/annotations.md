@@ -764,6 +764,15 @@ rerecords: 404
 
 I tried so hard to jump 1f earlier on the left wall, but could not find any workable path in >350 rerecords
 
+# 27-0
+rerecords: 374
+
+Branch 9: going down directly in the 3rd pipe. Barely slower.
+Branch 8: same but without the last two jumps
+Branch 7: using push at the end (2f slower)
+
+Perhaps a bwj in the end could save 1 or 2 frames
+
 # 28-1
 rerecords: 53
 
@@ -1343,4 +1352,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 127597
+# Total rerecords: 127971
