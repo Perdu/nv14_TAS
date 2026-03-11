@@ -730,6 +730,11 @@ rerecords: 304
 
 
 
+# 22-3
+rerecords: 915
+
+Branch 9: using TRO's landing with no wallslide
+
 # 23-3
 rerecords: 363
 
@@ -1338,4 +1343,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 126682
+# Total rerecords: 127597
