@@ -21,7 +21,7 @@ Links:
 ### stumbles
 ### cj
 
-![Corner jump](gifs/cj.gif)
+![Corner jump](gifs/cj_03-2.gif)
 
 ### rcj
 ### bbbwj (high and low) (+optimization)
