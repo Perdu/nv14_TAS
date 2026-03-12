@@ -1,0 +1,99 @@
+TRICKS
+
+1 tiles 	- Double -> http://www.nmaps.net/119667
+	 	- Reverse Double
+	 	- Triple
+
+2 tiles 	- Double
+	 	- Reverse Double
+	 	- Triple
+
+3 tiles 	- Double -> http://www.nmaps.net/156011
+	 	- Reverse Double
+
+4 tiles 	- Double -> http://www.nmaps.net/119964
+	 	- Triple
+		- WJ -> http://www.nmaps.net/120102
+
+5 tiles		- HTCJ
+		- RHTCJ -> http://www.nmaps.net/163992
+
+3&7 tiles 	- triple
+
+8 tiles		- Double
+	 	- Reverse Double
+	 	- Triple
+		- WJ -> http://www.nmaps.net/124685
+		- Squeeze and High Jump
+
+Multiple Tiles:
+	 	- CJ -> http://www.nmaps.net/127213
+	 	- RCJ
+	 	- CWJ -> http://www.nmaps.net/172705
+		- CK -> http://www.nmaps.net/127213
+		- Hieghtless CK
+		- Vertical Corner Shove -> http://www.nmaps.net/143427
+		- Horizontal CS
+		- BWJ -> http://www.nmaps.net/198240
+		- Low Jump -> http://www.nmaps.net/187034
+
+Thwump 		- CK
+	 	- BWJ
+		- Double of horizontal returning thwump
+
+Mines 		- Floor -> http://www.nmaps.net/124667
+		- Celing -> http://www.nmaps.net/120252
+		- Wall -> http://www.nmaps.net/154980
+		- over 4 mines in 2 tile high space -> http://www.nmaps.net/193692
+		- Wall jump between off set mines
+
+Bounce Block 	- Double WJ
+		- Triple WJ
+		- Quadruple WJ -> http://www.nmaps.net/168115
+		- Double Jump
+		- Triple Jump
+		- BBCD -> 147305
+		- BBCT -> http://www.nmaps.net/182687
+		- BBCK -> http://www.nmaps.net/163449
+		- BWJ -> http://www.nmaps.net/153359
+
+Oneway 		- Jump and fall/glitch through -> http://www.nmaps.net/193968
+		- WJ up through ->  http://pastebin.com/rmbi52b9
+
+Door 		- CJ ... Vertical -> http://www.nmaps.net/120055
+		- RCJ ... Vertical -> http://www.nmaps.net/172095
+		- CK ... Vertical
+		- CJ ... Horizontal
+		- RCJ ... Horizontal -> http://www.nmaps.net/217922
+		- CK ... Horizontal -> http://www.nmaps.net/187086
+
+Locked door	- CJ ... Vertical -> http://www.nmaps.net/119994
+		- RCJ ... Vertical
+		- CK ... Vertical
+		- CJ ... Horizontal
+		- RCJ ... Horizontal
+		- CK ... Horizontal
+
+Trap Door	- CJ ... Vertical
+		- RCJ ... Vertical
+		- CK ... Vertical
+		- CJ ... Horizontal
+		- RCJ ... Horizontal
+		- CK ... Horizontal
+
+Launch Pad	- Full Speed LPWJ -> http://www.nmaps.net/201428
+		- Survive fall from LP on the floor
+		- Angled LP + wj -> Text file in "My Maps"
+		- WJ + Horrizontal LP -> http://www.nmaps.net/158645
+
+Switches
+		- Grab through horizontal Locked Door
+		- Grab through Vertical Locked Door
+		- Run under switches with out grabbing
+Gold
+		- Grab Gold Over Switches
+
+
+
+
+
