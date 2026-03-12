@@ -912,6 +912,11 @@ Branch 9: optimized rta route (3f slower)
 
 Can't get a triple to work on the first slope, I always get a stumble for the 3rd jump
 
+# 48-3
+rerecords: 141
+
+
+
 # 49-4
 rerecords: 1922
 
@@ -1368,4 +1373,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 128312
+# Total rerecords: 128453
