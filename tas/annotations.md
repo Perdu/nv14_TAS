@@ -886,10 +886,13 @@ A very clean one, with a corner jump on the way up (which is slower)
 431:139810|17895680|17895697|97587473|89478485|17896789|17895697|89548397|89478485|18175317|22876433|17895697|17895697|17895697|35791393|35791394|35791394|35791394|35791394|35791394|35790848|35791394|35791394|35791394|35791394|107880994|35808870|35791394|107374306|107374182|107374182|35791394|89478494|22369621|17895697|17895697|17895697|17895697|17895697|235999505|89548390|89478485|89478485|18175317|17895697|107374289|89478485|89478485|17896789|17895697|219222289|90596966|89478485|89478485|17895697|17895697|17895697|17895697|17895697|17898769|17895697|4369
 
 # 44-0
-rerecords: 130
+rerecords: 154
 
 We seem to be drone-bottlenecked here.
 I wonder if a bwj could work and reach the switch directly
+
+Branch 9: jumping earlier in the beginning (gives less height)
+Branch 8: jumping for one more frame to the switch to avoid sliding before the drone: a few subpixels slower
 
 # 45-0
 rerecords: 322
@@ -901,6 +904,13 @@ rerecords: 252
 
 Using the grab-push on the middle platform gives us speed, but I can't find a path that gets to the exit faster.
 I optimize subpixels but I'm still tying 0th, 2.50 pixels away from the door.
+
+# 47-0
+rerecords: 187
+
+Branch 9: optimized rta route (3f slower)
+
+Can't get a triple to work on the first slope, I always get a stumble for the 3rd jump
 
 # 49-4
 rerecords: 1922
@@ -1358,4 +1368,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 128101
+# Total rerecords: 128312
