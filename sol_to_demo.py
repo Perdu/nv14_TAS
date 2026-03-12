@@ -15,6 +15,7 @@ import re
 import tarfile
 import configparser
 from ruamel.yaml import YAML
+from ruamel.yaml.scalarstring import LiteralScalarString
 
 from converter import extract_chunks
 
@@ -195,7 +196,7 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt', opti
             "authors": new_authors,
             "type": "tas",
             "optimization_level": new_optimization_level,
-            "demo": demo
+            "demo": LiteralScalarString(demo)
         }
         saved_score = int(data[level_id][score_type]["time"].split()[0])
         if score_type == "Speedrun" and saved_score < number_of_frames:
@@ -211,7 +212,7 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt', opti
             new_optimization_level = optimization_level
         else:
             new_optimization_level = DEFAULT_OPTIMIZATION_LEVEL
-        level_data[score_type] = {'time': score, 'diff_with_0th': diff_str_total, 'authors': authors, 'type': 'tas', 'optimization_level': new_optimization_level, 'demo': demo}
+        level_data[score_type] = {'time': score, 'diff_with_0th': diff_str_total, 'authors': authors, 'type': 'tas', 'optimization_level': new_optimization_level, 'demo': LiteralScalarString(demo)}
         data[level_id] = level_data
 
     data = {k: data[k] for k in sorted(data.keys())}
@@ -222,15 +223,51 @@ def save_demo(demo, episode, level, score_type="Speedrun", authors='zapkt', opti
     yaml.dump(data, buf)
     lines = buf.getvalue().splitlines()
 
-    # --- Insert blank line after each demo: line if missing ---
+    # --- Insert blank line after demo blocks ---
+    block_start_re = re.compile(r'^\s*[^:]+:\s*\|[+-]?\s*(?:#.*)?$')
     result_lines = []
     i = 0
-    while i < len(lines):
-        result_lines.append(lines[i])
-        if lines[i].strip().startswith("demo:"):
-            # If next line exists and is not blank, insert a blank line
-            if i + 1 < len(lines) and lines[i + 1].strip() != "":
-                result_lines.append("")  # insert one blank line
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        result_lines.append(line)
+
+        # If this line starts a literal block (demo: |  or demo: |+ / |-)
+        if block_start_re.match(line):
+            key_indent = len(line) - len(line.lstrip(' '))
+            # next line must exist and be more indented than the key (block content)
+            if i + 1 < n:
+                next_line = lines[i + 1]
+                next_leading = len(next_line) - len(next_line.lstrip(' '))
+                if next_leading > key_indent:
+                    # find the end of the block: all following lines that are indented > key_indent
+                    j = i + 1
+                    while j + 1 < n:
+                        nl = lines[j + 1]
+                        nl_leading = len(nl) - len(nl.lstrip(' '))
+                        # an "indented" blank line (i.e. with spaces) counts as inside the block;
+                        # an empty line with no indent is considered outside the block.
+                        if nl.strip() == "":
+                            if nl_leading <= key_indent:
+                                break
+                            else:
+                                j += 1
+                                continue
+                        if nl_leading > key_indent:
+                            j += 1
+                        else:
+                            break
+                    # append the block content lines (we already appended the block-start)
+                    for k in range(i + 1, j + 1):
+                        result_lines.append(lines[k])
+                    # if the block was a single-line block (only one content line),
+                    # ensure exactly one blank line AFTER the block (but don't duplicate).
+                    if j == i + 1:
+                        if not (j + 1 < n and lines[j + 1].strip() == ""):
+                            result_lines.append("")
+                    # advance i to the last line of the block (we already appended them)
+                    i = j + 1
+                    continue  # go to next iteration without the final i += 1
         i += 1
 
     # --- Write back to file ---
