@@ -44,10 +44,17 @@ Links:
 ### ceiling shove (?)
 ### Getting squeezed (by thwumps mostly)
 
+### Angled lp+wj
+
+00-0 hs
+
 ## Rare in RTA
 
 ### Clipping
 ### bwj
+
+07-2
+
 ### Tile wj
 
 06-2
@@ -57,6 +64,10 @@ Links:
 06-2
 
 ## TAS-only (/optimization)
+
+### Tile bwj
+
+08-2
 
 ### cj optimization
 ### Slope jump optimization
