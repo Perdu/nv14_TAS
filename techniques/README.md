@@ -26,6 +26,9 @@ Links:
 ### rcj
 ### bbbwj (high and low) (+optimization)
 ### thwump bwj (+optimization)
+
+![Thwump bwj](gifs/thwump_bwj_06-4.gif)
+
 ### thwump push (+optimization)
 ### Clipping through oneways using corners
 ### Double bb
@@ -45,6 +48,13 @@ Links:
 
 ### Clipping
 ### bwj
+### Tile wj
+
+06-2
+
+### Tile rcj
+
+06-2
 
 ## TAS-only (/optimization)
 
