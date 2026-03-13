@@ -1156,6 +1156,11 @@ It's possible to jump on the upper bb side but it's useless
 
 There are many different possibilities to test. For instance, we can hold right longer on the bb. This one seems optimal.
 
+# 68-3
+rerecords: 571
+
+I have to get a poorly angled rcj to get avoid detection by drone 3. There may still be room for improvement here by getting a direct landing that avoids that detection.
+
 # 69-2
 rerecords: 809
 
@@ -1373,4 +1378,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 128453
+# Total rerecords: 129024
