@@ -608,6 +608,9 @@ rerecords: 89
 
 
 
+# 16-0
+
+
 # 16-1
 rerecords: 219
 
@@ -778,6 +781,9 @@ rerecords: 53
 
 
 
+# 29-4
+
+
 # 30-1
 rerecords: 1468
 
@@ -899,6 +905,11 @@ rerecords: 322
 
 
 
+# 46-1
+rerecords: 276
+
+
+
 # 46-2
 rerecords: 252
 
@@ -1016,6 +1027,9 @@ rerecords: 276
 
 
 
+# 52-3
+
+
 # 53-0
 rerecords: 14
 
@@ -1072,6 +1086,9 @@ rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
+# 60-2
+
+
 # 61-1
 rerecords: 71
 
@@ -1093,10 +1110,16 @@ rerecords: 197
 
 Doing bwj after the rcj doesn't get high enough
 
+# 63-1
+
+
 # 63-3
 rerecords: 133
 
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
+
+# 63-4
+
 
 # 64-0
 rerecords: 153
@@ -1292,14 +1315,26 @@ Not faster:
 Did not work:
 - use the small portion of the slope next to the mines to land on the previous-to-last row. It's possible on the second row (but slower), but somehow I can't get it to work on the other one, because the drone restrict possible trajectories
 
+# 80-3
+
+
 # 81-1
 rerecords: 1183
 
 
 
+# 82-0
+
+
+# 84-0
+
+
 # 84-2
 rerecords: 152
 
+
+
+# 85-3
 
 
 # 86-3
@@ -1368,7 +1403,7 @@ rerecords: 906
 
 
 # 97-3
-rerecords: 197
+rerecords: 315
 
 
 
@@ -1378,4 +1413,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 129024
+# Total rerecords: 129418
