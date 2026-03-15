@@ -46,7 +46,7 @@ rerecords: 337
 I copied the inputs of the RTA run for the beginning (up to the doorkey) because I find a better or even tying route
 
 # 01-3
-rerecords: 698
+rerecords: 1419
 
 I tried:
 - many ways to turn around in the beginning. The RTA jump does not seem faster.
@@ -1418,4 +1418,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 129953
+# Total rerecords: 130674
