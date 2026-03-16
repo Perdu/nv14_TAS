@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 154
-Speedruns: 232
+Speedruns: 233
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -81,6 +81,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 18-4: TAS= 321 f  RTA= 357 f   -36 f (0.900) (-10.08%) ██
 07-0: TAS= 515 f  RTA= 550 f   -35 f (0.875) (- 6.36%) ██
 36-4: TAS= 285 f  RTA= 320 f   -35 f (0.875) (-10.94%) ██
+64-3: TAS= 143 f  RTA= 178 f   -35 f (0.875) (-19.66%) ██
 74-0: TAS= 448 f  RTA= 483 f   -35 f (0.875) (- 7.25%) ██
 14-1: TAS= 811 f  RTA= 844 f   -33 f (0.825) (- 3.91%) ██
 18-2: TAS= 289 f  RTA= 322 f   -33 f (0.825) (-10.25%) ██
@@ -238,9 +239,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 108685 f (45m17.125s)
-Total RTA: 118051 f (49m11.275s)
-Total Δ   = +9366 f (3m54.150s)
+Total TAS: 108828 f (45m20.700s)
+Total RTA: 118229 f (49m15.725s)
+Total Δ   = +9401 f (3m55.025s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -412,6 +413,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 62-3: TAS= 255 f  RTA= 276 f   -21 f (0.525) (- 7.61%) █
 63-3: TAS= 231 f  RTA= 249 f   -18 f (0.450) (- 7.23%) █
 64-0: TAS= 285 f  RTA= 289 f    -4 f (0.100) (- 1.38%) 
+64-3: TAS= 143 f  RTA= 178 f   -35 f (0.875) (-19.66%) ██
 64-4: TAS= 166 f  RTA= 166 f     0 f (0.000) (- 0.00%) 
 65-0: TAS= 365 f  RTA= 396 f   -31 f (0.775) (- 7.83%) ██
 65-4: TAS= 453 f  RTA= 500 f   -47 f (1.175) (- 9.40%) ███
@@ -478,9 +480,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 280 f  RTA= 296 f   -16 f (0.400) (- 5.41%) █
 
 ────────────────────────────────────────────────────────────
-Total TAS: 108685 f (45m17.125s)
-Total RTA: 118051 f (49m11.275s)
-Total Δ   = +9366 f (3m54.150s)
+Total TAS: 108828 f (45m20.700s)
+Total RTA: 118229 f (49m15.725s)
+Total Δ   = +9401 f (3m55.025s)
 
 Episode Highscore Grid:
 
