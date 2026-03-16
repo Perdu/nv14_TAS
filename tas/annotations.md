@@ -1376,6 +1376,12 @@ rerecords: 154
 F5: Hold jump longer to get higher up thwump
 F6: Min hold, max thwump speed. 
 
+# 95-2
+rerecords: 252
+
+F9: WJ under the mine after the second CJ. Too much speed and die to mine.
+F8: WJ under the next mine up and still die due to speed.
+
 # 96-4
 rerecords: 906
 
@@ -1397,4 +1403,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 130689
+# Total rerecords: 130941
