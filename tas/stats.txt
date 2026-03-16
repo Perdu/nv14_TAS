@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 154
-Speedruns: 230
+Speedruns: 231
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -170,6 +170,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 72-0: TAS= 278 f  RTA= 284 f    -6 f (0.150) (- 2.11%) 
 90-0: TAS= 310 f  RTA= 316 f    -6 f (0.150) (- 1.90%) 
 97-3: TAS= 123 f  RTA= 129 f    -6 f (0.150) (- 4.65%) 
+98-1: TAS= 639 f  RTA= 645 f    -6 f (0.150) (- 0.93%) 
 07-1: TAS= 154 f  RTA= 159 f    -5 f (0.125) (- 3.14%) 
 10-0: TAS= 301 f  RTA= 306 f    -5 f (0.125) (- 1.63%) 
 25-2: TAS= 314 f  RTA= 319 f    -5 f (0.125) (- 1.57%) 
@@ -236,9 +237,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 107798 f (44m54.950s)
-Total RTA: 116994 f (48m44.850s)
-Total Δ   = +9196 f (3m49.900s)
+Total TAS: 108437 f (45m10.925s)
+Total RTA: 117639 f (49m00.975s)
+Total Δ   = +9202 f (3m50.050s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -471,12 +472,13 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 94-1: TAS= 470 f  RTA= 472 f    -2 f (0.050) (- 0.42%) 
 96-4: TAS=1049 f  RTA=1307 f  -258 f (6.450) (-19.74%) ██████████████████
 97-3: TAS= 123 f  RTA= 129 f    -6 f (0.150) (- 4.65%) 
+98-1: TAS= 639 f  RTA= 645 f    -6 f (0.150) (- 0.93%) 
 99-0: TAS= 280 f  RTA= 296 f   -16 f (0.400) (- 5.41%) █
 
 ────────────────────────────────────────────────────────────
-Total TAS: 107798 f (44m54.950s)
-Total RTA: 116994 f (48m44.850s)
-Total Δ   = +9196 f (3m49.900s)
+Total TAS: 108437 f (45m10.925s)
+Total RTA: 117639 f (49m00.975s)
+Total Δ   = +9202 f (3m50.050s)
 
 Episode Highscore Grid:
 
@@ -504,7 +506,7 @@ Episode Speedrun Grid:
 🟢05 🟢15 🟡25 🟡35 🟡45 🟡55 🟡65 🟡75 🟡85 🔴95
 🟢06 🟡16 🟡26 🟡36 🟡46 🔴56 🟡66 🟡76 🔴86 🟡96
 🟢07 🟡17 🟡27 🟡37 🟡47 🔴57 🟡67 🟡77 🟡87 🟡97
-🟢08 🟡18 🟡28 🟡38 🟡48 🔴58 🟡68 🟡78 🟡88 🔴98
+🟢08 🟡18 🟡28 🟡38 🟡48 🔴58 🟡68 🟡78 🟡88 🟡98
 🟢09 🟡19 🟡29 🟡39 🟡49 🟡59 🟡69 🟡79 🟡89 🟡99
 
 Legend:
