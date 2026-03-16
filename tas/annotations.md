@@ -608,6 +608,9 @@ rerecords: 89
 
 
 
+# 16-0
+
+
 # 16-1
 rerecords: 219
 
@@ -778,6 +781,9 @@ rerecords: 53
 
 
 
+# 29-4
+
+
 # 30-1
 rerecords: 1468
 
@@ -899,6 +905,11 @@ rerecords: 322
 
 
 
+# 46-1
+rerecords: 276
+
+
+
 # 46-2
 rerecords: 252
 
@@ -1016,6 +1027,9 @@ rerecords: 276
 
 
 
+# 52-3
+
+
 # 53-0
 rerecords: 14
 
@@ -1046,9 +1060,6 @@ rerecords: 165
 
 
 
-# 58-2
-
-
 # 59-0
 rerecords: 180
 
@@ -1075,6 +1086,9 @@ rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
+# 60-2
+
+
 # 61-1
 rerecords: 71
 
@@ -1096,10 +1110,16 @@ rerecords: 197
 
 Doing bwj after the rcj doesn't get high enough
 
+# 63-1
+
+
 # 63-3
 rerecords: 133
 
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
+
+# 63-4
+
 
 # 64-0
 rerecords: 153
@@ -1300,9 +1320,18 @@ Not faster:
 Did not work:
 - use the small portion of the slope next to the mines to land on the previous-to-last row. It's possible on the second row (but slower), but somehow I can't get it to work on the other one, because the drone restrict possible trajectories
 
+# 80-3
+
+
 # 81-1
 rerecords: 1183
 
+
+
+# 82-0
+
+
+# 84-0
 
 
 # 84-2
@@ -1310,13 +1339,13 @@ rerecords: 152
 
 
 
+# 85-3
+
+
 # 86-3
 rerecords: 146
 
 Slower than RTA. Annoying.
-
-# 87-1
-
 
 # 88-0
 rerecords: 85
@@ -1362,9 +1391,6 @@ We're 0.18 pixels away from saving 1f. We can't make the third pipe jump earlier
 
 I can't land a proper cj on the way to the switch that's actually faster
 
-# 92-1
-
-
 # 94-0
 rerecords: 279
 
@@ -1377,10 +1403,9 @@ F5: Hold jump longer to get higher up thwump
 F6: Min hold, max thwump speed. 
 
 # 95-2
-rerecords: 252
+rerecords: 283
 
-F9: WJ under the mine after the second CJ. Too much speed and die to mine.
-F8: WJ under the next mine up and still die due to speed.
+
 
 # 96-4
 rerecords: 906
@@ -1392,15 +1417,10 @@ rerecords: 315
 
 
 
-# 98-1
-rerecords: 291
-
-F2: WJ start; Unable to find skip or ck which works
-
 # 99-0
 rerecords: 468
 
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 130941
+# Total rerecords: 130957
