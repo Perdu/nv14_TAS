@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 154
-Speedruns: 235
+Speedruns: 236
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -136,6 +136,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 09-4: TAS= 420 f  RTA= 433 f   -13 f (0.325) (- 3.00%) 
 15-0: TAS= 493 f  RTA= 506 f   -13 f (0.325) (- 2.57%) 
 23-4: TAS= 219 f  RTA= 232 f   -13 f (0.325) (- 5.60%) 
+78-0: TAS= 304 f  RTA= 317 f   -13 f (0.325) (- 4.10%) 
 89-0: TAS= 574 f  RTA= 587 f   -13 f (0.325) (- 2.21%) 
 89-2: TAS= 467 f  RTA= 480 f   -13 f (0.325) (- 2.71%) 
 02-2: TAS= 517 f  RTA= 529 f   -12 f (0.300) (- 2.27%) 
@@ -241,9 +242,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 109636 f (45m40.900s)
-Total RTA: 119150 f (49m38.750s)
-Total Δ   = +9514 f (3m57.850s)
+Total TAS: 109940 f (45m48.500s)
+Total RTA: 119467 f (49m46.675s)
+Total Δ   = +9527 f (3m58.175s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -448,6 +449,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 76-2: TAS= 127 f  RTA= 130 f    -3 f (0.075) (- 2.31%) 
 77-1: TAS= 246 f  RTA= 261 f   -15 f (0.375) (- 5.75%) █
 77-4: TAS= 184 f  RTA= 189 f    -5 f (0.125) (- 2.65%) 
+78-0: TAS= 304 f  RTA= 317 f   -13 f (0.325) (- 4.10%) 
 78-1: TAS= 347 f  RTA= 359 f   -12 f (0.300) (- 3.34%) 
 78-4: TAS= 807 f  RTA= 935 f  -128 f (3.200) (-13.69%) █████████
 79-4: TAS= 428 f  RTA= 543 f  -115 f (2.875) (-21.18%) ████████
@@ -484,9 +486,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 280 f  RTA= 296 f   -16 f (0.400) (- 5.41%) █
 
 ────────────────────────────────────────────────────────────
-Total TAS: 109636 f (45m40.900s)
-Total RTA: 119150 f (49m38.750s)
-Total Δ   = +9514 f (3m57.850s)
+Total TAS: 109940 f (45m48.500s)
+Total RTA: 119467 f (49m46.675s)
+Total Δ   = +9527 f (3m58.175s)
 
 Episode Highscore Grid:
 
