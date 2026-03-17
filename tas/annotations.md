@@ -1046,6 +1046,9 @@ rerecords: 165
 
 
 
+# 58-2
+
+
 # 59-0
 rerecords: 180
 
@@ -1310,6 +1313,14 @@ rerecords: 1183
 
 
 
+# 83-0
+
+
+# 83-4
+rerecords: 263
+
+
+
 # 84-2
 rerecords: 152
 
@@ -1319,6 +1330,9 @@ rerecords: 152
 rerecords: 146
 
 Slower than RTA. Annoying.
+
+# 87-1
+
 
 # 88-0
 rerecords: 85
@@ -1364,6 +1378,9 @@ We're 0.18 pixels away from saving 1f. We can't make the third pipe jump earlier
 
 I can't land a proper cj on the way to the switch that's actually faster
 
+# 92-1
+
+
 # 94-0
 rerecords: 279
 
@@ -1401,4 +1418,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 131581
+# Total rerecords: 131844
