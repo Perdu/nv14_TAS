@@ -282,11 +282,29 @@ def emoji_for_progress(done, total=5, use_gradient=True):
     # Ordered from "bad" → "good"
     gradient = [
         "🔴",  # 0%
-        "🟥",
-        "🟧",
-        "🟨",
-        "🟩",
+        "🟠",
+        "🟠",
+        "🟠",
+        "🟡",
         "🟢",  # 100%
+    ]
+
+    gradient_bars = [
+        " ",  # 0%
+        "▁",
+        "▂",
+        "▃",
+        "▄",
+        "▇",  # 100%
+    ]
+
+    gradient_emojinumbers = [
+        "0️⃣",
+        "1️⃣",
+        "2️⃣",
+        "3️⃣",
+        "4️⃣",
+        "5️⃣",  # 100%
     ]
 
     index = int(ratio * (len(gradient) - 1))
@@ -365,4 +383,4 @@ if __name__ == "__main__":
     print()
     display_episode_grid(filename, "Highscore", use_gradient=False, github=github)
     print()
-    display_episode_grid(filename, "Speedrun", use_gradient=False, github=github)
+    display_episode_grid(filename, "Speedrun", use_gradient=True, github=github)
