@@ -1399,6 +1399,12 @@ rerecords: 161
 
 
 
+# 93-3
+rerecords: 291
+
+Branch 9: weird stumble-then-land case
+Branch 8: in-between tiles bug
+
 # 94-0
 rerecords: 279
 
@@ -1436,4 +1442,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 133569
+# Total rerecords: 133860
