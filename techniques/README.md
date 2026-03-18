@@ -19,13 +19,16 @@ Links:
 ## Common in RTA
 
 ### stumbles
-### cj
+### Corner Jump (cj)
 
 ![Corner jump](gifs/cj_03-2.gif)
 
-### rcj
-### bbbwj (high and low) (+optimization)
-### thwump bwj (+optimization)
+### Reverse Corner Jump (rcj)
+
+### Perpendicular (reverse) Jump (pj)
+
+### Bounceblock Backward Walljump (bbbwj) (high and low) (+optimization)
+### Thwump bwj (+optimization)
 
 ![Thwump bwj](gifs/thwump_bwj_06-4.gif)
 
@@ -33,8 +36,13 @@ Links:
 ### Clipping through oneways using corners
 ### Double bb
 ### Triple bb
-### Double bb w/ bwj
-### Triple bb w/ bwj
+### Bounceblock Corner Double (bbcd)
+
+Double bb w/ bwj
+
+### Bounceblock Corner Triple (bbct)
+
+Triple bb w/ bwj
 
 (actually TAS only but it doesn't make sense to separate explanations. Categories could be reworked or we could have a whole bounceblock category)
 
