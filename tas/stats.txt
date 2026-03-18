@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 154
-Speedruns: 238
+Speedruns: 239
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -140,6 +140,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 78-0: TAS= 304 f  RTA= 317 f   -13 f (0.325) (- 4.10%) 
 89-0: TAS= 574 f  RTA= 587 f   -13 f (0.325) (- 2.21%) 
 89-2: TAS= 467 f  RTA= 480 f   -13 f (0.325) (- 2.71%) 
+92-2: TAS= 293 f  RTA= 306 f   -13 f (0.325) (- 4.25%) 
 02-2: TAS= 517 f  RTA= 529 f   -12 f (0.300) (- 2.27%) 
 04-0: TAS= 465 f  RTA= 477 f   -12 f (0.300) (- 2.52%) 
 05-3: TAS= 496 f  RTA= 508 f   -12 f (0.300) (- 2.36%) 
@@ -244,9 +245,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 110438 f (46m00.950s)
-Total RTA: 120017 f (50m00.425s)
-Total Δ   = +9579 f (3m59.475s)
+Total TAS: 110731 f (46m08.275s)
+Total RTA: 120323 f (50m08.075s)
+Total Δ   = +9592 f (3m59.800s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -481,6 +482,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 91-0: TAS= 299 f  RTA= 302 f    -3 f (0.075) (- 0.99%) 
 91-1: TAS= 322 f  RTA= 326 f    -4 f (0.100) (- 1.23%) 
 91-3: TAS= 404 f  RTA= 455 f   -51 f (1.275) (-11.21%) ███
+92-2: TAS= 293 f  RTA= 306 f   -13 f (0.325) (- 4.25%) 
 94-0: TAS= 346 f  RTA= 369 f   -23 f (0.575) (- 6.23%) █
 94-1: TAS= 470 f  RTA= 472 f    -2 f (0.050) (- 0.42%) 
 95-2: TAS= 248 f  RTA= 412 f  -164 f (4.100) (-39.81%) ███████████
@@ -490,9 +492,9 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 280 f  RTA= 296 f   -16 f (0.400) (- 5.41%) █
 
 ────────────────────────────────────────────────────────────
-Total TAS: 110438 f (46m00.950s)
-Total RTA: 120017 f (50m00.425s)
-Total Δ   = +9579 f (3m59.475s)
+Total TAS: 110731 f (46m08.275s)
+Total RTA: 120323 f (50m08.075s)
+Total Δ   = +9592 f (3m59.800s)
 
 Episode Highscore Grid:
 
@@ -514,7 +516,7 @@ Episode Speedrun Grid:
 
 🟢00 🟢10 🟡20 🟡30 🟡40 🟢50 🟡60 🟢70 🟡80 🟡90
 🟢01 🟢11 🟡21 🟡31 🟡41 🟢51 🟡61 🟡71 🟡81 🟡91
-🟢02 🟢12 🟡22 🟡32 🟡42 🟡52 🟡62 🟡72 🟡82 🔴92
+🟢02 🟢12 🟡22 🟡32 🟡42 🟡52 🟡62 🟡72 🟡82 🟡92
 🟢03 🟢13 🟡23 🟡33 🟡43 🟡53 🟡63 🟡73 🟡83 🔴93
 🟢04 🟢14 🟡24 🟡34 🟡44 🟡54 🟡64 🟢74 🟡84 🟡94
 🟢05 🟢15 🟡25 🟡35 🟡45 🟡55 🟡65 🟡75 🟡85 🟡95
