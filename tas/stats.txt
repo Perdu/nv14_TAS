@@ -18,6 +18,11 @@ Episode Speedrun Grid:
 Legend:
 🔴0/5 🟠1/5 🟠2/5 🟠3/5 🟡4/5 🟢5/5 → levels with Speedrun
 
+Total TAS: 113301 f (47m12.525s)
+Total RTA: 122979 f (51m14.475s)
+Total Δ   = +9678 f (4m01.950s)
+
+────────────────────────────────────────────────────────────
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
 
@@ -268,9 +273,6 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 280 f  RTA= 296 f   -16 f (0.400) (- 5.41%) █
 
 ────────────────────────────────────────────────────────────
-Total TAS: 113301 f (47m12.525s)
-Total RTA: 122979 f (51m14.475s)
-Total Δ   = +9678 f (4m01.950s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -519,11 +521,6 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 67-1: TAS= 101 f  RTA= 101 f     0 f (0.000) (- 0.00%) 
 73-0: TAS=  91 f  RTA=  91 f     0 f (0.000) (- 0.00%) 
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
-
-────────────────────────────────────────────────────────────
-Total TAS: 113301 f (47m12.525s)
-Total RTA: 122979 f (51m14.475s)
-Total Δ   = +9678 f (4m01.950s)
 
 Episode Highscore Grid:
 
