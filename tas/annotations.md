@@ -696,6 +696,11 @@ Somehow, the stumble on the middle rectangle make us gain 1 frame when reaching 
 
 Stumble in the end is faster with subpixel optimization
 
+# 20-0
+rerecords: 150
+
+
+
 # 20-1
 rerecords: 179
 
@@ -1447,4 +1452,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 134105
+# Total rerecords: 134255

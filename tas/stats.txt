@@ -1,6 +1,6 @@
 Levels already TASed:
 Highscores: 154
-Speedruns: 242
+Speedruns: 243
 
 Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 
@@ -235,6 +235,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 12-3: TAS= 240 f  RTA= 240 f     0 f (0.000) (- 0.00%) 
 14-2: TAS= 132 f  RTA= 132 f     0 f (0.000) (- 0.00%) 
 16-3: TAS= 159 f  RTA= 159 f     0 f (0.000) (- 0.00%) 
+20-0: TAS= 149 f  RTA= 149 f     0 f (0.000) (- 0.00%) 
 37-0: TAS= 248 f  RTA= 248 f     0 f (0.000) (- 0.00%) 
 37-2: TAS= 153 f  RTA= 153 f     0 f (0.000) (- 0.00%) 
 46-2: TAS= 128 f  RTA= 128 f     0 f (0.000) (- 0.00%) 
@@ -248,8 +249,8 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 82-1: TAS= 417 f  RTA= 417 f     0 f (0.000) (- 0.00%) 
 
 ────────────────────────────────────────────────────────────
-Total TAS: 111699 f (46m32.475s)
-Total RTA: 121315 f (50m32.875s)
+Total TAS: 111848 f (46m36.200s)
+Total RTA: 121464 f (50m36.600s)
 Total Δ   = +9616 f (4m00.400s)
 
 Time differences (Speedrun) — RTA vs TAS (sorted by level):
@@ -346,6 +347,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 19-0: TAS= 558 f  RTA= 613 f   -55 f (1.375) (- 8.97%) ███
 19-1: TAS= 543 f  RTA= 546 f    -3 f (0.075) (- 0.55%) 
 19-4: TAS= 566 f  RTA= 585 f   -19 f (0.475) (- 3.25%) █
+20-0: TAS= 149 f  RTA= 149 f     0 f (0.000) (- 0.00%) 
 20-1: TAS= 171 f  RTA= 172 f    -1 f (0.025) (- 0.58%) 
 20-2: TAS= 593 f  RTA= 660 f   -67 f (1.675) (-10.15%) ████
 20-3: TAS= 214 f  RTA= 215 f    -1 f (0.025) (- 0.47%) 
@@ -498,8 +500,8 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 99-0: TAS= 280 f  RTA= 296 f   -16 f (0.400) (- 5.41%) █
 
 ────────────────────────────────────────────────────────────
-Total TAS: 111699 f (46m32.475s)
-Total RTA: 121315 f (50m32.875s)
+Total TAS: 111848 f (46m36.200s)
+Total RTA: 121464 f (50m36.600s)
 Total Δ   = +9616 f (4m00.400s)
 
 Episode Highscore Grid:
@@ -520,7 +522,7 @@ Legend:
 
 Episode Speedrun Grid:
 
-🟢00 🟢10 🟡20 🟠30 🟠40 🟢50 🟠60 🟢70 🟠80 🟠90
+🟢00 🟢10 🟢20 🟠30 🟠40 🟢50 🟠60 🟢70 🟠80 🟠90
 🟢01 🟢11 🟠21 🟠31 🟠41 🟢51 🟠61 🟠71 🟠81 🟠91
 🟢02 🟢12 🟠22 🟠32 🟠42 🟠52 🟠62 🟠72 🟠82 🟠92
 🟢03 🟢13 🟠23 🟠33 🟠43 🟠53 🟠63 🟠73 🟠83 🟠93
