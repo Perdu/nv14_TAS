@@ -65,7 +65,7 @@ def parse_score(value, score_type="Speedrun"):
         return None
 
 # AI-generated
-def display_time_difference(score_type="Speedrun", sort=True, use_color=True):
+def display_time_difference(score_type="Speedrun", sort=True, use_color=True, display_totals=True):
     """
     Compare TAS vs RTA scores and display total difference with bar charts.
     - Speedrun: display frames
@@ -159,7 +159,6 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True):
         sort_type_text = "time saved over 0th"
     else:
         sort_type_text = "level"
-    print(f"\nTime differences ({score_type}) — RTA vs TAS (sorted by {sort_type_text}):\n")
 
     # Find max difference for scaling bars
     max_diff = max(abs(diff) for _, _, _, diff, _ in results)
@@ -180,23 +179,10 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True):
         levels = sorted(results, key=lambda x: x[3], reverse=True)
     else:
         levels = results
-    
-    for key, tas, rta, diff, perc_diff in levels:
-        bar = create_bar(diff, max_diff, use_color=use_color)
-        
-        # Format with fixed widths
-        if score_type.lower() == "speedrun":
-            diff_s = 0.025 * diff
-            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}} {unit}  RTA={rta:>{max_rta_len}} {unit}  {-diff:>{max_diff_len+1}} {unit} ({diff_s:.3f}) (-{perc_diff:>{perc_diff_len}.2f}%)"
-        else:
-            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}.3f} {unit}  RTA={rta:>{max_rta_len}.3f} {unit}  {diff:>+{max_diff_len+1}.3f} {unit}"
-        
-        print(f"{original_line} {bar}")
-    
+
     # Display totals
-    if results:
+    if results and display_totals:
         total_diff = total_rta - total_tas
-        print("\n" + "─" * 60)
         
         if score_type == "Speedrun":
             total_diff_s = total_diff * 0.025
@@ -214,6 +200,20 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True):
     
     if missing:
         print(f"\n⚠ Missing RTA entries for: {', '.join(missing)}")
+    
+    print("\n" + "─" * 60)
+    print(f"\nTime differences ({score_type}) — RTA vs TAS (sorted by {sort_type_text}):\n")
+    for key, tas, rta, diff, perc_diff in levels:
+        bar = create_bar(diff, max_diff, use_color=use_color)
+        
+        # Format with fixed widths
+        if score_type.lower() == "speedrun":
+            diff_s = 0.025 * diff
+            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}} {unit}  RTA={rta:>{max_rta_len}} {unit}  {-diff:>{max_diff_len+1}} {unit} ({diff_s:.3f}) (-{perc_diff:>{perc_diff_len}.2f}%)"
+        else:
+            original_line = f"{key:<{max_key_len}}: TAS={tas:>{max_tas_len}.3f} {unit}  RTA={rta:>{max_rta_len}.3f} {unit}  {diff:>+{max_diff_len+1}.3f} {unit}"
+        
+        print(f"{original_line} {bar}")
 
 
 def format_seconds(seconds: float) -> str:
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     print()
     display_episode_grid(filename, "Speedrun", use_gradient=True, github=github)
     print()
-    display_time_difference("Speedrun", sort=False, use_color=use_color)
-    display_time_difference("Speedrun", sort=True, use_color=use_color)
+    display_time_difference("Speedrun", sort=False, use_color=use_color, display_totals=True)
+    display_time_difference("Speedrun", sort=True, use_color=use_color, display_totals=False)
     print()
     display_episode_grid(filename, "Highscore", use_gradient=False, github=github)
