@@ -1079,16 +1079,12 @@ rerecords: 111
 F9: Going high over middle. Unable to get past mine and drone.
 
 # 58-0
-<<<<<<< HEAD
-rerecords: 245
-=======
 rerecords: 1257
 
 
 
 # 58-2
 rerecords: 409
->>>>>>> 3c7af0a (Add 58-0 19f improvement)
 
 
 
@@ -1505,11 +1501,7 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-<<<<<<< HEAD
-# Total rerecords: 134255
-=======
 # 99-2
 
 
-# Total rerecords: 135511
->>>>>>> 3c7af0a (Add 58-0 19f improvement)
+# Total rerecords: 135952
