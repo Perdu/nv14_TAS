@@ -18,7 +18,7 @@ Links:
 
 ## Common in RTA
 
-### stumbles
+### Stumbles
 ### Corner Jump (cj)
 
 ![Corner jump](gifs/cj_03-2.gif)
@@ -55,6 +55,8 @@ Triple bb w/ bwj
 ### Angled lp+wj
 
 00-0 hs
+
+### Taking only 1 stacked object
 
 ## Rare in RTA
 
