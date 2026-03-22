@@ -35,7 +35,7 @@ The angle to land on the slope is extremly tight and we need to jump sufficientl
 Branch 9: 1f earlier to the switch wall jump, but can't make anything out of it
 
 # 01-1
-rerecords: 837
+rerecords: 1096
 
 Didn't work:
 - Using the one-way platforms in the beginning to slow descent down
@@ -1529,4 +1529,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 138348
+# Total rerecords: 138607
