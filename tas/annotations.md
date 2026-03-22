@@ -59,7 +59,7 @@ The RTA path of jumping at the beginning of the slope is slower. Best is to jump
 Left-jump for the end is equally fast (but not in terms of subpixels)
 
 # 01-4
-rerecords: 695
+rerecords: 1132
 
 Can't start turning right on 177 because the drone kills us
 Jumping one frame earlier in 202 make us stumble on the platform on the right, which only allows for slower later paths
@@ -1529,4 +1529,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 138607
+# Total rerecords: 139044
