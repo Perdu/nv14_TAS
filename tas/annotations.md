@@ -267,7 +267,7 @@ rerecords: 958
 For the walljumps on the way to the exit, I get some subpixels but they get cancelled. Last jump still gets subpixels
 
 # 06-1
-rerecords: 229
+rerecords: 1672
 
 With our faster beginning, we get seen by the drone and have to find a strategy to get out of the bb faster.
 To get out of the central place, jumping directly right is not faster, neither is landing and jumping
@@ -1074,7 +1074,7 @@ rerecords: 165
 
 
 # 56-4
-rerecords: 863
+rerecords: 1835
 
 At the beginning, slowing down on the lower wall is slower than bumping + using bb (branch 9)
 
@@ -1083,6 +1083,12 @@ For the second switch, triple jump on slope + wall is way slower
 Branch 8: attempt at bjw + bbbwj to get to the doorswitch
 
 For the last jump, hitting the corner is faster than jumping fully and hitting the slope
+
+Branch 6: attempt at double bb + slope jump instead of triple bb
+
+Branch 4: original TAS route with direct triple bb
+
+Branch 3: pacelocked by drone 1
 
 # 57-1
 rerecords: 111
@@ -1529,4 +1535,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 139156
+# Total rerecords: 141571
