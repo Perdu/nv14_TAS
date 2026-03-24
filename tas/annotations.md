@@ -283,7 +283,7 @@ It seems the best turnaround on 572 is to single-frame jump
 For the last long jump to get to the door, corner jumping on the lower platform is exactly 1f slower (0.07 subpixels lol)
 
 # 06-3
-rerecords: 261
+rerecords: 1058
 
 All this all new strategy in the beginning to barely be any faster
 
@@ -1545,4 +1545,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 142299
+# Total rerecords: 143096
