@@ -1097,7 +1097,7 @@ Branch 4: original TAS route with direct triple bb
 Branch 3: pacelocked by drone 1
 
 # 57-0
-rerecords: 515
+rerecords: 1334
 
 
 
@@ -1565,4 +1565,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 145534
+# Total rerecords: 146353
