@@ -102,13 +102,15 @@ rerecords: 441
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 1521
+rerecords: 3200
 
 Jumping to go down small paths does not save any frame, it's just for style
 
 Stumbling near the end is faster
 
 Calculating the best path to slow down and jump down tubes is a pain and may still be improvable
+
+Chimneying through locked door at end and surviving is not possible
 
 # 03-0
 rerecords: 590
@@ -1565,4 +1567,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 146353
+# Total rerecords: 148032
