@@ -288,3 +288,10 @@ PlayerObject.prototype.ExitCelebrate = function()
    this.d = this.normDrag;
    this.Think = PlayerObject.prototype.Think;
 };
+PlayerObject.prototype.techwrite = function(name)
+{
+   this.techbox = gfx.CreateSprite("guiLevelNameMC",LAYER_GUI);
+   this.techbox._x = p.x;
+   this.techbox._y = p.y;
+   this.techbox.txt = name;
+}
