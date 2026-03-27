@@ -191,7 +191,7 @@ rerecords: 710
 With the right angle, you can jump on the top thwump. This is absolutely completely useless as it speeds you downwards
 
 # 04-3
-rerecords: 962
+rerecords: 1836
 
 I initially had a slightly better way past the drone after the switch (2 pixels), which I had to redo because of earlier drone detection. But it doesn't actually lose a frame on the way to the pipe up, and we're actually faster there. We avoid jumping in the corridor as the better positioning gives us too much speed in the pipe and kills us.
 
@@ -1577,4 +1577,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 149212
+# Total rerecords: 150086
