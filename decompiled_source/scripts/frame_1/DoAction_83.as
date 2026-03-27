@@ -175,6 +175,11 @@ PlayerObject.prototype.TickNormal = function()
    if(_root._dbg_x !== p.x || _root._dbg_y !== p.y)
    {
       trace("FRAME " + game.tickCounter + " Position after collision with tiles: " + p.x + ", " + p.y);
+      this.techbox = gfx.CreateSprite("guiLevelNameMC",LAYER_GUI);
+      // this.techbox._visible = true;
+      this.techbox._x = p.x;
+      this.techbox._y = p.y;
+      this.techbox.txt = "rcj";
       _root._dbg_x = p.x;
       _root._dbg_y = p.y;
    }
