@@ -282,7 +282,7 @@ I set up the [decompiled_source](decompiled_source) folder to be able to track c
 To rebuild a swf file after editing the source, run:
 
 ```
-ffdec -importScript volume/n_v14.swf volume/n_v14_patched.swf decompiled_source/
+./rebuild_patched_game.sh
 ```
 
 Original dump command:
