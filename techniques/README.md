@@ -74,6 +74,8 @@ Triple bb w/ bwj
 
 06-2
 
+### Ledge grab
+
 ## TAS-only (/optimization)
 
 ### Tile bwj
