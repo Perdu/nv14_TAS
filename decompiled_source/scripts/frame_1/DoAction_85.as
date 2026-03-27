@@ -198,10 +198,18 @@ PlayerObject.prototype.Think = function()
          if(_loc14_ * this.floorN.x < 0)
          {
             this.Jump(0,-0.7);
+            this.techbox = gfx.CreateSprite("guiLevelNameMC",LAYER_GUI);
+            this.techbox._x = p.x;
+            this.techbox._y = p.y;
+            this.techbox.txt = "Slope Jump";
          }
          else
          {
             this.Jump(this.floorN.x,this.floorN.y);
+            this.techbox = gfx.CreateSprite("guiLevelNameMC",LAYER_GUI);
+            this.techbox._x = p.x;
+            this.techbox._y = p.y;
+            this.techbox.txt = "Jump";
          }
          return undefined;
       }
