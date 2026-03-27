@@ -1,0 +1,3 @@
+COL_NONE = 0;
+COL_AXIS = 1;
+COL_OTHER = 2;
