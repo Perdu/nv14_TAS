@@ -116,7 +116,6 @@ PlayerObject.prototype.Think = function()
       }
       if(this.NEAR_WALL)
       {
-         trace("FRAME " + game.tickCounter + " NEAR_WALL == true");
          if(_loc8_)
          {
             _loc17_ = 0;

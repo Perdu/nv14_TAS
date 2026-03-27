@@ -192,6 +192,9 @@ PlayerObject.prototype.TickNormal = function()
       this._dbg_y = p.y;
    }
    objects.Moved(this);
+   if (this.NEAR_WALL) {
+	  trace("FRAME " + game.tickCounter + " NEAR_WALL == true");
+   }
    this.Think();
    if(_root._dbg_x !== p.x || _root._dbg_y !== p.y)
    {
