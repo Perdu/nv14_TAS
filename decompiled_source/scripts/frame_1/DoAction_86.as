@@ -290,8 +290,18 @@ PlayerObject.prototype.ExitCelebrate = function()
 };
 PlayerObject.prototype.techwrite = function(name)
 {
-   this.techbox = gfx.CreateSprite("guiLevelNameMC",LAYER_GUI);
-   this.techbox._x = p.x;
-   this.techbox._y = p.y;
-   this.techbox.txt = name;
+   var techbox = gfx.CreateSprite("guiLevelNameMC",LAYER_GUI);
+   techbox._x = p.x;
+   techbox._y = p.y;
+   techbox.txt = name;
+
+   techbox._durationFrames = 10;
+   techbox._frameCounter = 0;
+   techbox.onEnterFrame = function() {
+       this._frameCounter++;
+       trace("onEnterFrame");
+       if (this._frameCounter >= this._durationFrames) {
+           this.removeMovieClip();
+       }
+   };
 }
