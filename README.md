@@ -25,6 +25,7 @@ Videos produced with this tool:
 - [Notes for each TASed level](tas/annotations.md)
 - [A dockerfile to build the TASing environment](Dockerfile)
 - [Other tools and informations from external sources](external/)
+- A patched version of the game including tooling and [its sources](decompiled_source)
 - [Information extracted from code digging](doc/code_digging.md), including [unused glitches](doc/unused_glitches.md)
 
 And more.
@@ -276,7 +277,7 @@ This significantly *reduced* the size of the video because the fixed bitrate is 
 
 ## Patching the swf
 
-I set up the [decompiled_sources](decompiled_sources) folder to be able to track changes to the swf.
+I set up the [decompiled_source](decompiled_source) folder to be able to track changes to the swf.
 
 To rebuild a swf file after editing the source, run:
 
