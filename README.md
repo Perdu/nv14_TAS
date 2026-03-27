@@ -274,6 +274,21 @@ ffmpeg -i 'n_rta_hs.mkv' -vf scale=-1:720 'n_rta_hs_upscaled.mkv'
 
 This significantly *reduced* the size of the video because the fixed bitrate is removed (although... Sometimes. Not always).
 
+## Patching the swf
+
+I set up the [decompiled_sources](decompiled_sources) folder to be able to track changes to the swf.
+
+To rebuild a swf file after editing the source, run:
+
+```
+ffdec -importScript volume/n_v14.swf volume/n_v14_patched.swf decompiled_source/
+```
+
+Original dump command:
+```
+ffdec -export script decompiled_source/ volume/n_v14_patched.swf
+```
+
 ## Known issues
 
 Troubleshooting: see [troubleshoot.md](doc/troubleshoot.md)
