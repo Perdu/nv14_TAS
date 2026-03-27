@@ -133,6 +133,10 @@ PlayerObject.prototype.Think = function()
             }
             particles.SpawnJumpDust(this.pos.x - this.wallN.x * this.r,this.pos.y - this.wallN.y * this.r,this.wallN.x * 90);
             this.Jump(this.wallN.x * _loc17_,this.wallN.y - _loc18_);
+            this.techbox = gfx.CreateSprite("guiLevelNameMC",LAYER_GUI);
+            this.techbox._x = p.x;
+            this.techbox._y = p.y;
+            this.techbox.txt = "wj";
             return undefined;
          }
          if(_loc11_ == PSTATE_WALLSLIDING)

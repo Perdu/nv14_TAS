@@ -176,7 +176,8 @@ PlayerObject.prototype.TickNormal = function()
    {
       trace("FRAME " + game.tickCounter + " Position after collision with tiles: " + p.x + ", " + p.y);
       this.techbox = gfx.CreateSprite("guiLevelNameMC",LAYER_GUI);
-      // this.techbox._visible = true;
+      // this is currently wrong, don't display
+      this.techbox._visible = false;
       this.techbox._x = p.x;
       this.techbox._y = p.y;
       this.techbox.txt = "rcj";
