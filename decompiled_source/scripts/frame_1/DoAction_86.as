@@ -288,20 +288,38 @@ PlayerObject.prototype.ExitCelebrate = function()
    this.d = this.normDrag;
    this.Think = PlayerObject.prototype.Think;
 };
-PlayerObject.prototype.techwrite = function(name)
+PlayerObject.prototype.techwrite = function(name, durationFrames)
 {
-   var techbox = gfx.CreateSprite("guiLevelNameMC",LAYER_GUI);
-   techbox._x = p.x;
-   techbox._y = p.y;
-   techbox.txt = name;
+    var techbox = gfx.CreateSprite("guiLevelNameMC", LAYER_GUI);
+    techbox._x = p.x;
+    techbox._y = p.y;
+    techbox.txt = name;
 
-   techbox._durationFrames = 10;
-   techbox._frameCounter = 0;
-   techbox.onEnterFrame = function() {
-       this._frameCounter++;
-       trace("onEnterFrame");
-       if (this._frameCounter >= this._durationFrames) {
-           this.removeMovieClip();
-       }
-   };
-}
+    if (durationFrames == undefined) durationFrames = 60;
+
+    var frameRate = 40;
+    var intervalMs = 1000 / frameRate;
+
+    // Frames to wait before starting fade
+    var visibleFrames = 20;
+    var fadeFrames = durationFrames - visibleFrames;
+
+    techbox._alpha = 100;
+    var currentFrame = 0;
+
+    var self = techbox;
+    var fadeInterval = setInterval(function() {
+        currentFrame++;
+
+        if (currentFrame > visibleFrames) {
+            // Start fading
+            var fadeProgress = currentFrame - visibleFrames;
+            self._alpha = 100 - (fadeProgress / fadeFrames) * 100;
+        }
+
+        if (currentFrame >= durationFrames) {
+            clearInterval(fadeInterval);
+            self.removeMovieClip();
+        }
+    }, intervalMs);
+};
