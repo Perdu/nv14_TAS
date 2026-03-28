@@ -1393,7 +1393,7 @@ rerecords: 140
 
 
 # 76-0
-rerecords: 356
+rerecords: 971
 
 Branch 9: ledge grab in the end
 
@@ -1587,4 +1587,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 152099
+# Total rerecords: 152714
