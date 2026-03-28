@@ -114,7 +114,7 @@ HomingLauncherObject.prototype.FireMissile = function()
       this.mdir.x = _loc2_;
       this.mdir.y = _loc3_;
    }
-   trace("Homing launcher " + this.UID + " firing missile at direction " + this.mdir.x + ", " + this.mdir.y + ".");
+   trace("FRAME " + game.tickCounter + " Homing launcher " + this.UID + " firing missile at direction " + this.mdir.x + ", " + this.mdir.y + ".");
    this.rocketmc._visible = true;
    this.mc.gotoAndPlay("rocket_fire");
 };
@@ -131,7 +131,7 @@ HomingLauncherObject.prototype.ExplodeMissile = function()
 };
 HomingLauncherObject.prototype.Think = function()
 {
-   trace("Homing launcher " + this.UID + " checking for player.");
+   trace("FRAME " + game.tickCounter + " Homing launcher " + this.UID + " checking for player.");
    var _loc2_ = gfx.CreateEmptySprite(LAYER_OBJECTS);
    _loc2_._x = this.basepos.x;
    _loc2_._y = this.basepos.y;
@@ -151,7 +151,7 @@ HomingLauncherObject.prototype.Think = function()
    };
    if(QueryRayObj(this.view,this.basepos,player.pos,player))
    {
-      trace("Homing launcher " + this.UID + " detected player.");
+      trace("FRAME " + game.tickCounter + " Homing launcher " + this.UID + " detected player.");
       this.StartFiring();
    }
 };

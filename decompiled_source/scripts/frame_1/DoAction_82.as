@@ -38,7 +38,7 @@ DroneObject.prototype.Think = function()
 };
 DroneObject.prototype.Think_TargetPlayer = function()
 {
-   trace("Drone " + this.UID + " checking for player.");
+   trace("FRAME " + game.tickCounter + " Drone " + this.UID + " checking for player.");
    var _loc2_ = gfx.CreateEmptySprite(LAYER_OBJECTS);
    _loc2_._x = this.pos.x;
    _loc2_._y = this.pos.y;
@@ -58,7 +58,7 @@ DroneObject.prototype.Think_TargetPlayer = function()
    };
    if(QueryRayObj(this.view,this.pos,player.pos,player))
    {
-      trace("Drone " + this.UID + " detected player.");
+      trace("FRAME " + game.tickCounter + " Drone " + this.UID + " detected player.");
       this.StartFiring();
    }
 };
@@ -70,7 +70,7 @@ DroneObject.prototype.StartMoving = function()
 };
 DroneObject.prototype.StartFiring_Laser = function()
 {
-   trace("Drone " + this.UID + " firing laser.");
+   trace("FRAME " + game.tickCounter + " Drone " + this.UID + " firing laser.");
    this.mc.gotoAndPlay("laserdrone_prefire");
    objects.EndThink(this);
    objects.EndDraw(this);

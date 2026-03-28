@@ -182,7 +182,7 @@ ThwompObject.prototype.TestVsPlayer = function(guy)
    var _loc4_ = _loc3_.y - this.pos.y;
    var _loc5_ = Math.abs(_loc4_);
    var _loc6_ = this.yw + guy.yw - _loc5_;
-   trace("FRAME " + game.tickCounter + "Distance to thwump; y " + _loc6_);
+   trace("FRAME " + game.tickCounter + " Distance to thwump; y " + _loc6_);
    var _loc7_;
    var _loc8_;
    var _loc9_;
