@@ -440,6 +440,11 @@ The best setup for the lpwj gets us too much to the left and we stumble over the
 
 We're still 2.65 pixels from the door, I don't think it's possible to save one more frame
 
+# 10-2
+rerecords: 377
+
+
+
 # 10-3
 rerecords: 61
 
@@ -1582,4 +1587,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 150938
+# Total rerecords: 151315
