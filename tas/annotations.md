@@ -434,7 +434,7 @@ Branch 8: stlightly better walljump but the stumble is worse
 The stumble saves 1 pixel
 
 # 10-1
-rerecords: 150
+rerecords: 450
 
 The best setup for the lpwj gets us too much to the left and we stumble over the platform, which makes us die later. We have to slow a little bit by removing a left frame.
 
@@ -1582,4 +1582,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 150638
+# Total rerecords: 150938
