@@ -487,7 +487,7 @@ Branch 5: alt route with cj that doesn't work
 We can walljump after rcj on the way up but it's useless
 
 # 11-4
-rerecords: 76
+rerecords: 140
 
 kryX-orange's 0th is maxed, I only improved subpixel
 
@@ -1587,4 +1587,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 152714
+# Total rerecords: 152778
