@@ -426,7 +426,7 @@ rerecords: 1099
 We can reproduce RTA strategy of using the slope to propel ourselves after the switch, but the turret kills us. If we jump higher, it's slightly lower than current strategy.
 
 # 10-0
-rerecords: 738
+rerecords: 1522
 
 Branch 9: optimized first jump
 Branch 8: stlightly better walljump but the stumble is worse
@@ -1587,4 +1587,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 151315
+# Total rerecords: 152099
