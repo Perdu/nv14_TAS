@@ -114,6 +114,7 @@ BounceBlockObject.prototype.TestVsPlayer = function(guy)
    var _loc7_ = guy.pos;
    var _loc5_ = _loc7_.y - this.pos.y;
    var _loc2_ = this.yw + guy.yw - Math.abs(_loc5_);
+   trace("FRAME " + game.tickCounter + " Distance to bb; y: " + _loc2_);
    var _loc6_;
    var _loc3_;
    var _loc8_;
