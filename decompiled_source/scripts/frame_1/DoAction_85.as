@@ -133,7 +133,22 @@ PlayerObject.prototype.Think = function()
             particles.SpawnJumpDust(this.pos.x - this.wallN.x * this.r,this.pos.y - this.wallN.y * this.r,this.wallN.x * 90);
             this.Jump(this.wallN.x * _loc17_,this.wallN.y - _loc18_);
             if (this.NEAR_OBJECT) {
-                this.techwrite("bbwj", 0xFF555555);
+                if (game.tickCounter - this.last_bbwj < 10) {
+                    if (game.tickCounter - this.last_doublebbwj < 10) {
+                        if (game.tickCounter - this.last_triplebbwj < 10) {
+                            this.techwrite("Quad bbwj", 0xFFFF0000);
+                        } else {
+                            this.techwrite("Triple bbwj", 0xFFAA0000);
+                        }
+                        this.last_triplebbwj = game.tickCounter;
+                    } else {
+                        this.techwrite("Double bbwj", 0xFF330000);
+                    }
+                    this.last_doublebbwj = game.tickCounter;
+                } else {
+                    this.techwrite("bbwj", 0xFF555555);
+                }
+                this.last_bbwj = game.tickCounter;
             } else {
                 this.techwrite("wj", 0xFF555555);
             }

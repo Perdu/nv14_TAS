@@ -71,6 +71,9 @@ PlayerObject.prototype.SetupParams = function()
    this.floorN0 = new Vector2(0,0);
    this.floorN1 = new Vector2(0,0);
    this.fCount = 0;
+   this.last_bbwj = 0;
+   this.last_doublebbwj = 0;
+   this.last_triplebbwj = 0;
 };
 PlayerObject.prototype.Init = function(params)
 {
