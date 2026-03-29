@@ -414,6 +414,12 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
       this.NEAR_WALL = true;
       this.NEAR_OBJECT = true;
       this.NEAR_OBJECT_type = obj.OBJ_TYPE;
+      if (debug) {
+          trace("OBJECT:");
+          for (var k in obj) {
+              trace(k + " (" + typeof obj[k] + ") : " + obj[k]);
+          }
+      }
       this.wallN.x = nx;
       this.wallN.y = ny;
    }
