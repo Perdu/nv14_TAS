@@ -7,3 +7,4 @@ volume/n_levels/*_rta.ltm
 extract/
 db_config.py
 __pycache__/
+volume/n_v14_patched.swf
