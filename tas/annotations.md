@@ -340,7 +340,7 @@ The second jump we make on the way up makes us land later, but more to the right
 The last jump to go down is extremlely tight. RTA seems to get a better angle for the stumble, which I can't reproduce (i'm not starting with the same speed)
 
 # 08-1
-rerecords: 820
+rerecords: 1640
 
 In the beginning, landing the fall with a cj on the bb is slower
 It's extremely annoying to find a turnaround strategy around the switch that doesn't get us killed. This solution works. There may be better ones.
@@ -441,9 +441,12 @@ The best setup for the lpwj gets us too much to the left and we stumble over the
 We're still 2.65 pixels from the door, I don't think it's possible to save one more frame
 
 # 10-2
-rerecords: 377
+rerecords: 1146
 
-
+Branch 9: bbbwj + bbwj (4f slower)
+Branch 8: double bb
+Branch 7: triple bb
+Branch 6: triple bb + cj (doesn't lead anywhere)
 
 # 10-3
 rerecords: 61
@@ -1587,4 +1590,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 152778
+# Total rerecords: 154367
