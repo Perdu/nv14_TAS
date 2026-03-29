@@ -132,7 +132,7 @@ PlayerObject.prototype.Think = function()
             }
             particles.SpawnJumpDust(this.pos.x - this.wallN.x * this.r,this.pos.y - this.wallN.y * this.r,this.wallN.x * 90);
             this.Jump(this.wallN.x * _loc17_,this.wallN.y - _loc18_);
-            if (this.NEAR_OBJECT) {
+            if (this.NEAR_OBJECT && this.NEAR_OBJECT_type == OBJTYPE_BOUNCEBLOCK) {
                 if (game.tickCounter - this.last_bbwj < 10) {
                     if (game.tickCounter - this.last_doublebbwj < 10) {
                         if (game.tickCounter - this.last_triplebbwj < 10) {
@@ -149,6 +149,8 @@ PlayerObject.prototype.Think = function()
                     this.techwrite("bbwj", 0xFF555555);
                 }
                 this.last_bbwj = game.tickCounter;
+            } else if (this.NEAR_OBJECT && this.NEAR_OBJECT_type == OBJTYPE_THWOMP) {
+                this.techwrite("Thwump wj", 0xFF555555);
             } else {
                 this.techwrite("wj", 0xFF555555);
             }

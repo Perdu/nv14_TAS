@@ -413,6 +413,7 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
       // @todo: distinguish between objects
       this.NEAR_WALL = true;
       this.NEAR_OBJECT = true;
+      this.NEAR_OBJECT_type = obj.OBJ_TYPE;
       this.wallN.x = nx;
       this.wallN.y = ny;
    }
