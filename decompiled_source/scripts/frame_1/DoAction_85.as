@@ -153,6 +153,7 @@ PlayerObject.prototype.Think = function()
          if(0 < _loc10_ && _loc14_ * this.wallN.x < 0)
          {
             this.Wallslide();
+            this.techwrite("wallslide", 0xFF555555)
             return undefined;
          }
       }
