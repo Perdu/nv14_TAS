@@ -218,8 +218,8 @@ PlayerObject.prototype.Think = function()
                 this.techwrite("Double Jump", 0xFF550000);
             } else if (game.tickCounter - this.last_slope_jump < 10) {
                 this.techwrite("Double Jump", 0xFF550000);
-//            } else {
-//                this.techwrite("Slope Jump", 0xFF555555);
+            } else {
+                this.techwrite("Slope Jump", 0xFF555555);
             }
             this.last_slope_jump = game.tickCounter;
             this.last_jump = 0;
