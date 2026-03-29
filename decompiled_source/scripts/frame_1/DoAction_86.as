@@ -288,14 +288,23 @@ PlayerObject.prototype.ExitCelebrate = function()
    this.d = this.normDrag;
    this.Think = PlayerObject.prototype.Think;
 };
-PlayerObject.prototype.techwrite = function(name, durationFrames)
+PlayerObject.prototype.techwrite = function(name, color, durationFrames)
 {
+    if (color == undefined) color = 0xFF000000;
+    if (durationFrames == undefined) durationFrames = 60;
+
     var techbox = gfx.CreateSprite("guiLevelNameMC", LAYER_GUI);
     techbox._x = p.x;
     techbox._y = p.y;
     techbox.txt = name;
 
-    if (durationFrames == undefined) durationFrames = 60;
+    for (var k in techbox) {
+        if (typeof techbox[k] == "object") {
+           // The TextField
+           techbox[k].textColor = color;
+           break;
+        }
+    }
 
     var frameRate = 40;
     var intervalMs = 1000 / frameRate;
