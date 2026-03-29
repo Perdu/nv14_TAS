@@ -477,7 +477,7 @@ Branch 8: using a corner shove to take the top door instead of the lower one. Un
 Branch 7: original run with bwj
 
 # 11-2
-rerecords: 784
+rerecords: 870
 
 We can do a bigger jump in the beginning and land on the next platform, but we don't get a good angle to get directly to the switch without touching the third platform (branch 8)
 
@@ -1590,4 +1590,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 155102
+# Total rerecords: 155188
