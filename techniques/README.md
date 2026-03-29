@@ -28,6 +28,8 @@ Links:
 
 ### Perpendicular (reverse) Jump (pj)
 
+### Corner kick (ck)
+
 ### Bounceblock Backward Walljump (bbbwj) (high and low) (+optimization)
 ### Thwump bwj (+optimization)
 
