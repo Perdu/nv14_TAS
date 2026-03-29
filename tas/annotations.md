@@ -681,6 +681,11 @@ Branch 7: on the way down, use two stumbles instead of catching the wall
 
 I have to jump that high to the exit switch, otherwise I don't land right enough to slow down on the wall
 
+# 18-1
+rerecords: 646
+
+
+
 # 18-4
 rerecords: 853
 
@@ -1595,4 +1600,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 155860
+# Total rerecords: 156506
