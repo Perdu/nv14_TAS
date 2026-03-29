@@ -489,6 +489,11 @@ Branch 5: alt route with cj that doesn't work
 
 We can walljump after rcj on the way up but it's useless
 
+# 11-3
+rerecords: 249
+
+
+
 # 11-4
 rerecords: 140
 
@@ -1590,4 +1595,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 155188
+# Total rerecords: 155437
