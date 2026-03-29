@@ -132,7 +132,11 @@ PlayerObject.prototype.Think = function()
             }
             particles.SpawnJumpDust(this.pos.x - this.wallN.x * this.r,this.pos.y - this.wallN.y * this.r,this.wallN.x * 90);
             this.Jump(this.wallN.x * _loc17_,this.wallN.y - _loc18_);
-            this.techwrite("wj", 0xFF555555);
+            if (this.NEAR_OBJECT) {
+                this.techwrite("bbwj", 0xFF555555);
+            } else {
+                this.techwrite("wj", 0xFF555555);
+            }
             return undefined;
          }
          if(_loc11_ == PSTATE_WALLSLIDING)

@@ -65,6 +65,7 @@ PlayerObject.prototype.SetupParams = function()
    this.oldv = new Vector2(0,0);
    this.IN_AIR = true;
    this.NEAR_WALL = false;
+   this.NEAR_OBJECT = false;
    this.wallN = new Vector2(0,0);
    this.floorN = new Vector2(0,0);
    this.floorN0 = new Vector2(0,0);
@@ -214,6 +215,7 @@ PlayerObject.prototype.PrepareToCollide = function()
    this.oldv.y = this.pos.y - this.oldpos.y;
    this.WAS_IN_AIR = this.IN_AIR;
    this.NEAR_WALL = false;
+   this.NEAR_OBJECT = false;
    this.IN_AIR = true;
    this.fCount = 0;
 };
@@ -403,7 +405,9 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
    this.pos.y += py;
    if(ny == 0)
    {
+      // @todo: distinguish between objects
       this.NEAR_WALL = true;
+      this.NEAR_OBJECT = true;
       this.wallN.x = nx;
       this.wallN.y = ny;
    }
