@@ -214,12 +214,22 @@ PlayerObject.prototype.Think = function()
          if(_loc14_ * this.floorN.x < 0)
          {
             this.Jump(0,-0.7);
-            this.techwrite("Slope Jump", 0xFF555555);
+            if (game.tickCounter - this.last_jump < 10) {
+                this.techwrite("Double Jump", 0xFF550000);
+            } else if (game.tickCounter - this.last_slope_jump < 10) {
+                this.techwrite("Double Jump", 0xFF550000);
+//            } else {
+//                this.techwrite("Slope Jump", 0xFF555555);
+            }
+            this.last_slope_jump = game.tickCounter;
+            this.last_jump = 0;
          }
          else
          {
             this.Jump(this.floorN.x,this.floorN.y);
-            this.techwrite("Jump", 0XFF555555);
+            // this.techwrite("Jump", 0XFF555555);
+            this.last_jump = game.tickCounter;
+            this.last_slope_jump = 0;
          }
          return undefined;
       }
