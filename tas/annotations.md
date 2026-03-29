@@ -441,7 +441,7 @@ The best setup for the lpwj gets us too much to the left and we stumble over the
 We're still 2.65 pixels from the door, I don't think it's possible to save one more frame
 
 # 10-2
-rerecords: 1146
+rerecords: 1325
 
 Branch 9: bbbwj + bbwj (4f slower)
 Branch 8: double bb
@@ -1590,4 +1590,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 154367
+# Total rerecords: 154546
