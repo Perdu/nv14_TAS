@@ -157,6 +157,8 @@ If no `.ltm` file already exist for that level (in [volume/n_levels/](volume/n_l
 
 You can then proceed with TASing the level.
 
+If you want .ltm files created by this script to be pre-filled with your name, create a file called `author.txt` at the top of this repository and fill it with your name.
+
 Upon launching the level, the script will perform automatic actions to extract valuable information from memory. Let it load until it's settled.
 
 Place your notes in `Movies -> Annotations...`. Write things you tested that didn't work so that others know they're empty routes.

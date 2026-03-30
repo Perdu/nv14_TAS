@@ -6,6 +6,7 @@ cd "$SCRIPT_DIR"
 EXTRACT_FOLDER="extract"  # also change in builder.py for markers
 DOCKER_VOLUME_PATH="volume"
 LTM_FILE="n_base_for_levels.ltm"
+AUTHOR_FILE=author.txt
 
 mkdir -p $EXTRACT_FOLDER
 
@@ -23,6 +24,12 @@ else
 fi
 
 python3 start_tas_level.py $@
+
+if [ -f $AUTHOR_FILE ]; then
+    author=$(cat $AUTHOR_FILE)
+    sed -i "s/authors=.*/authors=$author/" $EXTRACT_FOLDER/config.ini
+fi
+
 tar czf $DOCKER_VOLUME_PATH/n_levels/"$1".ltm -C $EXTRACT_FOLDER .
 
 # Commented out as we already created all of them
