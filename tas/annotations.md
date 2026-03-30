@@ -671,7 +671,7 @@ rerecords: 460
 
 
 # 18-0
-rerecords: 461
+rerecords: 778
 
 Walljump after the switch is faster than turnaround
 
@@ -1616,4 +1616,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 158058
+# Total rerecords: 158375
