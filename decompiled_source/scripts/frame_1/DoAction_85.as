@@ -186,12 +186,6 @@ PlayerObject.prototype.Think = function()
    }
    else
    {
-      if(_root._dbg_floorn_x != this.floorN.x || _root._dbg_floorn_y != this.floorN.y)
-      {
-         trace("FRAME " + game.tickCounter + " FloorN; x: " + this.floorN.x + ", y: " + this.floorN.y);
-         _root._dbg_floorn_x = this.floorN.x;
-         _root._dbg_floorn_y = this.floorN.y;
-      }
       _loc16_ = _loc9_ + _loc13_ * _loc14_ * this.groundAccel;
       if(Math.abs(_loc16_) < this.maxspeedGround)
       {

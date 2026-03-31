@@ -369,6 +369,12 @@ PlayerObject.prototype.ReportCollisionVsWorld = function(px, py, nx, ny, t)
       _root._dbg_tilecol_x = px;
       _root._dbg_tilecol_y = py;
    }
+   if(_root._dbg_nx != nx || _root._dbg_ny != ny)
+      {
+         trace("FRAME " + game.tickCounter + " Surface N; x: " + nx + ", y: " + ny);
+         _root._dbg_nx = nx;
+         _root._dbg_ny = ny;
+   }
    this.pos.x += px;
    this.pos.y += py;
    if(0.8 * (this.r * this.r) < px * px + py * py)
@@ -405,6 +411,12 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
       trace("FRAME " + game.tickCounter + " ReportCollisionVsObject; px: " + px + ", py: " + py);
       _root._dbg_objcol_x = px;
       _root._dbg_objcol_y = py;
+   }
+   if(_root._dbg_nx != nx || _root._dbg_ny != ny)
+      {
+         trace("FRAME " + game.tickCounter + " Surface N; x: " + nx + ", y: " + ny);
+         _root._dbg_nx = nx;
+         _root._dbg_ny = ny;
    }
    this.pos.x += px;
    this.pos.y += py;
