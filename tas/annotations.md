@@ -634,7 +634,7 @@ rerecords: 219
 
 
 # 16-2
-rerecords: 246
+rerecords: 876
 
 Branch 9: wallslide like the RTA route
 Branch 8: attempt at getting a push down
@@ -1632,4 +1632,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 161507
+# Total rerecords: 162137
