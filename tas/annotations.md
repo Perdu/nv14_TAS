@@ -640,7 +640,7 @@ Branch 9: wallslide like the RTA route
 Branch 8: attempt at getting a push down
 
 # 16-3
-rerecords: 79
+rerecords: 209
 
 0th is maxed, I could barely get a few subpixel (0.something)
 
@@ -1632,4 +1632,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 162137
+# Total rerecords: 162267
