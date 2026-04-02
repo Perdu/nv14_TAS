@@ -649,6 +649,11 @@ rerecords: 296
 
 Branch 9: jumping earlier, then jumping to get the switch and fall directly. Slower.
 
+# 17-0
+rerecords: 459
+
+
+
 # 17-1
 rerecords: 893
 
@@ -830,9 +835,6 @@ rerecords: 53
 
 
 
-# 29-4
-
-
 # 30-1
 rerecords: 1468
 
@@ -943,9 +945,6 @@ rerecords: 291
 
 
 
-# 42-0
-
-
 # 42-1
 rerecords: 184
 
@@ -978,11 +977,6 @@ Branch 8: jumping for one more frame to the switch to avoid sliding before the d
 
 # 45-0
 rerecords: 322
-
-
-
-# 46-1
-rerecords: 276
 
 
 
@@ -1103,9 +1097,6 @@ rerecords: 276
 
 
 
-# 52-3
-
-
 # 53-0
 rerecords: 14
 
@@ -1199,9 +1190,6 @@ rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
-# 60-2
-
-
 # 61-1
 rerecords: 71
 
@@ -1223,16 +1211,10 @@ rerecords: 197
 
 Doing bwj after the rcj doesn't get high enough
 
-# 63-1
-
-
 # 63-3
 rerecords: 133
 
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
-
-# 63-4
-
 
 # 64-0
 rerecords: 153
@@ -1270,12 +1252,6 @@ It's possible to jump 1f earlier on the last slope, but then the angle is not as
 rerecords: 639
 
 running back across the bottom and cj to door is slower
-
-# 65-1
-
-
-# 65-3
-
 
 # 65-4
 rerecords: 1509
@@ -1442,6 +1418,11 @@ rerecords: 971
 
 Branch 9: ledge grab in the end
 
+# 76-1
+rerecords: 587
+
+bwj after exit switch 58, 431.8001
+
 # 76-2
 rerecords: 198
 
@@ -1472,15 +1453,9 @@ Not faster:
 Did not work:
 - use the small portion of the slope next to the mines to land on the previous-to-last row. It's possible on the second row (but slower), but somehow I can't get it to work on the other one, because the drone restrict possible trajectories
 
-# 80-3
-
-
 # 81-1
 rerecords: 1183
 
-
-
-# 82-0
 
 
 # 83-0
@@ -1493,15 +1468,9 @@ rerecords: 386
 
 
 
-# 84-0
-
-
 # 84-2
 rerecords: 152
 
-
-
-# 85-3
 
 
 # 86-2
@@ -1542,9 +1511,6 @@ For the third locked door key jumping on the lower slope was slower
 # 88-4
 rerecords: 1219
 
-
-
-# 89-0
 
 
 # 89-1
@@ -1623,13 +1589,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# 99-2
-
-
-# 99-4
-
-
-# 99-9
-
-
-# Total rerecords: 162267
+# Total rerecords: 163037
