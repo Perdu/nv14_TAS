@@ -33,3 +33,7 @@ if (inList[PINPUT_L] && inList[PINPUT_R]) {
     inList[PINPUT_L] = false;
 }
 ```
+
+## Radius
+
+Player radius is actually `12 * 0.8333333333333334 = 10.0000000000000008`. See [here](../decompiled_source/scripts/frame_1/DoAction_83.as#L11).
