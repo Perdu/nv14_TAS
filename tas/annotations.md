@@ -734,6 +734,11 @@ rerecords: 335
 bwj after exit switch: 685.9,527.7
 F9: Low Rocket Early Jump 
 
+# 19-3
+rerecords: 137
+
+
+
 # 19-4
 rerecords: 453
 
@@ -896,7 +901,7 @@ rerecords: 55
 This level is maxed out, we're 1.10 pixels away from saving a frame
 
 # 37-3
-rerecords: 2469
+rerecords: 2553
 
 Branch 9: alt attempt for the way up with a reverse slope jump and a ~bwj
 Branch 8: faster turnaround in the end, but we tie because we're speedcapped by the drone
@@ -1589,4 +1594,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 163037
+# Total rerecords: 163258
