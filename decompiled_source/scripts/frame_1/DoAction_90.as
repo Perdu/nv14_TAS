@@ -21,9 +21,9 @@ NinjaGame.prototype.GetInputState_Normal = function(inList)
    }
    inList[PINPUT_J] = Key.isDown(this.KEYDEF_J);
    inList[PINPUT_JTRIG] = inList[PINPUT_J] && !_loc3_;
-   if(debug)
+   if(Key.isDown(74)) // j
    {
-      inList[PINPUT_JTRIG] = inList[PINPUT_J];
+      inList[PINPUT_JTRIG] = true;
    }
    if(this.RECORDING_DEMO)
    {
