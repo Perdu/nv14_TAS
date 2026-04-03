@@ -511,7 +511,7 @@ If we jump 1f earlier after the last lp, we crash on the ceiling
 We can't get a better diagonal lp jump by slowing right before landing, except for the one the crashes us on the ceiling.
 
 # 12-1
-rerecords: 899
+rerecords: 1135
 
 cj on the top bb is useless
 cj on third bb is useless
@@ -1641,4 +1641,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 165672
+# Total rerecords: 165908
