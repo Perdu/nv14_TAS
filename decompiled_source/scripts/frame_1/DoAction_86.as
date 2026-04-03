@@ -332,3 +332,31 @@ PlayerObject.prototype.techwrite = function(name, color, durationFrames)
         }
     }, intervalMs);
 };
+
+PlayerObject.prototype.simple_write = function(name, color)
+{
+    trace("simple_write");
+    if (color == undefined) color = 0xFF000000;
+
+    var techbox = gfx.CreateSprite("guiLevelNameMC", LAYER_GUI);
+    techbox._x = p.x;
+    techbox._y = p.y - 10;
+    techbox.txt = name;
+
+    // Set color
+    for (var k in techbox) {
+        if (typeof techbox[k] == "object") {
+            techbox[k].textColor = color;
+            break;
+        }
+    }
+
+    // Remove after ~1 frame (safe delay)
+    var delay = 25; // ~1 frame at 40fps
+
+    var self = techbox;
+    var id = setInterval(function() {
+        clearInterval(id);
+        self.removeMovieClip();
+    }, delay);
+};
