@@ -167,6 +167,8 @@ If you have an alt route that you want to keep, place it in a savestate (e.g. 9)
 
 To register a position (and try to beat it with other routes), place a space key on the frame before it, then advance one frame. The script will delete the space key, create a savestate, and save the position. You should now see a yellow circle indicating that best position, and the position of this path compared to the position of the current route at the bottom of the screen. Small indicators on the left show whether current path compares to that best path (as in being more to the left or right, up or down).
 
+To use jjjs (fake jump keys that will attempt to jump on every frame), use the "j" column. Note that while this will produce demo strings that the game considers valid, they will only work on the patched swf and won't resync in the normal game. Only use this column as a helper, and place jump presses back in the shift column afterwards.
+
 Once you're done and want to obtain the demo data:
 - *Inside the docker container*, run: `./get_sol_file.sh` (this copies the sol file in a place we can get it from outside of the container)
 - in the repository folder, run: `python sol_to_demo.py --save 00-0`. This will obtain the demo data and place it correctly in [tas/level_data.yml](tas/level_data.yml).
