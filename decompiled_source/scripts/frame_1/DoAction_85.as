@@ -146,7 +146,11 @@ PlayerObject.prototype.Think = function()
                     }
                     this.last_doublebbwj = game.tickCounter;
                 } else {
-                    this.techwrite("bbwj", 0xFF555555);
+                    if (this.object_bbwj_position) {
+                        this.techwrite("bbbbwj", 0xFF880000);
+                    } else {
+                        this.techwrite("bbwj", 0xFF555555);
+                    }
                 }
                 this.last_bbwj = game.tickCounter;
             } else if (this.NEAR_OBJECT && this.NEAR_OBJECT_type == OBJTYPE_THWOMP) {

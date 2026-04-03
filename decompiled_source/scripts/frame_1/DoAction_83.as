@@ -77,6 +77,7 @@ PlayerObject.prototype.SetupParams = function()
    this.last_bbwj = 0;
    this.last_doublebbwj = 0;
    this.last_triplebbwj = 0;
+   this.object_bbwj_position = false;
 };
 PlayerObject.prototype.Init = function(params)
 {
@@ -161,6 +162,9 @@ PlayerObject.prototype.TickNormal = function()
    var _loc25_ = o.x = p.x;
    var _loc26_ = o.y = p.y;
    var _loc27_ = this.d;
+
+   this.object_bbwj_position = false;
+
    p.x += _loc27_ * (_loc25_ - _loc3_);
    p.y += _loc27_ * (_loc26_ - _loc4_) + this.g;
    objects.Moved(this);
@@ -432,6 +436,12 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
           for (var k in obj) {
               trace(k + " (" + typeof obj[k] + ") : " + obj[k]);
           }
+      }
+      if (debug) {
+          trace(obj.pos.x + ", " + player.pos.x + ", " + player.oldpos.x);
+      }
+      if ((obj.pos.x > player.pos.x && player.oldpos.x > player.pos.x) || (obj.pos.x < player.pos.x && player.oldpos.x < player.pos.x)) {
+          this.object_bbwj_position = true;
       }
       this.wallN.x = nx;
       this.wallN.y = ny;
