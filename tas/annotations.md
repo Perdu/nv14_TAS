@@ -464,7 +464,7 @@ rerecords: 692
 heightless cj coming down on the left was one frame slower
 
 # 11-1
-rerecords: 894
+rerecords: 2121
 
 I tried turning right in the very beginning before goign left but it wasn't really giving anything better. I land the fastest this way (and cj don't give a good enough angle)
 
@@ -904,16 +904,15 @@ rerecords: 55
 This level is maxed out, we're 1.10 pixels away from saving a frame
 
 # 37-3
-rerecords: 2553
+rerecords: 2557
 
 Branch 9: alt attempt for the way up with a reverse slope jump and a ~bwj
 Branch 8: faster turnaround in the end, but we tie because we're speedcapped by the drone
-Branch 7: alt route
-~~Branch 6: alt route, last drone detection 1 but not 2~~
+Branch 7: main route (i.e. not the one used in the current solution)
+~~Branch 6: alt route, last drone detection 1 but not 2~~ (removed)
 Branch 6: a super cool path with good bwjs that totally forgot the doorswitch
-Branch 5: alt route, better way up but too fast for the drone
+Branch 5: I got a cj on the way up, missing a bwj
 Branch 4: attempt at optimizing thwump bwj, but can't get a proper jump inbetween mines after that
-Branch 3: I got a cj on the way up, missing a bwj
 
 In the last section, I tried using a ceiling shove to get a bwj and get above the drone, but it barely doesn't make it
 
@@ -1642,4 +1641,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 163829
+# Total rerecords: 165060
