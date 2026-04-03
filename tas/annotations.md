@@ -500,7 +500,7 @@ rerecords: 140
 kryX-orange's 0th is maxed, I only improved subpixel
 
 # 12-0
-rerecords: 2547
+rerecords: 3064
 
 The lpwj at the beginning + cj saves us a whooping 3f over jumping on the wall and jumping from the platform normally
 
@@ -1641,4 +1641,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 165908
+# Total rerecords: 166425
