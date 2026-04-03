@@ -533,7 +533,7 @@ To go up, it doesn't work to:
 Optimizing the jump over the top without getting zapped is tedious. This weird stumble on the way from the left to the right is better than another example I got
 
 # 12-3
-rerecords: 205
+rerecords: 229
 
 Level is maxed, can only improve subpixel
 
@@ -1641,4 +1641,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 165171
+# Total rerecords: 165195
