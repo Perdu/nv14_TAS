@@ -335,7 +335,6 @@ PlayerObject.prototype.techwrite = function(name, color, durationFrames)
 
 PlayerObject.prototype.simple_write = function(name, color)
 {
-    trace("simple_write");
     if (color == undefined) color = 0xFF000000;
 
     var techbox = gfx.CreateSprite("guiLevelNameMC", LAYER_GUI);
