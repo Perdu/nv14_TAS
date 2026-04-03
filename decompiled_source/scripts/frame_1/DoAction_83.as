@@ -436,8 +436,10 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
           for (var k in obj) {
               trace(k + " (" + typeof obj[k] + ") : " + obj[k]);
           }
-      }
-      if (debug) {
+          trace("PLAYER");
+          for (var k in player) {
+              trace(k + " (" + typeof player[k] + ") : " + player[k]);
+          }
           trace(obj.pos.x + ", " + player.pos.x + ", " + player.oldpos.x);
       }
       if ((obj.pos.x > player.pos.x && player.oldpos.x > player.pos.x) || (obj.pos.x < player.pos.x && player.oldpos.x < player.pos.x)) {
