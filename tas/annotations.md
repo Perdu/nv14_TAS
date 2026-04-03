@@ -524,7 +524,7 @@ For the second switch, going down directly is faster than holding jump to get th
 We can't add 1 more jump before the door
 
 # 12-2
-rerecords: 357
+rerecords: 757
 
 To go up, it doesn't work to:
 - go to the right and do wall and bb jump
@@ -1641,4 +1641,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 165195
+# Total rerecords: 165595
