@@ -127,7 +127,7 @@ The only gain is on the jump over the doorswitch
 Branch 9: attempt to pass the door via thwump push (not working)
 
 # 03-2
-rerecords: 927
+rerecords: 975
 
 Straight jump from the top platform (no corner jump): slower
 
@@ -650,7 +650,7 @@ rerecords: 1178
 Branch 9: jumping earlier, then jumping to get the switch and fall directly. Slower.
 
 # 17-0
-rerecords: 459
+rerecords: 1254
 
 
 
@@ -1641,4 +1641,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 166425
+# Total rerecords: 167268
