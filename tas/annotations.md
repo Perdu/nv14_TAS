@@ -740,7 +740,7 @@ bwj after exit switch: 685.9,527.7
 F9: Low Rocket Early Jump 
 
 # 19-3
-rerecords: 137
+rerecords: 802
 
 
 
@@ -1646,4 +1646,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 168225
+# Total rerecords: 168890
