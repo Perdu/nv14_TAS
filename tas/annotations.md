@@ -725,7 +725,7 @@ Branch 8: using a cj for the way to the doorswitch
 Branch 7: faster beginning, but lost due to subpixel positionning stuff. Could save a drone framerule
 
 # 19-1
-rerecords: 1403
+rerecords: 1895
 
 Branch 9: reverse slope jump
 Branch 8: triple bb
@@ -1646,4 +1646,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 168890
+# Total rerecords: 169382
