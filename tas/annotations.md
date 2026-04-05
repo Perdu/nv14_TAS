@@ -734,7 +734,7 @@ Branch 6: delaying drone with triple, 2f faster 0th
 Branch 4: triple on lowest bb (idk I was desperate to try anything at that point)
 
 # 19-2
-rerecords: 335
+rerecords: 1195
 
 bwj after exit switch: 685.9,527.7
 F9: Low Rocket Early Jump 
@@ -1646,4 +1646,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 169382
+# Total rerecords: 170242
