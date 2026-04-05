@@ -78,6 +78,10 @@ PlayerObject.prototype.SetupParams = function()
    this.last_doublebbwj = 0;
    this.last_triplebbwj = 0;
    this.object_bbwj_position = false;
+   this.depenetration = false;
+   this.depenetration_x = 0;
+   this.depenetration_y = 0;
+   this.last_ceiling_push = 0;
 };
 PlayerObject.prototype.Init = function(params)
 {
@@ -163,7 +167,11 @@ PlayerObject.prototype.TickNormal = function()
    var _loc26_ = o.y = p.y;
    var _loc27_ = this.d;
 
+   // @help resetting variables on every frame
    this.object_bbwj_position = false;
+   this.depenetration = false;
+   this.depenetration_x = 0;
+   this.depenetration_y = 0;
 
    p.x += _loc27_ * (_loc25_ - _loc3_);
    p.y += _loc27_ * (_loc26_ - _loc4_) + this.g;
@@ -367,6 +375,9 @@ PlayerObject.prototype.HandleCollisions = function()
 };
 PlayerObject.prototype.ReportCollisionVsWorld = function(px, py, nx, ny, t)
 {
+   this.depenetration = true;
+   this.depenetration_x = px;
+   this.depenetration_y = py;
    if(_root._dbg_tilecol_x != px || _root._dbg_tilecol_y != py)
    {
       trace("FRAME " + game.tickCounter + " ReportCollisionVsWorld; px: " + px + ", py: " + py);

@@ -114,6 +114,11 @@ PlayerObject.prototype.Think = function()
       if(_loc11_ == PSTATE_FALLING)
       {
       }
+      // perhaps we can move this into pstate_falling just above here if it's displayed at incorrect times
+      if (this.depenetration && this.depenetration_y > 0 && game.tickCounter - this.last_ceiling_push > 5) {
+          this.techwrite("Ceiling push");
+          this.last_ceiling_push = game.tickCounter;
+      }
       if(this.NEAR_WALL)
       {
          if(_loc8_)
