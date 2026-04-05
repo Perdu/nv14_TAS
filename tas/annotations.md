@@ -745,7 +745,7 @@ rerecords: 802
 
 
 # 19-4
-rerecords: 453
+rerecords: 966
 
 Didn't work:
 - in the beginning, jumping right from before the launchpad to reach the platform: it's very tightly too short (the ceiling pushes us down)
@@ -1646,4 +1646,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 170242
+# Total rerecords: 170755
