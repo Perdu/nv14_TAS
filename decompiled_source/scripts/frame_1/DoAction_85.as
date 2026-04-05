@@ -230,8 +230,6 @@ PlayerObject.prototype.Think = function()
          }
          else
          {
-             trace("Jump: " + this.floorN.x + ", " + this.floorN.y);
-             trace("poses: " + this.pos.x + ", " + this.pos.y + "; " + this.oldpos.x + ", " + this.oldpos.y);
             if (this.floorN.x == 0 && this.floorN.y == -1) {
                 this.techwrite("Jump", 0XFF555555);
             } else if ((this.pos.x < this.oldpos.x && this.floorN.x < 0) || (this.pos.x > this.oldpos.x && this.floorN.x >= 0)) {
