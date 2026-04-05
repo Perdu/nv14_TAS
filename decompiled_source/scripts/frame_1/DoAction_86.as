@@ -302,6 +302,8 @@ PlayerObject.prototype.techwrite = function(name, color, durationFrames)
         if (typeof techbox[k] == "object") {
            // The TextField
            techbox[k].textColor = color;
+//           techbox[k].multiline = true;
+//           techbox[k].wordWrap = true;
            break;
         }
     }
