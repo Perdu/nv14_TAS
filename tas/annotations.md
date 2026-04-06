@@ -549,7 +549,7 @@ The rcj is really tight and finding a better way to land on the platform is diff
 # 13-0
 rerecords: 390
 
-
+rcj (as in hs) lands faster but it cannot access the y-subpixels for the best ck
 
 # 13-1
 rerecords: 684
