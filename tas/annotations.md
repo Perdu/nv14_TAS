@@ -552,7 +552,7 @@ rerecords: 390
 rcj (as in hs) lands faster but it cannot access the y-subpixels for the best ck
 
 # 13-1
-rerecords: 684
+rerecords: 1349
 
 We *can* save time on the way down with a stumble. However, if we arrive too early, the drone chases us on the left instead of up and gets in the way. We *need* to be slow for that.
 There may be an optimization to do to find a better beginning
@@ -1664,4 +1664,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 172718
+# Total rerecords: 173383
