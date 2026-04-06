@@ -563,7 +563,7 @@ On the way up to the door, getting wallpushed slows us down (lower height)
 On the way up to the door, we can do a full jump, then wall jump and slope jump on the way to the lp, but it's slightly slower.
 
 # 13-2
-rerecords: 644
+rerecords: 958
 
 
 
@@ -1664,4 +1664,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 172404
+# Total rerecords: 172718
