@@ -597,6 +597,15 @@ rerecords: 432
 
 
 
+# 14-4
+rerecords: 375
+
+bbcj on top of bb is faster but misses switch.
+ 
+wj off the wall + bbbwj on bottom of bb is slower as you need to slow down to get under the bb
+
+wj off the wall, landing on top of the bb is also slower
+
 # 15-0
 rerecords: 339
 
@@ -1238,6 +1247,9 @@ Branch 9: fast bb cj that can't avoid the drone. Reaches for the left, but is sl
 Branch 8: attempt at going right
 Branch 7: rta route, faster beginning but slower slope jumps
 
+# 61-4
+
+
 # 62-3
 rerecords: 197
 
@@ -1652,4 +1664,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 171330
+# Total rerecords: 171705
