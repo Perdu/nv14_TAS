@@ -846,6 +846,11 @@ rerecords: 404
 
 I tried so hard to jump 1f earlier on the left wall, but could not find any workable path in >350 rerecords
 
+# 26-2
+rerecords: 444
+
+
+
 # 27-0
 rerecords: 374
 
@@ -1684,4 +1689,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 177399
+# Total rerecords: 177843
