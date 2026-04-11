@@ -1426,6 +1426,11 @@ rerecords: 215
 
 
 
+# 73-4
+rerecords: 461
+
+F9 = rcj > bwj > rcj > bwj start - Slower
+
 # 74-0
 rerecords: 267
 
@@ -1634,4 +1639,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 176141
+# Total rerecords: 176602
