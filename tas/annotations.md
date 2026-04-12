@@ -772,7 +772,7 @@ rerecords: 150
 
 
 # 20-1
-rerecords: 179
+rerecords: 433
 
 I tried various stuff, notably to keep going left, then hold right while jumping (see branch 9).
 
@@ -1732,4 +1732,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 180920
+# Total rerecords: 181174
