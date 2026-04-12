@@ -835,7 +835,7 @@ Branch 7: attempt at using the first (right-most) thwump for jump
 Haven't found some workable thing do to with thwumps. I tried jumping on the one before the two switches at the top but that didn't work out. I tried jumping earlier to take the upper switch first but that was slower as well.
 
 # 23-4
-rerecords: 713
+rerecords: 957
 
 
 
@@ -1722,4 +1722,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 180279
+# Total rerecords: 180523
