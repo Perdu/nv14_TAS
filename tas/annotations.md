@@ -808,7 +808,7 @@ rerecords: 304
 # 21-3
 rerecords: 324
 
-
+bbcd at start is 1f slower
 
 # 21-4
 rerecords: 347
