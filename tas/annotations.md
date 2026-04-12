@@ -807,6 +807,9 @@ rerecords: 304
 
 
 
+# 21-3
+
+
 # 21-4
 rerecords: 347
 
@@ -880,9 +883,6 @@ rerecords: 541
 
 
 
-# 29-4
-
-
 # 30-1
 rerecords: 1468
 
@@ -911,6 +911,9 @@ rerecords: 343
 # 33-4
 rerecords: 250
 
+
+
+# 34-0
 
 
 # 34-3
@@ -1002,9 +1005,6 @@ rerecords: 291
 
 
 
-# 42-0
-
-
 # 42-1
 rerecords: 184
 
@@ -1062,6 +1062,11 @@ rerecords: 187
 Branch 9: optimized rta route (3f slower)
 
 Can't get a triple to work on the first slope, I always get a stumble for the 3rd jump
+
+# 47-2
+rerecords: 138
+
+
 
 # 48-3
 rerecords: 141
@@ -1167,9 +1172,6 @@ rerecords: 276
 
 
 
-# 52-3
-
-
 # 53-0
 rerecords: 14
 
@@ -1263,9 +1265,6 @@ rerecords: 21
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
-# 60-2
-
-
 # 61-1
 rerecords: 71
 
@@ -1282,24 +1281,15 @@ Branch 9: fast bb cj that can't avoid the drone. Reaches for the left, but is sl
 Branch 8: attempt at going right
 Branch 7: rta route, faster beginning but slower slope jumps
 
-# 61-4
-
-
 # 62-3
 rerecords: 197
 
 Doing bwj after the rcj doesn't get high enough
 
-# 63-1
-
-
 # 63-3
 rerecords: 133
 
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
-
-# 63-4
-
 
 # 64-0
 rerecords: 153
@@ -1337,12 +1327,6 @@ It's possible to jump 1f earlier on the last slope, but then the angle is not as
 rerecords: 639
 
 running back across the bottom and cj to door is slower
-
-# 65-1
-
-
-# 65-3
-
 
 # 65-4
 rerecords: 1509
@@ -1514,6 +1498,11 @@ rerecords: 971
 
 Branch 9: ledge grab in the end
 
+# 76-1
+rerecords: 587
+
+bwj after exit switch 58, 431.8001
+
 # 76-2
 rerecords: 198
 
@@ -1544,15 +1533,9 @@ Not faster:
 Did not work:
 - use the small portion of the slope next to the mines to land on the previous-to-last row. It's possible on the second row (but slower), but somehow I can't get it to work on the other one, because the drone restrict possible trajectories
 
-# 80-3
-
-
 # 81-1
 rerecords: 1183
 
-
-
-# 82-0
 
 
 # 83-0
@@ -1565,15 +1548,9 @@ rerecords: 386
 
 
 
-# 84-0
-
-
 # 84-2
 rerecords: 152
 
-
-
-# 85-3
 
 
 # 86-2
@@ -1614,9 +1591,6 @@ For the third locked door key jumping on the lower slope was slower
 # 88-4
 rerecords: 1219
 
-
-
-# 89-0
 
 
 # 89-1
@@ -1695,13 +1669,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# 99-2
-
-
-# 99-4
-
-
-# 99-9
-
-
-# Total rerecords: 179101
+# Total rerecords: 179826
