@@ -795,6 +795,16 @@ rerecords: 460
 
 
 
+# 21-0
+rerecords: 475
+
+Branch 9: pj for the first switch, slightly slower
+Branch 8: slope ceiling push after switch then bbbwj (too low to reach subsequent bb)
+
+bbbwj on the top bb does not seem possible. I didn't find an angle for the left-most bb either
+
+To save time at the end, we need to be able to land before 599. I can't find a way to do that, either by optimizing reverse slope jump or by adding another slope jump
+
 # 21-1
 rerecords: 698
 
@@ -855,7 +865,7 @@ rerecords: 262
 
 
 # 25-3
-rerecords: 298
+rerecords: 516
 
 
 
@@ -938,9 +948,6 @@ rerecords: 250
 
 
 
-# 34-0
-
-
 # 34-3
 rerecords: 337
 
@@ -970,6 +977,11 @@ rerecords: 85
 
 Well, kryX-orange's 0th is maxed
 I can get a slight push down, but it's far from being enough to save a frame
+
+# 37-1
+rerecords: 46
+
+
 
 # 37-2
 rerecords: 55
@@ -1523,11 +1535,6 @@ rerecords: 971
 
 Branch 9: ledge grab in the end
 
-# 76-1
-rerecords: 587
-
-bwj after exit switch 58, 431.8001
-
 # 76-2
 rerecords: 198
 
@@ -1694,4 +1701,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 182379
+# Total rerecords: 182531
