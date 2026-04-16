@@ -796,7 +796,7 @@ rerecords: 460
 
 
 # 21-0
-rerecords: 475
+rerecords: 278
 
 Branch 9: pj for the first switch, slightly slower
 Branch 8: slope ceiling push after switch then bbbwj (too low to reach subsequent bb)
@@ -866,6 +866,11 @@ rerecords: 262
 
 # 25-3
 rerecords: 516
+
+
+
+# 25-4
+rerecords: 84
 
 
 
@@ -948,6 +953,9 @@ rerecords: 250
 
 
 
+# 34-0
+
+
 # 34-3
 rerecords: 337
 
@@ -977,11 +985,6 @@ rerecords: 85
 
 Well, kryX-orange's 0th is maxed
 I can get a slight push down, but it's far from being enough to save a frame
-
-# 37-1
-rerecords: 46
-
-
 
 # 37-2
 rerecords: 55
@@ -1535,6 +1538,11 @@ rerecords: 971
 
 Branch 9: ledge grab in the end
 
+# 76-1
+rerecords: 587
+
+bwj after exit switch 58, 431.8001
+
 # 76-2
 rerecords: 198
 
@@ -1701,4 +1709,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 182531
+# Total rerecords: 182959
