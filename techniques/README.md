@@ -27,9 +27,15 @@ Links:
 
 ### Reverse Corner Jump (rcj)
 
+05-4
+
 ### Perpendicular (reverse) Jump (pj)
 
+08-2
+
 ### Corner kick (ck)
+
+08-4
 
 ### Bounceblock Backward Walljump (bbbwj) (high and low) (+optimization)
 ### Thwump bwj (+optimization)
