@@ -361,14 +361,12 @@ PlayerObject.prototype.HandleCollisions = function()
       _loc7_ = this.r + 0.1;
       if(QueryPointvsTileMap(_loc6_.x + _loc7_,_loc6_.y))
       {
-      trace("Tilemap1");
          this.NEAR_WALL = true;
          this.wallN.x = -1;
          this.wallN.y = 0;
       }
       else if(QueryPointvsTileMap(_loc6_.x - _loc7_,_loc6_.y))
       {
-      trace("Tilemap2");
          this.NEAR_WALL = true;
          this.wallN.x = 1;
          this.wallN.y = 0;

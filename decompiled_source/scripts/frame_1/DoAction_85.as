@@ -116,8 +116,7 @@ PlayerObject.prototype.Think = function()
       }
       // perhaps we can move this into pstate_falling just above here if it's displayed at incorrect times
       if (this.depenetration && this.depenetration_y > 0 && game.tickCounter - this.last_ceiling_push > 5) {
-          this.techwrite("Ceiling push", 0xFF000000);
-          this.techwrite(this.depenetration_y, 0xFF000000, 0, 10);
+          this.techwrite("Ceiling push");
           this.last_ceiling_push = game.tickCounter;
       }
       if(this.NEAR_WALL)
@@ -223,6 +222,7 @@ PlayerObject.prototype.Think = function()
          particles.SpawnJumpDust(this.pos.x - this.floorN.x * this.r,this.pos.y - this.floorN.y * this.r,this.mc._rotation);
          if(_loc14_ * this.floorN.x < 0)
          {
+            this.Jump(0,-0.7);
             if (game.tickCounter - this.last_jump < 10) {
                 this.techwrite("Double Jump", 0xFF550000);
             } else if (game.tickCounter - this.last_slope_jump < 10) {
@@ -230,15 +230,11 @@ PlayerObject.prototype.Think = function()
             } else {
                 this.techwrite("Slope Jump", 0xFF555555);
             }
-            trace(this.depenetration);
-            this.Jump(0,-0.7);
             this.last_slope_jump = game.tickCounter;
             this.last_jump = 0;
          }
          else
          {
-             trace("Jump: " + this.floorN.x + ", " + this.floorN.y);
-             trace("poses: " + this.pos.x + ", " + this.pos.y + "; " + this.oldpos.x + ", " + this.oldpos.y);
             if (this.floorN.x == 0 && this.floorN.y == -1) {
                 this.techwrite("Jump", 0XFF555555);
             } else if ((this.pos.x < this.oldpos.x && this.floorN.x < 0) || (this.pos.x > this.oldpos.x && this.floorN.x >= 0)) {
@@ -246,7 +242,6 @@ PlayerObject.prototype.Think = function()
             } else {
                 this.techwrite("rcj", 0XFF000000);
             }
-            trace(this.depenetration);
             this.Jump(this.floorN.x,this.floorN.y);
             this.last_jump = game.tickCounter;
             this.last_slope_jump = 0;
