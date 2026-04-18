@@ -802,7 +802,7 @@ Branch 9: pj for the first switch, slightly slower
 Branch 8: slope ceiling push after switch then bbbwj (too low to reach subsequent bb)
 
 # 21-1
-rerecords: 698
+rerecords: 988
 
 
 
@@ -1758,4 +1758,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 185186
+# Total rerecords: 185476
