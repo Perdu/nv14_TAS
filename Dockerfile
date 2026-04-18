@@ -45,7 +45,7 @@ FROM debian:12 AS libtas-builder
   # Installs
     RUN mkdir /root/src
     # RUN cd /root/src && git clone https://github.com/clementgallet/libTAS.git
-    ARG LIBTAS_VERSION=993cb0fee074694e5e3209f72f8e971f2589c5da
+    ARG LIBTAS_VERSION=0ccac991578a1b42f7f3238021c9ee258add357f
     RUN cd /root/src && git clone https://github.com/Perdu/libTAS.git && cd /root/src/libTAS && git checkout $LIBTAS_VERSION
     WORKDIR /root/src/libTAS
     # RUN git fetch origin pull/667/head:pr-667 && git checkout pr-667
