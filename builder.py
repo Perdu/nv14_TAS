@@ -146,8 +146,8 @@ if __name__ == "__main__":
     with open("extract/editor.ini", "w") as f:
         config["markers"] = markers
         config.write(f, space_around_delimiters=False)
-    with open("display_infos.lua.template") as f:
+    with open("infos.lua.template") as f:
         template = Template(f.read())
     lua_script_filled = template.substitute(infos=lua_infos)
-    with open("volume/lua/display_infos.lua", "w") as f:
+    with open("volume/lua/data/infos.lua", "w") as f:
         print(lua_script_filled, file=f)

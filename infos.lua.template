@@ -1,0 +1,4 @@
+frame_ranges_to_annotate = {
+$infos
+}
+return frame_ranges_to_annotate

@@ -1,6 +1,4 @@
-local frame_ranges_to_annotate = {
-$infos
-}
+local frame_ranges_to_annotate = dofile("/home/lua/data/infos.lua")
 
 j_pressed = false
 left_pressed = false
@@ -46,3 +44,4 @@ function onPaint()
     end
     gui.text(730, 580, "->", color)
 end
+
