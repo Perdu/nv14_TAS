@@ -13,12 +13,13 @@ end
 function onPaint()
     local f = movie.currentFrame()
     for _, range in ipairs(frame_ranges_to_annotate) do
-        local start_frame, end_frame, msg, msg_rta, diff = table.unpack(range)
+        local start_frame, end_frame, msg, msg_rta, diff, rerecords = table.unpack(range)
         if f >= start_frame and f <= end_frame then
             -- Draw text at top-left
             gui.text(30, 575, msg, 0xffffffff, 0, 0, 15)
             gui.text(30, 585, msg_rta, 0xffff00ff, 0, 0, 15)
             gui.text(370, 580, diff, 0xffffffff, 0, 0, 15)
+            gui.text(690, 5, "rerecords: " .. rerecords, 0xffffffff, 0, 0, 15)
             break  -- stop after first matching range
         end
     end
