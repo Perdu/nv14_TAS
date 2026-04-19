@@ -187,17 +187,3 @@ function CollideCirclevsTileMap(obj)
       }
    }
 }
-if(_root.debugText == undefined)
-{
-   _root.createTextField("debugText",999999,400,3,100,20);
-   _root.debugText.textColor = 0;
-   _root.debugText.background = true;
-   _root.debugText.backgroundColor = 16777215;
-}
-if(_root.resolveCircleText == undefined)
-{
-   _root.createTextField("resolveCircleText",999997,510,3,100,20);
-   _root.resolveCircleText.textColor = 0;
-   _root.resolveCircleText.background = true;
-   _root.resolveCircleText.backgroundColor = 16777215;
-}

@@ -1,10 +1,3 @@
-if(_root.ninjastateText == undefined)
-{
-   _root.createTextField("ninjastateText",999998,675,3,75,20);
-   _root.ninjastateText.textColor = 0;
-   _root.ninjastateText.background = true;
-   _root.ninjastateText.backgroundColor = 16777215;
-}
 PSTATE_STANDING = 0;
 PSTATE_RUNNING = 1;
 PSTATE_SKIDDING = 2;

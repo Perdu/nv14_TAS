@@ -1,3 +1,13 @@
+function toBool(v)
+{
+   var s = String(v);
+   s = s.split("\r").join("");
+   s = s.split("\n").join("");
+   s = s.split(" ").join("");
+   s = s.toLowerCase();
+   return (s == "true" || s == "1" || s == "yes");
+}
+
 function NinjaUserData()
 {
    this.shared = SharedObject.getLocal("n_v14b_userdata","/");
@@ -21,7 +31,46 @@ function NinjaUserData()
    {
       this.ImportUserData();
    }
+   trace("Loading patch config");
+   APP_CUSTOM_LOADER = new LoadVars();
+   APP_CUSTOM_LOADER.onLoad = function(success)
+   {
+      trace("CONFIG LOAD SUCCESS: " + success);
+      trace("RAW DATA: " + this);
+      if(_root.patch_options == undefined)
+      {
+         _root.patch_options = {};
+      }
+      _root.patch_options.recording = toBool(this.recording);
+       trace("Setting recording to " + _root.patch_options.recording);
+
+      if((_root.debugText == undefined) && (!_root.patch_options.recording))
+      {
+          trace("Creating debugText");
+         _root.createTextField("debugText",999999,400,3,100,20);
+         _root.debugText.textColor = 0;
+         _root.debugText.background = true;
+         _root.debugText.backgroundColor = 16777215;
+      }
+      if((_root.resolveCircleText == undefined) && (!_root.patch_options.recording))
+      {
+         _root.createTextField("resolveCircleText",999997,510,3,100,20);
+         _root.resolveCircleText.textColor = 0;
+         _root.resolveCircleText.background = true;
+         _root.resolveCircleText.backgroundColor = 16777215;
+      }
+      if((_root.ninjastateText == undefined) && (!_root.patch_options.recording))
+      {
+         _root.createTextField("ninjastateText",999998,675,3,75,20);
+         _root.ninjastateText.textColor = 0;
+         _root.ninjastateText.background = true;
+         _root.ninjastateText.backgroundColor = 16777215;
+      }
+
+   };
+   APP_CUSTOM_LOADER.load("patch_config.txt");
 }
+
 NinjaUserData.prototype.Save = function()
 {
    var _loc2_ = this.shared.flush(20000000);
