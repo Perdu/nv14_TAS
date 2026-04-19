@@ -42,6 +42,8 @@ if [ "$LEVEL" == "" ]; then
     exit 1
 fi
 
+./build_demo.sh -i "$LEVEL"
+
 if [ $LOCAL -eq 1 ]; then
     if [ "$YOUTUBE" -eq 1 ]; then
         IMAGE="libtas_n_recording_youtube"
@@ -55,7 +57,7 @@ else
         IMAGE="cmatteperdu/libtas_n_recording"
     fi
 fi
-docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v $SCRIPT_DIR/volume:/home/ $IMAGE bash -c "$HEADLESS libTAS -n -r /home/n_levels/$LEVEL.ltm --lua /home/lua/n_ghost.lua -d /home/n_demos/$LEVEL.mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf ; while ffprobe /home/n_demos/$LEVEL.mp4 2>&1 | grep -q 'moov atom not found'; do sleep 1 ; done "
+docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v $SCRIPT_DIR/volume:/home/ $IMAGE bash -c "$HEADLESS libTAS -n -r /home/n_levels/$LEVEL.ltm --lua /home/lua/n_ghost.lua,/home/lua/display_infos.lua -d /home/n_demos/$LEVEL.mp4 /usr/local/bin/ruffle_desktop -g gl --no-gui --width 792 /home/n_v14.swf ; while ffprobe /home/n_demos/$LEVEL.mp4 2>&1 | grep -q 'moov atom not found'; do sleep 1 ; done "
 
 if [ $OPEN_MPV -eq 1 ]; then
     mpv volume/n_demos/$LEVEL.mp4

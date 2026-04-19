@@ -17,6 +17,7 @@ N_LEVELS_PATH = "volume/n_levels"
 
 def usage():
     print(f"Usage: {sys.argv[0]} [-e END_EPISODE|-s START_EPISODE|-r|-h]")
+    print("-i LEVEL: build infos for given level (for display_infos.lua)")
     print("-r: build RTA scores")
     print("-h: print this help")
 
@@ -53,7 +54,7 @@ def get_rerecords_number(level_name):
     return int(match.group(1))
 
 
-def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="Speedrun"):
+def build_libtas_input(begin_episode=0, end_episode=99, begin_level=0, end_level=4, rta=False, score_type="Speedrun"):
     nb_frames = 0
     res = ""
     markers = {}
@@ -84,10 +85,10 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
     for level_name, level_data in data.items():
         episode = int(level_name.split("-")[0])
         level = int(level_name.split("-")[1])
-        if episode < begin_episode:
+        if episode < begin_episode or (episode == begin_episode and level < begin_level):
             # skip to the beginning
             continue
-        elif episode > end_episode:
+        elif episode > end_episode or (episode == end_episode and level > end_level):
             # we reached the end
             break
         ghost_file = f"volume/ghosts/{level_name}.csv"
@@ -126,7 +127,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
             nb_frames += nb_frames_demo
             res += "|K20|\n"  # space
             nb_frames += 1
-        if int(level_name.split("-")[1]) == 4:
+        if int(level_name.split("-")[1]) == 4 and end_level == 4:
             # pass end of episode screen
             res += "|\n|K20|\n"
             nb_frames += 2
@@ -143,8 +144,9 @@ def parse_args():
     starting_episode = 0
     end_episode = None
     rta = False
+    infos_level = None
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'e:hrs:')
+        opts, args = getopt.getopt(sys.argv[1:], 'e:hi:rs:')
     except getopt.GetoptError as err:
         print("Error: ", str(err))
         sys.exit(1)
@@ -156,25 +158,36 @@ def parse_args():
             rta = True
         if o == '-s':
             starting_episode = int(arg)
+        if o == '-i':
+            level_name = arg
+            starting_episode = int(level_name.split("-")[0])
+            infos_level = int(level_name.split("-")[1])
         if o == '-h':
             usage()
     if end_episode is None:
         end_episode = starting_episode
-    return starting_episode, end_episode, rta
+    return starting_episode, end_episode, rta, infos_level
 
 
 if __name__ == "__main__":
-    starting_episode, end_episode, rta = parse_args()
-    config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
-    config.read("extract/editor.ini")
-    libtas_input, nb_frames, markers, lua_infos = build_libtas_input(starting_episode, end_episode, rta=rta, score_type="Speedrun")
-    with open("extract/inputs", "w") as f:
-        print(libtas_input, file=f)
-    with open("extract/editor.ini", "w") as f:
-        config["markers"] = markers
-        config.write(f, space_around_delimiters=False)
+    starting_episode, end_episode, rta, infos_level = parse_args()
+    if infos_level is not None:
+        begin_level = infos_level
+        end_level = infos_level
+    else:
+        begin_level = 0
+        end_level = 4
+    libtas_input, nb_frames, markers, lua_infos = build_libtas_input(starting_episode, end_episode, begin_level=begin_level, end_level=end_level, rta=rta, score_type="Speedrun")
     with open("infos.lua.template") as f:
         template = Template(f.read())
     lua_script_filled = template.substitute(infos=lua_infos)
     with open("volume/lua/data/infos.lua", "w") as f:
         print(lua_script_filled, file=f)
+    if not infos_level:
+        with open("extract/inputs", "w") as f:
+            print(libtas_input, file=f)
+        config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
+        config.read("extract/editor.ini")
+        with open("extract/editor.ini", "w") as f:
+            config["markers"] = markers
+            config.write(f, space_around_delimiters=False)
