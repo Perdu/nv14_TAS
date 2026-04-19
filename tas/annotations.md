@@ -777,7 +777,7 @@ rerecords: 433
 I tried various stuff, notably to keep going left, then hold right while jumping (see branch 9).
 
 # 20-2
-rerecords: 661
+rerecords: 1264
 
 Branch 8: RTA route a bit more optimized for the beginning
 
@@ -1758,4 +1758,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 185476
+# Total rerecords: 186079
