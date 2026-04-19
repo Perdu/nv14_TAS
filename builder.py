@@ -5,11 +5,15 @@ import sys
 import getopt
 import yaml
 import csv
+import tarfile
+import re
 import configparser
 from string import Template
 
 from converter import convert_demo_to_libtas
 
+
+N_LEVELS_PATH = "volume/n_levels"
 
 def usage():
     print(f"Usage: {sys.argv[0]} [-e END_EPISODE|-s START_EPISODE|-r|-h]")
@@ -25,6 +29,28 @@ def start_episode(col, row):
     # the right coordinates. On the second frame, click on right
     # coordinates
     return f"|K6e|M{coord["column"][col]}:{coord["row"][row]}:A:.....:0|\n|M{coord["column"][col]}:{coord["row"][row]}:A:1....:0|\n|\n"
+
+
+def get_rerecords_number(level_name):
+    archive_path = f"{N_LEVELS_PATH}/{level_name}.ltm"
+
+    with tarfile.open(archive_path, "r:gz") as tar:
+        try:
+            config_member = tar.getmember("config.ini")
+        except KeyError:
+            raise FileNotFoundError("config.ini not found in archive")
+
+        config_file = tar.extractfile(config_member)
+        if config_file is None:
+            raise ValueError("Could not extract config.ini")
+
+        content = config_file.read().decode("utf-8")
+
+    match = re.search(r"^rerecord_count\s*=\s*(\d+)", content, re.MULTILINE)
+    if not match:
+        raise KeyError("rerecord_count not found in config.ini")
+
+    return int(match.group(1))
 
 
 def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="Speedrun"):
@@ -82,6 +108,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
             markers[f"{nb_markers}\\frame"] = nb_frames
             markers[f"{nb_markers}\\text"] = level_name
             demo_str = level_data[score_type]["demo"]
+            rerecords = get_rerecords_number(level_name)
             libtas_input, nb_frames_demo = convert_demo_to_libtas(demo_str)
             if rta:
                 try:
@@ -92,7 +119,7 @@ def build_libtas_input(begin_episode=0, end_episode=99, rta=False, score_type="S
                 lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"{level_data[score_type]['authors']}, {level_data[score_type]['time']}, {date}\"}},\n"
             else:
                 diff_with_rta = int(data_rta[level_name][score_type]['time']) - int(level_data[score_type]['time'].replace(' f', ''))
-                lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"TAS: {level_data[score_type]['authors']}, {level_data[score_type]['time']}\",\"0th: {data_rta[level_name][score_type]['authors']}, {data_rta[level_name][score_type]['time']} f\", \"- {diff_with_rta} f\"}},\n"
+                lua_infos += f"    {{{nb_frames}, {nb_frames+nb_frames_demo}, \"TAS: {level_data[score_type]['authors']}, {level_data[score_type]['time']}\",\"0th: {data_rta[level_name][score_type]['authors']}, {data_rta[level_name][score_type]['time']} f\", \"- {diff_with_rta} f\", {rerecords}}},\n"
             res += libtas_input
             for i in range(nb_frames_demo):
                 output_ghost.writerow([nb_frames + i] + ghost_data[i][1:])
