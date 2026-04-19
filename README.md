@@ -56,8 +56,9 @@ And more.
 
 ## Todo
 - [Document all techniques](techniques/README.md)
+- Patch the game to display all techniques in real time
+- have a way to properly select which patched features we use during recording
 - Extract ninja state https://discord.com/channels/197765375503368192/199460839252688896/1465895994767183942
-- understand the slipping through one-ways glitch
 - Bruteforcer for walljumps
 - Bruteforcer for cj and rcj
 - Bruteforcer for double bb jump
