@@ -335,8 +335,12 @@ PlayerObject.prototype.techwrite = function(name, color, durationFrames)
     }, intervalMs);
 };
 
-PlayerObject.prototype.simple_write = function(name, color)
+PlayerObject.prototype.simple_write = function(name, color, write_on_record)
 {
+    if (!write_on_record && _root.patch_options.recording) {
+        return;
+    }
+
     if (color == undefined) color = 0xFF000000;
 
     var techbox = gfx.CreateSprite("guiLevelNameMC", LAYER_GUI);

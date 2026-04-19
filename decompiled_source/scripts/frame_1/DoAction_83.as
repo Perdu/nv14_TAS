@@ -213,7 +213,7 @@ PlayerObject.prototype.TickNormal = function()
    objects.Moved(this);
    if (this.NEAR_WALL) {
 	  trace("FRAME " + game.tickCounter + " NEAR_WALL == true");
-          this.simple_write("NEAR_WALL", 0xFF000000);
+          this.simple_write("NEAR_WALL", 0xFF000000, false);
    }
    this.Think();
    if(_root._dbg_x !== p.x || _root._dbg_y !== p.y)
