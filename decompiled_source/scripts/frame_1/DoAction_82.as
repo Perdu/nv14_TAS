@@ -39,23 +39,25 @@ DroneObject.prototype.Think = function()
 DroneObject.prototype.Think_TargetPlayer = function()
 {
    trace("FRAME " + game.tickCounter + " Drone " + this.UID + " checking for player.");
-   var _loc2_ = gfx.CreateEmptySprite(LAYER_OBJECTS);
-   _loc2_._x = this.pos.x;
-   _loc2_._y = this.pos.y;
-   _loc2_.clear();
-   _loc2_.lineStyle(2,16711935,100);
-   _loc2_.moveTo(0,0);
-   _loc2_.lineTo(player.pos.x - this.pos.x,player.pos.y - this.pos.y);
-   _loc2_.__ttl = 3;
-   _loc2_.onEnterFrame = function()
-   {
-      this.__ttl--;
-      if(this.__ttl <= 0)
+   if (!_root.patch_options.recording) {
+      var _loc2_ = gfx.CreateEmptySprite(LAYER_OBJECTS);
+      _loc2_._x = this.pos.x;
+      _loc2_._y = this.pos.y;
+      _loc2_.clear();
+      _loc2_.lineStyle(2,16711935,100);
+      _loc2_.moveTo(0,0);
+      _loc2_.lineTo(player.pos.x - this.pos.x,player.pos.y - this.pos.y);
+      _loc2_.__ttl = 3;
+      _loc2_.onEnterFrame = function()
       {
-         this.onEnterFrame = null;
-         this.removeMovieClip();
-      }
-   };
+         this.__ttl--;
+         if(this.__ttl <= 0)
+         {
+            this.onEnterFrame = null;
+            this.removeMovieClip();
+         }
+      };
+   }
    if(QueryRayObj(this.view,this.pos,player.pos,player))
    {
       trace("FRAME " + game.tickCounter + " Drone " + this.UID + " detected player.");
