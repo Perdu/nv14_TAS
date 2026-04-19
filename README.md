@@ -280,6 +280,10 @@ ffmpeg -i 'n_rta_hs.mkv' -vf scale=-1:720 'n_rta_hs_upscaled.mkv'
 
 This significantly *reduced* the size of the video because the fixed bitrate is removed (although... Sometimes. Not always).
 
+### Patch options
+
+I set options in the patched .swf to be able to selectively disable some display during encode. To do so, create a file called `volume/patch_config.txt` with the following content: `recording=true` (this is done automatically be `encode.sh`).
+
 ## Patching the swf
 
 I set up the [decompiled_source](decompiled_source) folder to be able to track changes to the swf.
