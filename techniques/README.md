@@ -31,7 +31,7 @@ Links:
 
 ### Perpendicular (reverse) Jump (pj)
 
-08-2
+![Perpendicular (reverse) Jump](gifs/pj_08-2.gif)
 
 ### Corner kick (ck)
 
