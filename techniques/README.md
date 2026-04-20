@@ -39,9 +39,9 @@ Links:
 
 ### Bounceblock Backward Walljump (bbbwj) (high and low) (+optimization)
 
-Low: 90-0
+High: ![Bounceblock Backward Walljump (high)](gifs/bbbwj_high_90-0.gif)
 
-High: 00-0
+Low: ![Bounceblock Backward Walljump (low)](gifs/bbbwj_low_00-0.gif)
 
 Side:
 
