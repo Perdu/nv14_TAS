@@ -27,7 +27,7 @@ Links:
 
 ### Reverse Corner Jump (rcj)
 
-05-4
+![Reverse Corner jump](gifs/rcj_05-4.gif)
 
 ### Perpendicular (reverse) Jump (pj)
 
@@ -94,6 +94,8 @@ Triple bb w/ bwj
 06-2
 
 ### Ledge grab
+
+(They may actually just be a ceiling push)
 
 ## TAS-only (/optimization)
 
