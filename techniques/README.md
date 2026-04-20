@@ -38,11 +38,21 @@ Links:
 08-4
 
 ### Bounceblock Backward Walljump (bbbwj) (high and low) (+optimization)
+
+Low: 90-0
+
+High: 00-0
+
+Side:
+
 ### Thwump bwj (+optimization)
 
 ![Thwump bwj](gifs/thwump_bwj_06-4.gif)
 
 ### thwump push (+optimization)
+
+22-0
+
 ### Clipping through oneways using corners
 ### Double bb
 ### Triple bb
