@@ -628,6 +628,8 @@ rerecords: 307
 
 
 # 15-4
+rerecords: 89
+
 
 
 # 16-0
@@ -870,11 +872,6 @@ rerecords: 463
 
 
 
-# 25-1
-rerecords: 314
-
-
-
 # 25-2
 rerecords: 262
 
@@ -979,9 +976,6 @@ rerecords: 250
 
 
 
-# 34-0
-
-
 # 34-3
 rerecords: 337
 
@@ -1011,6 +1005,11 @@ rerecords: 85
 
 Well, kryX-orange's 0th is maxed
 I can get a slight push down, but it's far from being enough to save a frame
+
+# 37-1
+rerecords: 46
+
+
 
 # 37-2
 rerecords: 55
@@ -1128,11 +1127,6 @@ rerecords: 187
 Branch 9: optimized rta route (3f slower)
 
 Can't get a triple to work on the first slope, I always get a stumble for the 3rd jump
-
-# 47-1
-rerecords: 68
-
-
 
 # 47-2
 rerecords: 138
@@ -1574,11 +1568,6 @@ rerecords: 971
 
 Branch 9: ledge grab in the end
 
-# 76-1
-rerecords: 587
-
-bwj after exit switch 58, 431.8001
-
 # 76-2
 rerecords: 198
 
@@ -1745,4 +1734,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 189765
+# Total rerecords: 188931
