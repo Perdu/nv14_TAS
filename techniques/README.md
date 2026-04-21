@@ -35,7 +35,7 @@ Links:
 
 ### Corner kick (ck)
 
-08-4
+17-2
 
 ### Bounceblock Backward Walljump (bbbwj) (high and low) (+optimization)
 
@@ -43,7 +43,7 @@ High: ![Bounceblock Backward Walljump (high)](gifs/bbbwj_high_90-0.gif)
 
 Low: ![Bounceblock Backward Walljump (low)](gifs/bbbwj_low_00-0.gif)
 
-Side:
+Side: 14-4
 
 ### Thwump bwj (+optimization)
 
@@ -53,12 +53,16 @@ Side:
 
 22-0
 
+17-1
+
 ### Clipping through oneways using corners
 ### Double bb
 ### Triple bb
 ### Bounceblock Corner Double (bbcd)
 
 Double bb w/ bwj
+
+19-1
 
 ### Bounceblock Corner Triple (bbct)
 
@@ -70,6 +74,9 @@ Triple bb w/ bwj
 ### chimney jumps
 ### ceiling push
 ### ceiling shove (?)
+
+17-3
+
 ### Getting squeezed (by thwumps mostly)
 
 ### Angled lp+wj
@@ -97,16 +104,21 @@ Triple bb w/ bwj
 
 (They may actually just be a ceiling push)
 
+19-3
+
 ## TAS-only (/optimization)
 
 ### Quadruple bbwj
 
 ![Quadruple bbwj](gifs/quad_bbwj_20-2.gif)
 
+18-4
 
 ### Tile bwj
 
 08-2
+
+18-3
 
 ### cj optimization
 ### Slope jump optimization
@@ -118,6 +130,8 @@ Triple bb w/ bwj
 ### Exit door hitbox optimization
 ### Jumping to maximize speed
 ### Turnarounds optimization
+
+19-0
 
 ### Delaying drone detection
 
