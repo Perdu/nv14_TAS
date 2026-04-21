@@ -64,6 +64,15 @@ def parse_score(value, score_type="Speedrun"):
     except (ValueError, OverflowError):
         return None
 
+def get_total_rta_time_no_loadtimes(rta_data, score_type="Speedrun"):
+    total_score = 0
+    for key, value in rta_data.items():
+        if "time" in rta_data[key][score_type]:
+            rta_score = parse_score(rta_data[key][score_type]["time"], score_type)
+            total_score += rta_score
+    return total_score
+
+
 # AI-generated
 def display_time_difference(score_type="Speedrun", sort=True, use_color=True, display_totals=True):
     """
@@ -184,13 +193,16 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True, di
     if results and display_totals:
         total_diff = total_rta - total_tas
         
+        total_rta_all_levels = get_total_rta_time_no_loadtimes(rta_data, score_type)
         if score_type == "Speedrun":
             total_diff_s = total_diff * 0.025
             formatted_diff = format_seconds(total_diff_s)
             formatted_tas = format_seconds(total_tas * 0.025)
             formatted_rta = format_seconds(total_rta * 0.025)
+            formatted_rta_all_levels = format_seconds(total_rta_all_levels * 0.025)
+            percentage_rta = total_rta / total_rta_all_levels * 100
             print(f"Total TAS: {total_tas} {unit} ({formatted_tas})")
-            print(f"Total RTA: {total_rta} {unit} ({formatted_rta})")
+            print(f"Total RTA: {total_rta} {unit} ({formatted_rta}) / {total_rta_all_levels} f ({formatted_rta_all_levels}) ({percentage_rta:.2f} %)")
             print(f"Total Δ   = +{total_diff} {unit} ({formatted_diff})")
         else:
             formatted = format_seconds(total_diff)
