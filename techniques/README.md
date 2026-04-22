@@ -129,6 +129,10 @@ Triple bb w/ bwj
 ### Surviving high-speed chimney jumps
 ### Exit door hitbox optimization
 ### Jumping to maximize speed
+### Non-slowing stumbles
+
+49-2
+
 ### Turnarounds optimization
 
 19-0
