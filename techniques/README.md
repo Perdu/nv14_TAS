@@ -76,17 +76,20 @@ Triple bb w/ bwj
 ![Chimney jumps](gifs/chimney_jumps_02-4.gif)
 ![Chimney jumps (slowed)](gifs/chimney_jumps_02-4_slowed.gif)
 
-### Ceiling push
-
-![Ceiling push](gifs/ceiling_push_11-1.gif)
-
 ### Corner shove
 
-![Corner shove](gifs/corner_shove_17-3.gif)
+![Corner shove](gifs/corner_shove_11-1.gif)
 
-### Corner push
+### Corner pushes
 
-57-0 but there are better ones
+![Corner push (sideway, moving upwards)](gifs/corner_shove_17-3.gif)
+
+Sideway (moving downwards) : 25-2, 57-0 but there are better ones
+
+Downwards : 27-2
+(ledge grabs are probably just downwards corner pushes)
+
+upwards: 10-2
 
 ### Getting squeezed (by thwumps mostly)
 
@@ -126,10 +129,6 @@ Turning 1 frame before jumping off the wall (slowed): ![Backwards walljump (turn
 ![Walljump on small tiles](gifs/tile_bwj_06-2.gif)
 
 ### Tile rcj
-
-### Ledge grab
-
-(They may actually just be a ceiling push)
 
 ## TAS-only (/optimization)
 
