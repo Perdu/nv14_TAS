@@ -73,7 +73,7 @@ Triple bb w/ bwj
 ### Sideways double/triple bb
 ### Chimney jumps
 
-![Chimney jumps](gifs/chimney_jumps_02-4_slowed.gif)
+![Chimney jumps](gifs/chimney_jumps_02-4.gif)
 ![Chimney jumps (slowed)](gifs/chimney_jumps_02-4_slowed.gif)
 
 ### Ceiling push
