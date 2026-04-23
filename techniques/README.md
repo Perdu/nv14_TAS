@@ -66,10 +66,16 @@ Double bb w/ bwj
 
 Triple bb w/ bwj
 
+![Bounceblock Corner Triple](gifs/bbct_33-2.gif)
+
 (actually TAS only but it doesn't make sense to separate explanations. Categories could be reworked or we could have a whole bounceblock category)
 
 ### Sideways double/triple bb
-### chimney jumps
+### Chimney jumps
+
+![Chimney jumps](gifs/chimney_jumps_02-4_slowed.gif)
+![Chimney jumps (slowed)](gifs/chimney_jumps_02-4_slowed.gif)
+
 ### Ceiling push
 
 ![Ceiling push](gifs/ceiling_push_11-1.gif)
@@ -84,6 +90,8 @@ Triple bb w/ bwj
 
 ### Getting squeezed (by thwumps mostly)
 
+![Thwump squeeze](gifs/thwump_squeeze_88-4.gif)
+
 ### lp+wj
 
 ![Launchpad + Walljump](gifs/lpwj_00-0hs.gif)
@@ -93,6 +101,8 @@ Triple bb w/ bwj
 A bit harder version of the lp+wj. With a precise positioning and jump press, you can get propelled horizontally along with the vertical propulsion.
 
 ![Angled launchpad + walljump](gifs/angled_lpwj_00-0hs.gif)
+
+![launchpad + wall on a 45 degree lp](gifs/45angled_lpwj_29-1.gif)
 
 ### Taking only 1 stacked object
 
@@ -126,7 +136,7 @@ Turning 1 frame before jumping off the wall (slowed): ![Backwards walljump (turn
 ### Quadruple bbwj
 
 ![Quadruple bbwj](gifs/quad_bbwj_10-2.gif)
-Slowed: ![Quadruple bbwj](gifs/quad_bbwj_20-2_slowed.gif)
+Slowed: ![Quadruple bbwj](gifs/quad_bbwj_10-2_slowed.gif)
 
 18-4
 
