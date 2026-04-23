@@ -109,7 +109,7 @@ A bit harder version of the lp+wj. With a precise positioning and jump press, yo
 
 Tile: ![backwards walljump on special tiles](gifs/bwj_tile_08-3.gif)
 
-Turning 1 frame before jumping off the wall: ![Backwards walljump (turning while falling)](gifs/bwj_turn_01-4.gif)
+Turning 1 frame before jumping off the wall (slowed): ![Backwards walljump (turning while falling)](gifs/bwj_turn_01-4.gif)
 
 ### Tile wj
 
@@ -129,7 +129,8 @@ Turning 1 frame before jumping off the wall: ![Backwards walljump (turning while
 
 ### Quadruple bbwj
 
-![Quadruple bbwj](gifs/quad_bbwj_20-2.gif)
+![Quadruple bbwj](gifs/quad_bbwj_10-2.gif)
+Slowed: ![Quadruple bbwj](gifs/quad_bbwj_20-2_slowed.gif)
 
 18-4
 
