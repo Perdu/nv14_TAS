@@ -84,9 +84,15 @@ Triple bb w/ bwj
 
 ### Getting squeezed (by thwumps mostly)
 
+### lp+wj
+
+![Launchpad + Walljump](gifs/lpwj_00-0hs.gif)
+
 ### Angled lp+wj
 
-00-0 hs
+A bit harder version of the lp+wj. With a precise positioning and jump press, you can get propelled horizontally along with the vertical propulsion.
+
+![Angled launchpad + walljump](gifs/angled_lpwj_00-0hs.gif)
 
 ### Taking only 1 stacked object
 
@@ -95,15 +101,15 @@ Triple bb w/ bwj
 ## Rare in RTA
 
 ### Clipping
-### bwj
+### Backwards walljump (bwj)
 
 07-2
 
 19-2
 
-Tile: 08-3
+Tile: ![backwards walljump on special tiles](gifs/bwj_tile_08-3.gif)
 
-Turning before jumping off the wall: 1-4
+Turning 1 frame before jumping off the wall: ![Backwards walljump (turning while falling)](gifs/bwj_turn_01-4.gif)
 
 ### Tile wj
 
