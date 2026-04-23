@@ -113,17 +113,13 @@ Turning 1 frame before jumping off the wall (slowed): ![Backwards walljump (turn
 
 ### Tile wj
 
-06-2
+![Walljump on small tiles](gifs/tile_bwj_06-2.gif)
 
 ### Tile rcj
-
-06-2
 
 ### Ledge grab
 
 (They may actually just be a ceiling push)
-
-19-3
 
 ## TAS-only (/optimization)
 
@@ -155,7 +151,7 @@ Slowed: ![Quadruple bbwj](gifs/quad_bbwj_20-2_slowed.gif)
 
 ### Turnarounds optimization
 
-19-0
+![Optimized turnaround](gifs/optimized_turnaround_19-0.gif)
 
 ### Delaying drone detection
 
