@@ -1,6 +1,6 @@
 # List of all techniques for N
 
-Todo: detail all techniques, ideally with gifs, similar to what can be found [here](https://tasvideos.org/GameResources/NES/Rockman).
+Todo: detail all techniques, ideally with gifs, similar to what can be found [here](https://tasvideos.org/GameResources/NES/Rockman). Gifs were produced using method described [here](notes.md).
 
 Links:
 - [Thread on air speed](https://forum.droni.es/viewtopic.php?f=20&t=10336&sid=569eab4beeecd814135f67b0fa574a3a)
@@ -187,7 +187,3 @@ As a result, it is occasionnaly possible to delay drone detection by interacting
 
 (such as directional keys
 being blocked after a certain speed)
-
-# Notes
-
-Model for this page: https://tasvideos.org/GameResources/NES/Rockman
