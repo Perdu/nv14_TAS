@@ -92,6 +92,12 @@ Triple bb w/ bwj
 
 07-2
 
+19-2
+
+Tile: 08-3
+
+Turning before jumping off the wall: 1-4
+
 ### Tile wj
 
 06-2
