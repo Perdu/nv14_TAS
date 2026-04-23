@@ -187,3 +187,7 @@ As a result, it is occasionnaly possible to delay drone detection by interacting
 
 (such as directional keys
 being blocked after a certain speed)
+
+# Notes
+
+Model for this page: https://tasvideos.org/GameResources/NES/Rockman
