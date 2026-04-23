@@ -51,9 +51,7 @@ Side: 14-4
 
 ### thwump push (+optimization)
 
-22-0
-
-17-1
+![Thwump push](gifs/thumpw_push_17-1.gif)
 
 ### Clipping through oneways using corners
 ### Double bb
