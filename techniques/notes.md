@@ -8,7 +8,7 @@ python get_demo.py 27-2 | xclip -selection clipboard
 ```
 sleep 1 ; ffmpeg -y -video_size 1920x1080 -framerate 25 -f x11grab -i :0.0 -vf "crop=in_w:in_h-50:0:0,format=yuv420p" output.mp4
 ```
-- Use mpv to create video and find start timestamp
+- Use mpv to create video and find start timestamp (requires having installed mpv-scripts https://github.com/occivink/mpv-scripts). I use `c` for crop and `g` to create gifs in my setup (requires some config).
 ```
 mpv 'output.mp4' | ./create_encode_command.sh
 ```
