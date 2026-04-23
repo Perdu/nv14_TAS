@@ -35,7 +35,7 @@ Links:
 
 ### Corner kick (ck)
 
-17-2
+![Corner kick](gifs/ck_17-2.gif)
 
 ### Bounceblock Backward Walljump (bbbwj) (high and low) (+optimization)
 
@@ -43,7 +43,7 @@ High: ![Bounceblock Backward Walljump (high)](gifs/bbbwj_high_90-0.gif)
 
 Low: ![Bounceblock Backward Walljump (low)](gifs/bbbwj_low_00-0.gif)
 
-Side: 14-4
+Side: ![Bounceblock Backward Walljump (side)](gifs/bbbwj_side_14-4.gif)
 
 ### Thwump bwj (+optimization)
 
@@ -60,7 +60,7 @@ Side: 14-4
 
 Double bb w/ bwj
 
-19-1
+![Bounceblock Corner Double](gifs/bbcd_19-1.gif)
 
 ### Bounceblock Corner Triple (bbct)
 
@@ -70,10 +70,17 @@ Triple bb w/ bwj
 
 ### Sideways double/triple bb
 ### chimney jumps
-### ceiling push
-### ceiling shove (?)
+### Ceiling push
 
-17-3
+![Ceiling push](gifs/ceiling_push_11-1.gif)
+
+### Corner shove
+
+![Corner shove](gifs/corner_shove_17-3.gif)
+
+### Corner push
+
+57-0 but there are better ones
 
 ### Getting squeezed (by thwumps mostly)
 
