@@ -84,12 +84,12 @@ Triple bb w/ bwj
 
 ![Corner push (sideway, moving upwards)](gifs/corner_shove_17-3.gif)
 
-Sideway (moving downwards) : 25-2, 57-0 but there are better ones
+Sideway (moving downwards) (bounce) : 25-2, 57-0 but there are better ones
 
 Downwards : 27-2
 (ledge grabs are probably just downwards corner pushes)
 
-upwards: 10-2
+upwards (bump): 10-2
 
 ### Getting squeezed (by thwumps mostly)
 
