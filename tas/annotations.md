@@ -849,7 +849,7 @@ rerecords: 678
 
 
 # 23-3
-rerecords: 363
+rerecords: 991
 
 Branch 9: crazy thwump push
 Branch 8: path with a thwump push
@@ -1808,4 +1808,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 192115
+# Total rerecords: 192743
