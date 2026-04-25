@@ -42,6 +42,8 @@ if [ "$LEVEL" == "" ]; then
     exit 1
 fi
 
+mkdir -p $DOCKER_VOLUME_PATH/n_demos/
+
 ./build_demo.sh -i "$LEVEL"
 
 if [ $LOCAL -eq 1 ]; then
