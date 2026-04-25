@@ -926,6 +926,11 @@ rerecords: 289
 
 
 
+# 27-4
+rerecords: 420
+
+
+
 # 28-1
 rerecords: 53
 
@@ -1002,9 +1007,10 @@ rerecords: 337
 
 
 # 35-2
-rerecords: 328
+rerecords: 804
 
-
+Branch 9: alt route for the end, slower
+Branch 7: attempt to use the slope to jump up directly
 
 # 35-3
 rerecords: 225
@@ -1813,4 +1819,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 193202
+# Total rerecords: 194098
