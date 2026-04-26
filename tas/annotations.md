@@ -916,6 +916,11 @@ Branch 7: using push at the end (2f slower)
 
 Perhaps a bwj in the end could save 1 or 2 frames
 
+# 27-1
+rerecords: 611
+
+
+
 # 27-2
 rerecords: 586
 
@@ -1822,4 +1827,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 195004
+# Total rerecords: 195615
