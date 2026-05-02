@@ -923,9 +923,9 @@ rerecords: 444
 
 
 # 26-4
-rerecords: 332
+rerecords: 1476
 
-
+F8: Alternate route, slower, incomplete
 
 # 27-0
 rerecords: 806
@@ -1847,4 +1847,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 198898
+# Total rerecords: 200042
