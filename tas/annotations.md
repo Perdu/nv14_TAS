@@ -922,6 +922,11 @@ rerecords: 444
 
 
 
+# 26-3
+rerecords: 2256
+
+F9: rta sr route, incomplete, slower
+
 # 26-4
 rerecords: 1476
 
@@ -1847,4 +1852,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 200042
+# Total rerecords: 202298
