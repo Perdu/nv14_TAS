@@ -839,7 +839,9 @@ rerecords: 1015
 
 
 # 22-3
-rerecords: 915
+rerecords: 2399
+
+Branch 8: Double cj start (not high enough to avoid wj)
 
 Branch 9: using TRO's landing with no wallslide
 
@@ -1857,4 +1859,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 202850
+# Total rerecords: 204334
