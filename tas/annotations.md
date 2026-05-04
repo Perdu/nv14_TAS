@@ -973,6 +973,12 @@ rerecords: 420
 
 
 
+# 28-0
+rerecords: 978
+
+Branch 8: cwj route (impossible)
+Branch 9: double bwj route (slower)
+
 # 28-1
 rerecords: 147
 
@@ -1869,4 +1875,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 206633
+# Total rerecords: 207611
