@@ -879,6 +879,14 @@ rerecords: 957
 
 
 
+# 24-0
+rerecords: 1904
+
+Branch 6: Double bbbwj across top
+Branch 7: Middle section first (even frame perfect laser drone cycle is not enough)
+Branch 8: Right switch -> left switch
+Branch 9: Right switch -> exit switch -> left switch (slower)
+
 # 24-1
 rerecords: 370
 
@@ -1875,4 +1883,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 207611
+# Total rerecords: 209515
