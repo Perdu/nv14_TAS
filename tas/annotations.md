@@ -1050,7 +1050,7 @@ rerecords: 321
 # 31-1
 rerecords: 809
 
-
+Branch 9: double thwump bwj (slower)
 
 # 31-4
 rerecords: 388
