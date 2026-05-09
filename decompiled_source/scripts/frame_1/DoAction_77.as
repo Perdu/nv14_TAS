@@ -95,6 +95,7 @@ TurretObject.prototype.StopFiring = function()
 };
 TurretObject.prototype.StartTargetting = function()
 {
+   trace("FRAME " + game.tickCounter + " Turret " + this.UID + " started targetting player.");
    this.crosshairMC._visible = true;
    this.crosshairMC.gotoAndStop("aim_far");
    this.aimSpeed = this.farAimSpeed;
@@ -104,6 +105,7 @@ TurretObject.prototype.StartTargetting = function()
 };
 TurretObject.prototype.StopTargetting = function()
 {
+   trace("FRAME " + game.tickCounter + " Turret " + this.UID + " stopped targetting player.");
    this.crosshairMC._visible = false;
    objects.EndUpdate(this);
    this.Think = this.Think_Waiting;
@@ -166,6 +168,26 @@ TurretObject.prototype.Fire = function()
 };
 TurretObject.prototype.Think_Waiting = function()
 {
+   trace("FRAME " + game.tickCounter + " Turret " + this.UID + " checking for player.");
+   if (!_root.patch_options.recording) {
+      var _loc2_ = gfx.CreateEmptySprite(LAYER_OBJECTS);
+      _loc2_._x = this.pos.x;
+      _loc2_._y = this.pos.y;
+      _loc2_.clear();
+      _loc2_.lineStyle(2,16711935,100);
+      _loc2_.moveTo(0,0);
+      _loc2_.lineTo(player.pos.x - this.pos.x,player.pos.y - this.pos.y);
+      _loc2_.__ttl = 3;
+      _loc2_.onEnterFrame = function()
+      {
+         this.__ttl--;
+         if(this.__ttl <= 0)
+         {
+            this.onEnterFrame = null;
+            this.removeMovieClip();
+         }
+      };
+   }
    if(QueryRayObj(this.view,this.pos,player.pos,player))
    {
       this.StartTargetting();
@@ -173,6 +195,26 @@ TurretObject.prototype.Think_Waiting = function()
 };
 TurretObject.prototype.Think_Targetting = function()
 {
+	trace("FRAME " + game.tickCounter + " Turret " + this.UID + " checking for player.");
+   if (!_root.patch_options.recording) {
+      var _loc2_ = gfx.CreateEmptySprite(LAYER_OBJECTS);
+      _loc2_._x = this.pos.x;
+      _loc2_._y = this.pos.y;
+      _loc2_.clear();
+      _loc2_.lineStyle(2,16711935,100);
+      _loc2_.moveTo(0,0);
+      _loc2_.lineTo(player.pos.x - this.pos.x,player.pos.y - this.pos.y);
+      _loc2_.__ttl = 3;
+      _loc2_.onEnterFrame = function()
+      {
+         this.__ttl--;
+         if(this.__ttl <= 0)
+         {
+            this.onEnterFrame = null;
+            this.removeMovieClip();
+         }
+      };
+   }
    if(!QueryRayObj(this.view,this.pos,player.pos,player))
    {
       this.StopTargetting();

@@ -10,6 +10,8 @@ DroneObject.prototype.TestVsPlayer_Zap = function(guy)
    var _loc4_ = this.pos.x - _loc3_.x;
    var _loc5_ = this.pos.y - _loc3_.y;
    var _loc6_ = Math.sqrt(_loc4_ * _loc4_ + _loc5_ * _loc5_);
+   var overlap = _loc6_ - (this.r + guy.r)
+   trace("FRAME " + game.tickCounter + " Distance to Zap Drone: " + overlap)
    if(_loc6_ < this.r + guy.r)
    {
       _loc4_ /= _loc6_;
