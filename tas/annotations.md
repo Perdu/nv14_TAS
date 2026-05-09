@@ -1053,9 +1053,9 @@ rerecords: 483
 
 
 # 30-3
-rerecords: 228
+rerecords: 229
 
-
+Branch 9: rcj -> bwj route (probably slower)
 
 # 31-1
 rerecords: 809
@@ -1069,6 +1069,11 @@ rerecords: 388
 
 # 32-1
 rerecords: 339
+
+
+
+# 33-1
+rerecords: 570
 
 
 
@@ -1923,4 +1928,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 214153
+# Total rerecords: 214724
