@@ -1176,9 +1176,9 @@ Branch 4: attempt at optimizing thwump bwj, but can't get a proper jump inbetwee
 In the last section, I tried using a ceiling shove to get a bwj and get above the drone, but it barely doesn't make it
 
 # 38-0
-rerecords: 265
+rerecords: 940
 
-
+Branch 9: Faster ending blocked by gauss
 
 # 38-1
 rerecords: 1047
@@ -1949,4 +1949,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 216960
+# Total rerecords: 217635
