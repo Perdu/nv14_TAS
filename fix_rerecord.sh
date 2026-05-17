@@ -8,7 +8,7 @@ if [ $# -ne 2 -o ! -f volume/n_levels/"$1".ltm ]; then
     exit 1
 fi
 
-mkdir extract
+mkdir -p extract
 rm extract/*
 
 tar xzf volume/n_levels/"$1".ltm -C extract/
