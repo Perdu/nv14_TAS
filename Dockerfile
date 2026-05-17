@@ -73,6 +73,7 @@ FROM debian:12-slim
   COPY --from=ruffle-builder /root/src/ruffle/target/release/ruffle_desktop /usr/local/bin/ruffle_desktop
   COPY --from=libtas-builder /root/src/libTAS/build/AppDir/usr/bin/libTAS /usr/local/bin/libTAS
   COPY --from=libtas-builder /root/src/libTAS/build/AppDir/usr/bin/libtas.so /usr/local/bin/libtas.so
+  COPY --from=libtas-builder /root/src/libTAS/build/AppDir/usr/bin/libtas32.so /usr/local/bin/libtas32.so
 
   # n-related commands
     COPY external/n_v14.swf /home/
