@@ -1124,7 +1124,7 @@ rerecords: 922
 
 
 # 35-2
-rerecords: 1911
+rerecords: 2996
 
 Branch 9: alt route for the end, slower
 Branch 8: jumping 1f earlier on the right wall, but somehow slower
@@ -1201,7 +1201,7 @@ rerecords: 1047
 
 
 # 38-3
-rerecords: 444
+rerecords: 1384
 
 
 
@@ -1969,4 +1969,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 219784
+# Total rerecords: 221809
