@@ -1067,6 +1067,11 @@ rerecords: 809
 
 Branch 9: double thwump bwj (slower)
 
+# 31-2
+rerecords: 512
+
+
+
 # 31-4
 rerecords: 388
 
@@ -1969,4 +1974,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 221809
+# Total rerecords: 222321
