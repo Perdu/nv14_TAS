@@ -131,7 +131,7 @@ PlayerObject.prototype.Think = function()
             particles.SpawnJumpDust(this.pos.x - this.wallN.x * this.r,this.pos.y - this.wallN.y * this.r,this.wallN.x * 90);
             this.Jump(this.wallN.x * _loc17_,this.wallN.y - _loc18_);
             if (this.NEAR_OBJECT && this.NEAR_OBJECT_type == OBJTYPE_BOUNCEBLOCK) {
-                if (game.tickCounter - this.last_bbwj < 10) {
+                if ((game.tickCounter - this.last_bbwj < 10) && this.sameBB) {
                     if (game.tickCounter - this.last_doublebbwj < 10) {
                         if (game.tickCounter - this.last_triplebbwj < 10) {
                             this.techwrite("Quad bbwj", 0xFFFF0000);
