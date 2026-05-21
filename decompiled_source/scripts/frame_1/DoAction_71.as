@@ -154,10 +154,8 @@ BounceBlockObject.prototype.TestVsPlayer = function(guy)
             guy.ReportCollisionVsObject(this.mass * _loc3_,0,_loc9_,0,this);
          }
          if (guy.lastBB == this) {
-             trace("same BB");
              guy.sameBB = true;
          } else {
-             trace("not same BB");
              guy.sameBB = false;
          }
          guy.lastBB = this;
