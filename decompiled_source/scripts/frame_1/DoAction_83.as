@@ -459,6 +459,19 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
       }
       this.wallN.x = nx;
       this.wallN.y = ny;
+      var currentBBID = obj.anchor.x + "_" + obj.anchor.y;
+      if (player.lastObject == currentBBID) {
+          if (debug)
+              trace("same BB");
+          player.sameObject = true;
+      } else {
+          if (debug)
+              trace("not same BB");
+          player.sameObject = false;
+      }
+      if (debug)
+          trace("object: " + currentBBID);
+      player.lastObject = currentBBID;
    }
    else if(ny < 0)
    {

@@ -153,12 +153,6 @@ BounceBlockObject.prototype.TestVsPlayer = function(guy)
             this.pos.x -= (1 - this.mass) * _loc3_;
             guy.ReportCollisionVsObject(this.mass * _loc3_,0,_loc9_,0,this);
          }
-         if (guy.lastBB == this) {
-             guy.sameBB = true;
-         } else {
-             guy.sameBB = false;
-         }
-         guy.lastBB = this;
 
          this.sleepTimer = 0;
          if(this.ASLEEP)
