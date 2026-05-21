@@ -75,6 +75,7 @@ PlayerObject.prototype.SetupParams = function()
    this.last_jump = 0;
    this.last_slope_jump = 0;
    this.last_bbwj = 0;
+   this.last_bb = null;
    this.last_doublebbwj = 0;
    this.last_triplebbwj = 0;
    this.object_bbwj_position = false;
@@ -460,18 +461,7 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
       this.wallN.x = nx;
       this.wallN.y = ny;
       var currentBBID = obj.anchor.x + "_" + obj.anchor.y;
-      if (player.lastObject == currentBBID) {
-          if (debug)
-              trace("same BB");
-          player.sameObject = true;
-      } else {
-          if (debug)
-              trace("not same BB");
-          player.sameObject = false;
-      }
-      if (debug)
-          trace("object: " + currentBBID);
-      player.lastObject = currentBBID;
+      this.current_obj = obj;
    }
    else if(ny < 0)
    {
