@@ -236,6 +236,9 @@ PlayerObject.prototype.Think = function()
                 this.techwrite("Jump", 0XFF555555);
             } else if ((this.pos.x < this.oldpos.x && this.floorN.x < 0) || (this.pos.x > this.oldpos.x && this.floorN.x >= 0)) {
                 this.techwrite("cj", 0XFF000000);
+            } else if (this.floorN.x > -0.708 && this.floorN.x < -0.707 && this.floorN.y > -0.708 && this.floorN.y < -0.707) {
+                // @todo: add other types of slopes
+                this.techwrite("Reverse slope jump", 0XFF000000);
             } else {
                 this.techwrite("rcj", 0XFF000000);
             }
