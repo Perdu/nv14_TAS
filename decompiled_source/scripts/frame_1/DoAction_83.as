@@ -75,6 +75,7 @@ PlayerObject.prototype.SetupParams = function()
    this.last_jump = 0;
    this.last_slope_jump = 0;
    this.last_double_slope_jump = 0;
+   this.last_triple_slope_jump = 0;
    this.last_bb = null;
    this.last_bbwj = 0;
    this.last_doublebbwj = 0;

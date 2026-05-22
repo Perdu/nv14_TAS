@@ -224,8 +224,11 @@ PlayerObject.prototype.Think = function()
             this.Jump(0,-0.7);
             if (game.tickCounter - this.last_jump < 10) {
                 this.techwrite("Double Jump", 0xFF550000);
+            } else if (game.tickCounter - this.last_triple_slope_jump < 10) {
+                this.techwrite("Quad Slope Jump", 0xFFAA0000); // ex: 25-0
             } else if (game.tickCounter - this.last_double_slope_jump < 10) {
-                this.techwrite("Triple Slope Jump", 0xFFAA0000); // ex: 10-0
+                this.techwrite("Triple Slope Jump", 0xFF880000); // ex: 10-0
+                this.last_triple_slope_jump = game.tickCounter;
             } else if (game.tickCounter - this.last_slope_jump < 10) {
                 this.techwrite("Double Slope Jump", 0xFF550000);
                 this.last_double_slope_jump = game.tickCounter;
