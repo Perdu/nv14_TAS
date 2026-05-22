@@ -80,6 +80,7 @@ PlayerObject.prototype.SetupParams = function()
    this.last_doublebbwj = 0;
    this.last_triplebbwj = 0;
    this.lp_triggered = false;
+   this.lp_faces_up = true;
    this.object_bbwj_position = false;
    this.depenetration = false;
    this.depenetration_x = 0;

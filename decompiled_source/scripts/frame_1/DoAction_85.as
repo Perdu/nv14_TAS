@@ -159,7 +159,10 @@ PlayerObject.prototype.Think = function()
                     this.techwrite("Thwump wj", 0xFF555555);
                 }
             } else if (this.lp_triggered) {
-                this.techwrite("lp+wj", 0xFF880000); // 00-0
+                if (Math.abs(this.oldpos.x - this.pos.x) > 3 && this.lp_faces_up)
+                    this.techwrite("Angled lp+wj", 0xFFAA0000); // 29-1
+                else
+                    this.techwrite("lp+wj", 0xFF550000); // 00-0
             } else {
                 this.techwrite("wj", 0xFF555555);
             }

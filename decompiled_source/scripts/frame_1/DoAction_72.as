@@ -107,6 +107,13 @@ LaunchPadObject.prototype.TestVsPlayer = function(guy)
          this.mc.gotoAndPlay("launch_triggered");
          guy.Launch(this.nx * this.strength,this.ny * this.strength * _loc7_);
          guy.lp_triggered = true;
+         // Exclude situations such as 29-1 where we lp+wj an angled lp
+         // (so that we can distinguish lp+wj from angled lp+wj via
+         // x displacement)
+         if (this.ny < 0 && this.nx == 0)
+             guy.lp_faces_up = true;
+          else
+             guy.lp_faces_up = false;
       }
    }
 };
