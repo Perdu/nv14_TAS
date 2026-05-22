@@ -295,7 +295,8 @@ PlayerObject.prototype.decide_write_position = function(name)
     // invert in case of a wj
     if ((player.facingDir == 1 && name.slice(-2) != "wj") ||
         (player.facingDir == -1 && name.slice(-2) == "wj")) {
-        cur = cur - 50;
+        trace(name.length);
+        cur = cur - (35 + name.length * 4);
     }
     if (cur > 690)
         cur = 690;
