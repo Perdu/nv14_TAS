@@ -297,8 +297,9 @@ PlayerObject.prototype.decide_write_position = function(name)
         (player.facingDir == -1 && name.slice(-2) == "wj")) {
         cur = cur - (35 + name.length * 4);
     }
-    if (cur > 690)
-        cur = 690;
+    // if writing gets out of screen, write on the left instead
+    if (cur + name.length * 4 > 792)
+        cur = cur - (35 + name.length * 4);
     return cur;
 }
 PlayerObject.prototype.techwrite = function(name, color, durationFrames)
