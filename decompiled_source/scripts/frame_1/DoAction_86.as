@@ -292,11 +292,12 @@ PlayerObject.prototype.decide_write_position = function(name)
 {
     var cur_x = p.x;
     var cur_y = p.y;
+    var is_wj = (name == "wj" || (name.length > 2 && name.slice(-3) == " wj"));
     // Display behind the player. For this, we use facingDir, which we
     // invert in case of a wj
     // Also check that we don't get out-of-screen on the left
-    if (((player.facingDir == 1 && name.slice(-2) != "wj") ||
-        (player.facingDir == -1 && name.slice(-2) == "wj")) &&
+    if (((player.facingDir == 1 && ! is_wj) ||
+        (player.facingDir == -1 && is_wj)) &&
         (cur_x - (25 + name.length * 4) > 0)
        ) {
         cur_x = cur_x - (35 + name.length * 4);

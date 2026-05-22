@@ -134,20 +134,20 @@ PlayerObject.prototype.Think = function()
                 if ((game.tickCounter - this.last_bbwj < 10) && (this.last_bb == this.current_obj)) {
                     if (game.tickCounter - this.last_doublebbwj < 10) {
                         if (game.tickCounter - this.last_triplebbwj < 10) {
-                            this.techwrite("Quad bbwj", 0xFFFF0000);
+                            this.techwrite("Quad bb wj", 0xFFFF0000);
                         } else {
-                            this.techwrite("Triple bbwj", 0xFFAA0000);
+                            this.techwrite("Triple bb wj", 0xFFAA0000);
                         }
                         this.last_triplebbwj = game.tickCounter;
                     } else {
-                        this.techwrite("Double bbwj", 0xFF330000);
+                        this.techwrite("Double bb wj", 0xFF330000);
                     }
                     this.last_doublebbwj = game.tickCounter;
                 } else {
                     if (this.object_bbwj_position) {
-                        this.techwrite("bbbbwj", 0xFF880000);
+                        this.techwrite("bb bwj", 0xFF880000);
                     } else {
-                        this.techwrite("bbwj", 0xFF555555);
+                        this.techwrite("bb wj", 0xFF555555);
                     }
                 }
                 this.last_bbwj = game.tickCounter;
