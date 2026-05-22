@@ -290,17 +290,23 @@ PlayerObject.prototype.ExitCelebrate = function()
 };
 PlayerObject.prototype.decide_write_position = function(name)
 {
-    var cur = p.x;
+    var cur_x = p.x;
+    var cur_y = p.y;
     // Display behind the player. For this, we use facingDir, which we
     // invert in case of a wj
     if ((player.facingDir == 1 && name.slice(-2) != "wj") ||
         (player.facingDir == -1 && name.slice(-2) == "wj")) {
-        cur = cur - (35 + name.length * 4);
+        cur_x = cur_x - (35 + name.length * 4);
     }
     // if writing gets out of screen, write on the left instead
-    if (cur + name.length * 4 > 792)
-        cur = cur - (35 + name.length * 4);
-    return cur;
+    if (cur_x + name.length * 4 > 792)
+        cur_x = cur_x - (35 + name.length * 4);
+
+    if (name == "Ceiling push") {
+        cur_y = cur_y - 28;
+        cur_x = p.x - 35;
+    }
+    return { x: cur_x, y: cur_y };
 }
 PlayerObject.prototype.techwrite = function(name, color, durationFrames)
 {
@@ -308,8 +314,9 @@ PlayerObject.prototype.techwrite = function(name, color, durationFrames)
     if (durationFrames == undefined) durationFrames = 60;
 
     var techbox = gfx.CreateSprite("guiLevelNameMC", LAYER_GUI);
-    techbox._x = PlayerObject.prototype.decide_write_position(name);
-    techbox._y = p.y;
+    var pos = PlayerObject.prototype.decide_write_position(name);
+    techbox._x = pos.x
+    techbox._y = pos.y;
     techbox.txt = name;
 
     for (var k in techbox) {
