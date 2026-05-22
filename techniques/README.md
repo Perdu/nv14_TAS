@@ -149,6 +149,9 @@ Slowed: ![Quadruple bbwj](gifs/quad_bbwj_10-2_slowed.gif)
 ### Slope jump optimization
 ### Clipping through oneways
 ### Supercharged lp
+
+29-1
+
 ### lpwj (jumping through lp)
 ### wj optimization
 ### Surviving high-speed chimney jumps
