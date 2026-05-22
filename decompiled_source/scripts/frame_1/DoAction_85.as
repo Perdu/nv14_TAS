@@ -158,6 +158,8 @@ PlayerObject.prototype.Think = function()
                 } else {
                     this.techwrite("Thwump wj", 0xFF555555);
                 }
+            } else if (this.lp_triggered) {
+                this.techwrite("lp+wj", 0xFF880000); // 00-0
             } else {
                 this.techwrite("wj", 0xFF555555);
             }
@@ -232,7 +234,9 @@ PlayerObject.prototype.Think = function()
          }
          else
          {
-            if (this.floorN.x == 0 && this.floorN.y == -1) {
+            if (this.lp_triggered) {
+                this.techwrite("Supercharged lp", 0XFFAA0000);
+            } else if (this.floorN.x == 0 && this.floorN.y == -1) {
                 this.techwrite("Jump", 0XFF555555);
             } else if ((this.pos.x < this.oldpos.x && this.floorN.x < 0) || (this.pos.x > this.oldpos.x && this.floorN.x >= 0)) {
                 this.techwrite("cj", 0XFF000000);

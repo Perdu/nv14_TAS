@@ -106,6 +106,7 @@ LaunchPadObject.prototype.TestVsPlayer = function(guy)
          }
          this.mc.gotoAndPlay("launch_triggered");
          guy.Launch(this.nx * this.strength,this.ny * this.strength * _loc7_);
+         guy.lp_triggered = true;
       }
    }
 };
