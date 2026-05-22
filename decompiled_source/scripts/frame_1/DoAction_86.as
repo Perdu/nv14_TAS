@@ -299,7 +299,8 @@ PlayerObject.prototype.decide_write_position = function(name)
         cur_x = cur_x - (35 + name.length * 4);
     }
     // if writing gets out of screen, write on the left instead
-    if (cur_x + name.length * 4 > 792)
+    // ex: lp+wj on 29-1
+    if (cur_x + name.length * 8 > 792)
         cur_x = cur_x - (35 + name.length * 4);
 
     if (name == "Ceiling push") {
