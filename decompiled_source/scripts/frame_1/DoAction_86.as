@@ -288,11 +288,18 @@ PlayerObject.prototype.ExitCelebrate = function()
    this.d = this.normDrag;
    this.Think = PlayerObject.prototype.Think;
 };
-PlayerObject.prototype.decide_write_position = function()
+PlayerObject.prototype.decide_write_position = function(name)
 {
-    if (p.x > 690)
-        return 690;
-    return p.x
+    var cur = p.x;
+    // Display behind the player. For this, we use facingDir, which we
+    // invert in case of a wj
+    if ((player.facingDir == 1 && name.slice(-2) != "wj") ||
+        (player.facingDir == -1 && name.slice(-2) == "wj")) {
+        cur = cur - 50;
+    }
+    if (cur > 690)
+        cur = 690;
+    return cur;
 }
 PlayerObject.prototype.techwrite = function(name, color, durationFrames)
 {
@@ -300,7 +307,7 @@ PlayerObject.prototype.techwrite = function(name, color, durationFrames)
     if (durationFrames == undefined) durationFrames = 60;
 
     var techbox = gfx.CreateSprite("guiLevelNameMC", LAYER_GUI);
-    techbox._x = PlayerObject.prototype.decide_write_position();
+    techbox._x = PlayerObject.prototype.decide_write_position(name);
     techbox._y = p.y;
     techbox.txt = name;
 
