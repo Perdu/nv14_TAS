@@ -75,10 +75,12 @@ PlayerObject.prototype.SetupParams = function()
    this.last_jump = 0;
    this.last_slope_jump = 0;
    this.last_double_slope_jump = 0;
-   this.last_bbwj = 0;
    this.last_bb = null;
+   this.last_bbwj = 0;
    this.last_doublebbwj = 0;
    this.last_triplebbwj = 0;
+   this.last_bbj = 0;
+   this.last_doublebbj = 0;
    this.lp_triggered = false;
    this.lp_faces_up = true;
    this.object_bbwj_position = false;
@@ -442,12 +444,13 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
    }
    this.pos.x += px;
    this.pos.y += py;
+   this.NEAR_OBJECT = true;
+   this.NEAR_OBJECT_type = obj.OBJ_TYPE;
+   this.current_obj = obj;
    if(ny == 0)
    {
       // @todo: distinguish between objects
       this.NEAR_WALL = true;
-      this.NEAR_OBJECT = true;
-      this.NEAR_OBJECT_type = obj.OBJ_TYPE;
       if (debug) {
           trace("OBJECT:");
           for (var k in obj) {
@@ -464,8 +467,6 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
       }
       this.wallN.x = nx;
       this.wallN.y = ny;
-      var currentBBID = obj.anchor.x + "_" + obj.anchor.y;
-      this.current_obj = obj;
    }
    else if(ny < 0)
    {

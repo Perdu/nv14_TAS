@@ -237,7 +237,20 @@ PlayerObject.prototype.Think = function()
          }
          else
          {
-            if (this.lp_triggered) {
+            if (this.NEAR_OBJECT && this.NEAR_OBJECT_type == OBJTYPE_BOUNCEBLOCK) {
+                if ((game.tickCounter - this.last_bbj < 10) && (this.last_bb == this.current_obj)) {
+                    if (game.tickCounter - this.last_doublebbj < 10) {
+                        this.techwrite("Triple bbj", 0XFFAA0000); // 22-2
+                    } else {
+                        this.techwrite("Double bbj", 0XFFAA5555);
+                        this.last_doublebbj = game.tickCounter;
+                    }
+                } else {
+                    this.techwrite("bb jump", 0XFF555555);
+                }
+                this.last_bbj = game.tickCounter;
+                this.last_bb = this.current_obj;
+            } else if (this.lp_triggered) {
                 this.techwrite("Supercharged lp", 0XFFAA0000);
             } else if (this.floorN.x == 0 && this.floorN.y == -1) {
                 this.techwrite("Jump", 0XFF555555);
