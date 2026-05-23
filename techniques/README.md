@@ -124,6 +124,8 @@ Tile: ![backwards walljump on special tiles](gifs/bwj_tile_08-3.gif)
 
 Turning 1 frame before jumping off the wall (slowed): ![Backwards walljump (turning while falling)](gifs/bwj_turn_01-4.gif)
 
+Upwards: middle of 27-1
+
 ### Tile wj
 
 ![Walljump on small tiles](gifs/tile_bwj_06-2.gif)
