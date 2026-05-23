@@ -84,6 +84,7 @@ PlayerObject.prototype.SetupParams = function()
    this.last_doublebbj = 0;
    this.lp_triggered = false;
    this.lp_faces_up = true;
+   this.is_bwj = false;
    this.object_bbwj_position = false;
    this.depenetration = false;
    this.depenetration_x = 0;
@@ -180,6 +181,7 @@ PlayerObject.prototype.TickNormal = function()
    this.depenetration_x = 0;
    this.depenetration_y = 0;
    this.lp_triggered = false;
+   this.is_bwj = false;
 
    p.x += _loc27_ * (_loc25_ - _loc3_);
    p.y += _loc27_ * (_loc26_ - _loc4_) + this.g;

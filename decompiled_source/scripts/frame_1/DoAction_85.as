@@ -164,7 +164,10 @@ PlayerObject.prototype.Think = function()
                 else
                     this.techwrite("lp+wj", 0xFF550000); // 00-0
             } else {
-                this.techwrite("wj", 0xFF550000);
+                if (this.is_bwj)
+                    this.techwrite("bwj", 0xFFCC0000);
+                else
+                    this.techwrite("wj", 0xFF550000);
             }
             return undefined;
          }
