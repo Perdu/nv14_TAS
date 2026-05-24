@@ -1168,7 +1168,7 @@ rerecords: 665
 
 
 # 36-3
-rerecords: 640
+rerecords: 1671
 
 Can't get over the first drone without losing time...
 
@@ -1999,4 +1999,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 227868
+# Total rerecords: 228899
