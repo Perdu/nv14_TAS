@@ -1188,7 +1188,7 @@ rerecords: 55
 This level is maxed out, we're 1.10 pixels away from saving a frame
 
 # 37-3
-rerecords: 2557
+rerecords: 4268
 
 Branch 9: alt attempt for the way up with a reverse slope jump and a ~bwj
 Branch 8: faster turnaround in the end, but we tie because we're speedcapped by the drone
@@ -1994,4 +1994,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 225562
+# Total rerecords: 227273
