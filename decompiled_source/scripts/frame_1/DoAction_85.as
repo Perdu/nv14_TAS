@@ -134,7 +134,7 @@ PlayerObject.prototype.Think = function()
                 if ((game.tickCounter - this.last_bbwj < 10) && (this.last_bb == this.current_obj)) {
                     if (game.tickCounter - this.last_doublebbwj < 10) {
                         if (game.tickCounter - this.last_triplebbwj < 10) {
-                            this.techwrite("Quad bb wj", 0xFFFF0000);
+                            this.techwrite("Quad bb wj", 0xFFFF0000, undefined, 4); // 10-2
                         } else {
                             this.techwrite("Triple bb wj", 0xFFAA0000);
                         }
