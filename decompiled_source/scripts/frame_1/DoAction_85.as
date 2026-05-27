@@ -267,7 +267,11 @@ PlayerObject.prototype.Think = function()
             } else if (this.floorN.x == 0 && this.floorN.y == -1) {
                 this.techwrite("Jump", 0XFF555555);
             } else if ((this.pos.x < this.oldpos.x && this.floorN.x < 0) || (this.pos.x > this.oldpos.x && this.floorN.x >= 0)) {
-                this.techwrite("cj", 0XFF000000);
+                if (this.prev2State == PSTATE_RUNNING)
+                    // simple jump close to a corner, e.g. 31-0
+                    this.techwrite("Jump", 0XFF000000);
+                else
+                    this.techwrite("cj", 0XFF000000);
             } else if (this.floorN.x > -0.708 && this.floorN.x < -0.707 && this.floorN.y > -0.708 && this.floorN.y < -0.707) {
                 // @todo: add other types of slopes
                 this.techwrite("Reverse slope jump", 0XFF000000);

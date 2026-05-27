@@ -92,6 +92,8 @@ PlayerObject.prototype.SetupParams = function()
    this.last_ceiling_push = 0;
    this.prev1Dir = 1;
    this.prev2Dir = 1;
+   this.prev1State = 0;
+   this.prev2State = 0;
 };
 PlayerObject.prototype.Init = function(params)
 {
@@ -186,6 +188,8 @@ PlayerObject.prototype.TickNormal = function()
    this.is_bwj = false;
    this.prev2Dir = this.prev1Dir;
    this.prev1Dir = this.facingDir;
+   this.prev2State = this.prev1State;
+   this.prev1State = this.curState;
 
    p.x += _loc27_ * (_loc25_ - _loc3_);
    p.y += _loc27_ * (_loc26_ - _loc4_) + this.g;
