@@ -242,7 +242,7 @@ PlayerObject.prototype.Think = function()
                 this.techwrite("Double Slope Jump", 0xFF550000);
                 this.last_double_slope_jump = game.tickCounter;
             } else {
-                this.techwrite("Slope Jump", 0xFF555555);
+                this.techwrite("Slope Jump (0, -0.7)", 0xFF555555);
             }
             this.last_slope_jump = game.tickCounter;
             this.last_jump = 0;
@@ -265,18 +265,19 @@ PlayerObject.prototype.Think = function()
             } else if (this.lp_triggered) {
                 this.techwrite("Supercharged lp", 0XFFAA0000);
             } else if (this.floorN.x == 0 && this.floorN.y == -1) {
-                this.techwrite("Jump", 0XFF555555);
+                this.techwrite("Jump (" + Math.round(this.floorN.x * 100) / 100 + ", " + Math.round(this.floorN.y * 100) / 100 + ")", 0XFF555555);
+
             } else if ((this.pos.x < this.oldpos.x && this.floorN.x < 0) || (this.pos.x > this.oldpos.x && this.floorN.x >= 0)) {
                 if (this.prev2State == PSTATE_RUNNING)
                     // simple jump close to a corner, e.g. 31-0
-                    this.techwrite("Jump", 0XFF000000);
+                    this.techwrite("Jump (" + Math.round(this.floorN.x * 100) / 100 + ", " + Math.round(this.floorN.y * 100) / 100 + ")", 0XFF555555);
                 else
-                    this.techwrite("cj", 0XFF000000);
+                    this.techwrite("cj (" + Math.round(this.floorN.x * 100) / 100 + ", " + Math.round(this.floorN.y * 100) / 100 + ")", 0XFF000000);
             } else if (this.floorN.x > -0.708 && this.floorN.x < -0.707 && this.floorN.y > -0.708 && this.floorN.y < -0.707) {
                 // @todo: add other types of slopes
-                this.techwrite("Reverse slope jump", 0XFF000000);
+                this.techwrite("Reverse slope jump (" + Math.round(this.floorN.x * 100) / 100 + ", " + Math.round(this.floorN.y * 100) / 100 + ")", 0XFF000000);
             } else {
-                this.techwrite("rcj", 0XFF000000);
+                this.techwrite("rcj (" + Math.round(this.floorN.x * 100) / 100 + ", " + Math.round(this.floorN.y * 100) / 100 + ")", 0XFF000000);
             }
             this.Jump(this.floorN.x,this.floorN.y);
             this.last_jump = game.tickCounter;
