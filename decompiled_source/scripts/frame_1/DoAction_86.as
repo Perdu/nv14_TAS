@@ -313,10 +313,11 @@ PlayerObject.prototype.decide_write_position = function(name)
     }
     return { x: cur_x, y: cur_y };
 }
-PlayerObject.prototype.techwrite = function(name, color, durationFrames)
+PlayerObject.prototype.techwrite = function(name, color, durationFrames, blinkCount)
 {
     if (color == undefined) color = 0xFF000000;
     if (durationFrames == undefined) durationFrames = 60;
+    if (blinkCount == undefined) blinkCount = 0;
 
     var techbox = gfx.CreateSprite("guiLevelNameMC", LAYER_GUI);
     var pos = PlayerObject.prototype.decide_write_position(name);
@@ -337,23 +338,50 @@ PlayerObject.prototype.techwrite = function(name, color, durationFrames)
     var frameRate = 40;
     var intervalMs = 1000 / frameRate;
 
+    // Blink setup
+    var blinkFramesPerState = 4; // visible/invisible duration
+    var totalBlinkFrames = blinkCount * blinkFramesPerState * 2;
+
+    // Fade setup
     // Frames to wait before starting fade
     var visibleFrames = 20;
-    var fadeFrames = durationFrames - visibleFrames;
+    var fadeStartFrame = totalBlinkFrames + visibleFrames;
+    var fadeFrames = durationFrames - fadeStartFrame;
 
     techbox._alpha = 100;
+    techbox._visible = true;
+
     var currentFrame = 0;
 
     var self = techbox;
     var fadeInterval = setInterval(function() {
         currentFrame++;
 
-        if (currentFrame > visibleFrames) {
-            // Start fading
-            var fadeProgress = currentFrame - visibleFrames;
-            self._alpha = 100 - (fadeProgress / fadeFrames) * 100;
+        // BLINKING PHASE
+        if (currentFrame <= totalBlinkFrames)
+        {
+            var blinkPhase = Math.floor(currentFrame / blinkFramesPerState);
+
+            // Alternate visibility
+            self._visible = (blinkPhase % 2 == 0);
+        }
+        else
+        {
+            self._visible = true;
+
+            // FADING PHASE
+            if (currentFrame > fadeStartFrame)
+            {
+                var fadeProgress = currentFrame - fadeStartFrame;
+
+                self._alpha = 100 - (fadeProgress / fadeFrames) * 100;
+
+                if (self._alpha < 0)
+                    self._alpha = 0;
+            }
         }
 
+        // END
         if (currentFrame >= durationFrames) {
             clearInterval(fadeInterval);
             self.removeMovieClip();
