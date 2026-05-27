@@ -90,6 +90,8 @@ PlayerObject.prototype.SetupParams = function()
    this.depenetration_x = 0;
    this.depenetration_y = 0;
    this.last_ceiling_push = 0;
+   this.prev1Dir = 1;
+   this.prev2Dir = 1;
 };
 PlayerObject.prototype.Init = function(params)
 {
@@ -182,6 +184,8 @@ PlayerObject.prototype.TickNormal = function()
    this.depenetration_y = 0;
    this.lp_triggered = false;
    this.is_bwj = false;
+   this.prev2Dir = this.prev1Dir;
+   this.prev1Dir = this.facingDir;
 
    p.x += _loc27_ * (_loc25_ - _loc3_);
    p.y += _loc27_ * (_loc26_ - _loc4_) + this.g;

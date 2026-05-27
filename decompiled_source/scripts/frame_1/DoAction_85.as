@@ -164,10 +164,16 @@ PlayerObject.prototype.Think = function()
                 else
                     this.techwrite("lp+wj", 0xFF550000); // 00-0
             } else {
-                if (this.is_bwj)
-                    this.techwrite("bwj", 0xFFCC0000, undefined, 4);
-                else
+                if (this.is_bwj) {
+                    if (this.prev2Dir == this.facingDir)
+                        // 27-2 has both cases
+                        this.techwrite("bwj", 0xFFCC0000, undefined, 4);
+                    else
+                        // case where we turned just 1f before the bwj
+                        this.techwrite("bwj", 0xFF880000);
+                } else {
                     this.techwrite("wj", 0xFF550000);
+                }
             }
             return undefined;
          }
