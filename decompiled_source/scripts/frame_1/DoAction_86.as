@@ -20,10 +20,7 @@ PlayerObject.prototype.Jump = function(x, y)
    this.mc._rotation = 0;
    this.Render = this.RenderInAir;
    this.snd.gotoAndPlay("jump");
-   if(debug)
-   {
-      trace("jumped");
-   }
+   trace("FRAME " + game.tickCounter + " Jump: " + x + ", " + y)
 };
 PlayerObject.prototype.ExitJump = function()
 {
