@@ -1114,9 +1114,9 @@ rerecords: 570
 
 
 # 33-2
-rerecords: 343
+rerecords: 494
 
-
+Branch 9: Improved start (not enough to bat drone bottleneck)
 
 # 33-4
 rerecords: 250
@@ -2014,4 +2014,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 233938
+# Total rerecords: 234089
