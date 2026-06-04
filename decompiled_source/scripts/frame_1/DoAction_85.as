@@ -112,7 +112,12 @@ PlayerObject.prototype.Think = function()
           // We use old positions to check that player is going down
           if ((this.old2pos.y <= this.old1pos.y) && this.depenetration_y > 0) {
               this.techwrite("Downwards corner push (v " + Math.round(this.depenetration_y * 100) / 100 + ")", 0xFF440000);
-          } else if (this.depenetration_x != 0) {
+          } else if (this.depenetration_x != 0 &&
+                     // check that player going in the correct direction
+                     ((this.depenetration_x > 0 && this.old2pos.x <= this.old1pos.x) ||
+                      (this.depenetration_x < 0 && this.old2pos.x >= this.old1pos.x)
+                      )
+                    ) {
               var dir = "> ";
               if (this.depenetration_x < 0)
                   dir = "< "
