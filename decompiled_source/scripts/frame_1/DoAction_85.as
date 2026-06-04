@@ -231,7 +231,16 @@ PlayerObject.prototype.Think = function()
       if(2 < _loc11_)
       {
           if (this.depenetration && this.depenetration_x != 0) {
-              this.techwrite("Bump (" + Math.round(this.depenetration_x * 100) / 100 + ", " + Math.round(this.depenetration_y * 100) / 100 + ")", 0xFF440000);
+              var dir = "> ";
+              if (this.depenetration_x < 0)
+                  dir = "< "
+              var color = 0xFF440000;
+              var name = "Bump";
+              if (Math.abs(this.depenetration_x) > 4) {
+                  color = 0xFFAA0000;
+                  name = "Supercharged bump";
+              }
+              this.techwrite(name + " (" + dir + Math.abs(Math.round(this.depenetration_x * 100) / 100) + ")", color);
           }
          particles.SpawnLandDust(this.pos.x - this.r * this.floorN.x,this.pos.y - this.r * this.floorN.y,NormToRot(this.floorN.x,this.floorN.y) + 90,Math.abs(_loc9_) + _loc10_);
          this.snd.gotoAndPlay("land");
