@@ -238,7 +238,7 @@ PlayerObject.prototype.Think = function()
               var name = "Bump";
               if (Math.abs(this.depenetration_x) > 4) {
                   color = 0xFFAA0000;
-                  name = "Supercharged bump";
+                  name = "Supercharged bump"; // 25-2
               }
               this.techwrite(name + " (" + dir + Math.abs(Math.round(this.depenetration_x * 100) / 100) + ")", color);
           }
