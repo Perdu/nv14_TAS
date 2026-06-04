@@ -122,7 +122,7 @@ PlayerObject.prototype.Think = function()
               if (this.depenetration_x < 0)
                   dir = "< "
               this.techwrite("Sideways corner push (" + dir + Math.abs(Math.round(this.depenetration_x * 100) / 100) + ")", 0xFF440000);
-          } else {
+          } else if (this.depenetration_x != 0) {
               this.techwrite("Ceiling push (" + Math.round(this.depenetration_x * 100) / 100 + ", " + Math.round(this.depenetration_y * 100) / 100 + ")", 0xFF440000);
           }
           this.last_ceiling_push = game.tickCounter;
