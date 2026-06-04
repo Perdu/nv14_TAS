@@ -17,6 +17,7 @@ Links:
 - [In-between-tile slope jumps](https://discord.com/channels/197765375503368192/199460839252688896/1483352718503444581)
 - [2-frames depenetration](https://discord.com/channels/197765375503368192/199460839252688896/1486849823285051565)
 - [Locked-door walljump](https://discord.com/channels/197765375503368192/199460839252688896/1488577463406690394)
+- [Triple jump on 4-tile/8-tile sections](https://discord.com/channels/197765375503368192/199460839252688896/1510699050075164835)
 
 ## Common in RTA
 
