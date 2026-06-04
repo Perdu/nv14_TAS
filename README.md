@@ -57,6 +57,7 @@ And more.
 ## Todo
 - [Document all techniques](techniques/README.md)
 - Patch the game to display all techniques in real time
+- display infos script: use arrows around the player similar to NReality
 - Extract ninja state https://discord.com/channels/197765375503368192/199460839252688896/1465895994767183942
 - Bruteforcer for walljumps
 - Bruteforcer for cj and rcj
