@@ -109,7 +109,11 @@ PlayerObject.prototype.Think = function()
       }
       // perhaps we can move this into pstate_falling just above here if it's displayed at incorrect times
       if (this.depenetration && this.depenetration_y > 0 && game.tickCounter - this.last_ceiling_push > 5) {
-          this.techwrite("Ceiling push (" + Math.round(this.depenetration_x * 100) / 100 + ", " + Math.round(this.depenetration_y * 100) / 100 + ")", 0xFF440000);
+          if ((this.prev2State == PSTATE_FALLING || this.prev2State == PSTATE_WALLSLIDING) && this.depenetration_y > 0) {
+              this.techwrite("Downwards corner push (" + Math.round(this.depenetration_y * 100) / 100 + ")", 0xFF440000);
+          } else {
+              this.techwrite("Ceiling push (" + Math.round(this.depenetration_x * 100) / 100 + ", " + Math.round(this.depenetration_y * 100) / 100 + ")", 0xFF440000);
+          }
           this.last_ceiling_push = game.tickCounter;
       }
       if(this.NEAR_WALL)

@@ -304,7 +304,9 @@ PlayerObject.prototype.decide_write_position = function(name)
     if (cur_x + name.length * 8 > 792)
         cur_x = cur_x - (35 + name.length * 4);
 
-    if (name.length >= 12 && name.substr(0, 12) == "Ceiling push") {
+    if ((name.length >= 12 && name.substr(0, 12) == "Ceiling push") ||
+        (name.length >= 21 && name.substr(0, 21) == "Downwards corner push")
+        ) {
         cur_y = cur_y - 28;
         cur_x = p.x - 35;
     }
