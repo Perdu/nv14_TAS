@@ -111,7 +111,12 @@ PlayerObject.prototype.Think = function()
       if (this.depenetration && this.depenetration_y > 0 && game.tickCounter - this.last_ceiling_push > 5) {
           // We use old positions to check that player is going down
           if ((this.old2pos.y <= this.old1pos.y) && this.depenetration_y > 0) {
-              this.techwrite("Downwards corner push (" + Math.round(this.depenetration_y * 100) / 100 + ")", 0xFF440000);
+              this.techwrite("Downwards corner push (v " + Math.round(this.depenetration_y * 100) / 100 + ")", 0xFF440000);
+          } else if (this.depenetration_x != 0) {
+              var dir = "> ";
+              if (this.depenetration_x < 0)
+                  dir = "< "
+              this.techwrite("Sideways corner push (" + dir + Math.abs(Math.round(this.depenetration_x * 100) / 100) + ")", 0xFF440000);
           } else {
               this.techwrite("Ceiling push (" + Math.round(this.depenetration_x * 100) / 100 + ", " + Math.round(this.depenetration_y * 100) / 100 + ")", 0xFF440000);
           }
