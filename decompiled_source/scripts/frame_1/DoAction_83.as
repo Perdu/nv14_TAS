@@ -7,6 +7,8 @@ function PlayerObject()
    this.inputList[PINPUT_JTRIG] = false;
    this.pos = new Vector2(45,70);
    this.oldpos = this.pos.clone();
+   this.old1pos = this.pos.clone();
+   this.old2pos = this.pos.clone();
     // 12 * 0.8333333333333334 = 10.0000000000000008
    this.r = tiles.xw * 0.8333333333333334;
    this.xw = this.r;
@@ -190,6 +192,8 @@ PlayerObject.prototype.TickNormal = function()
    this.prev1Dir = this.facingDir;
    this.prev2State = this.prev1State;
    this.prev1State = this.curState;
+   this.old2pos = this.old1pos.clone();
+   this.old1pos = this.oldpos.clone();
 
    p.x += _loc27_ * (_loc25_ - _loc3_);
    p.y += _loc27_ * (_loc26_ - _loc4_) + this.g;
