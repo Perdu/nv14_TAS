@@ -240,7 +240,11 @@ PlayerObject.prototype.Think = function()
                   color = 0xFFAA0000;
                   name = "Supercharged bump"; // 25-2
               }
-              this.techwrite(name + " (" + dir + Math.abs(Math.round(this.depenetration_x * 100) / 100) + ")", color);
+              var strength = " (" + dir + Math.abs(Math.round(this.depenetration_x * 100) / 100) + ")";
+              if (Math.abs(this.depenetration_x) < 0.05)
+                  // Don't display value for small bumps
+                  strength = "";
+              this.techwrite(name + strength, color);
           }
          particles.SpawnLandDust(this.pos.x - this.r * this.floorN.x,this.pos.y - this.r * this.floorN.y,NormToRot(this.floorN.x,this.floorN.y) + 90,Math.abs(_loc9_) + _loc10_);
          this.snd.gotoAndPlay("land");
