@@ -96,6 +96,7 @@ PlayerObject.prototype.SetupParams = function()
    this.prev2Dir = 1;
    this.prev1State = 0;
    this.prev2State = 0;
+   this.distanceToWall = 0;
 };
 PlayerObject.prototype.Init = function(params)
 {
@@ -194,6 +195,7 @@ PlayerObject.prototype.TickNormal = function()
    this.prev1State = this.curState;
    this.old2pos = this.old1pos.clone();
    this.old1pos = this.oldpos.clone();
+   this.distanceToWall = 0;
 
    p.x += _loc27_ * (_loc25_ - _loc3_);
    p.y += _loc27_ * (_loc26_ - _loc4_) + this.g;
@@ -383,15 +385,41 @@ PlayerObject.prototype.HandleCollisions = function()
       _loc7_ = this.r + 0.1;
       if(QueryPointvsTileMap(_loc6_.x + _loc7_,_loc6_.y))
       {
+         if (debug) trace("QueryPointvsTileMap case 1: " + this.pos + ", " + player.pos);
          this.NEAR_WALL = true;
          this.wallN.x = -1;
          this.wallN.y = 0;
+
+         var distanceToWall = 0.1;
+         for (var offset = 0.1; offset >= 0; offset -= 0.01) {
+             if (debug) trace("Looping on offset " + offset);
+             if (QueryPointvsTileMap_test(_loc6_.x + this.r + offset, _loc6_.y)) {
+                 if (debug) trace("Found offset " + offset);
+                 distanceToWall = offset;
+             } else {
+                 break;
+             }
+         }
+         this.distanceToWall = distanceToWall;
       }
       else if(QueryPointvsTileMap(_loc6_.x - _loc7_,_loc6_.y))
       {
+         if (debug) trace("QueryPointvsTileMap case 1: " + this.pos + ", " + player.pos);
          this.NEAR_WALL = true;
          this.wallN.x = 1;
          this.wallN.y = 0;
+
+         var distanceToWall = 0.1;
+         for (var offset = 0.1; offset >= 0; offset -= 0.01) {
+             if (debug) trace("Looping on offset " + offset);
+             if (QueryPointvsTileMap_test(_loc6_.x - this.r - offset, _loc6_.y)) {
+                 if (debug) trace("Found offset " + offset);
+                 distanceToWall = offset; // Keep updating until we find the closest true point
+             } else {
+                 break; // Stop looping once we hit empty air
+             }
+         }
+         this.distanceToWall = distanceToWall;
       }
    }
 };

@@ -180,14 +180,21 @@ PlayerObject.prototype.Think = function()
                     this.techwrite("lp+wj", 0xFF550000); // 00-0
             } else {
                 if (this.is_bwj) {
+                    var distance_text = " (" + this.distanceToWall + ")";
+                    if (this.distanceToWall == 0)
+                        distance_text = "";
                     if (this.prev2Dir == this.facingDir)
                         // 27-1 has both cases
-                        this.techwrite("bwj", 0xFFCC0000, undefined, 4);
+                        this.techwrite("bwj" + distance_text, 0xFFCC0000, undefined, 4);
                     else
                         // case where we turned just 1f before the bwj
-                        this.techwrite("bwj", 0xFF880000);
+                        this.techwrite("bwj" + distance_text, 0xFF880000);
                 } else {
-                    this.techwrite("wj", 0xFF550000);
+                    if (this.distanceToWall == 0) {
+                        this.techwrite("wj", 0xFF550000);
+                    } else {
+                        this.techwrite("Optimized wj (" + this.distanceToWall + ")", 0xFF880000);
+                    }
                 }
             }
             return undefined;

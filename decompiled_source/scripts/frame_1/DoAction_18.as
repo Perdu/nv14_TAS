@@ -17,3 +17,10 @@ function QueryPointvsTileMap(x, y)
    evaluate_bwj(x, _loc1_.pos.x);
    return TestPointTile(x,y,_loc1_);
 }
+
+// Same but we don't change is_bwj value via side effect
+function QueryPointvsTileMap_test(x, y)
+{
+   var _loc1_ = tiles.GetTile_S(x,y);
+   return TestPointTile(x,y,_loc1_);
+}
