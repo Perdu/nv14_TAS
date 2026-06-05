@@ -310,6 +310,11 @@ PlayerObject.prototype.decide_write_position = function(name)
         ) {
         cur_y = cur_y - 28;
         cur_x = p.x - 35;
+    } else if ((name.length >= 4 && name.substr(0, 4) == "Bump") ||
+        (name.length >= 17 && name.substr(0, 17) == "Supercharged bump")
+        ) {
+        // Write bumps a little bit higher, otherwise they're in the ground
+        cur_y = cur_y - 10;
     }
     return { x: cur_x, y: cur_y };
 }
