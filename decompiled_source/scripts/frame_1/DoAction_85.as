@@ -181,7 +181,7 @@ PlayerObject.prototype.Think = function()
             } else {
                 if (this.is_bwj) {
                     if (this.prev2Dir == this.facingDir)
-                        // 27-2 has both cases
+                        // 27-1 has both cases
                         this.techwrite("bwj", 0xFFCC0000, undefined, 4);
                     else
                         // case where we turned just 1f before the bwj
