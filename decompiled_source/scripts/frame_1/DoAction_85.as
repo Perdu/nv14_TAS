@@ -198,6 +198,10 @@ PlayerObject.prototype.Think = function()
                 }
             }
             return undefined;
+         } else {
+             if (this.NEAR_OBJECT && this.NEAR_OBJECT_type == OBJTYPE_THWOMP && this.objcol_x > 0) {
+                 this.techwrite("Thwump push (" + Math.abs(Math.round(this.objcol_x * 100) / 100) + ")");
+             }
          }
          if(_loc11_ == PSTATE_WALLSLIDING)
          {

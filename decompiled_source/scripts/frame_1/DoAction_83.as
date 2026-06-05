@@ -97,6 +97,8 @@ PlayerObject.prototype.SetupParams = function()
    this.prev1State = 0;
    this.prev2State = 0;
    this.distanceToWall = 0;
+   this.objcol_x = 0;
+   this.objcol_y = 0;
 };
 PlayerObject.prototype.Init = function(params)
 {
@@ -196,6 +198,8 @@ PlayerObject.prototype.TickNormal = function()
    this.old2pos = this.old1pos.clone();
    this.old1pos = this.oldpos.clone();
    this.distanceToWall = 0;
+   this.objcol_x = 0;
+   this.objcol_y = 0;
 
    p.x += _loc27_ * (_loc25_ - _loc3_);
    p.y += _loc27_ * (_loc26_ - _loc4_) + this.g;
@@ -478,6 +482,8 @@ PlayerObject.prototype.ReportCollisionVsObject = function(px, py, nx, ny, obj)
       trace("FRAME " + game.tickCounter + " ReportCollisionVsObject; px: " + px + ", py: " + py);
       _root._dbg_objcol_x = px;
       _root._dbg_objcol_y = py;
+      this.objcol_x = px;
+      this.objcol_y = py;
    }
    if(_root._dbg_nx != nx || _root._dbg_ny != ny)
       {
