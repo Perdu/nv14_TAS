@@ -50,7 +50,7 @@ FROM debian:12 AS libtas-builder
     WORKDIR /root/src/libTAS
     # RUN git fetch origin pull/667/head:pr-667 && git checkout pr-667
     # RUN git checkout v1.4.7
-    RUN ./build.sh --with-i386
+    RUN ./build.sh --skip-appimage --with-i386
     RUN cd ./build && make install
 
 
