@@ -153,7 +153,7 @@ I also tried some tricks for the hs TAS:
 Perhaps going to the right in the outer section could avoid because slower by drone 4 (todo)
 
 # 03-4
-rerecords: 730
+rerecords: 750
 
 Jumping longer or shorter around 100 is slower (or not faster for longer jumps)
 
@@ -2064,4 +2064,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 240860
+# Total rerecords: 240880
