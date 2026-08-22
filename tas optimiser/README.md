@@ -287,7 +287,7 @@ option.
 | `--config FILE` | Load defaults from a TOML file. Explicit scalar CLI options take precedence. |
 | `--retime START:DELTA` | Apply a fixed-length transition-suffix retime before the selected search. Repeatable. |
 | `--list-objects` | Print stable target and interaction selectors, then exit. No output or target frame is required. |
-| `--workers N|auto` | Select a positive process count. `1` always forces serial; `auto` is the default. |
+| `--workers N\|auto` | Select a positive process count. `1` always forces serial; `auto` is the default. |
 | `--simulate-enemies` | Enable the supported enemy model. |
 | `--no-simulate-enemies` | Disable it. Auto defaults to enabled; Local and jump-pattern default to disabled. |
 
@@ -1072,7 +1072,7 @@ The tables below include every v2.70 optimiser option and its default.
 | `--auto-runs N` | `1` | Population rounds. `0` means indefinite; an indefinite campaign requires positive iterations. |
 | `--beam N` | `32` | Retained candidate population per independent search. Must be positive. |
 | `--max-retime N` | `3` | Maximum Auto-generated suffix shift. Must be 1–3. |
-| `--auto-objective speedrun|highscore` | `speedrun` | Whole-route objective. |
+| `--auto-objective speedrun\|highscore` | `speedrun` | Whole-route objective. |
 | `--auto-require-reference-gold` | off | Highscore-only hard constraint preserving every exact post-retime source gold. |
 | `--auto-max-extra-ticks N` | highscore: up to `80`; speedrun: `0` | Editable workspace after source finish. Must be non-negative. A positive value is invalid for speedrun. |
 | `--auto-repair-window N`, `--auto-window N` | `6` | Consecutive direction frames in a bounded repair. Must be 1–10. |
@@ -1081,7 +1081,7 @@ The tables below include every v2.70 optimiser option and its default.
 | `--auto-max-alignment N`, `--auto-alignment N` | `3` | Maximum future reference offset used for trajectory matching. Must be non-negative. |
 | `--auto-no-deterministic` | off | Skip structured retime/pulse/jump bootstrap and start with the stochastic beam. |
 | `--auto-repair-local-steps N` | `1000` | Fresh local-simulation limit per admitted repair. `0` is unlimited. |
-| `--auto-repair-search-order random|fixed` | `random` | Seeded random repair traversal or the fixed legacy order; primary jump/direction ordering remains seed-derived. |
+| `--auto-repair-search-order random\|fixed` | `random` | Seeded random repair traversal or the fixed legacy order; primary jump/direction ordering remains seed-derived. |
 | `--auto-frame-ahead-repair-multiplier N` | `10` | Multiplies repair and campaign allowances after a measured positive trajectory offset. Must be at least 1. |
 | `--auto-campaign-local-steps N` | `10000` | Soft local-simulation ceiling per repair campaign. `0` disables the ceiling. |
 | `--auto-cheap-pulses N` | `96` | Budget for the deterministic one-frame horizontal pre-sweep. `0` disables it. |
@@ -1091,7 +1091,7 @@ The tables below include every v2.70 optimiser option and its default.
 | `--auto-postroll N` | `1` | Compatibility spelling. Only `1` is accepted because one neutral sentinel is invariant. |
 | `--auto-no-all-input-repair` | off | Disable the third-stage bounded all-input repair fallback. |
 | `--range START:END` | complete verified replay/highscore workspace | Bounds mutation seams/starts, not all downstream suffix effects. One interval only. |
-| `--seed N|random` | `0` | Master search seed. `random` prints a fresh seed. |
+| `--seed N\|random` | `0` | Master search seed. `random` prints a fresh seed. |
 
 ### Local options
 
@@ -1106,16 +1106,16 @@ The tables below include every v2.70 optimiser option and its default.
 | `--require-reference-interactions` | off | Preserve every supported exact interaction made by the post-retime reference. |
 | `--avoid-interaction SELECTOR` | none | Repeatable persistent hard prohibition. |
 | `--window N` | `4` | Mutable frames searched together. Must be at least 1. |
-| `--window-shape contiguous|sparse|mixed` | `contiguous` | Consecutive, random sparse, or alternating sparse/contiguous passes. |
+| `--window-shape contiguous\|sparse\|mixed` | `contiguous` | Consecutive, random sparse, or alternating sparse/contiguous passes. |
 | `--window-span N` | full mutable span | Sparse-pass inclusive span limit; invalid with contiguous shape. |
 | `--windows-per-pass N` | contiguous-window count | Number of distinct sparse frame sets; invalid with contiguous shape. |
-| `--local-inputs all|direction` | `all` | Six-state all-input alphabet or three-state direction-only alphabet with jump stream preserved. |
+| `--local-inputs all\|direction` | `all` | Six-state all-input alphabet or three-state direction-only alphabet with jump stream preserved. |
 | `--jump-start-mutation X` | `0` | Per-pulse start offset bound for random/mixed direction-only restarts. |
 | `--jump-length-mutation Y` | `0` | Per-pulse hold-length offset bound for random/mixed direction-only restarts. |
 | `--immutable-jumps F[:PROPERTY],...` | none | Preserve `start`, `length` or `both` for named source pulses. Requires jump mutation. |
 | `--physics-prune` | off | Optional horizontal bound for direction-only mode; relies on the no-future-boost assumption. |
 | `--passes N` | `2` | Passes within each trajectory. Must be at least 1. |
-| `--window-order forward|reverse|random|mixed` | `forward` | Window traversal and independent trajectory portfolio. |
+| `--window-order forward\|reverse\|random\|mixed` | `forward` | Window traversal and independent trajectory portfolio. |
 | `--restarts N` | `10` | Random trajectories used by random/mixed order. Must be at least 1. |
 | `--seed N` | generated when needed | Integer seed for Local randomness. The literal `random` is not supported. |
 | `--minimum-improvement D` | `0` | Positional score gain threshold for an ordinary greedy improvement; hard-state repairs take priority. Non-negative values are recommended. |
@@ -1149,7 +1149,7 @@ The tables below include every v2.70 optimiser option and its default.
 | `--ltm-postroll N` | exact metadata; otherwise infer n-idle tail | Treat exactly the final `N` active-input rows as authoritative raw-LTM post-roll; `0` retains every post-Space row. Must leave a replay frame. LTM-only. |
 | `--retime START:DELTA` | none | Repeatable pre-search transition-suffix retime. |
 | `--list-objects` | off | Print selectors and exit without searching. |
-| `--workers N|auto` | `auto` | Positive process count, or the mode-aware automatic policy. |
+| `--workers N\|auto` | `auto` | Positive process count, or the mode-aware automatic policy. |
 | `-o FILE`, `--output FILE` | required for search | Same-format main output: combined text for text input, `.ltm` for LTM input. |
 | `--config FILE` | none | TOML defaults. |
 | `--replay-output FILE` | none | Optional replay-only output. |
