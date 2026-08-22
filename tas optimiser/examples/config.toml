@@ -1,0 +1,71 @@
+[common]
+workers = 8
+simulate-enemies = true
+# level-id = "00-0"
+# ltm-postroll = 0
+
+[auto]
+iterations = 10000
+runs = 0
+beam = 32
+max-retime = 3
+objective = "speedrun"
+# require-reference-gold = false
+# max-extra-ticks = 80
+# range = "0:555"
+seed = "random"
+repair-window = 6
+repair-lookback = 192
+lookahead = 3
+max-alignment = 3
+deterministic = true
+repair-local-steps = 1000
+repair-search-order = "random"
+frame-ahead-repair-multiplier = 50
+campaign-local-steps = 10000
+cheap-pulses = 96
+position-tolerance = 3.0
+velocity-tolerance = 0.75
+all-input-repair = true
+simulate-enemies = false
+
+[local]
+
+local-inputs = "direction"
+target-frame = 121
+range = ["15:121"]
+objective = "min-distance"
+target-object = "exit"
+# target-point = [470.0, 432.0]
+# x-window = "740:"
+# y-window = "317:327"
+# require-interaction = ["testdoor:0", "testdoor:1"]
+# require-reference-interactions = false
+# avoid-interaction = ["trapdoor:1"]
+window = 4
+passes = 4
+restarts = 500
+window-shape = "mixed"
+window-order = "random"
+window-span = 15
+# windows-per-pass = 20
+# jump-start-mutation = 2
+# jump-length-mutation = 2
+# immutable-jumps = ["21:start", "73:length", "105:both"]
+# physics-prune = false
+# minimum-improvement = 0.0
+
+[jump-pattern]
+
+target-frame = 100
+range = "50:90"
+objective = "min-y"
+# target-object = "exit"
+# target-point = [470.0, 432.0]
+# x-window = "740:"
+# y-window = "317:327"
+jumps = [2, 3]
+jump-length = "1:"
+minimum-gap = 1
+top-results = 10
+# fixed-jump-frames = [42, 73]
