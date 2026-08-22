@@ -1,6 +1,6 @@
 [common]
 workers = 8
-simulate-enemies = true
+simulate-enemies = false
 # level-id = "00-0"
 # ltm-postroll = 0
 
@@ -27,7 +27,6 @@ cheap-pulses = 96
 position-tolerance = 3.0
 velocity-tolerance = 0.75
 all-input-repair = true
-simulate-enemies = false
 
 [local]
 
