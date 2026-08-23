@@ -24,7 +24,7 @@ rerecords: 184
 
 
 # 01-0
-rerecords: 1337
+rerecords: 1441
 
 It's possible to do a cj on the bb in the beginning. It's slightly faster, but we don't have a good angle to land and start the rcj
 
@@ -2064,4 +2064,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 241101
+# Total rerecords: 241205
