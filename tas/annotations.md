@@ -1604,7 +1604,7 @@ In the end, jumping to avoid touching the floorchaser's floor is slower
 A simple jump on the left wall in the end is equally fast but way less cool ;)
 
 # 60-0
-rerecords: 21
+rerecords: 43
 
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
@@ -2069,4 +2069,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 241506
+# Total rerecords: 241528
