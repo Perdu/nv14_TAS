@@ -7,6 +7,7 @@ import pytest
 from nv14_engine import (
     HomingLauncher,
     HomingMode,
+    InputFrame,
     Turret,
     ObjectSpec,
     Player,
@@ -138,3 +139,28 @@ def test_homing_missile_contact_uses_player_radius_and_kills() -> None:
     launcher.test_player(player)
     assert player.dead is True
     assert launcher.mode == HomingMode.IDLE
+
+
+def test_homing_contact_runs_source_death_scheduler_cleanup() -> None:
+    level = parse_level_string(
+        "0" * (31 * 23) + "|5^130,120!10^120.0001,120",
+        simulate_enemies=True,
+    )
+    state = level.initial_state()
+    launcher = next(
+        obj for obj in state.objects if isinstance(obj, HomingLauncher)
+    )
+
+    # Pin the ninja so the launcher's strict distance < player.r contact is
+    # deterministic. Frame 3 acquires, frame 13 fires and collides.
+    for _ in range(14):
+        state.player.pos.x = state.player.oldpos.x = 130.0
+        state.player.pos.y = state.player.oldpos.y = 120.0
+        state.player.g = state.player.d = 0.0
+        state.step(InputFrame(), level.tiles)
+
+    assert state.player.dead is True
+    assert launcher.mode == HomingMode.IDLE
+    assert launcher.load_index not in state.update_uids
+    assert launcher.load_index not in state.thinker_uids
+    assert state.grid_state.object_cells[launcher.load_index] is None

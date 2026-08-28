@@ -69,7 +69,7 @@ def test_parallel_jump_search_matches_serial_terminal_set() -> None:
     )
 
     assert result_signature(parallel) == result_signature(serial)
-    assert any("2 worker processes" in line for line in logs)
+    assert any("2 native worker threads" in line for line in logs)
 
 
 def test_fixed_first_jump_can_split_at_second_pulse() -> None:
@@ -95,7 +95,7 @@ def test_fixed_first_jump_can_split_at_second_pulse() -> None:
     )
 
     assert result_signature(parallel) == result_signature(serial)
-    assert any("worker processes" in line for line in logs)
+    assert any("native worker threads" in line for line in logs)
 
 
 def test_enemy_enabled_parallel_winner_matches_serial() -> None:

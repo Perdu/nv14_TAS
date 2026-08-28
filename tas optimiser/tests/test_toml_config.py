@@ -93,6 +93,7 @@ window_span = 12
 windows_per_pass = 4
 require_interaction = ["gold:0"]
 avoid_interaction = ["trapdoor:any"]
+python_resimulate = true
 """,
     )
     local = opt.parse_arguments(
@@ -108,6 +109,7 @@ avoid_interaction = ["trapdoor:any"]
     assert local.windows_per_pass == 4
     assert local.require_interaction == ["gold:0"]
     assert local.avoid_interaction == ["trapdoor:any"]
+    assert local.python_resimulate is True
 
     jump_config = _write_config(
         tmp_path,
@@ -120,6 +122,7 @@ jump_length = [1, 8]
 minimum_gap = 2
 top_results = 4
 fixed_jump_frames = [42, 73]
+python_resimulate = true
 """,
     )
     jump = opt.parse_arguments(
@@ -138,6 +141,7 @@ fixed_jump_frames = [42, 73]
     assert jump.jump_length == (1, 8)
     assert jump.minimum_gap == 2
     assert jump.top_results == 4
+    assert jump.python_resimulate is True
     assert jump.fixed_jump_frames == (42, 73)
 
 
@@ -177,6 +181,26 @@ def test_wrong_mode_toml_options_are_rejected(
 
     with pytest.raises(SystemExit, match="unknown TOML option"):
         opt.parse_arguments([mode, "input.txt", "--config", str(config)])
+
+
+def test_examples_are_valid_for_their_selected_subcommands() -> None:
+    root = Path(__file__).parents[1]
+    for mode, filename in (
+        ("auto", "highscore.toml"),
+        ("local", "local.toml"),
+        ("jump-pattern", "jump-pattern.toml"),
+    ):
+        args = opt.parse_arguments(
+            [
+                mode,
+                "input.txt",
+                "--config",
+                str(root / "examples" / "config" / filename),
+                "-o",
+                "output.txt",
+            ]
+        )
+        assert args.mode == mode
 
 
 def test_parsed_namespace_materialises_typed_local_and_jump_configs(tmp_path) -> None:

@@ -16,18 +16,15 @@ from __future__ import annotations
 
 import hashlib
 import math
+import operator
 import random
 from collections.abc import Callable, Iterable, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
 
 from nv14_engine import (
-    door_control_masks as _door_control_masks,
     InputFrame,
     Level,
-    PlayerState,
-    SimulationState,
-    TestDoor,
-    UnsupportedTileCollision,
 )
 from nv14_replay import (
     RetimeMutation,
@@ -36,6 +33,24 @@ from nv14_replay import (
     editable_frames,
     input_transition_frames,
     valid_retime_mutations,
+)
+from nv14_search import (
+    INTERACTION_EXIT_SWITCH,
+    INTERACTION_GOLD,
+    INTERACTION_LOCKED_DOOR,
+    INTERACTION_TRAPDOOR,
+    OBJECTIVE_CONSTANT,
+    OBJECTIVE_TRACE_DISTANCE,
+    PATCH_TIE_LOW_EDIT_LEX,
+    PATCH_TIE_SUPPLIED_ORDER,
+    InteractionAtomSpec,
+    InteractionGroupSpec,
+    NativeSearchSession,
+    PatchAssignmentSpec,
+    PatchEvaluationSpec,
+    SearchResult,
+    SearchSpec,
+    TraceTargetSpec,
 )
 
 NEUTRAL_INPUT = InputFrame(False, False, False, None)
@@ -49,6 +64,35 @@ AUTO_REPAIR_SEARCH_ORDERS = (
     AUTO_REPAIR_SEARCH_ORDER_FIXED,
 )
 GOLD_BONUS_TICKS = 80
+
+# Auto owns the route-score definition. Native kernels receive these immutable
+# scalar weights with each target and only evaluate the compiled objective.
+_TRACE_POSITION_WEIGHT = 1.0
+_TRACE_VELOCITY_WEIGHT = 4.0
+_TRACE_CONTACT_MISMATCH_PENALTY = 16.0
+_TRACE_IN_AIR_MISMATCH_PENALTY = 25.0
+_TRACE_NEAR_WALL_MISMATCH_PENALTY = 9.0
+_TRACE_GOLD_BIT_PENALTY = 0.25
+_TRACE_MINE_BIT_PENALTY = 0.25
+_TRACE_EXIT_BIT_PENALTY = 8.0
+_TRACE_LOCKED_DOOR_BIT_PENALTY = 24.0
+_TRACE_TRAPDOOR_BIT_PENALTY = 24.0
+
+
+_ACTIVE_NATIVE_SESSION: ContextVar[
+    tuple[Level, NativeSearchSession | None] | None
+] = ContextVar("nv14_auto_native_session", default=None)
+
+
+def _native_session(level: Level) -> NativeSearchSession:
+    active = _ACTIVE_NATIVE_SESSION.get()
+    if active is not None and active[0] is level:
+        if active[1] is not None:
+            return active[1]
+        session = NativeSearchSession(level)
+        _ACTIVE_NATIVE_SESSION.set((level, session))
+        return session
+    return NativeSearchSession(level)
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,12 +254,128 @@ class CompactTracePoint:
         )
 
 
-@dataclass(frozen=True, slots=True)
+def _compact_trace_point(row: Sequence[object]) -> CompactTracePoint:
+    """Materialise one public point from a native scalar/mask row."""
+    return CompactTracePoint(
+        tick=int(row[0]),
+        x=float(row[1]),
+        y=float(row[2]),
+        vx=float(row[3]),
+        vy=float(row[4]),
+        player_state=int(row[5]),
+        in_air=bool(row[6]),
+        near_wall=bool(row[7]),
+        wall_x=int(row[8]),
+        floor_x=int(row[9]),
+        floor_y=int(row[10]),
+        previous_jump_held=bool(row[11]),
+        jump_events=int(row[12]),
+        collected_gold_mask=int(row[13]),
+        exploded_mine_mask=int(row[14]),
+        open_exit_mask=int(row[15]),
+        opened_locked_door_mask=int(row[16]),
+        triggered_trapdoor_mask=int(row[17]),
+        complete=bool(row[18]),
+        dead=bool(row[19]),
+        gold_bonus_ticks=int(row[20]),
+    )
+
+
+_TERMINAL_SUMMARY_UNSET = object()
+
+
+class _NativeTraceView(Sequence[CompactTracePoint]):
+    """Sequence-compatible lazy view over one owned native analysis.
+
+    Normal Auto policy uses scalar queries and native scans, so no point is
+    constructed. Indexing, slicing, iteration, equality and pickling are the
+    explicit compatibility/reporting boundaries which materialise rows.
+    """
+
+    __slots__ = ("analysis", "_terminal_flags", "_terminal_summary")
+
+    def __init__(self, analysis: object) -> None:
+        self.analysis = analysis
+        self._terminal_flags: object = _TERMINAL_SUMMARY_UNSET
+        self._terminal_summary: object = _TERMINAL_SUMMARY_UNSET
+
+    def __len__(self) -> int:
+        return int(self.analysis.trace_count)
+
+    def __getitem__(self, index: int | slice):
+        if isinstance(index, slice):
+            return tuple(
+                self[position]
+                for position in range(*index.indices(len(self)))
+            )
+        position = operator.index(index)
+        if position < 0:
+            position += len(self)
+        if position < 0 or position >= len(self):
+            raise IndexError("trace index out of range")
+        return _compact_trace_point(self.analysis.point_at(position))
+
+    def __iter__(self):
+        for index in range(len(self)):
+            yield _compact_trace_point(self.analysis.point_at(index))
+
+    def __eq__(self, other: object) -> bool:
+        if self is other:
+            return True
+        if not isinstance(other, Sequence):
+            return False
+        if len(self) != len(other):
+            return False
+        return all(left == right for left, right in zip(self, other))
+
+    def __hash__(self) -> int:
+        return hash(tuple(self))
+
+    def __repr__(self) -> str:
+        return f"NativeTraceView(count={len(self)})"
+
+    def __reduce__(self):
+        # Auto worker results/checkpoints cross a multiprocessing boundary.
+        # Materialise only there so the owning C pointer itself is never
+        # pickled or copied.
+        materialised = tuple(self)
+        return (tuple, (materialised,))
+
+    def point(self, tick: int) -> CompactTracePoint | None:
+        if tick < 0:
+            return None
+        row = self.analysis.point(tick)
+        return None if row is None else _compact_trace_point(row)
+
+    def terminal_flags(self) -> tuple[bool, bool] | None:
+        if self._terminal_flags is _TERMINAL_SUMMARY_UNSET:
+            raw = self.analysis.terminal_flags()
+            self._terminal_flags = None if raw is None else (
+                bool(raw[0]),
+                bool(raw[1]),
+            )
+        value = self._terminal_flags
+        if value is None:
+            return None
+        return value  # type: ignore[return-value]
+
+    def terminal_summary(self) -> tuple | None:
+        if self._terminal_summary is _TERMINAL_SUMMARY_UNSET:
+            value = self.analysis.terminal_summary()
+            self._terminal_summary = None if value is None else tuple(value)
+        value = self._terminal_summary
+        return None if value is None else value  # type: ignore[return-value]
+
+    def materialize(self) -> tuple[CompactTracePoint, ...]:
+        return tuple(self)
+
+
+@dataclass(frozen=True, slots=True, eq=False)
 class AutoEvaluation:
     finish_tick: int | None
     dead_tick: int | None
     last_tick: int
-    trace: tuple[CompactTracePoint, ...]
+    trace: Sequence[CompactTracePoint]
     successful_jumps: tuple[int, ...]
     jump_edges: tuple[int, ...]
     missed_jump_edges: tuple[int, ...]
@@ -234,6 +394,39 @@ class AutoEvaluation:
     # not change completion validity or emulator state.
     pre_finish_exit_distance: float | None = None
 
+    def _comparison_key(self) -> tuple:
+        # Equality/hash are explicit compatibility operations and therefore a
+        # valid place to materialise a native trace.
+        return (
+            self.finish_tick,
+            self.dead_tick,
+            self.last_tick,
+            tuple(self.trace),
+            tuple(self.successful_jumps),
+            tuple(self.jump_edges),
+            tuple(self.missed_jump_edges),
+            self.unsupported,
+            self.final_gold_mask,
+            self.gold_bonus_ticks,
+            tuple(self.gold_events),
+            self.final_opened_locked_door_mask,
+            self.final_triggered_trapdoor_mask,
+            tuple(self.route_control_events),
+            self.completed_exit_index,
+            self.pre_finish_exit_distance,
+        )
+
+    def __eq__(self, other: object) -> bool:
+        if self is other:
+            return True
+        if other.__class__ is not self.__class__:
+            return NotImplemented
+        assert isinstance(other, AutoEvaluation)
+        return self._comparison_key() == other._comparison_key()
+
+    def __hash__(self) -> int:
+        return hash(self._comparison_key())
+
     @property
     def valid(self) -> bool:
         """Whether this is a completed route the optimiser may keep/output.
@@ -250,6 +443,12 @@ class AutoEvaluation:
             return False
         if self.dead_tick is not None and self.dead_tick != finish_tick:
             return False
+        if isinstance(self.trace, _NativeTraceView):
+            flags = self.trace.terminal_flags()
+            if flags is None:
+                return False
+            complete, dead = flags
+            return not dead or complete
         terminal = self.trace[-1]
         return not terminal.dead or terminal.complete
 
@@ -268,6 +467,8 @@ class AutoEvaluation:
         return self.gold_bonus_ticks - self.finish_tick
 
     def point(self, tick: int) -> CompactTracePoint | None:
+        if isinstance(self.trace, _NativeTraceView):
+            return self.trace.point(tick)
         # Traces are normally dense.  Linear fallback also supports a caller
         # deliberately choosing a larger trace_stride.
         if 0 <= tick < len(self.trace) and self.trace[tick].tick == tick:
@@ -276,6 +477,30 @@ class AutoEvaluation:
             if point.tick == tick:
                 return point
         return None
+
+    def materialize_trace(self) -> tuple[CompactTracePoint, ...]:
+        """Explicitly return the complete public Python trace."""
+        return tuple(self.trace)
+
+    def _terminal_summary(self) -> tuple | None:
+        if isinstance(self.trace, _NativeTraceView):
+            return self.trace.terminal_summary()
+        if not self.trace:
+            return None
+        point = self.trace[-1]
+        return (
+            point.tick,
+            point.x,
+            point.y,
+            point.player_state,
+            point.dead,
+            point.complete,
+            point.collected_gold_mask,
+            point.exploded_mine_mask,
+            point.open_exit_mask,
+            point.opened_locked_door_mask,
+            point.triggered_trapdoor_mask,
+        )
 
 
 def pre_finish_exit_edge_distance(
@@ -657,43 +882,6 @@ def _sign_bin(value: float) -> int:
     return -1 if value < -1e-9 else 1 if value > 1e-9 else 0
 
 
-def _compact_point(
-    state: SimulationState,
-    tick: int,
-    *,
-    opened_locked_door_mask: int | None = None,
-    triggered_trapdoor_mask: int | None = None,
-) -> CompactTracePoint:
-    p = state.player
-
-    static = state.static_state
-    if opened_locked_door_mask is None or triggered_trapdoor_mask is None:
-        opened_locked_door_mask, triggered_trapdoor_mask = _door_control_masks(state)
-    return CompactTracePoint(
-        tick=tick,
-        x=p.pos.x,
-        y=p.pos.y,
-        vx=p.vx,
-        vy=p.vy,
-        player_state=int(p.state),
-        in_air=p.in_air,
-        near_wall=p.near_wall,
-        wall_x=_sign_bin(p.wall_n.x),
-        floor_x=_sign_bin(p.floor_n.x),
-        floor_y=_sign_bin(p.floor_n.y),
-        previous_jump_held=p.previous_jump_held,
-        jump_events=p.jump_events,
-        collected_gold_mask=static.collected_gold_mask,
-        exploded_mine_mask=static.exploded_mine_mask,
-        open_exit_mask=static.open_exit_mask,
-        opened_locked_door_mask=opened_locked_door_mask,
-        triggered_trapdoor_mask=triggered_trapdoor_mask,
-        complete=state.level_complete,
-        dead=p.dead,
-        gold_bonus_ticks=static.gold_bonus_ticks,
-    )
-
-
 def _evaluate_working(
     level: Level,
     working_frames: Sequence[InputFrame],
@@ -706,120 +894,60 @@ def _evaluate_working(
     if sentinel.left or sentinel.right or sentinel.jump:
         raise ValueError("working replay must end in a neutral sentinel")
 
-    state = level.initial_state()
-    tracks_persistent_doors = any(
-        type(obj) is TestDoor and (obj.is_locked or obj.is_trap)
-        for obj in state.objects
+    analysis = _native_session(level).evaluate_replay(
+        working_frames, trace_stride=trace_stride
     )
-    opened_locked_mask = 0
-    triggered_trap_mask = 0
-    if tracks_persistent_doors:
-        opened_locked_mask, triggered_trap_mask = _door_control_masks(state)
-    trace: list[CompactTracePoint] = []
-    successful: list[int] = []
-    edges: list[int] = []
-    missed: list[int] = []
-    previous_jump = False
-    dead_tick: int | None = None
-    finish_tick: int | None = None
-    pre_finish_exit_distance: float | None = None
-    unsupported = False
-    last_tick = -1
-    gold_events: list[GoldCollectionEvent] = []
-    route_control_events: list[RouteControlEvent] = []
+    (
+        finish_tick,
+        dead_tick,
+        last_tick,
+        unsupported,
+        completed_exit_index,
+        has_pre_finish_exit_distance,
+        pre_finish_exit_distance,
+        gold_bonus_ticks,
+        final_gold_mask,
+        _final_exploded_mine_mask,
+        _final_open_exit_mask,
+        final_opened_locked_door_mask,
+        final_triggered_trapdoor_mask,
+    ) = analysis.summary()
 
-    for tick, frame in enumerate(working_frames):
-        # Keep the exact pre-step position.  If this step completes the level,
-        # this is the state reached by the preceding serialized input (or the
-        # initial state for a zero-input replay).
-        pre_step_x = state.player.pos.x
-        pre_step_y = state.player.pos.y
-        edge = frame.jump and not previous_jump
-        if edge:
-            edges.append(tick)
-        before_jumps = state.player.jump_events
-        before_gold_mask = state.static_state.collected_gold_mask
-        before_exit_mask = state.static_state.open_exit_mask
-        before_locked_mask = opened_locked_mask
-        before_trap_mask = triggered_trap_mask
-        try:
-            state.step(frame, level.tiles)
-        except UnsupportedTileCollision:
-            if tracks_persistent_doors:
-                opened_locked_mask, triggered_trap_mask = _door_control_masks(state)
-            unsupported = True
-            last_tick = tick
-            break
-        added_gold = state.static_state.collected_gold_mask & ~before_gold_mask
-        while added_gold:
-            bit = added_gold & -added_gold
-            gold_events.append(
-                GoldCollectionEvent(gold_index=bit.bit_length() - 1, tick=tick)
-            )
-            added_gold ^= bit
-        added_exit = state.static_state.open_exit_mask & ~before_exit_mask
-        for index in _iter_set_bit_indices(added_exit):
-            route_control_events.append(RouteControlEvent("exit", index, tick))
-        if tracks_persistent_doors:
-            opened_locked_mask, triggered_trap_mask = _door_control_masks(state)
-        for index in _iter_set_bit_indices(opened_locked_mask & ~before_locked_mask):
-            route_control_events.append(
-                RouteControlEvent("locked-door", index, tick)
-            )
-        for index in _iter_set_bit_indices(triggered_trap_mask & ~before_trap_mask):
-            route_control_events.append(RouteControlEvent("trapdoor", index, tick))
-        jumped = state.player.jump_events > before_jumps
-        if jumped:
-            successful.append(tick)
-        elif edge:
-            missed.append(tick)
-        previous_jump = frame.jump
-        last_tick = tick
-
-        point = _compact_point(
-            state,
-            tick,
-            opened_locked_door_mask=opened_locked_mask,
-            triggered_trapdoor_mask=triggered_trap_mask,
-        )
-        if tick % trace_stride == 0 or point.complete or point.dead or tick == len(working_frames) - 1:
-            trace.append(point)
-        if state.player.dead:
-            dead_tick = tick
-        if state.level_complete:
-            finish_tick = tick
-            completed_exit_index = state.static_state.completed_exit_index
-            if completed_exit_index is not None:
-                door = level.static_world.entry_for_ref(
-                    level.static_world.exit_door_ref(completed_exit_index)
-                )
-                if door is not None:
-                    distance = math.hypot(
-                        door.x - pre_step_x, door.y - pre_step_y
-                    )
-                    if math.isfinite(distance):
-                        pre_finish_exit_distance = distance
-            break
-        if state.player.dead:
-            break
-
+    def optional_tick(raw_value: object) -> int | None:
+        value = int(raw_value)
+        return None if value < 0 else value
+    route_kinds = {0: "exit", 1: "locked-door", 2: "trapdoor"}
     return AutoEvaluation(
-        finish_tick=finish_tick,
-        dead_tick=dead_tick,
-        last_tick=last_tick,
-        trace=tuple(trace),
-        successful_jumps=tuple(successful),
-        jump_edges=tuple(edges),
-        missed_jump_edges=tuple(missed),
-        unsupported=unsupported,
-        final_gold_mask=state.static_state.collected_gold_mask,
-        gold_bonus_ticks=state.static_state.gold_bonus_ticks,
-        gold_events=tuple(gold_events),
-        final_opened_locked_door_mask=opened_locked_mask,
-        final_triggered_trapdoor_mask=triggered_trap_mask,
-        route_control_events=tuple(route_control_events),
-        completed_exit_index=state.static_state.completed_exit_index,
-        pre_finish_exit_distance=pre_finish_exit_distance,
+        finish_tick=optional_tick(finish_tick),
+        dead_tick=optional_tick(dead_tick),
+        last_tick=int(last_tick),
+        trace=_NativeTraceView(analysis),
+        successful_jumps=tuple(
+            int(tick) for tick in analysis.successful_jumps()
+        ),
+        jump_edges=tuple(int(tick) for tick in analysis.jump_edges()),
+        missed_jump_edges=tuple(
+            int(tick) for tick in analysis.missed_jump_edges()
+        ),
+        unsupported=bool(unsupported),
+        final_gold_mask=int(final_gold_mask),
+        gold_bonus_ticks=int(gold_bonus_ticks),
+        gold_events=tuple(
+            GoldCollectionEvent(int(index), int(tick))
+            for index, tick in analysis.gold_events()
+        ),
+        final_opened_locked_door_mask=int(final_opened_locked_door_mask),
+        final_triggered_trapdoor_mask=int(final_triggered_trapdoor_mask),
+        route_control_events=tuple(
+            RouteControlEvent(route_kinds[int(kind)], int(index), int(tick))
+            for kind, index, tick in analysis.route_control_events()
+        ),
+        completed_exit_index=optional_tick(completed_exit_index),
+        pre_finish_exit_distance=(
+            float(pre_finish_exit_distance)
+            if has_pre_finish_exit_distance
+            else None
+        ),
     )
 
 
@@ -924,26 +1052,35 @@ def _trace_distance(a: CompactTracePoint, b: CompactTracePoint) -> float:
     # These fields distinguish control topology for ranking and repair, but
     # they are deliberately soft: simulation, not a reference mask, decides
     # whether an alternate completed route is valid.
-    static_penalty = 0.25 * (
-        (a.collected_gold_mask ^ b.collected_gold_mask).bit_count()
-        + (a.exploded_mine_mask ^ b.exploded_mine_mask).bit_count()
-    )
-    static_penalty += 8.0 * (a.open_exit_mask ^ b.open_exit_mask).bit_count()
-    static_penalty += 24.0 * (
+    static_penalty = _TRACE_GOLD_BIT_PENALTY * (
+        a.collected_gold_mask ^ b.collected_gold_mask
+    ).bit_count()
+    static_penalty += _TRACE_MINE_BIT_PENALTY * (
+        a.exploded_mine_mask ^ b.exploded_mine_mask
+    ).bit_count()
+    static_penalty += _TRACE_EXIT_BIT_PENALTY * (
+        a.open_exit_mask ^ b.open_exit_mask
+    ).bit_count()
+    static_penalty += _TRACE_LOCKED_DOOR_BIT_PENALTY * (
         a.opened_locked_door_mask ^ b.opened_locked_door_mask
     ).bit_count()
-    static_penalty += 24.0 * (
+    static_penalty += _TRACE_TRAPDOOR_BIT_PENALTY * (
         a.triggered_trapdoor_mask ^ b.triggered_trapdoor_mask
     ).bit_count()
-    contact_penalty = 0.0 if a.contact_key == b.contact_key else 16.0
+    contact_penalty = (
+        0.0
+        if a.contact_key == b.contact_key
+        else _TRACE_CONTACT_MISMATCH_PENALTY
+    )
     if a.in_air != b.in_air:
-        contact_penalty += 25.0
+        contact_penalty += _TRACE_IN_AIR_MISMATCH_PENALTY
     if a.near_wall != b.near_wall:
-        contact_penalty += 9.0
+        contact_penalty += _TRACE_NEAR_WALL_MISMATCH_PENALTY
     return (
-        (a.x - b.x) ** 2
-        + (a.y - b.y) ** 2
-        + 4.0 * ((a.vx - b.vx) ** 2 + (a.vy - b.vy) ** 2)
+        _TRACE_POSITION_WEIGHT
+        * ((a.x - b.x) ** 2 + (a.y - b.y) ** 2)
+        + _TRACE_VELOCITY_WEIGHT
+        * ((a.vx - b.vx) ** 2 + (a.vy - b.vy) ** 2)
         + contact_penalty
         + static_penalty
     )
@@ -961,6 +1098,11 @@ def _alignment_route_matches(
     return not (
         reference.open_exit_mask & bit and not candidate.open_exit_mask & bit
     )
+
+
+def _native_trace_analysis(evaluation: AutoEvaluation) -> object | None:
+    trace = evaluation.trace
+    return trace.analysis if isinstance(trace, _NativeTraceView) else None
 
 
 def find_baseline_alignment(
@@ -986,6 +1128,53 @@ def find_baseline_alignment(
         )
     if max_alignment < 0 or max_negative_alignment < 0:
         raise ValueError("alignment bounds must be non-negative")
+    candidate_analysis = _native_trace_analysis(candidate)
+    baseline_analysis = _native_trace_analysis(baseline)
+    if (
+        candidate_analysis is not None
+        and baseline_analysis is not None
+        and math.isfinite(position_tolerance)
+        and position_tolerance >= 0.0
+        and math.isfinite(velocity_tolerance)
+        and velocity_tolerance >= 0.0
+    ):
+        raw_match = candidate_analysis.find_alignment(
+            baseline_analysis,
+            objective=(0 if objective == AUTO_OBJECTIVE_SPEEDRUN else 1),
+            max_alignment=min(max_alignment, max(0, baseline.last_tick)),
+            max_negative_alignment=min(
+                max_negative_alignment, max(0, candidate.last_tick)
+            ),
+            scan_limit=192,
+            reference_completion_exit_index=(
+                -1
+                if reference_completion_exit_index is None
+                else reference_completion_exit_index
+            ),
+            position_tolerance=position_tolerance,
+            velocity_tolerance=velocity_tolerance,
+            position_weight=_TRACE_POSITION_WEIGHT,
+            velocity_weight=_TRACE_VELOCITY_WEIGHT,
+            contact_mismatch_penalty=_TRACE_CONTACT_MISMATCH_PENALTY,
+            in_air_mismatch_penalty=_TRACE_IN_AIR_MISMATCH_PENALTY,
+            near_wall_mismatch_penalty=_TRACE_NEAR_WALL_MISMATCH_PENALTY,
+            gold_bit_penalty=_TRACE_GOLD_BIT_PENALTY,
+            mine_bit_penalty=_TRACE_MINE_BIT_PENALTY,
+            exit_bit_penalty=_TRACE_EXIT_BIT_PENALTY,
+            locked_door_bit_penalty=_TRACE_LOCKED_DOOR_BIT_PENALTY,
+            trapdoor_bit_penalty=_TRACE_TRAPDOOR_BIT_PENALTY,
+        )
+        if raw_match is None:
+            return None
+        return AlignmentMatch(
+            candidate_tick=int(raw_match[0]),
+            reference_tick=int(raw_match[1]),
+            offset=int(raw_match[2]),
+            distance=float(raw_match[3]),
+            contact_matches=bool(raw_match[4]),
+            static_matches=bool(raw_match[5]),
+            score_lead=int(raw_match[6]),
+        )
     if objective == AUTO_OBJECTIVE_SPEEDRUN:
         if max_alignment < 1:
             return None
@@ -1425,120 +1614,6 @@ def _mutate_jump_interval_known(
     return tuple(result) + (NEUTRAL_INPUT,)
 
 
-def _point_from_state(state: SimulationState, tick: int) -> CompactTracePoint:
-    return _compact_point(state, tick)
-
-
-def _simulate_prefix(level: Level, frames: Sequence[InputFrame], end_exclusive: int) -> SimulationState:
-    state = level.initial_state()
-    for frame in frames[:end_exclusive]:
-        state.step(frame, level.tiles)
-        if state.player.dead or state.level_complete:
-            break
-    return state
-
-
-def _repair_copy_on_write_beneficial(state: SimulationState) -> bool:
-    """Choose the local/jump-pattern COW path only when it should pay off.
-
-    Copy-on-write is a large win when a level has many sleeping or immutable
-    physics objects, but it adds detachment bookkeeping when almost every
-    object updates on every tick.  Auto visits both shapes, so use the fast
-    branch path only when the object set materially exceeds the objects likely
-    to detach on the next tick.
-    """
-    active_next_tick = len(state.update_uids) + int(bool(state.thinker_uids))
-    # Two extra slots conservatively cover nearby collision-mutated objects.
-    return len(state.objects) > active_next_tick + 2
-
-
-def _forbidden_trapdoor_triggered(
-    state: SimulationState,
-    forbidden_trapdoor_mask: int,
-) -> bool:
-    """Reject an irreversible Auto repair violation as soon as it occurs."""
-    mask = forbidden_trapdoor_mask
-    slots = state.object_slots
-    while mask:
-        bit = mask & -mask
-        uid = bit.bit_length() - 1
-        if uid < len(slots):
-            obj = slots[uid]
-            if (
-                type(obj) is TestDoor
-                and obj.is_trap
-                and not obj.trigger_active
-            ):
-                return True
-        mask ^= bit
-    return False
-
-
-def _local_target_score(
-    state: SimulationState,
-    tick: int,
-    reference_point: CompactTracePoint | None,
-    *,
-    point: CompactTracePoint | None = None,
-    required_jump: int | None,
-    successful_jumps: frozenset[int],
-    jump_tolerance: int = 0,
-    required_gold_mask: int = 0,
-    required_exit_mask: int = 0,
-    required_locked_door_mask: int = 0,
-    forbidden_trapdoor_mask: int = 0,
-) -> float:
-    if state.player.dead:
-        return float("inf")
-    if (
-        required_gold_mask
-        and state.static_state.collected_gold_mask & required_gold_mask
-        != required_gold_mask
-    ):
-        return float("inf")
-    opened_locked_door_mask = 0
-    triggered_trapdoor_mask = 0
-    if point is not None:
-        opened_locked_door_mask = point.opened_locked_door_mask
-        triggered_trapdoor_mask = point.triggered_trapdoor_mask
-    elif (
-        reference_point is not None
-        or required_locked_door_mask
-        or forbidden_trapdoor_mask
-    ):
-        opened_locked_door_mask, triggered_trapdoor_mask = _door_control_masks(
-            state
-        )
-    if (
-        required_exit_mask
-        and state.static_state.open_exit_mask & required_exit_mask
-        != required_exit_mask
-    ):
-        return float("inf")
-    if (
-        required_locked_door_mask
-        and opened_locked_door_mask & required_locked_door_mask
-        != required_locked_door_mask
-    ):
-        return float("inf")
-    if forbidden_trapdoor_mask & triggered_trapdoor_mask:
-        return float("inf")
-    if required_jump is not None and not any(
-        abs(tick - required_jump) <= jump_tolerance for tick in successful_jumps
-    ):
-        return float("inf")
-    if reference_point is None:
-        return 0.0
-    if point is None:
-        point = _compact_point(
-            state,
-            tick,
-            opened_locked_door_mask=opened_locked_door_mask,
-            triggered_trapdoor_mask=triggered_trapdoor_mask,
-        )
-    return _trace_distance(point, reference_point)
-
-
 def _derive_repair_search_rng(
     master_seed: int,
     repair_number: int,
@@ -1703,6 +1778,310 @@ def _all_input_search_order(
     return (original, *alternatives)
 
 
+def _native_trace_target(point: CompactTracePoint) -> TraceTargetSpec:
+    """Compile Python's route objective definition into immutable C data."""
+    return TraceTargetSpec(
+        x=point.x,
+        y=point.y,
+        vx=point.vx,
+        vy=point.vy,
+        player_state=point.player_state,
+        in_air=point.in_air,
+        near_wall=point.near_wall,
+        wall_x=point.wall_x,
+        floor_x=point.floor_x,
+        floor_y=point.floor_y,
+        previous_jump_held=point.previous_jump_held,
+        collected_gold_mask=point.collected_gold_mask,
+        exploded_mine_mask=point.exploded_mine_mask,
+        open_exit_mask=point.open_exit_mask,
+        opened_locked_door_mask=point.opened_locked_door_mask,
+        triggered_trapdoor_mask=point.triggered_trapdoor_mask,
+        position_weight=_TRACE_POSITION_WEIGHT,
+        velocity_weight=_TRACE_VELOCITY_WEIGHT,
+        contact_mismatch_penalty=_TRACE_CONTACT_MISMATCH_PENALTY,
+        in_air_mismatch_penalty=_TRACE_IN_AIR_MISMATCH_PENALTY,
+        near_wall_mismatch_penalty=_TRACE_NEAR_WALL_MISMATCH_PENALTY,
+        gold_bit_penalty=_TRACE_GOLD_BIT_PENALTY,
+        mine_bit_penalty=_TRACE_MINE_BIT_PENALTY,
+        exit_bit_penalty=_TRACE_EXIT_BIT_PENALTY,
+        locked_door_bit_penalty=_TRACE_LOCKED_DOOR_BIT_PENALTY,
+        trapdoor_bit_penalty=_TRACE_TRAPDOOR_BIT_PENALTY,
+    )
+
+
+def _native_mask_groups(
+    kind: int,
+    mask: int,
+) -> tuple[InteractionGroupSpec, ...]:
+    return tuple(
+        InteractionGroupSpec((InteractionAtomSpec(kind, index),))
+        for index in _iter_set_bit_indices(mask)
+    )
+
+
+def _native_repair_groups(
+    *,
+    required_gold_mask: int,
+    required_exit_mask: int,
+    required_locked_door_mask: int,
+    forbidden_trapdoor_mask: int,
+) -> tuple[tuple[InteractionGroupSpec, ...], tuple[InteractionGroupSpec, ...]]:
+    required = (
+        *_native_mask_groups(INTERACTION_GOLD, required_gold_mask),
+        *_native_mask_groups(INTERACTION_EXIT_SWITCH, required_exit_mask),
+        *_native_mask_groups(
+            INTERACTION_LOCKED_DOOR, required_locked_door_mask
+        ),
+    )
+    avoided = _native_mask_groups(
+        INTERACTION_TRAPDOOR, forbidden_trapdoor_mask
+    )
+    return required, avoided
+
+
+def _native_repair_search(
+    level: Level,
+    replay: Sequence[InputFrame],
+    *,
+    mutable_frames: tuple[int, ...],
+    choices: tuple[tuple[InputFrame, ...], ...],
+    target_tick: int,
+    reference_point: CompactTracePoint | None,
+    required_jump_frames: tuple[int, ...] = (),
+    ignored_jump_frames: tuple[int, ...] = (),
+    required_jump_any: bool = False,
+    minimum_jump_events: int = 0,
+    required_gold_mask: int = 0,
+    required_exit_mask: int = 0,
+    required_locked_door_mask: int = 0,
+    forbidden_trapdoor_mask: int = 0,
+    incumbent_score: float = float("inf"),
+    incumbent_feasible: bool = False,
+    prune_inactive_jump: bool = False,
+    skip_unchanged_final_step: bool = False,
+    randomized_ties: bool = False,
+    max_simulated_ticks: int = 0,
+) -> SearchResult:
+    required_groups, avoided_groups = _native_repair_groups(
+        required_gold_mask=required_gold_mask,
+        required_exit_mask=required_exit_mask,
+        required_locked_door_mask=required_locked_door_mask,
+        forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+    )
+    return _native_session(level).search(
+        replay,
+        SearchSpec(
+            mutable_frames=mutable_frames,
+            choices=choices,
+            target_frame=target_tick,
+            objective=(
+                OBJECTIVE_TRACE_DISTANCE
+                if reference_point is not None
+                else OBJECTIVE_CONSTANT
+            ),
+            trace_target=(
+                _native_trace_target(reference_point)
+                if reference_point is not None
+                else None
+            ),
+            required_groups=required_groups,
+            avoided_groups=avoided_groups,
+            incumbent_missing_requirements=(
+                frozenset()
+                if incumbent_feasible
+                else frozenset(range(len(required_groups)))
+            ),
+            incumbent_violated_avoidances=(
+                frozenset()
+                if incumbent_feasible
+                else frozenset(range(len(avoided_groups)))
+            ),
+            required_jump_frames=required_jump_frames,
+            incumbent_missing_jump_frames=(
+                frozenset()
+                if incumbent_feasible
+                else frozenset(required_jump_frames)
+            ),
+            ignored_jump_frames=ignored_jump_frames,
+            minimum_jump_events=minimum_jump_events,
+            incumbent_score=(
+                -incumbent_score if math.isfinite(incumbent_score) else -math.inf
+            ),
+            incumbent_feasible=incumbent_feasible,
+            prune_inactive_jump=prune_inactive_jump,
+            skip_unchanged_final_step=skip_unchanged_final_step,
+            require_all_constraints=True,
+            required_jump_any=required_jump_any,
+            tie_break_low_edit_lex=randomized_ties,
+            max_simulated_ticks=max_simulated_ticks,
+        ),
+    )
+
+
+def _native_repair_score(result: SearchResult) -> float:
+    return -result.score if result.improved and result.feasible else math.inf
+
+
+def _native_apply_search_result(
+    replay: Sequence[InputFrame],
+    mutable_frames: Sequence[int],
+    result: SearchResult,
+) -> tuple[InputFrame, ...] | None:
+    """Materialise the policy-level replay selected by a native kernel."""
+    if not result.improved or not result.feasible:
+        return None
+    if len(result.best_inputs) != len(mutable_frames):
+        raise RuntimeError("native repair kernel returned an invalid input count")
+    proposal = list(replay)
+    for tick, frame in zip(mutable_frames, result.best_inputs):
+        proposal[tick] = frame
+    return tuple(proposal)
+
+
+def _native_remaining_budget(config: AutoConfig, used: int) -> int:
+    if config.repair_local_limit == 0:
+        return 0
+    return max(0, config.repair_local_limit - used)
+
+
+
+def _native_patch_evaluation(
+    level: Level,
+    replay: Sequence[InputFrame],
+    patches: tuple[tuple[PatchAssignmentSpec, ...], ...],
+    *,
+    target_tick: int,
+    reference_point: CompactTracePoint | None,
+    required_jump_frames: tuple[int, ...] = (),
+    ignored_jump_frames: tuple[int, ...] = (),
+    required_jump_any: bool = False,
+    minimum_jump_events: int = 0,
+    required_gold_mask: int = 0,
+    required_exit_mask: int = 0,
+    required_locked_door_mask: int = 0,
+    forbidden_trapdoor_mask: int = 0,
+    prune_inactive_jump: bool = False,
+    randomized_ties: bool = False,
+    max_simulated_ticks: int = 0,
+    capture_endpoints: bool = False,
+):
+    """Compile an ordered Python patch batch and execute it natively."""
+    required_groups, avoided_groups = _native_repair_groups(
+        required_gold_mask=required_gold_mask,
+        required_exit_mask=required_exit_mask,
+        required_locked_door_mask=required_locked_door_mask,
+        forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+    )
+    return _native_session(level).evaluate_patches(
+        replay,
+        PatchEvaluationSpec(
+            patches=patches,
+            target_frame=target_tick,
+            trace_target=(
+                _native_trace_target(reference_point)
+                if reference_point is not None
+                else None
+            ),
+            required_groups=required_groups,
+            avoided_groups=avoided_groups,
+            required_jump_frames=required_jump_frames,
+            ignored_jump_frames=ignored_jump_frames,
+            minimum_jump_events=minimum_jump_events,
+            required_jump_any=required_jump_any,
+            prune_inactive_jump=prune_inactive_jump,
+            tie_policy=(
+                PATCH_TIE_LOW_EDIT_LEX
+                if randomized_ties
+                else PATCH_TIE_SUPPLIED_ORDER
+            ),
+            max_simulated_ticks=max_simulated_ticks,
+            capture_endpoints=capture_endpoints,
+        ),
+    )
+
+
+def _repair_evaluation_score(
+    evaluation: AutoEvaluation,
+    target_tick: int,
+    reference_point: CompactTracePoint | None,
+    *,
+    required_jump_frames: frozenset[int] = frozenset(),
+    ignored_jump_frames: frozenset[int] = frozenset(),
+    minimum_jump_events: int = 0,
+    required_gold_mask: int = 0,
+    required_exit_mask: int = 0,
+    required_locked_door_mask: int = 0,
+    forbidden_trapdoor_mask: int = 0,
+) -> float:
+    point = evaluation.point(target_tick)
+    if point is None or point.dead:
+        return math.inf
+    if point.collected_gold_mask & required_gold_mask != required_gold_mask:
+        return math.inf
+    if point.open_exit_mask & required_exit_mask != required_exit_mask:
+        return math.inf
+    if (
+        point.opened_locked_door_mask & required_locked_door_mask
+        != required_locked_door_mask
+    ):
+        return math.inf
+    if point.triggered_trapdoor_mask & forbidden_trapdoor_mask:
+        return math.inf
+    if required_jump_frames and not any(
+        tick in required_jump_frames and tick not in ignored_jump_frames
+        for tick in evaluation.successful_jumps
+        if tick <= target_tick
+    ):
+        return math.inf
+    if point.jump_events < minimum_jump_events:
+        return math.inf
+    return 0.0 if reference_point is None else _trace_distance(
+        point, reference_point
+    )
+
+
+def _native_endpoint_effect(
+    player: dict[str, object] | None,
+    base_point: CompactTracePoint | None,
+) -> float:
+    if player is None or base_point is None:
+        return 0.0
+    pos = player.get("pos")
+    oldpos = player.get("oldpos")
+    wall_n = player.get("wall_n")
+    floor_n = player.get("floor_n")
+    if not all(
+        isinstance(value, (tuple, list)) and len(value) == 2
+        for value in (pos, oldpos, wall_n, floor_n)
+    ):
+        return 0.0
+    assert isinstance(pos, (tuple, list))
+    assert isinstance(oldpos, (tuple, list))
+    assert isinstance(wall_n, (tuple, list))
+    assert isinstance(floor_n, (tuple, list))
+    x = float(pos[0])
+    y = float(pos[1])
+    vx = x - float(oldpos[0])
+    vy = y - float(oldpos[1])
+    contact_key = (
+        int(player.get("state", -1)),
+        bool(player.get("in_air", False)),
+        bool(player.get("near_wall", False)),
+        _sign_bin(float(wall_n[0])),
+        _sign_bin(float(floor_n[0])),
+        _sign_bin(float(floor_n[1])),
+        bool(player.get("previous_jump_held", False)),
+    )
+    contact_effect = 100.0 if contact_key != base_point.contact_key else 0.0
+    return (
+        (x - base_point.x) ** 2
+        + (y - base_point.y) ** 2
+        + 4.0 * ((vx - base_point.vx) ** 2 + (vy - base_point.vy) ** 2)
+        + contact_effect
+    )
+
+
 def _repair_proposal_is_better(
     original: Sequence[InputFrame],
     proposal: Sequence[InputFrame],
@@ -1734,20 +2113,6 @@ def _repair_proposal_is_better(
     if proposal_edits != incumbent_edits:
         return proposal_edits < incumbent_edits
     return _frame_key(proposal) < _frame_key(incumbent)
-
-
-def _repair_score_needs_proposal(
-    score: float,
-    incumbent_score: float,
-    *,
-    randomized: bool,
-) -> bool:
-    """Whether ranking can require materialising a complete replay proposal."""
-    return score < incumbent_score or (
-        randomized
-        and score == incumbent_score
-        and math.isfinite(score)
-    )
 
 
 def _jump_repair_variants(
@@ -1867,13 +2232,7 @@ def repair_jump_mutation_lookback(
     forbidden_trapdoor_mask: int = 0,
     require_failure_jump: bool = True,
 ) -> tuple[tuple[InputFrame, ...] | None, int, int]:
-    """Try semantic +/-1 jump start and length repairs across the lookback.
-
-    Horizontal inputs are retained byte-for-byte.  Each candidate moves one
-    existing pulse start by one frame or changes its held length by one frame.
-    Exact unchanged prefix states are cached at the first changed frame, so the
-    local allowance charges only simulation made necessary by the mutation.
-    """
+    """Evaluate policy-selected jump-boundary patches in native C."""
     if failure_tick < 0:
         return None, 0, 0
     seed = tuple(working_frames)
@@ -1901,154 +2260,97 @@ def repair_jump_mutation_lookback(
         and (failure_tick == 0 or not seed[failure_tick - 1].jump)
         else None
     )
-    # A one-frame start mutation may legitimately move the causal successful
-    # press one frame either side of the original failed edge.
-    jump_tolerance = 1
-    simulations = 0
-    branches = 0
-    next_progress_simulations = 250_000
+    seed_evaluation = _evaluate_working(
+        level, seed, trace_stride=config.trace_stride
+    )
+    seed_successes = frozenset(
+        tick
+        for tick in seed_evaluation.successful_jumps
+        if tick <= target_tick
+    )
+    base_score = _repair_evaluation_score(
+        seed_evaluation,
+        target_tick,
+        reference_point,
+        required_jump_frames=(
+            frozenset((required_jump,))
+            if required_jump is not None
+            else frozenset()
+        ),
+        required_gold_mask=required_gold_mask,
+        required_exit_mask=required_exit_mask,
+        required_locked_door_mask=required_locked_door_mask,
+        forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+    )
+    if base_score == 0.0:
+        if progress is not None:
+            progress(0, 0)
+        return None, 0, 0
 
-    def local_budget_exhausted() -> bool:
-        return bool(
-            config.repair_local_limit
-            and simulations >= config.repair_local_limit
-        )
-
-    def maybe_report_progress(*, force: bool = False) -> None:
-        nonlocal next_progress_simulations
-        if progress is None:
-            return
-        if force or simulations >= next_progress_simulations:
-            progress(branches, simulations)
-            while simulations >= next_progress_simulations:
-                next_progress_simulations += 250_000
-
-    branch_ticks = {first_changed for _, first_changed, _ in variants}
-    prefix_states: dict[int, SimulationState] = {}
-    prefix_successes: dict[int, frozenset[int]] = {}
-    seed_state = level.initial_state()
-    copy_on_write_objects = _repair_copy_on_write_beneficial(seed_state)
-    seed_successes: set[int] = set()
-    seed_survived = True
-    for tick, frame in enumerate(seed[: target_tick + 1]):
-        if tick in branch_ticks:
-            prefix_states[tick] = seed_state.clone(
-                copy_on_write_objects=copy_on_write_objects
+    accepted_jump_frames = (
+        tuple(
+            range(
+                max(0, required_jump - 1),
+                min(target_tick, required_jump + 1) + 1,
             )
-            prefix_successes[tick] = frozenset(seed_successes)
-        before = seed_state.player.jump_events
-        try:
-            seed_state.step(frame, level.tiles)
-        except UnsupportedTileCollision:
-            seed_survived = False
-            break
-        if seed_state.player.jump_events > before:
-            seed_successes.add(tick)
-        if seed_state.player.dead:
-            seed_survived = False
-            break
-    maybe_report_progress()
-
-    seed_success_set = frozenset(seed_successes)
-    seed_point = (
-        _point_from_state(seed_state, target_tick)
-        if seed_survived and not seed_state.player.dead
-        else None
-    )
-    base_score = (
-        _local_target_score(
-            seed_state,
-            target_tick,
-            reference_point,
-            point=seed_point,
-            required_jump=required_jump,
-            # The damaged source edge itself is the causal requirement.  An
-            # unrelated successful press one frame away must not make the seed
-            # look repaired merely because semantic variants may move the edge
-            # by one frame.
-            successful_jumps=seed_success_set,
-            jump_tolerance=0,
-            required_gold_mask=required_gold_mask,
-            required_exit_mask=required_exit_mask,
-            required_locked_door_mask=required_locked_door_mask,
-            forbidden_trapdoor_mask=forbidden_trapdoor_mask,
         )
-        if seed_point is not None
-        else float("inf")
+        if required_jump is not None
+        else ()
     )
+    require_new_success = (
+        required_jump is not None and required_jump not in seed_successes
+    )
+    ignored_jump_frames = (
+        tuple(tick for tick in accepted_jump_frames if tick in seed_successes)
+        if require_new_success
+        else ()
+    )
+    target_seed_point = seed_evaluation.point(target_tick)
+    minimum_jump_events = (
+        (target_seed_point.jump_events if target_seed_point is not None else len(seed_successes))
+        + 1
+        if require_new_success
+        else 0
+    )
+
     best_work = seed
     best_score = base_score
+    branches = 0
+    simulations = 0
     randomized_ties = (
         config.repair_search_order == AUTO_REPAIR_SEARCH_ORDER_RANDOM
     )
-    require_new_jump_success = (
-        required_jump is not None and required_jump not in seed_success_set
+    patches = tuple(
+        tuple(
+            PatchAssignmentSpec(tick, proposal[tick])
+            for tick, (before, after) in enumerate(zip(seed, proposal))
+            if before != after and tick <= target_tick
+        )
+        for proposal, _first_changed, _description in variants
     )
-    if base_score == 0.0:
-        # The repair score is non-negative and the unchanged seed has zero
-        # local edits, so no semantic boundary mutation can improve it.
-        maybe_report_progress(force=True)
-        return None, branches, simulations
-
-    for proposal, first_changed, _description in variants:
-        if local_budget_exhausted():
-            break
-        prefix = prefix_states.get(first_changed)
-        if prefix is None:
-            # The unchanged route died/completed before this edit could act.
-            continue
-        branches += 1
-        state = prefix.clone(
-            copy_on_write_objects=copy_on_write_objects
-        )
-        successes = set(prefix_successes[first_changed])
-        completed_candidate = True
-        for tick in range(first_changed, target_tick + 1):
-            if local_budget_exhausted():
-                completed_candidate = False
-                break
-            before = state.player.jump_events
-            try:
-                state.step(proposal[tick], level.tiles)
-            except UnsupportedTileCollision:
-                completed_candidate = False
-                break
-            simulations += 1
-            if state.player.jump_events > before:
-                successes.add(tick)
-            if state.player.dead or _forbidden_trapdoor_triggered(
-                state, forbidden_trapdoor_mask
-            ):
-                completed_candidate = False
-                break
-        maybe_report_progress()
-        if not completed_candidate:
-            continue
-        successful_jumps = frozenset(successes)
-        score = _local_target_score(
-            state,
-            target_tick,
-            reference_point,
-            required_jump=required_jump,
-            # For a genuinely missed source edge, only a newly-created
-            # successful press may satisfy the repair. If the source edge had
-            # already succeeded, length/start edits may retain or move it.
-            successful_jumps=(
-                successful_jumps - seed_success_set
-                if require_new_jump_success
-                else successful_jumps
-            ),
-            jump_tolerance=jump_tolerance,
-            required_gold_mask=required_gold_mask,
-            required_exit_mask=required_exit_mask,
-            required_locked_door_mask=required_locked_door_mask,
-            forbidden_trapdoor_mask=forbidden_trapdoor_mask,
-        )
-        if (
-            require_new_jump_success
-            and len(successful_jumps) <= len(seed_success_set)
-        ):
-            continue
+    batch = _native_patch_evaluation(
+        level,
+        seed,
+        patches,
+        target_tick=target_tick,
+        reference_point=reference_point,
+        required_jump_frames=accepted_jump_frames,
+        ignored_jump_frames=ignored_jump_frames,
+        required_jump_any=bool(accepted_jump_frames),
+        minimum_jump_events=minimum_jump_events,
+        required_gold_mask=required_gold_mask,
+        required_exit_mask=required_exit_mask,
+        required_locked_door_mask=required_locked_door_mask,
+        forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+        randomized_ties=randomized_ties,
+        max_simulated_ticks=config.repair_local_limit,
+    )
+    branches = batch.stats.branches
+    simulations = batch.stats.simulated_ticks
+    for (proposal, _first_changed, _description), candidate in zip(
+        variants, batch.candidates
+    ):
+        score = candidate.score if candidate.feasible else math.inf
         if _repair_proposal_is_better(
             seed,
             proposal,
@@ -2060,7 +2362,8 @@ def repair_jump_mutation_lookback(
             best_work = proposal
             best_score = score
 
-    maybe_report_progress(force=True)
+    if progress is not None:
+        progress(branches, simulations)
     return best_work if best_work != seed else None, branches, simulations
 
 
@@ -2080,15 +2383,7 @@ def repair_direction_window(
     forbidden_trapdoor_mask: int = 0,
     require_failure_jump: bool = True,
 ) -> tuple[tuple[InputFrame, ...] | None, int, int]:
-    """Bounded L/N/R DFS which aims at the corresponding reference state.
-
-    Jump-held inputs stay fixed.  A cheap long-baseline sensitivity-pair pass
-    first identifies useful horizontal nudges; the exact DFS then searches the
-    final ``repair_window`` frames before the failure.  The returned counters
-    are local branches and chargeable local-search steps respectively.  The
-    one-time unchanged-prefix replay needed to establish exact branch states is
-    deliberately excluded from both the allowance and the returned step count.
-    """
+    """Choose horizontal probes in Python and execute them in native C."""
     if failure_tick < 0:
         return None, 0, 0
     search_rng = _effective_repair_search_rng(
@@ -2097,9 +2392,15 @@ def repair_direction_window(
         stream_tag="direction-direct",
     )
     randomized = search_rng is not None
-    body_limit = len(working_frames) - 1
+    seed = tuple(working_frames)
+    body_limit = len(seed) - 1
+    if body_limit <= 0:
+        return None, 0, 0
     failure_tick = min(failure_tick, body_limit - 1)
-    range_end = body_limit - 1 if config.range_end is None else config.range_end
+    range_end = min(
+        body_limit - 1,
+        body_limit - 1 if config.range_end is None else config.range_end,
+    )
     target_tick = min(body_limit, failure_tick + config.repair_lookahead)
     reference_tick = min(
         max(0, target_tick + reference_offset), baseline.last_tick
@@ -2108,185 +2409,91 @@ def repair_direction_window(
     required_jump = (
         failure_tick
         if require_failure_jump
-        and working_frames[failure_tick].jump
-        and (failure_tick == 0 or not working_frames[failure_tick - 1].jump)
+        and seed[failure_tick].jump
+        and (failure_tick == 0 or not seed[failure_tick - 1].jump)
         else None
     )
+    required_jump_frames = (
+        (required_jump,) if required_jump is not None else ()
+    )
+    seed_evaluation = _evaluate_working(
+        level, seed, trace_stride=config.trace_stride
+    )
+    base_point = seed_evaluation.point(target_tick)
+    base_score = _repair_evaluation_score(
+        seed_evaluation,
+        target_tick,
+        reference_point,
+        required_jump_frames=frozenset(required_jump_frames),
+        required_gold_mask=required_gold_mask,
+        required_exit_mask=required_exit_mask,
+        required_locked_door_mask=required_locked_door_mask,
+        forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+    )
+    if base_score == 0.0:
+        if progress is not None:
+            progress(0, 0)
+        return None, 0, 0
+
     branches = 0
     simulations = 0
-    next_progress_simulations = 250_000
-
-    def local_budget_exhausted() -> bool:
-        return bool(
-            config.repair_local_limit
-            and simulations >= config.repair_local_limit
-        )
-
-    def maybe_report_progress(*, force: bool = False) -> None:
-        nonlocal next_progress_simulations
-        if progress is None:
-            return
-        if force or simulations >= next_progress_simulations:
-            progress(branches, simulations)
-            while simulations >= next_progress_simulations:
-                next_progress_simulations += 250_000
-
-    seed = tuple(working_frames)
+    budget_exhausted = False
     look_start = max(config.range_start, failure_tick - config.repair_lookback)
     look_end = min(failure_tick, range_end)
-    prefix_states: dict[int, SimulationState] = {}
-    prefix_successes: dict[int, frozenset[int]] = {}
-
-    # Simulate the unchanged seed once.  Sensitivity trials can then branch at
-    # their first changed frame instead of replaying frame zero thousands of
-    # times.  A SimulationState clone includes the full mutable ObjectManager,
-    # so this is an exact branch point even on enemy/object-heavy levels.
-    seed_state = level.initial_state()
-    copy_on_write_objects = _repair_copy_on_write_beneficial(seed_state)
-    seed_successes: set[int] = set()
-    seed_survived = True
-    for tick, frame in enumerate(seed[: target_tick + 1]):
-        if tick >= look_start:
-            prefix_states[tick] = seed_state.clone(
-                copy_on_write_objects=copy_on_write_objects
-            )
-            prefix_successes[tick] = frozenset(seed_successes)
-        before = seed_state.player.jump_events
-        try:
-            seed_state.step(frame, level.tiles)
-        except UnsupportedTileCollision:
-            seed_survived = False
-            break
-        if seed_state.player.jump_events > before:
-            seed_successes.add(tick)
-        if seed_state.player.dead:
-            seed_survived = False
-            break
-    maybe_report_progress()
-
-    base_point = (
-        _point_from_state(seed_state, target_tick)
-        if seed_survived and not seed_state.player.dead
-        else None
-    )
-    base_score = (
-        _local_target_score(
-            seed_state,
-            target_tick,
-            reference_point,
-            point=base_point,
-            required_jump=required_jump,
-            successful_jumps=frozenset(seed_successes),
-            required_gold_mask=required_gold_mask,
-            required_exit_mask=required_exit_mask,
-            required_locked_door_mask=required_locked_door_mask,
-            forbidden_trapdoor_mask=forbidden_trapdoor_mask,
-        )
-        if base_point is not None
-        else float("inf")
-    )
-
-    if base_score == 0.0:
-        # Exact target/hard-state match: the unchanged replay is already the
-        # unique zero-edit optimum for this repair objective.
-        maybe_report_progress(force=True)
-        return None, branches, simulations
-
-    def run_to_target(
-        frames: Sequence[InputFrame],
-        *,
-        start_tick: int = 0,
-    ) -> tuple[float, frozenset[int], CompactTracePoint | None]:
-        nonlocal simulations
-        if start_tick in prefix_states:
-            state = prefix_states[start_tick].clone(
-                copy_on_write_objects=copy_on_write_objects
-            )
-            successes = set(prefix_successes[start_tick])
-            first_tick = start_tick
-        else:
-            state = level.initial_state()
-            successes = set()
-            first_tick = 0
-        for tick in range(first_tick, target_tick + 1):
-            # When an exact cached state is unavailable, frames before the
-            # caller's first changed tick are unavoidable prefix setup rather
-            # than search work and therefore do not consume the local budget.
-            charge_step = tick >= start_tick
-            if charge_step and local_budget_exhausted():
-                return float("inf"), frozenset(successes), None
-            frame = frames[tick]
-            before = state.player.jump_events
-            try:
-                state.step(frame, level.tiles)
-            except UnsupportedTileCollision:
-                return float("inf"), frozenset(successes), None
-            if charge_step:
-                simulations += 1
-            if state.player.jump_events > before:
-                successes.add(tick)
-            if state.player.dead or _forbidden_trapdoor_triggered(
-                state, forbidden_trapdoor_mask
-            ):
-                return float("inf"), frozenset(successes), None
-        maybe_report_progress()
-        point = _point_from_state(state, target_tick)
-        return _local_target_score(
-            state,
-            target_tick,
-            reference_point,
-            point=point,
-            required_jump=required_jump,
-            successful_jumps=frozenset(successes),
-            required_gold_mask=required_gold_mask,
-            required_exit_mask=required_exit_mask,
-            required_locked_door_mask=required_locked_door_mask,
-            forbidden_trapdoor_mask=forbidden_trapdoor_mask,
-        ), frozenset(successes), point
-
     best_seed = seed
     best_seed_score = base_score
 
-    # Horizontal sensitivity pairs reach farther back than an exponential DFS.
-    # Rank *every* lookback frame by its measured one-frame effect at the target
-    # rather than uniformly sampling the interval; important compensating taps
-    # can be a hundred frames before a shifted wall jump.
-    sensitivity: list[tuple[float, int]] = []
-
-    def endpoint_effect(point: CompactTracePoint | None) -> float:
-        if point is None or base_point is None:
-            return 0.0
-        contact_effect = 100.0 if point.contact_key != base_point.contact_key else 0.0
-        return (
-            (point.x - base_point.x) ** 2
-            + (point.y - base_point.y) ** 2
-            + 4.0 * ((point.vx - base_point.vx) ** 2 + (point.vy - base_point.vy) ** 2)
-            + contact_effect
-        )
-
-    for tick in _repair_sensitivity_tick_order(
+    probe_entries: list[tuple[int, tuple[InputFrame, ...]]] = []
+    probe_patches: list[tuple[PatchAssignmentSpec, ...]] = []
+    sensitivity_ticks = _repair_sensitivity_tick_order(
         look_start,
         look_end,
         failure_tick,
         search_rng,
-    ):
-        if local_budget_exhausted():
-            break
+    )
+    for tick in sensitivity_ticks:
         old = seed[tick]
-        tick_effect = 0.0
         for direction in _direction_search_order(
             old.horizontal,
             search_rng,
             source_first=False,
         ):
-            if local_budget_exhausted():
-                break
-            branches += 1
+            frame = InputFrame(
+                direction < 0, direction > 0, old.jump, None
+            )
             changed = list(seed)
-            changed[tick] = InputFrame(direction < 0, direction > 0, old.jump, None)
-            score, _, endpoint = run_to_target(changed, start_tick=tick)
-            tick_effect = max(tick_effect, endpoint_effect(endpoint))
-            proposal = tuple(changed)
+            changed[tick] = frame
+            probe_entries.append((tick, tuple(changed)))
+            probe_patches.append((PatchAssignmentSpec(tick, frame),))
+
+    sensitivity_effects = {tick: 0.0 for tick in sensitivity_ticks}
+    if probe_patches:
+        probe_batch = _native_patch_evaluation(
+            level,
+            seed,
+            tuple(probe_patches),
+            target_tick=target_tick,
+            reference_point=reference_point,
+            required_jump_frames=required_jump_frames,
+            required_gold_mask=required_gold_mask,
+            required_exit_mask=required_exit_mask,
+            required_locked_door_mask=required_locked_door_mask,
+            forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+            randomized_ties=randomized,
+            max_simulated_ticks=config.repair_local_limit,
+            capture_endpoints=True,
+        )
+        branches += probe_batch.stats.branches
+        simulations += probe_batch.stats.simulated_ticks
+        budget_exhausted = probe_batch.budget_exhausted
+        for (tick, proposal), candidate in zip(
+            probe_entries, probe_batch.candidates
+        ):
+            sensitivity_effects[tick] = max(
+                sensitivity_effects[tick],
+                _native_endpoint_effect(candidate.player, base_point),
+            )
+            score = candidate.score if candidate.feasible else math.inf
             if _repair_proposal_is_better(
                 seed,
                 proposal,
@@ -2295,9 +2502,12 @@ def repair_direction_window(
                 best_seed_score,
                 randomized=randomized,
             ):
-                best_seed_score = score
                 best_seed = proposal
-        sensitivity.append((tick_effect, tick))
+                best_seed_score = score
+    sensitivity = [
+        (sensitivity_effects[tick], tick) for tick in sensitivity_ticks
+    ]
+
     if base_point is None:
         candidate_ticks: list[int] = []
     elif search_rng is None:
@@ -2331,8 +2541,8 @@ def repair_direction_window(
                     first,
                     second,
                 )
-                for pos, first in enumerate(candidate_ticks[:-1])
-                for second in candidate_ticks[pos + 1 :]
+                for position, first in enumerate(candidate_ticks[:-1])
+                for second in candidate_ticks[position + 1 :]
             )
         )
         pair_sites = [(first, second) for _, first, second in ranked_pairs]
@@ -2345,42 +2555,74 @@ def repair_direction_window(
                     first,
                     second,
                 )
-                for pos, first in enumerate(candidate_ticks[:-1])
-                for second in candidate_ticks[pos + 1 :]
+                for position, first in enumerate(candidate_ticks[:-1])
+                for second in candidate_ticks[position + 1 :]
             )
         )
         pair_sites = [
             (first, second)
             for _, _, first, second in ranked_pairs_random
         ]
+
     exact_pair = False
     for first, second in pair_sites:
-        if local_budget_exhausted():
+        if budget_exhausted:
             break
-        first_original = seed[first].horizontal
-        second_original = seed[second].horizontal
-        for left_direction, right_direction in _pair_direction_search_order(
-            first_original,
-            second_original,
+        pair_entries: list[tuple[InputFrame, ...]] = []
+        pair_patches: list[tuple[PatchAssignmentSpec, ...]] = []
+        for first_direction, second_direction in _pair_direction_search_order(
+            seed[first].horizontal,
+            seed[second].horizontal,
             search_rng,
         ):
-            if local_budget_exhausted():
-                break
-            branches += 1
             changed = list(seed)
-            for tick, direction in (
-                (first, left_direction),
-                (second, right_direction),
-            ):
-                old = changed[tick]
-                changed[tick] = InputFrame(
-                    direction < 0,
-                    direction > 0,
-                    old.jump,
-                    None,
+            first_frame = InputFrame(
+                first_direction < 0,
+                first_direction > 0,
+                seed[first].jump,
+                None,
+            )
+            second_frame = InputFrame(
+                second_direction < 0,
+                second_direction > 0,
+                seed[second].jump,
+                None,
+            )
+            changed[first] = first_frame
+            changed[second] = second_frame
+            assignments = tuple(
+                PatchAssignmentSpec(tick, frame)
+                for tick, frame in (
+                    (first, first_frame),
+                    (second, second_frame),
                 )
-            score, _, _ = run_to_target(changed, start_tick=first)
-            proposal = tuple(changed)
+                if frame != seed[tick]
+            )
+            if not assignments:
+                continue
+            pair_entries.append(tuple(changed))
+            pair_patches.append(assignments)
+        pair_batch = _native_patch_evaluation(
+            level,
+            seed,
+            tuple(pair_patches),
+            target_tick=target_tick,
+            reference_point=reference_point,
+            required_jump_frames=required_jump_frames,
+            required_gold_mask=required_gold_mask,
+            required_exit_mask=required_exit_mask,
+            required_locked_door_mask=required_locked_door_mask,
+            forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+            randomized_ties=randomized,
+            max_simulated_ticks=_native_remaining_budget(config, simulations),
+        )
+        branches += pair_batch.stats.branches
+        simulations += pair_batch.stats.simulated_ticks
+        budget_exhausted = pair_batch.budget_exhausted
+        for proposal, candidate in zip(
+            pair_entries, pair_batch.candidates
+        ):
+            score = candidate.score if candidate.feasible else math.inf
             if _repair_proposal_is_better(
                 seed,
                 proposal,
@@ -2389,8 +2631,8 @@ def repair_direction_window(
                 best_seed_score,
                 randomized=randomized,
             ):
-                best_seed_score = score
                 best_seed = proposal
+                best_seed_score = score
             if score <= 1e-18:
                 exact_pair = True
                 break
@@ -2400,202 +2642,62 @@ def repair_direction_window(
     nominal_start = max(0, failure_tick - config.repair_window + 1)
     window_start = min(max(nominal_start, config.range_start), range_end)
     window_end = min(failure_tick, window_start + config.repair_window - 1)
-    if window_start > window_end:
-        return None, branches, simulations
-    if local_budget_exhausted():
-        maybe_report_progress(force=True)
-        return (
-            best_seed if best_seed != seed else None,
-            branches,
-            simulations,
-        )
-    # The unchanged seed walk above already created exact snapshots throughout
-    # the lookback.  Rebuild only the span after a sensitivity edit instead of
-    # replaying frame zero for the exact DFS prefix.
-    first_best_change = _first_changed_frame(seed, best_seed)
-    cached_tick = (
-        window_start
-        if first_best_change >= window_start
-        else first_best_change
-    )
-    cached_prefix = prefix_states.get(cached_tick)
-    if cached_prefix is None:
-        prefix = _simulate_prefix(level, best_seed, window_start)
-    else:
-        prefix = cached_prefix.clone(
-            copy_on_write_objects=copy_on_write_objects
-        )
-        for tick in range(cached_tick, window_start):
-            try:
-                prefix.step(best_seed[tick], level.tiles)
-            except UnsupportedTileCollision:
-                return None, branches, simulations
-            if prefix.player.dead or prefix.level_complete:
-                break
-    maybe_report_progress()
-    if (
-        prefix.player.dead
-        or prefix.level_complete
-        or _forbidden_trapdoor_triggered(prefix, forbidden_trapdoor_mask)
-    ):
-        return None, branches, simulations
-
-    best_work = best_seed
-    best_score = best_seed_score
-    seen: set[tuple] = set()
-    tiles = level.tiles
-    direction_frames = {
-        tick: tuple(
-            InputFrame(direction < 0, direction > 0, best_seed[tick].jump, None)
-            for direction in (-1, 0, 1)
-        )
-        for tick in range(window_start, window_end + 1)
-    }
-    direction_orders = {
-        tick: _direction_search_order(
-            best_seed[tick].horizontal,
-            search_rng,
-            source_first=True,
-        )
-        for tick in range(window_start, window_end + 1)
-    }
-
-    def recurse(
-        state: SimulationState,
-        tick: int,
-        chosen: list[InputFrame],
-        required_jump_succeeded: bool,
-        changed: bool,
-    ) -> None:
-        nonlocal branches, simulations, best_work, best_score
-        if local_budget_exhausted():
-            return
-        branches += 1
-        if branches % 1024 == 0:
-            maybe_report_progress()
-        # The root is unique. Deeper branches can converge physically; only
-        # the one causal required-jump fact can affect terminal acceptance.
-        if tick != window_start:
-            key = (tick, state.state_key(), required_jump_succeeded)
-            if key in seen:
-                return
-            seen.add(key)
-        if tick > window_end:
-            # ``best_seed_score`` already represents this complete candidate.
-            # An unchanged DFS path cannot improve it or any hard condition.
-            if not changed:
-                return
-            # The terminal DFS state is not reused by its caller after this
-            # leaf returns, so replay the fixed suffix in place. This avoids a
-            # full object-manager clone for every repair leaf.
-            suffix_state = state
-            suffix_jump_succeeded = required_jump_succeeded
-            step = suffix_state.step
-            for suffix_tick in range(window_end + 1, target_tick + 1):
-                if local_budget_exhausted():
-                    return
-                checks_required_jump = suffix_tick == required_jump
-                before = (
-                    suffix_state.player.jump_events
-                    if checks_required_jump
-                    else 0
+    if window_start <= window_end and not budget_exhausted:
+        mutable_frames = tuple(range(window_start, window_end + 1))
+        choices = tuple(
+            tuple(
+                InputFrame(
+                    direction < 0,
+                    direction > 0,
+                    best_seed[tick].jump,
+                    None,
                 )
-                try:
-                    step(best_seed[suffix_tick], tiles)
-                except UnsupportedTileCollision:
-                    return
-                simulations += 1
-                if (
-                    checks_required_jump
-                    and suffix_state.player.jump_events > before
-                ):
-                    suffix_jump_succeeded = True
-                if suffix_state.player.dead or _forbidden_trapdoor_triggered(
-                    suffix_state, forbidden_trapdoor_mask
-                ):
-                    return
-            maybe_report_progress()
-            score = _local_target_score(
-                suffix_state,
-                target_tick,
-                reference_point,
-                required_jump=required_jump,
-                successful_jumps=(
-                    frozenset((required_jump,))
-                    if required_jump is not None and suffix_jump_succeeded
-                    else frozenset()
-                ),
-                required_gold_mask=required_gold_mask,
-                required_exit_mask=required_exit_mask,
-                required_locked_door_mask=required_locked_door_mask,
-                forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+                for direction in _direction_search_order(
+                    best_seed[tick].horizontal,
+                    search_rng,
+                    source_first=True,
+                )
             )
-            if not _repair_score_needs_proposal(
-                score, best_score, randomized=randomized
-            ):
-                return
-            proposal_frames = list(best_seed)
-            proposal_frames[window_start : window_end + 1] = chosen
-            proposal = tuple(proposal_frames)
+            for tick in mutable_frames
+        )
+        result = _native_repair_search(
+            level,
+            best_seed,
+            mutable_frames=mutable_frames,
+            choices=choices,
+            target_tick=target_tick,
+            reference_point=reference_point,
+            required_jump_frames=required_jump_frames,
+            required_gold_mask=required_gold_mask,
+            required_exit_mask=required_exit_mask,
+            required_locked_door_mask=required_locked_door_mask,
+            forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+            incumbent_score=best_seed_score,
+            incumbent_feasible=math.isfinite(best_seed_score),
+            randomized_ties=randomized,
+            max_simulated_ticks=_native_remaining_budget(config, simulations),
+        )
+        branches += result.stats.visited_nodes
+        simulations += result.stats.simulated_ticks
+        proposal = _native_apply_search_result(
+            best_seed, mutable_frames, result
+        )
+        if proposal is not None:
+            score = _native_repair_score(result)
             if _repair_proposal_is_better(
                 seed,
                 proposal,
                 score,
-                best_work,
-                best_score,
+                best_seed,
+                best_seed_score,
                 randomized=randomized,
             ):
-                best_work = proposal
-                best_score = score
-            return
-        old = best_seed[tick]
-        directions = direction_orders[tick]
-        last_direction_index = len(directions) - 1
-        for direction_index, direction in enumerate(directions):
-            if local_budget_exhausted():
-                break
-            frame = direction_frames[tick][direction + 1]
-            next_state = (
-                state
-                if direction_index == last_direction_index
-                else state.clone(
-                    copy_on_write_objects=copy_on_write_objects
-                )
-            )
-            checks_required_jump = tick == required_jump
-            before = (
-                next_state.player.jump_events if checks_required_jump else 0
-            )
-            try:
-                next_state.step(frame, tiles)
-            except UnsupportedTileCollision:
-                continue
-            simulations += 1
-            if next_state.player.dead or _forbidden_trapdoor_triggered(
-                next_state, forbidden_trapdoor_mask
-            ):
-                continue
-            next_jump_succeeded = (
-                required_jump_succeeded
-                or (
-                    checks_required_jump
-                    and next_state.player.jump_events > before
-                )
-            )
-            chosen.append(frame)
-            recurse(
-                next_state,
-                tick + 1,
-                chosen,
-                next_jump_succeeded,
-                changed or frame != old,
-            )
-            chosen.pop()
+                best_seed = proposal
+                best_seed_score = score
 
-    recurse(prefix, window_start, [], False, False)
-    maybe_report_progress(force=True)
-    return best_work if best_work != seed else None, branches, simulations
-
+    if progress is not None:
+        progress(branches, simulations)
+    return best_seed if best_seed != seed else None, branches, simulations
 
 def repair_all_input_window(
     level: Level,
@@ -2614,16 +2716,7 @@ def repair_all_input_window(
     forbidden_trapdoor_mask: int = 0,
     require_failure_jump: bool = True,
 ) -> tuple[tuple[InputFrame, ...] | None, int, int]:
-    """Bounded six-input fallback which may move a failed jump edge.
-
-    Seeded jump-mutation and direction repairs are the first two choices.  This
-    third-stage fallback searches at most four frames and varies L/N/R crossed
-    with jump released/held, retaining the second v2.8 implementation's
-    general jump-changing capability without making every repair pay the
-    six-way DFS cost.  The one-time unchanged prefix needed to reach the search
-    window is setup work and is excluded from the local-search allowance and
-    returned step count.
-    """
+    """Search the six held-input choices with the generic native DFS."""
     if failure_tick < 0:
         return None, 0, 0
     search_rng = _effective_repair_search_rng(
@@ -2633,9 +2726,14 @@ def repair_all_input_window(
     )
     randomized = search_rng is not None
     seed = tuple(working_frames)
-    body_limit = len(working_frames) - 1
+    body_limit = len(seed) - 1
+    if body_limit <= 0:
+        return None, 0, 0
     failure_tick = min(failure_tick, body_limit - 1)
-    range_end = body_limit - 1 if config.range_end is None else config.range_end
+    range_end = min(
+        body_limit - 1,
+        body_limit - 1 if config.range_end is None else config.range_end,
+    )
     target_tick = min(body_limit, failure_tick + config.repair_lookahead)
     reference_tick = min(
         max(0, target_tick + reference_offset), baseline.last_tick
@@ -2644,11 +2742,10 @@ def repair_all_input_window(
     required_jump = (
         failure_tick
         if require_failure_jump
-        and working_frames[failure_tick].jump
-        and (failure_tick == 0 or not working_frames[failure_tick - 1].jump)
+        and seed[failure_tick].jump
+        and (failure_tick == 0 or not seed[failure_tick - 1].jump)
         else None
     )
-    jump_tolerance = max(1, config.max_jump_shift)
     if seed_evaluation is None:
         seed_evaluation = _evaluate_working(
             level, seed, trace_stride=config.trace_stride
@@ -2658,211 +2755,83 @@ def repair_all_input_window(
         for tick in seed_evaluation.successful_jumps
         if tick <= target_tick
     )
-    seed_jump_edges = frozenset(
-        tick for tick in seed_evaluation.jump_edges if tick <= target_tick
-    )
     width = min(4, config.repair_window)
     nominal_start = max(0, failure_tick - width + 1)
     window_start = min(max(nominal_start, config.range_start), range_end)
     window_end = min(failure_tick, window_start + width - 1)
     if window_start > window_end:
         return None, 0, 0
-    prefix = _simulate_prefix(level, working_frames, window_start)
-    copy_on_write_objects = _repair_copy_on_write_beneficial(prefix)
-    simulations = 0
-    branches = 0
-    next_progress_simulations = 250_000
 
-    def local_budget_exhausted() -> bool:
-        return bool(
-            config.repair_local_limit
-            and simulations >= config.repair_local_limit
+    jump_tolerance = max(1, config.max_jump_shift)
+    required_jump_frames = (
+        tuple(
+            range(
+                max(0, required_jump - jump_tolerance),
+                min(target_tick, required_jump + jump_tolerance) + 1,
+            )
         )
-
-    def maybe_report_progress(*, force: bool = False) -> None:
-        nonlocal next_progress_simulations
-        if progress is None:
-            return
-        if force or simulations >= next_progress_simulations:
-            progress(branches, simulations)
-            while simulations >= next_progress_simulations:
-                next_progress_simulations += 250_000
-
-    maybe_report_progress()
-    if (
-        prefix.player.dead
-        or prefix.level_complete
-        or _forbidden_trapdoor_triggered(prefix, forbidden_trapdoor_mask)
-    ):
-        return None, branches, simulations
-
-    best_work = seed
-    best_score = float("inf")
-    seen: set[tuple] = set()
-    tiles = level.tiles
-    input_orders = {
-        tick: tuple(
+        if required_jump is not None
+        else ()
+    )
+    ignored_jump_frames = tuple(
+        tick for tick in required_jump_frames if tick in seed_successes
+    )
+    target_seed_point = seed_evaluation.point(target_tick)
+    minimum_jump_events = (
+        (target_seed_point.jump_events if target_seed_point is not None else len(seed_successes))
+        + 1
+        if required_jump is not None
+        else 0
+    )
+    base_score = _repair_evaluation_score(
+        seed_evaluation,
+        target_tick,
+        reference_point,
+        required_jump_frames=frozenset(required_jump_frames),
+        ignored_jump_frames=frozenset(ignored_jump_frames),
+        minimum_jump_events=minimum_jump_events,
+        required_gold_mask=required_gold_mask,
+        required_exit_mask=required_exit_mask,
+        required_locked_door_mask=required_locked_door_mask,
+        forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+    )
+    mutable_frames = tuple(range(window_start, window_end + 1))
+    choices = tuple(
+        tuple(
             InputFrame(direction < 0, direction > 0, jump, None)
             for direction, jump in _all_input_search_order(
                 (seed[tick].horizontal, seed[tick].jump), search_rng
             )
         )
-        for tick in range(window_start, window_end + 1)
-    }
-
-    def recurse(
-        state: SimulationState,
-        tick: int,
-        chosen: list[InputFrame],
-        successes: frozenset[int],
-    ) -> None:
-        nonlocal branches, simulations, best_work, best_score
-        if local_budget_exhausted():
-            return
-        branches += 1
-        if branches % 1024 == 0:
-            maybe_report_progress()
-        if tick != window_start:
-            key = (tick, state.state_key(), successes)
-            if key in seen:
-                return
-            seen.add(key)
-        if tick > window_end:
-            # Terminal leaves own their state; the fixed suffix can be applied
-            # in place without another branch clone.
-            suffix_state = state
-            local_success = set(successes)
-            step = suffix_state.step
-            for suffix_tick in range(window_end + 1, target_tick + 1):
-                if local_budget_exhausted():
-                    return
-                previous_jump_held = suffix_state.player.previous_jump_held
-                state_was_jumping = (
-                    suffix_state.player.state == PlayerState.JUMPING
-                )
-                before = suffix_state.player.jump_events
-                try:
-                    step(seed[suffix_tick], tiles)
-                except UnsupportedTileCollision:
-                    return
-                simulations += 1
-                jumped = suffix_state.player.jump_events > before
-                if (
-                    seed[suffix_tick].jump
-                    and not previous_jump_held
-                    and not state_was_jumping
-                    and not jumped
-                    and suffix_tick not in seed_jump_edges
-                ):
-                    # A changed mutable prefix can manufacture a rising edge
-                    # on an otherwise fixed held-jump frame. If that edge does
-                    # not call Player.jump(), it is not a real jump repair
-                    # target and must not be handed to descendants.
-                    return
-                if jumped:
-                    local_success.add(suffix_tick)
-                if suffix_state.player.dead or _forbidden_trapdoor_triggered(
-                    suffix_state, forbidden_trapdoor_mask
-                ):
-                    return
-            maybe_report_progress()
-            score = _local_target_score(
-                suffix_state,
-                target_tick,
-                reference_point,
-                required_jump=required_jump,
-                # A nearby success which already existed in the damaged seed
-                # cannot stand in for the missed edge being repaired.
-                successful_jumps=frozenset(local_success) - seed_successes,
-                jump_tolerance=jump_tolerance,
-                required_gold_mask=required_gold_mask,
-                required_exit_mask=required_exit_mask,
-                required_locked_door_mask=required_locked_door_mask,
-                forbidden_trapdoor_mask=forbidden_trapdoor_mask,
-            )
-            if (
-                required_jump is not None
-                and len(local_success) <= len(seed_successes)
-            ):
-                return
-            if not _repair_score_needs_proposal(
-                score, best_score, randomized=randomized
-            ):
-                return
-            proposal_frames = list(seed)
-            proposal_frames[window_start : window_end + 1] = chosen
-            proposal = tuple(proposal_frames)
-            if _repair_proposal_is_better(
-                seed,
-                proposal,
-                score,
-                best_work,
-                best_score,
-                randomized=randomized,
-            ):
-                best_work = proposal
-                best_score = score
-            return
-
-        candidates = input_orders[tick]
-        last_candidate_index = len(candidates) - 1
-        for candidate_index, frame in enumerate(candidates):
-            if local_budget_exhausted():
-                break
-            next_state = (
-                state
-                if candidate_index == last_candidate_index
-                else state.clone(
-                    copy_on_write_objects=copy_on_write_objects
-                )
-            )
-            previous_jump_held = next_state.player.previous_jump_held
-            state_was_jumping = next_state.player.state == PlayerState.JUMPING
-            before = next_state.player.jump_events
-            try:
-                next_state.step(frame, tiles)
-            except UnsupportedTileCollision:
-                continue
-            simulations += 1
-            jumped = next_state.player.jump_events > before
-            preserve_failed_prehold = (
-                tick == window_end
-                and tick + 1 <= target_tick
-                and seed[tick + 1].jump
-            )
-            if (
-                frame.jump
-                and not previous_jump_held
-                and not state_was_jumping
-                and not jumped
-                and tick not in seed_jump_edges
-                and not preserve_failed_prehold
-            ):
-                # Do not recurse below an input edge introduced by this
-                # fallback which never invokes Player.jump(). Apart from
-                # avoiding useless descendant repairs, this prunes the large
-                # inactive-jump subtrees after only one local simulation.
-                continue
-            if next_state.player.dead or _forbidden_trapdoor_triggered(
-                next_state, forbidden_trapdoor_mask
-            ):
-                continue
-            next_success = successes
-            if jumped:
-                next_success = successes | {tick}
-            chosen.append(frame)
-            recurse(next_state, tick + 1, chosen, next_success)
-            chosen.pop()
-
-    recurse(
-        prefix,
-        window_start,
-        [],
-        frozenset(tick for tick in seed_successes if tick < window_start),
+        for tick in mutable_frames
     )
-    maybe_report_progress(force=True)
-    return best_work if best_work != seed else None, branches, simulations
-
+    result = _native_repair_search(
+        level,
+        seed,
+        mutable_frames=mutable_frames,
+        choices=choices,
+        target_tick=target_tick,
+        reference_point=reference_point,
+        required_jump_frames=required_jump_frames,
+        ignored_jump_frames=ignored_jump_frames,
+        required_jump_any=bool(required_jump_frames),
+        minimum_jump_events=minimum_jump_events,
+        required_gold_mask=required_gold_mask,
+        required_exit_mask=required_exit_mask,
+        required_locked_door_mask=required_locked_door_mask,
+        forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+        incumbent_score=base_score,
+        incumbent_feasible=math.isfinite(base_score),
+        prune_inactive_jump=True,
+        randomized_ties=randomized,
+        max_simulated_ticks=config.repair_local_limit,
+    )
+    branches = result.stats.visited_nodes
+    simulations = result.stats.simulated_ticks
+    if progress is not None:
+        progress(branches, simulations)
+    proposal = _native_apply_search_result(seed, mutable_frames, result)
+    return proposal, branches, simulations
 
 def _candidate_key(
     candidate: AutoCandidate,
@@ -2918,8 +2887,8 @@ def _candidate_key(
     progress = match.reference_tick if match is not None else evaluation.last_tick
     score_lead = match.score_lead if match is not None else 0
     distance = match.distance if match is not None else float("inf")
-    point = evaluation.trace[-1] if evaluation.trace else None
-    final_mask = point.collected_gold_mask if point is not None else 0
+    terminal = evaluation._terminal_summary()
+    final_mask = int(terminal[6]) if terminal is not None else 0
     missing_reference_gold = (reference_gold_mask & ~final_mask).bit_count()
     return (
         1,
@@ -2994,18 +2963,18 @@ def _best_candidate_key(
 
 
 def _diversity_bucket(candidate: AutoCandidate) -> tuple:
-    point = candidate.evaluation.trace[-1] if candidate.evaluation.trace else None
+    terminal = candidate.evaluation._terminal_summary()
     transition_bucket = len(_candidate_input_transitions(candidate)) // 2
-    if point is None:
+    if terminal is None:
         return (candidate.finish_tick, transition_bucket, None)
     return (
         candidate.finish_tick,
         transition_bucket,
         candidate.alignment.offset if candidate.alignment else 0,
-        round(point.x / 6.0),
-        round(point.y / 6.0),
-        point.player_state,
-        point.static_key,
+        round(float(terminal[1]) / 6.0),
+        round(float(terminal[2]) / 6.0),
+        int(terminal[3]),
+        tuple(int(value) for value in terminal[6:11]),
     )
 
 
@@ -3119,6 +3088,31 @@ def _find_route_control_repair_target(
     """Find the first control divergence which can explain a failed route."""
     if candidate.completed:
         return None
+    candidate_analysis = _native_trace_analysis(candidate)
+    reference_analysis = _native_trace_analysis(reference)
+    if (
+        candidate_analysis is not None
+        and reference_analysis is not None
+        and -(1 << 63) <= reference_offset <= (1 << 63) - 1
+    ):
+        raw_target = candidate_analysis.find_route_divergence(
+            reference_analysis,
+            reference_offset=reference_offset,
+            reference_completion_exit_index=(
+                -1
+                if reference.completed_exit_index is None
+                else reference.completed_exit_index
+            ),
+        )
+        if raw_target is None:
+            return None
+        return RouteControlRepairTarget(
+            candidate_tick=int(raw_target[0]),
+            reference_tick=int(raw_target[1]),
+            required_exit_mask=int(raw_target[2]),
+            required_locked_door_mask=int(raw_target[3]),
+            forbidden_trapdoor_mask=int(raw_target[4]),
+        )
     completion_bit = (
         0
         if reference.completed_exit_index is None
@@ -5731,14 +5725,18 @@ def optimise_autonomous(
     retime/splice/pulse/direction mutations with a priority-ranked,
     local-step-bounded repair scheduler.
     """
-    prepared = _prepare_autonomous_search(
-        level, source_frames, config, progress
-    )
-    if isinstance(prepared, AutoResult):
-        return prepared
-    return _AutonomousSearch(
-        level, config, prepared, progress, best_callback
-    ).run()
+    token = _ACTIVE_NATIVE_SESSION.set((level, None))
+    try:
+        prepared = _prepare_autonomous_search(
+            level, source_frames, config, progress
+        )
+        if isinstance(prepared, AutoResult):
+            return prepared
+        return _AutonomousSearch(
+            level, config, prepared, progress, best_callback
+        ).run()
+    finally:
+        _ACTIVE_NATIVE_SESSION.reset(token)
 
 
 # American spelling is a convenience for callers; the CLI/documentation uses

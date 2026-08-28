@@ -18,6 +18,14 @@ from nv14_replay import (
     parse_combined_level_replay,
     simulate_through_frame,
 )
+from nv14_search import (
+    INTERACTION_GOLD,
+    OBJECTIVE_MAX_X,
+    InteractionAtomSpec,
+    InteractionGroupSpec,
+    NativeSearchSession,
+    SearchSpec,
+)
 
 
 EMPTY_MAP = "0" * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
@@ -181,7 +189,7 @@ def test_explicit_interaction_repairs_outrank_max_x(
     assert result.state.state_key() == serial_result.state.state_key()
     assert optimised[0].left
     assert result.score < 100.0
-    assert satisfied(result.state)
+    assert satisfied(simulate_through_frame(level, optimised, 1))
     assert not result.missing_interactions
     assert any("satisfied required interaction" in line for line in progress)
 
@@ -223,7 +231,8 @@ def test_reference_interactions_are_preserved_in_both_local_input_modes(
         progress=None,
     )
     assert constrained[0].left
-    assert result.state.static_state.collected_gold_mask == 1
+    checked = simulate_through_frame(level, constrained, 1)
+    assert checked.static_state.collected_gold_mask == 1
     assert not result.missing_interactions
 
 
@@ -246,7 +255,8 @@ def test_interaction_in_immutable_prefix_counts() -> None:
     )
 
     assert optimised[0].left
-    assert result.state.static_state.collected_gold_mask == 1
+    checked = simulate_through_frame(level, optimised, 2)
+    assert checked.static_state.collected_gold_mask == 1
     assert not result.missing_interactions
 
 
@@ -275,35 +285,66 @@ def test_impossible_explicit_interaction_produces_no_valid_result(monkeypatch) -
         )
 
 
-def test_candidate_comparison_does_not_exchange_hard_requirements() -> None:
-    level = make_level("0^80,100!11^300,100,120,100")
-    gold = opt.resolve_interaction_requirement(level, "gold:0")
-    switch = opt.resolve_interaction_requirement(level, "switch:0")
-    state = level.initial_state()
-    incumbent = opt.Evaluation(0.0, state, True, frozenset((gold, switch)))
-    best = opt.Evaluation(1.0, state, True, frozenset((switch,)))
-    sideways = opt.Evaluation(100.0, state, True, frozenset((gold,)))
-
-    assert not opt._local_candidate_better(
-        sideways,
-        frozenset(),
-        best,
-        frozenset(),
-        incumbent_eval=incumbent,
-        incumbent_missing_jump_frames=frozenset(),
+def test_native_candidate_comparison_does_not_exchange_hard_requirements() -> None:
+    # The left branch is deliberately enumerated first and repairs gold:0.
+    # The later, higher-scoring right branch repairs gold:1 instead, so it is
+    # incomparable and must not replace the first repair.
+    level = parse_level_string(
+        f"{EMPTY_MAP}|5^100,100!0^83.95,100!0^116.05,100"
+    )
+    frames = (InputFrame(), InputFrame())
+    requirements = tuple(
+        InteractionGroupSpec(
+            (InteractionAtomSpec(INTERACTION_GOLD, index),)
+        )
+        for index in range(2)
+    )
+    result = NativeSearchSession(level).search(
+        frames,
+        SearchSpec(
+            mutable_frames=(0,),
+            choices=((InputFrame(left=True), InputFrame(right=True)),),
+            target_frame=1,
+            objective=OBJECTIVE_MAX_X,
+            required_groups=requirements,
+            incumbent_missing_requirements=frozenset((0, 1)),
+            incumbent_score=100.0,
+            incumbent_feasible=True,
+        ),
     )
 
-    repaired_interaction_but_lost_jump = opt.Evaluation(
-        100.0, state, True, frozenset()
+    assert result.best_inputs == (InputFrame(left=True),)
+    assert result.missing_requirement_indices == frozenset((1,))
+
+    # Cross-category repairs are incomparable too: a later right input may
+    # collect the gold, but it cannot replace an earlier branch which repaired
+    # the required jump edge.
+    floor = ["0"] * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
+    for tile_x in range(APP_NUM_GRIDCOLS):
+        floor[tile_x * APP_NUM_GRIDROWS + 5] = "1"
+    grounded = parse_level_string(
+        "".join(floor) + "|5^132,134!0^148.05,134"
     )
-    assert not opt._local_candidate_better(
-        repaired_interaction_but_lost_jump,
-        frozenset((10,)),
-        best,
-        frozenset(),
-        incumbent_eval=incumbent,
-        incumbent_missing_jump_frames=frozenset((10,)),
+    mixed = NativeSearchSession(grounded).search(
+        frames,
+        SearchSpec(
+            mutable_frames=(0,),
+            choices=((InputFrame(jump=True), InputFrame(right=True)),),
+            target_frame=1,
+            objective=OBJECTIVE_MAX_X,
+            required_groups=(requirements[0],),
+            incumbent_missing_requirements=frozenset((0,)),
+            required_jump_frames=(0,),
+            incumbent_missing_jump_frames=frozenset((0,)),
+            incumbent_score=132.0,
+            incumbent_feasible=True,
+        ),
     )
+
+    assert mixed.best_inputs == (InputFrame(jump=True),)
+    assert mixed.missing_requirement_indices == frozenset((0,))
+    assert not mixed.missing_jump_frames
+    assert mixed.stats.missed_jump_prunes > 0
 
 
 def test_list_objects_advertises_supported_interaction_selectors() -> None:
@@ -402,7 +443,8 @@ def test_physics_pruning_keeps_lower_scoring_interaction_repair() -> None:
     )
 
     assert optimised[0].left
-    assert result.state.static_state.collected_gold_mask == 1
+    checked = simulate_through_frame(level, optimised, 1)
+    assert checked.static_state.collected_gold_mask == 1
 
 
 def test_interaction_in_sparse_window_gap_counts() -> None:
@@ -590,7 +632,8 @@ def test_physics_pruning_keeps_lower_scoring_interaction_repair_branches() -> No
     )
 
     assert optimised[0].left
-    assert result.state.static_state.collected_gold_mask == 1
+    checked = simulate_through_frame(level, optimised, 1)
+    assert checked.static_state.collected_gold_mask == 1
 
 
 def test_cli_interaction_failure_leaves_existing_output_unchanged(

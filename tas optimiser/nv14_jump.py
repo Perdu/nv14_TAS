@@ -1,25 +1,36 @@
 """Jump-pulse utilities and exhaustive jump-pattern search."""
 from __future__ import annotations
 
-import heapq
 import math
 import multiprocessing
 import os
 import random
 from collections.abc import Callable, Sequence
-from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, replace
+from threading import Event
 
-from nv14_engine import InputFrame, Level, SimulationState, UnsupportedTileCollision
+from nv14_engine import InputFrame, Level
 from nv14_objectives import (
     AxisWindow,
     Evaluation,
     TargetSelection,
+    evaluate,
     objective_function,
-    position_within_windows,
-    state_before_frame,
 )
 from nv14_replay import editable_frames
+from nv14_search import (
+    NativeTerminalState,
+    NativeSearchSession,
+    PatternSearchCandidate,
+    PatternSearchResult,
+    PatternSearchSpec,
+    PatternSearchStats,
+    REQUIRED_START_EVENT_JUMPED,
+    compile_axis_window,
+    compile_objective,
+    native_player_matches,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -456,397 +467,13 @@ def mutate_jump_inputs(
 
 
 @dataclass(frozen=True, slots=True)
-class _JumpSearchContext:
-    """Immutable data shared by all branches and worker processes."""
+class _PreparedJumpSearch:
+    """Validated Python policy compiled for the native pattern kernel."""
 
-    level: Level
     original: tuple[InputFrame, ...]
-    released_frames: tuple[InputFrame, ...]
-    held_frames: tuple[InputFrame, ...]
-    target_frame: int
-    range_start: int
-    range_end: int
-    objective_name: str
-    objective_target: TargetSelection | None
-    jump_count_min: int
-    jump_count_max: int
-    jump_length_min: int
-    minimum_gap: int
-    top_results: int
+    spec: PatternSearchSpec
     fixed_frames: tuple[int, ...]
-    x_window: AxisWindow | None
-    y_window: AxisWindow | None
-    start_max_lengths: tuple[int, ...]
-
-
-@dataclass(slots=True)
-class _JumpSearchStats:
-    attempted_starts: int = 0
-    successful_starts: int = 0
-    evaluated_candidates: int = 0
-    deduplicated_branches: int = 0
-
-    def add(self, other: "_JumpSearchStats") -> None:
-        self.attempted_starts += other.attempted_starts
-        self.successful_starts += other.successful_starts
-        self.evaluated_candidates += other.evaluated_candidates
-        self.deduplicated_branches += other.deduplicated_branches
-
-
-@dataclass(slots=True)
-class _JumpSearchWorkItem:
-    """An independently searchable state immediately after one jump pulse."""
-
-    state: SimulationState
-    next_frame: int
-    pulses: tuple[JumpPulse, ...]
-    state_key: tuple
-    remaining_fixed: tuple[int, ...]
-
-
-@dataclass(slots=True)
-class _JumpWorkerResult:
-    results: list[JumpSearchResult]
-    stats: _JumpSearchStats
-
-
-class _JumpPatternSearch:
-    """One serial jump DFS, used alone or on a batch of process work items."""
-
-    def __init__(self, context: _JumpSearchContext) -> None:
-        self.context = context
-        self.objective = objective_function(
-            context.objective_name, context.objective_target
-        )
-        self.retained: list[tuple[float, int, JumpSearchResult]] = []
-        self.serial = 0
-        self.seen_branch_states: set[tuple[object, ...]] = set()
-        self.terminal_cache: dict[tuple[object, ...], Evaluation] = {}
-        self.stats = _JumpSearchStats()
-
-    def retain(self, result: JumpSearchResult) -> None:
-        if not result.evaluation.feasible:
-            return
-        self.serial += 1
-        item = (result.score, self.serial, result)
-        if len(self.retained) < self.context.top_results:
-            heapq.heappush(self.retained, item)
-        elif result.score > self.retained[0][0]:
-            heapq.heapreplace(self.retained, item)
-
-    def evaluate_tail(
-        self,
-        state_after_pulse: SimulationState,
-        next_frame: int,
-        precomputed_state_key: tuple,
-        *,
-        consume_state: bool,
-    ) -> Evaluation:
-        """Run released jump to range end, then replay the unchanged suffix."""
-        context = self.context
-        cache_key = (next_frame, precomputed_state_key)
-        cached = self.terminal_cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        self.stats.evaluated_candidates += 1
-        state = (
-            state_after_pulse
-            if consume_state
-            else state_after_pulse.clone(copy_on_write_objects=True)
-        )
-        step = state.step
-        try:
-            for frame_index in range(next_frame, context.range_end + 1):
-                step(context.released_frames[frame_index], context.level.tiles)
-                if state.player.dead:
-                    result = Evaluation(float("-inf"), state, False)
-                    self.terminal_cache[cache_key] = result
-                    return result
-            for frame_index in range(context.range_end + 1, context.target_frame + 1):
-                step(context.original[frame_index], context.level.tiles)
-                if state.player.dead:
-                    result = Evaluation(float("-inf"), state, False)
-                    self.terminal_cache[cache_key] = result
-                    return result
-        except UnsupportedTileCollision:
-            result = Evaluation(float("-inf"), state, False)
-            self.terminal_cache[cache_key] = result
-            return result
-
-        feasible = position_within_windows(
-            state, x_window=context.x_window, y_window=context.y_window
-        )
-        result = Evaluation(
-            self.objective(state) if feasible else float("-inf"), state, feasible
-        )
-        self.terminal_cache[cache_key] = result
-        return result
-
-    def process_work_item(
-        self,
-        item: _JumpSearchWorkItem,
-        *,
-        capture_count: int | None = None,
-        frontier: list[_JumpSearchWorkItem] | None = None,
-    ) -> None:
-        """Evaluate and/or extend one owned post-pulse state."""
-        context = self.context
-        count = len(item.pulses)
-        if capture_count == count:
-            if frontier is None:
-                raise ValueError("a frontier is required when capturing work")
-            frontier.append(item)
-            return
-
-        can_evaluate = (
-            not item.remaining_fixed
-            and context.jump_count_min <= count <= context.jump_count_max
-        )
-        can_recurse = (
-            count < context.jump_count_max
-            and item.next_frame <= context.range_end
-        )
-
-        if can_evaluate and can_recurse:
-            evaluation = self.evaluate_tail(
-                item.state,
-                item.next_frame,
-                item.state_key,
-                consume_state=False,
-            )
-            self.retain(JumpSearchResult(item.pulses, evaluation))
-            self.recurse(
-                item.state,
-                item.next_frame,
-                item.pulses,
-                context.minimum_gap,
-                state_key=item.state_key,
-                consume_state=True,
-                remaining_fixed=item.remaining_fixed,
-                capture_count=capture_count,
-                frontier=frontier,
-            )
-        elif can_evaluate:
-            evaluation = self.evaluate_tail(
-                item.state,
-                item.next_frame,
-                item.state_key,
-                consume_state=True,
-            )
-            self.retain(JumpSearchResult(item.pulses, evaluation))
-        elif can_recurse:
-            self.recurse(
-                item.state,
-                item.next_frame,
-                item.pulses,
-                context.minimum_gap,
-                state_key=item.state_key,
-                consume_state=True,
-                remaining_fixed=item.remaining_fixed,
-                capture_count=capture_count,
-                frontier=frontier,
-            )
-
-    def _dispatch_pulse(
-        self,
-        state_after_pulse: SimulationState,
-        next_frame: int,
-        pulses: tuple[JumpPulse, ...],
-        state_key: tuple,
-        remaining_fixed: tuple[int, ...],
-        *,
-        transfer_state: bool,
-        capture_count: int | None,
-        frontier: list[_JumpSearchWorkItem] | None,
-    ) -> None:
-        # Hold-state extension still owns non-final lengths. Give the work item
-        # an isolated clone except when the final length can transfer ownership.
-        item_state = (
-            state_after_pulse
-            if transfer_state
-            else state_after_pulse.clone(copy_on_write_objects=True)
-        )
-        self.process_work_item(
-            _JumpSearchWorkItem(
-                item_state,
-                next_frame,
-                pulses,
-                state_key,
-                remaining_fixed,
-            ),
-            capture_count=capture_count,
-            frontier=frontier,
-        )
-
-    def recurse(
-        self,
-        state_before_cursor: SimulationState,
-        cursor: int,
-        pulses: tuple[JumpPulse, ...],
-        required_release_frames: int,
-        *,
-        state_key: tuple | None = None,
-        consume_state: bool = False,
-        remaining_fixed: tuple[int, ...] = (),
-        capture_count: int | None = None,
-        frontier: list[_JumpSearchWorkItem] | None = None,
-    ) -> None:
-        context = self.context
-        used = len(pulses)
-        if used >= context.jump_count_max or cursor > context.range_end:
-            return
-        if used + len(remaining_fixed) > context.jump_count_max:
-            return
-        if remaining_fixed and remaining_fixed[0] < cursor:
-            return
-
-        if state_key is None:
-            state_key = state_before_cursor.state_key()
-        branch_key = (
-            used,
-            cursor,
-            required_release_frames,
-            remaining_fixed,
-            state_key,
-        )
-        if branch_key in self.seen_branch_states:
-            self.stats.deduplicated_branches += 1
-            return
-        self.seen_branch_states.add(branch_key)
-
-        walking_state = (
-            state_before_cursor
-            if consume_state
-            else state_before_cursor.clone(copy_on_write_objects=True)
-        )
-        walking_step = walking_state.step
-        start = cursor
-        try:
-            for _ in range(required_release_frames):
-                if start > context.range_end:
-                    return
-                if remaining_fixed and start == remaining_fixed[0]:
-                    return
-                walking_step(
-                    context.released_frames[start], context.level.tiles
-                )
-                if walking_state.player.dead:
-                    return
-                start += 1
-        except UnsupportedTileCollision:
-            return
-
-        next_fixed = remaining_fixed[0] if remaining_fixed else None
-        while start <= context.range_end:
-            if next_fixed is not None and start > next_fixed:
-                return
-            if start + context.jump_length_min - 1 > context.range_end:
-                break
-
-            fixed_start = next_fixed is not None and start == next_fixed
-            self.stats.attempted_starts += 1
-            try:
-                alternate_player = walking_step(
-                    context.released_frames[start],
-                    context.level.tiles,
-                    alternate_jump=True,
-                )
-            except UnsupportedTileCollision:
-                return
-
-            if alternate_player is not None and not walking_state.player.dead:
-                self.stats.successful_starts += 1
-                hold_state = walking_state.clone(
-                    player=alternate_player,
-                    copy_on_write_objects=True,
-                )
-                child_remaining_fixed = (
-                    remaining_fixed[1:] if fixed_start else remaining_fixed
-                )
-                max_length_here = context.start_max_lengths[
-                    start - context.range_start
-                ]
-                if child_remaining_fixed:
-                    following_fixed = child_remaining_fixed[0]
-                    max_length_here = min(
-                        max_length_here,
-                        following_fixed - context.minimum_gap - start,
-                    )
-
-                hold_step = hold_state.step
-                length = 1
-                while length <= max_length_here:
-                    if length >= context.jump_length_min:
-                        pulse = JumpPulse(start, length)
-                        next_pulses = pulses + (pulse,)
-                        next_frame = pulse.end_frame + 1
-                        count = len(next_pulses)
-                        can_evaluate = (
-                            not child_remaining_fixed
-                            and context.jump_count_min
-                            <= count
-                            <= context.jump_count_max
-                        )
-                        can_recurse = (
-                            count < context.jump_count_max
-                            and next_frame <= context.range_end
-                        )
-                        if can_evaluate or can_recurse:
-                            self._dispatch_pulse(
-                                hold_state,
-                                next_frame,
-                                next_pulses,
-                                hold_state.state_key(),
-                                child_remaining_fixed,
-                                transfer_state=length == max_length_here,
-                                capture_count=capture_count,
-                                frontier=frontier,
-                            )
-
-                    length += 1
-                    if length > max_length_here:
-                        break
-                    next_hold_frame = start + length - 1
-                    try:
-                        hold_step(
-                            context.held_frames[next_hold_frame], context.level.tiles
-                        )
-                    except UnsupportedTileCollision:
-                        break
-                    if hold_state.player.dead:
-                        break
-
-            if fixed_start:
-                return
-            if walking_state.player.dead:
-                return
-            start += 1
-
-    def finish(self) -> _JumpWorkerResult:
-        results = [item[2] for item in self.retained]
-        results.sort(key=lambda result: result.score, reverse=True)
-        return _JumpWorkerResult(results, self.stats)
-
-
-_JUMP_WORKER_CONTEXT: _JumpSearchContext | None = None
-
-
-def _initialise_jump_worker(context: _JumpSearchContext) -> None:
-    global _JUMP_WORKER_CONTEXT
-    _JUMP_WORKER_CONTEXT = context
-
-
-def _run_jump_work_batch(
-    items: tuple[_JumpSearchWorkItem, ...],
-) -> _JumpWorkerResult:
-    context = _JUMP_WORKER_CONTEXT
-    if context is None:
-        raise RuntimeError("jump worker was not initialised")
-    search = _JumpPatternSearch(context)
-    for item in items:
-        search.process_work_item(item)
-    return search.finish()
+    theoretical_root_branches: int
 
 
 def _automatic_jump_worker_count(frontier_size: int | None = None) -> int:
@@ -868,8 +495,8 @@ def _automatic_jump_worker_count(frontier_size: int | None = None) -> int:
     ):
         return available
 
-    # Windows and macOS start fresh interpreters. Scale the pool only when the
-    # exact viable frontier is large enough to amortise each additional import.
+    # Local mode still uses process workers. Preserve its spawn-startup policy
+    # even though jump-pattern now calls the native kernel from worker threads.
     if frontier_size < 64:
         return 1
     if frontier_size < 256:
@@ -879,41 +506,43 @@ def _automatic_jump_worker_count(frontier_size: int | None = None) -> int:
     return available
 
 
-def _jump_work_cost(
-    context: _JumpSearchContext, item: _JumpSearchWorkItem
-) -> int:
-    """Estimate relative subtree size for longest-processing-time batching."""
-    mutable_frames = max(0, context.range_end - item.next_frame + 1)
-    remaining_jumps = max(0, context.jump_count_max - len(item.pulses))
-    branching = (mutable_frames + 1) ** max(1, remaining_jumps)
-    terminal_tail = max(0, context.target_frame - item.next_frame + 1)
-    return branching + terminal_tail
+def _theoretical_root_branch_count(spec: PatternSearchSpec) -> int:
+    """Estimate native first-run branches without simulating their rising edges."""
+    last_start = spec.fixed_starts[0] if spec.fixed_starts else spec.range_end
+    total = 0
+    for start in range(spec.range_start, last_start + 1):
+        maximum_length = spec.start_max_lengths[start - spec.range_start]
+        following_fixed: int | None
+        if not spec.fixed_starts:
+            following_fixed = None
+        elif start < spec.fixed_starts[0]:
+            following_fixed = spec.fixed_starts[0]
+        elif len(spec.fixed_starts) > 1:
+            following_fixed = spec.fixed_starts[1]
+        else:
+            following_fixed = None
+        if following_fixed is not None:
+            maximum_length = min(
+                maximum_length,
+                following_fixed - spec.minimum_gap - start,
+            )
+        total += max(0, maximum_length - spec.run_length_min + 1)
+    return total
 
 
-def _partition_jump_work(
-    context: _JumpSearchContext,
-    frontier: Sequence[_JumpSearchWorkItem],
-    batch_count: int,
-) -> tuple[tuple[_JumpSearchWorkItem, ...], ...]:
-    """Balance frontier states into coarse batches with small IPC overhead."""
-    buckets: list[list[_JumpSearchWorkItem]] = [[] for _ in range(batch_count)]
-    loads = [(0, index) for index in range(batch_count)]
-    heapq.heapify(loads)
-    ordered = sorted(
-        frontier,
-        key=lambda item: _jump_work_cost(context, item),
-        reverse=True,
-    )
-    for item in ordered:
-        load, index = heapq.heappop(loads)
-        cost = _jump_work_cost(context, item)
-        buckets[index].append(item)
-        heapq.heappush(loads, (load + cost, index))
-    return tuple(tuple(bucket) for bucket in buckets if bucket)
+def _automatic_pattern_worker_count(theoretical_root_branches: int) -> int:
+    """Scale native threads only when root work can amortise extra sessions."""
+    available = _automatic_jump_worker_count()
+    if theoretical_root_branches < 64:
+        return 1
+    if theoretical_root_branches < 256:
+        return min(2, available)
+    if theoretical_root_branches < 1024:
+        return min(4, available)
+    return min(available, theoretical_root_branches)
 
 
 def _prepare_jump_search(
-    level: Level,
     original_frames: Sequence[InputFrame],
     *,
     target_frame: int,
@@ -930,7 +559,8 @@ def _prepare_jump_search(
     fixed_jump_frames: Sequence[int],
     x_window: AxisWindow | None,
     y_window: AxisWindow | None,
-) -> tuple[_JumpSearchContext | None, SimulationState | None]:
+) -> _PreparedJumpSearch | None:
+    """Validate jump policy and compile a data-only native pattern spec."""
     if target_frame < range_end:
         raise ValueError("target frame cannot be before the end of the jump-search range")
     if range_start < 0 or range_end < range_start:
@@ -975,8 +605,6 @@ def _prepare_jump_search(
             )
 
     original = tuple(editable_frames(original_frames))
-    released_frames = tuple(_jump_only_frame(frame, False) for frame in original)
-    held_frames = tuple(_jump_only_frame(frame, True) for frame in original)
     if fixed_frames:
         previous_jump = original[range_start - 1].jump if range_start > 0 else False
         source_starts: set[int] = set()
@@ -999,41 +627,159 @@ def _prepare_jump_search(
         else min(jump_length_max, range_length)
     )
     if jump_length_min > effective_max_length:
-        return None, None
+        return None
 
     start_max_lengths = tuple(
         min(effective_max_length, range_end - frame + 1)
         for frame in range(range_start, range_end + 1)
     )
-    context = _JumpSearchContext(
-        level=level,
-        original=original,
-        released_frames=released_frames,
-        held_frames=held_frames,
-        target_frame=target_frame,
+    inactive_inputs = tuple(
+        _jump_only_frame(original[frame], False)
+        for frame in range(range_start, range_end + 1)
+    )
+    active_inputs = tuple(
+        _jump_only_frame(original[frame], True)
+        for frame in range(range_start, range_end + 1)
+    )
+    objective, targets = compile_objective(objective_name, objective_target)
+    spec = PatternSearchSpec(
         range_start=range_start,
         range_end=range_end,
-        objective_name=objective_name,
-        objective_target=objective_target,
-        jump_count_min=jump_count_min,
-        jump_count_max=jump_count_max,
-        jump_length_min=jump_length_min,
-        minimum_gap=minimum_gap,
-        top_results=top_results,
-        fixed_frames=fixed_frames,
-        x_window=x_window,
-        y_window=y_window,
+        inactive_inputs=inactive_inputs,
+        active_inputs=active_inputs,
+        target_frame=target_frame,
+        objective=objective,
+        targets=targets,
+        x_window=compile_axis_window(x_window),
+        y_window=compile_axis_window(y_window),
+        run_count_min=jump_count_min,
+        run_count_max=jump_count_max,
+        run_length_min=jump_length_min,
         start_max_lengths=start_max_lengths,
+        minimum_gap=minimum_gap,
+        fixed_starts=fixed_frames,
+        required_start_event_mask=REQUIRED_START_EVENT_JUMPED,
+        top_results=top_results,
     )
-    return context, state_before_frame(level, original, range_start)
+    return _PreparedJumpSearch(
+        original=original,
+        spec=spec,
+        fixed_frames=fixed_frames,
+        theoretical_root_branches=_theoretical_root_branch_count(spec),
+    )
+
+
+def _run_native_pattern_shard(
+    level: Level,
+    original: tuple[InputFrame, ...],
+    spec: PatternSearchSpec,
+    cancel_event: Event | None = None,
+) -> PatternSearchResult:
+    """Own one native session so searches on separate threads never share state."""
+    session = NativeSearchSession(level)
+    if cancel_event is None:
+        return session.search_patterns(original, spec)
+    return session.search_patterns(original, spec, cancel_event)
+
+
+def _merge_native_pattern_shards(
+    shard_results: Sequence[PatternSearchResult],
+    *,
+    top_results: int,
+) -> tuple[tuple[PatternSearchCandidate, ...], PatternSearchStats]:
+    candidates: list[PatternSearchCandidate] = []
+    stats = PatternSearchStats()
+    for result in shard_results:
+        candidates.extend(result.candidates)
+        stats = stats.add(result.stats)
+    # Native DFS visits start frames and hold lengths in ascending order; that
+    # traversal is lexicographic on spans.  Restore the same global tie order
+    # after modulo-sharded searches instead of depending on shard completion.
+    candidates.sort(key=lambda candidate: (-candidate.score, candidate.spans))
+    return tuple(candidates[:top_results]), stats
+
+
+def _materialise_jump_results(
+    level: Level,
+    original: tuple[InputFrame, ...],
+    candidates: Sequence[PatternSearchCandidate],
+    *,
+    target_frame: int,
+    range_start: int,
+    range_end: int,
+    objective_name: str,
+    objective_target: TargetSelection | None,
+    x_window: AxisWindow | None,
+    y_window: AxisWindow | None,
+    python_resimulate: bool,
+) -> list[JumpSearchResult]:
+    """Adapt retained native results, optionally checking them in Python."""
+    objective = (
+        objective_function(objective_name, objective_target)
+        if python_resimulate
+        else None
+    )
+    results: list[JumpSearchResult] = []
+    for candidate in candidates:
+        pulses = tuple(
+            JumpPulse(start_frame, hold_length)
+            for start_frame, hold_length in candidate.spans
+        )
+        if candidate.player is None:
+            raise RuntimeError("native jump-pattern result omitted its player")
+        evaluation = Evaluation(
+            candidate.score,
+            NativeTerminalState.from_snapshot(
+                candidate.player,
+                frame=target_frame + 1,
+            ),
+            True,
+        )
+        if python_resimulate:
+            assert objective is not None
+            frames = apply_jump_pattern(
+                original,
+                range_start=range_start,
+                range_end=range_end,
+                pulses=pulses,
+            )
+            python_evaluation = evaluate(
+                level,
+                frames,
+                target_frame,
+                objective,
+                x_window=x_window,
+                y_window=y_window,
+            )
+            native_state_matches = native_player_matches(
+                candidate.player,
+                python_evaluation.state.player,
+            )
+            if (
+                not python_evaluation.feasible
+                or python_evaluation.score != candidate.score
+                or not native_state_matches
+            ):
+                raise RuntimeError(
+                    "native jump-pattern result failed exact Python "
+                    f"resimulation for "
+                    f"{', '.join(map(str, pulses)) or 'empty pattern'}: "
+                    f"native score={candidate.score!r}, "
+                    f"Python score={python_evaluation.score!r}, "
+                    f"Python feasible={python_evaluation.feasible}, "
+                    f"terminal player match={native_state_matches}"
+                )
+            evaluation = python_evaluation
+        results.append(JumpSearchResult(pulses, evaluation))
+    return results
 
 
 def _report_jump_search(
-    result: _JumpWorkerResult,
+    results: list[JumpSearchResult],
+    stats: PatternSearchStats,
     progress: Callable[[str], None] | None,
 ) -> list[JumpSearchResult]:
     if progress is not None:
-        stats = result.stats
         progress(
             "jump search: "
             f"attempted {stats.attempted_starts} starts, "
@@ -1041,9 +787,9 @@ def _report_jump_search(
             f"evaluated {stats.evaluated_candidates} terminal states, "
             f"deduplicated {stats.deduplicated_branches} branches"
         )
-        if result.results:
-            progress(f"retained top {len(result.results)} feasible jump patterns")
-    return result.results
+        if results:
+            progress(f"retained top {len(results)} feasible jump patterns")
+    return results
 
 
 def optimise_jump_patterns(
@@ -1066,24 +812,24 @@ def optimise_jump_patterns(
     y_window: AxisWindow | None = None,
     workers: int = 1,
     progress: Callable[[str], None] | None = print,
+    python_resimulate: bool = False,
 ) -> list[JumpSearchResult]:
-    """Exhaustively search successful jump pulses, optionally in processes.
+    """Exhaustively search successful jump pulses in the native C kernel.
 
     Horizontal input is preserved. Jump input inside the mutable range is
     replaced by non-overlapping pulses whose rising edges actually invoke
-    ``Player.jump()``. ``workers=0`` selects up to eight available CPUs;
-    ``workers=1`` retains the low-overhead serial path.
+    Player.jump(). workers=0 chooses up to eight CPUs automatically; explicit
+    positive values run that many native shards when enough root work exists.
+    Parallel shards execute in threads because the native wrapper releases the
+    GIL and each thread owns an independent native search session.
 
-    Parallel search creates exact post-pulse simulator frontier states in the
-    parent and sends coarse, load-balanced batches to persistent worker
-    processes. Workers have independent transposition caches, so the result is
-    exhaustive but equal-score ordering and cache statistics may differ from
-    a serial traversal.
+    ``python_resimulate`` replays every retained native result through the
+    Python reference emulator and compares its score and full exported player
+    snapshot. This diagnostic is deliberately disabled by default.
     """
     if workers < 0:
         raise ValueError("workers must be zero (auto) or a positive integer")
-    context, prefix_state = _prepare_jump_search(
-        level,
+    prepared = _prepare_jump_search(
         original_frames,
         target_frame=target_frame,
         range_start=range_start,
@@ -1100,92 +846,92 @@ def optimise_jump_patterns(
         x_window=x_window,
         y_window=y_window,
     )
-    if context is None or prefix_state is None:
+    if prepared is None:
         return []
 
-    if progress is not None and context.fixed_frames:
+    if progress is not None and prepared.fixed_frames:
         progress(
             "fixed jump starts: "
-            + ", ".join(map(str, context.fixed_frames))
+            + ", ".join(map(str, prepared.fixed_frames))
             + "; start frames locked, hold lengths variable"
         )
 
-    automatic_workers = workers == 0
-    worker_count = _automatic_jump_worker_count() if automatic_workers else workers
-    search = _JumpPatternSearch(context)
-    if worker_count <= 1:
-        search.recurse(
-            prefix_state,
-            context.range_start,
-            (),
-            0,
-            consume_state=True,
-            remaining_fixed=context.fixed_frames,
+    theoretical_branches = max(1, prepared.theoretical_root_branches)
+    if workers == 0:
+        worker_count = _automatic_pattern_worker_count(theoretical_branches)
+    else:
+        worker_count = workers
+    actual_workers = min(max(1, worker_count), theoretical_branches)
+
+    if actual_workers == 1:
+        native_results = (
+            _run_native_pattern_shard(level, prepared.original, prepared.spec),
         )
-        return _report_jump_search(search.finish(), progress)
-
-    # Split only at exact post-pulse states. This keeps every emulator tick in
-    # one process and avoids any approximation or shared mutable simulation.
-    frontier: list[_JumpSearchWorkItem] = []
-    search.recurse(
-        prefix_state,
-        context.range_start,
-        (),
-        0,
-        consume_state=True,
-        remaining_fixed=context.fixed_frames,
-        capture_count=1,
-        frontier=frontier,
-    )
-
-    # A fixed first start or narrow length range may expose too little first-
-    # pulse parallelism. Expand that small frontier once in the parent and split
-    # after the second pulse instead.
-    if len(frontier) < worker_count and context.jump_count_max > 1:
-        expanded: list[_JumpSearchWorkItem] = []
-        for item in frontier:
-            search.process_work_item(
-                item,
-                capture_count=2,
-                frontier=expanded,
+    else:
+        if progress is not None:
+            progress(
+                f"jump search: {actual_workers} native worker threads, "
+                f"{actual_workers} exhaustive shards"
             )
-        frontier = expanded
-
-    if len(frontier) < 2:
-        for item in frontier:
-            search.process_work_item(item)
-        return _report_jump_search(search.finish(), progress)
-
-    if automatic_workers:
-        worker_count = _automatic_jump_worker_count(len(frontier))
-    if worker_count <= 1:
-        for item in frontier:
-            search.process_work_item(item)
-        return _report_jump_search(search.finish(), progress)
-
-    actual_workers = min(worker_count, len(frontier))
-    batch_count = min(len(frontier), actual_workers * 2)
-    batches = _partition_jump_work(context, frontier, batch_count)
-    if progress is not None:
-        progress(
-            f"jump search: {actual_workers} worker processes, "
-            f"{len(frontier)} independent frontier branches"
+        shard_specs = tuple(
+            replace(
+                prepared.spec,
+                shard_index=shard_index,
+                shard_count=actual_workers,
+            )
+            for shard_index in range(actual_workers)
         )
+        cancel_event = Event()
+        futures: list[Future[PatternSearchResult]] = []
+        with ThreadPoolExecutor(
+            max_workers=actual_workers,
+            thread_name_prefix="nv14-jump",
+        ) as executor:
+            completed: list[PatternSearchResult | None] = [None] * actual_workers
+            try:
+                for shard_spec in shard_specs:
+                    futures.append(
+                        executor.submit(
+                            _run_native_pattern_shard,
+                            level,
+                            prepared.original,
+                            shard_spec,
+                            cancel_event,
+                        )
+                    )
+                future_indices = {
+                    future: shard_index
+                    for shard_index, future in enumerate(futures)
+                }
+                for future in as_completed(futures):
+                    completed[future_indices[future]] = future.result()
+            except BaseException:
+                # Wake native siblings before executor shutdown waits for them.
+                cancel_event.set()
+                for future in futures:
+                    future.cancel()
+                raise
+            if any(result is None for result in completed):
+                raise RuntimeError("a native jump-search shard did not complete")
+            native_results = tuple(
+                result for result in completed if result is not None
+            )
 
-    with ProcessPoolExecutor(
-        max_workers=actual_workers,
-        mp_context=multiprocessing.get_context(),
-        initializer=_initialise_jump_worker,
-        initargs=(context,),
-    ) as executor:
-        worker_results = list(executor.map(_run_jump_work_batch, batches))
-
-    parent_result = search.finish()
-    merged = list(parent_result.results)
-    stats = parent_result.stats
-    for worker_result in worker_results:
-        merged.extend(worker_result.results)
-        stats.add(worker_result.stats)
-    merged.sort(key=lambda result: result.score, reverse=True)
-    merged_result = _JumpWorkerResult(merged[: context.top_results], stats)
-    return _report_jump_search(merged_result, progress)
+    candidates, stats = _merge_native_pattern_shards(
+        native_results,
+        top_results=prepared.spec.top_results,
+    )
+    results = _materialise_jump_results(
+        level,
+        prepared.original,
+        candidates,
+        target_frame=target_frame,
+        range_start=range_start,
+        range_end=range_end,
+        objective_name=objective_name,
+        objective_target=objective_target,
+        x_window=x_window,
+        y_window=y_window,
+        python_resimulate=python_resimulate,
+    )
+    return _report_jump_search(results, stats, progress)

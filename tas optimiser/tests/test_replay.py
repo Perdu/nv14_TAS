@@ -82,22 +82,11 @@ def test_one_frame_local_optimisation_can_change_replay() -> None:
     assert result.state.player.pos.x > 59.901
 
 
-def test_forward_contiguous_local_search_reuses_live_prefixes(monkeypatch) -> None:
-    """Later forward windows must see accepted earlier edits without replaying 0..N."""
-    import optimize_replay as opt
-
+def test_forward_contiguous_native_search_uses_each_accepted_prefix() -> None:
+    """Later forward windows must see edits accepted by preceding windows."""
     level = parse_level_string("0" * (31 * 23) + "|5^100,100")
     source = [InputFrame() for _ in range(6)]
     objective = objective_function("max-x")
-    original_state_before = opt.state_before_frame
-    calls = 0
-
-    def counted_state_before(*args, **kwargs):
-        nonlocal calls
-        calls += 1
-        return original_state_before(*args, **kwargs)
-
-    monkeypatch.setattr(opt, "state_before_frame", counted_state_before)
     for local_inputs in ("all", "direction"):
         optimised, result = optimise_local_windows(
             level,
@@ -110,32 +99,17 @@ def test_forward_contiguous_local_search_reuses_live_prefixes(monkeypatch) -> No
             passes=1,
             local_inputs=local_inputs,
             window_order="forward",
+            python_resimulate=True,
             progress=None,
         )
         direct = evaluate(level, optimised, 5, objective)
         assert result.state.state_key() == direct.state.state_key()
         assert result.score == direct.score
 
-    # One initial prefix per forward-contiguous pass and input mode, rather
-    # than once for each of the six overlapping windows.
-    assert calls == 2
 
-
-def test_reverse_contiguous_local_search_caches_prefixes(monkeypatch) -> None:
-    """Reverse windows must not rebuild every prefix from frame zero."""
-    import optimize_replay as opt
-
+def test_reverse_contiguous_native_search_returns_exact_terminal_state() -> None:
     level = parse_level_string("0" * (31 * 23) + "|5^100,100")
     source = [InputFrame() for _ in range(8)]
-    original_state_before = opt.state_before_frame
-    calls = 0
-
-    def counted_state_before(*args, **kwargs):
-        nonlocal calls
-        calls += 1
-        return original_state_before(*args, **kwargs)
-
-    monkeypatch.setattr(opt, "state_before_frame", counted_state_before)
     optimised, result = optimise_local_windows(
         level,
         source,
@@ -147,13 +121,13 @@ def test_reverse_contiguous_local_search_caches_prefixes(monkeypatch) -> None:
         passes=1,
         local_inputs="direction",
         window_order="reverse",
+        python_resimulate=True,
         progress=None,
     )
 
     direct = evaluate(level, optimised, 7, objective_function("max-x"))
     assert result.state.state_key() == direct.state.state_key()
     assert result.score == direct.score
-    assert calls == 0
 
 
 def test_parse_axis_window_supports_bounded_and_open_intervals() -> None:
@@ -303,25 +277,7 @@ def test_direction_only_progressively_repairs_both_lockness_missed_presses() -> 
     )
 
 
-def test_optimistic_horizontal_bounds_cover_open_air_direction_sequences() -> None:
-    from itertools import product
-
-    from nv14_engine import InputFrame, parse_level_string
-    from optimize_replay import optimistic_horizontal_bounds
-
-    level = parse_level_string("0" * (31 * 23) + "|5^100,100")
-    fixed = [InputFrame() for _ in range(5)]
-    initial = level.initial_state()
-    lower, upper = optimistic_horizontal_bounds(initial, fixed, target_frame=4)
-
-    for directions in product((-1, 0, 1), repeat=5):
-        state = level.initial_state()
-        for horizontal in directions:
-            state.step(InputFrame(horizontal < 0, horizontal > 0, False, None), level.tiles)
-        assert lower <= state.player.pos.x <= upper
-
-
-def test_physics_prune_matches_exact_direction_search_in_open_air() -> None:
+def test_native_physics_prune_matches_exact_direction_search_in_open_air() -> None:
     from nv14_engine import InputFrame, parse_level_string
 
     level = parse_level_string("0" * (31 * 23) + "|5^100,100")
@@ -341,6 +297,7 @@ def test_physics_prune_matches_exact_direction_search_in_open_air() -> None:
         workers=1,
         progress=None,
     )
+    pruned_logs: list[str] = []
     pruned, pruned_result = optimise_local_windows(
         level,
         frames,
@@ -353,13 +310,22 @@ def test_physics_prune_matches_exact_direction_search_in_open_air() -> None:
         local_inputs="direction",
         physics_prune=True,
         workers=3,
-        progress=None,
+        progress=pruned_logs.append,
     )
 
     assert pruned_result.score == exact_result.score
     assert [(f.left, f.right, f.jump) for f in pruned] == [
         (f.left, f.right, f.jump) for f in exact
     ]
+    search_line = next(
+        line
+        for line in pruned_logs
+        if line.startswith("frames 0-4 search:")
+    )
+    physics_prunes = int(
+        search_line.split("physics=", 1)[1].split(",", 1)[0]
+    )
+    assert physics_prunes > 0
 
 
 def test_local_window_order_forward_and_reverse_are_distinct_traversals() -> None:
@@ -662,6 +628,7 @@ def test_local_best_run_callback_receives_immutable_mid_run_snapshots(
         restarts=1,
         seed=266,
         workers=workers,
+        python_resimulate=True,
         # Multi-worker checkpoint streaming must remain active even when the
         # caller has disabled stdout progress.
         progress=None,

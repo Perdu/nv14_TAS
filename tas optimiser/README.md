@@ -36,7 +36,7 @@ step. The source file is never overwritten.
 
 ## Examples
 
-All of the examples below use `examples/config.tml`. For details of all the configuration option refer
+All of the examples below use `examples/config.toml`. For details of all the configuration option refer
 to the other sections.
 
 Auto mode is used for optimising a whole level at once. Example:
@@ -67,11 +67,23 @@ python3 optimize_replay.py jump-pattern 'examples/bbjump.txt' --config 'examples
 ## Requirements and setup
 
 - Python **3.11 or newer**.
-- No third-party packages are required to run the optimiser.
+- No third-party Python packages are required to run the optimiser.
+- Auto, Local and jump-pattern require the bundled native extension to be
+  built with a C11 compiler and Python development headers. Fixed-replay tools
+  and the readable reference emulator remain usable without them.
 - `pytest` is required only to run the bundled test suite.
+- `PyYAML` is required only for the optional corpus verification and native
+  differential/coverage tools.
 
-Extract the archive, open a terminal in the extracted directory, and confirm
-that the command-line interface starts:
+
+Extract the archive, open a terminal in the extracted directory and build the extension 
+from the project directory with:
+
+```bash
+python build_native.py
+```
+
+Confirm that the command-line interface starts:
 
 ```bash
 python optimize_replay.py --help

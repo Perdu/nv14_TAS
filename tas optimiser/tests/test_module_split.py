@@ -13,6 +13,7 @@ import nv14_cli
 import nv14_jump
 import nv14_local
 import nv14_objectives
+import nv14_search
 import optimize_replay
 import pytest
 from nv14_engine import InputFrame, parse_level_string
@@ -44,10 +45,11 @@ def test_compatibility_facade_reexports_single_owned_definitions() -> None:
     assert optimize_replay.LocalSearchRunResult is nv14_local.LocalSearchRunResult
     assert optimize_replay.LocalConfig is nv14_cli.LocalConfig
     assert optimize_replay.JumpPatternConfig is nv14_cli.JumpPatternConfig
-    assert (
-        optimize_replay._search_all_input_frames
-        is nv14_local._search_all_input_frames
-    )
+    assert nv14_search.SearchSpec.__module__ == "nv14_search"
+    assert not hasattr(optimize_replay, "_search_all_input_frames")
+    assert not hasattr(optimize_replay, "_search_direction_frames")
+    assert not hasattr(nv14_local, "_search_all_input_frames")
+    assert not hasattr(nv14_local, "_search_direction_frames")
     assert (
         optimize_replay._validate_output_paths
         is nv14_cli._validate_output_paths
@@ -57,7 +59,7 @@ def test_compatibility_facade_reexports_single_owned_definitions() -> None:
 def test_runtime_modules_import_in_dependency_reverse_order() -> None:
     command = (
         "import nv14_cli, nv14_local, nv14_jump, nv14_objectives, "
-        "nv14_auto_parallel, nv14_auto, nv14_replay, nv14_engine, "
+        "nv14_auto_parallel, nv14_auto, nv14_search, nv14_replay, nv14_engine, "
         "optimize_replay"
     )
     completed = subprocess.run(

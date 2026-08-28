@@ -34,7 +34,6 @@ from nv14_jump import mutate_jump_inputs
 from nv14_local import *  # noqa: F403
 from nv14_local import successful_jump_frames
 from nv14_objectives import *  # noqa: F403
-from nv14_objectives import state_before_frame
 from nv14_replay import *  # noqa: F403
 from nv14_replay import parse_combined_level_replay
 
@@ -46,9 +45,6 @@ _paths_alias = _cli._paths_alias
 _validate_output_paths = _cli._validate_output_paths
 _sample_sparse_local_windows = _local._sample_sparse_local_windows
 _sparse_window_capacity = _local._sparse_window_capacity
-_search_all_input_frames = _local._search_all_input_frames
-_search_direction_frames = _local._search_direction_frames
-_local_candidate_better = _local._local_candidate_better
 _optimise_local_single_run = _local._optimise_local_single_run
 
 _JUMP_OPTIMISER = _jump.optimise_jump_patterns
@@ -72,7 +68,6 @@ def optimise_local_windows(*args, **kwargs):
     """
     overrides = {
         "ProcessPoolExecutor": ProcessPoolExecutor,
-        "state_before_frame": state_before_frame,
         "successful_jump_frames": successful_jump_frames,
         "mutate_jump_inputs": mutate_jump_inputs,
         "_optimise_local_single_run": _optimise_local_single_run,

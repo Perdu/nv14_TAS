@@ -81,6 +81,7 @@ from nv14_replay import (
     input_transition_frames,
     parse_combined_level_replay,
 )
+from nv14_search import evaluate_fixed_replay_native, player_snapshot_key
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +165,7 @@ class LocalConfig:
     require_reference_interactions: bool = False
     avoid_interaction: tuple[str, ...] = ()
     workers: int = 0
+    python_resimulate: bool = False
 
     def __post_init__(self) -> None:
         if self.objective not in (
@@ -275,6 +277,7 @@ class LocalConfig:
             require_reference_interactions=args.require_reference_interactions,
             avoid_interaction=tuple(args.avoid_interaction),
             workers=args.workers,
+            python_resimulate=getattr(args, "python_resimulate", False),
         )
 
 
@@ -295,6 +298,7 @@ class JumpPatternConfig:
     top_results: int = 10
     fixed_jump_frames: tuple[int, ...] = ()
     workers: int = 0
+    python_resimulate: bool = False
 
     def __post_init__(self) -> None:
         if self.objective not in (
@@ -354,6 +358,7 @@ class JumpPatternConfig:
             top_results=args.top_results,
             fixed_jump_frames=tuple(args.fixed_jump_frames),
             workers=args.workers,
+            python_resimulate=getattr(args, "python_resimulate", False),
         )
 
 
@@ -720,14 +725,15 @@ def _verify_packed_replay_for_output(
     avoided_interactions: Sequence[InteractionAvoidance] = (),
     expected_missing_jump_frames: frozenset[int] = frozenset(),
     require_successful_jump_presses: bool = False,
+    python_resimulate: bool = False,
 ) -> tuple[str, list[InputFrame], Evaluation]:
-    """Canonicalise and cleanly verify a fixed-frame result before writing it.
+    """Canonicalise and verify a fixed-frame result before writing it.
 
     Local workers can evaluate from cached prefix states, while the file on disk
-    contains a canonical packed replay. Keep the worker result as an expected
-    value only: output is accepted solely after encoding, decoding, simulating
-    from frame zero, checking every hard requirement, and matching the worker's
-    exact terminal state.
+    contains a canonical packed replay. The normal path verifies it from frame
+    zero in the independent native engine and matches the native winner's full
+    exported player snapshot. ``python_resimulate`` selects the slower Python
+    reference-emulator parity path for debugging.
     """
     if not expected_evaluation.feasible:
         raise ValueError("the in-memory result is infeasible")
@@ -757,26 +763,45 @@ def _verify_packed_replay_for_output(
     packed_frames = editable_frames(
         decode_complex_replay(replay_string).frames
     )
-    packed_evaluation = evaluate(
-        level,
-        packed_frames,
-        target_frame,
-        objective,
-        x_window=x_window,
-        y_window=y_window,
-        required_interactions=required_interactions,
-        avoided_interactions=avoided_interactions,
+    source_bits = tuple(
+        (frame.left, frame.right, frame.jump) for frame in frames
     )
+    packed_bits = tuple(
+        (frame.left, frame.right, frame.jump) for frame in packed_frames
+    )
+    if source_bits != packed_bits:
+        raise ValueError("the packed replay changed its held-input stream")
+
+    if python_resimulate:
+        packed_evaluation = evaluate(
+            level,
+            packed_frames,
+            target_frame,
+            objective,
+            x_window=x_window,
+            y_window=y_window,
+            required_interactions=required_interactions,
+            avoided_interactions=avoided_interactions,
+        )
+    else:
+        packed_evaluation = evaluate_fixed_replay_native(
+            level,
+            packed_frames,
+            target_frame,
+            objective,
+            x_window=x_window,
+            y_window=y_window,
+        )
     if not packed_evaluation.feasible:
         raise ValueError("the packed replay failed clean frame-zero verification")
-    if packed_evaluation.missing_interactions:
+    if python_resimulate and packed_evaluation.missing_interactions:
         missing_text = format_interaction_requirements(
             tuple(packed_evaluation.missing_interactions)
         )
         raise ValueError(
             f"the packed replay lost required interaction(s): {missing_text}"
         )
-    if packed_evaluation.violated_interactions:
+    if python_resimulate and packed_evaluation.violated_interactions:
         violated_text = format_interaction_avoidances(
             tuple(packed_evaluation.violated_interactions)
         )
@@ -784,7 +809,7 @@ def _verify_packed_replay_for_output(
             "the packed replay triggered forbidden interaction(s): "
             f"{violated_text}"
         )
-    if require_successful_jump_presses:
+    if python_resimulate and require_successful_jump_presses:
         packed_required_jumps = jump_press_frames(packed_frames, target_frame)
         packed_missing_jumps = packed_required_jumps - successful_jump_frames(
             level, packed_frames, target_frame
@@ -795,12 +820,24 @@ def _verify_packed_replay_for_output(
                 "the packed direction-only replay missed required jump "
                 f"press(es) at frame(s) {missing_text}"
             )
-    if (
-        packed_evaluation.state.state_key()
-        != expected_evaluation.state.state_key()
-    ):
+    if python_resimulate:
+        if (
+            packed_evaluation.state.state_key()
+            != expected_evaluation.state.state_key()
+        ):
+            raise ValueError(
+                "the packed replay state did not match the Python-resimulated "
+                "in-memory result"
+            )
+    elif player_snapshot_key(
+        packed_evaluation.state.player
+    ) != player_snapshot_key(expected_evaluation.state.player):
         raise ValueError(
-            "the packed replay state did not match the verified in-memory result"
+            "the packed replay player did not match the in-memory native result"
+        )
+    if packed_evaluation.score != expected_evaluation.score:
+        raise ValueError(
+            "the packed replay score did not match the in-memory native result"
         )
     return replay_string, packed_frames, packed_evaluation
 
@@ -1885,6 +1922,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
     )
     command.add_argument(
+        "--python-resimulate",
+        modes=fixed_frame_modes,
+        action="store_true",
+        help=(
+            "debugging only: re-simulate returned native Local or jump-pattern "
+            "results with the Python reference emulator and require exact parity; "
+            "disabled by default"
+        ),
+    )
+    command.add_argument(
         "--jumps",
         modes=jump_pattern_modes,
         type=parse_jump_count_range,
@@ -1929,10 +1976,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         metavar="N|auto",
         help=(
-            "worker processes; auto runs this many independent seeded searches "
-            "per round; local pools independent trajectories or one window's "
-            "safe DFS frontier; auto selects up to 8 available CPUs and 1 "
-            "always forces serial (default: auto)"
+            "mode-aware parallelism: auto and local use worker processes for "
+            "independent searches or trajectories; jump-pattern uses native C "
+            "shards in worker threads; auto selects up to 8 available CPUs "
+            "and 1 always forces serial (default: auto)"
         ),
     )
     command.add_argument(
@@ -2497,6 +2544,7 @@ def main() -> None:
     target_point_value = mode_config.target_point
     x_window = mode_config.x_window
     y_window = mode_config.y_window
+    python_resimulate = mode_config.python_resimulate
 
     if isinstance(mode_config, LocalConfig):
         local_inputs = mode_config.local_inputs
@@ -2709,6 +2757,7 @@ def main() -> None:
             x_window=x_window,
             y_window=y_window,
             workers=jump_pattern_config.workers,
+            python_resimulate=python_resimulate,
         )
         if not jump_results:
             raise SystemExit(
@@ -2722,16 +2771,10 @@ def main() -> None:
             range_end=range_end,
             pulses=best.pulses,
         )
-        # Verify the winning pattern once from the beginning rather than relying
-        # on the cached prefix used during the search.
-        final_eval = evaluate(
-            level,
-            optimised_frames,
-            target_frame,
-            objective,
-            x_window=x_window,
-            y_window=y_window,
-        )
+        # The retained result already carries the native terminal view or the
+        # opt-in Python-resimulated state. Packed-output verification below is
+        # the only additional full replay pass.
+        final_eval = best.evaluation
     else:
         def checkpoint_local_best(run: LocalSearchRunResult) -> bool:
             nonlocal local_checkpoint_written
@@ -2756,6 +2799,7 @@ def main() -> None:
                         require_successful_jump_presses=(
                             local_inputs == "direction"
                         ),
+                        python_resimulate=python_resimulate,
                     )
                 )
             except ValueError:
@@ -2800,6 +2844,7 @@ def main() -> None:
                 require_reference_interactions=require_reference_interactions,
                 workers=local_workers,
                 best_run_callback=checkpoint_local_best,
+                python_resimulate=python_resimulate,
             )
         except (RuntimeError, ValueError) as exc:
             raise SystemExit(str(exc)) from exc
@@ -2827,6 +2872,7 @@ def main() -> None:
                 require_successful_jump_presses=(
                     args.mode == "local" and local_inputs == "direction"
                 ),
+                python_resimulate=python_resimulate,
             )
         )
     except ValueError as exc:

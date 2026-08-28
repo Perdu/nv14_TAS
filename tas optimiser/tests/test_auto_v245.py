@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
 
 import nv14_auto as auto
+import nv14_search
 from nv14_engine import InputFrame, parse_level_string
 from nv14_replay import (
     decode_complex_replay,
@@ -13,20 +13,18 @@ from nv14_replay import (
 )
 
 
-def test_v245_adaptive_repair_cow_requires_dormant_object_headroom() -> None:
-    dormant = SimpleNamespace(
-        objects=[object()] * 12,
-        update_uids=[1, 2],
-        thinker_uids=[3],
-    )
-    all_active = SimpleNamespace(
-        objects=[object()] * 4,
-        update_uids=[0, 1, 2, 3],
-        thinker_uids=[],
-    )
-
-    assert auto._repair_copy_on_write_beneficial(dormant)
-    assert not auto._repair_copy_on_write_beneficial(all_active)
+def test_v277_auto_hot_mechanics_exist_only_in_native_kernels() -> None:
+    for legacy_python_loop in (
+        "_compact_point",
+        "_simulate_prefix",
+        "_repair_copy_on_write_beneficial",
+        "_forbidden_trapdoor_triggered",
+        "_local_target_score",
+    ):
+        assert not hasattr(auto, legacy_python_loop)
+    info = nv14_search.backend_info()
+    assert info["search_abi"] == 3
+    assert info["patch_abi"] == 2
 
 
 def test_v245_semantic_jump_variants_materialise_only_requested_prefix() -> None:
@@ -81,9 +79,7 @@ def test_v245_exact_direction_seed_skips_all_mutation_simulation() -> None:
     assert branches == simulations == 0
 
 
-def test_v245_adaptive_cow_and_deep_repair_return_identical_results(
-    monkeypatch,
-) -> None:
+def test_v277_native_direction_repair_is_deterministic() -> None:
     combined = parse_combined_level_replay(
         Path(__file__).with_name("example_44_0.txt").read_text(encoding="utf-8")
     )
@@ -110,8 +106,7 @@ def test_v245_adaptive_cow_and_deep_repair_return_identical_results(
         repair_search_order=auto.AUTO_REPAIR_SEARCH_ORDER_FIXED,
     )
 
-    monkeypatch.setattr(auto, "_repair_copy_on_write_beneficial", lambda _state: False)
-    deep = auto.repair_direction_window(
+    first = auto.repair_direction_window(
         level,
         working,
         shifted_reference,
@@ -120,8 +115,7 @@ def test_v245_adaptive_cow_and_deep_repair_return_identical_results(
         config=config,
         require_failure_jump=False,
     )
-    monkeypatch.setattr(auto, "_repair_copy_on_write_beneficial", lambda _state: True)
-    cow = auto.repair_direction_window(
+    second = auto.repair_direction_window(
         level,
         working,
         shifted_reference,
@@ -131,4 +125,4 @@ def test_v245_adaptive_cow_and_deep_repair_return_identical_results(
         require_failure_jump=False,
     )
 
-    assert cow == deep
+    assert second == first

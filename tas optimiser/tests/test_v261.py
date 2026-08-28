@@ -99,7 +99,7 @@ def test_invalid_local_checkpoint_does_not_overwrite_existing_outputs(
         opt.main()
 
     message = str(caught.value)
-    assert "packed replay state did not match" in message
+    assert "packed replay player did not match" in message
     assert message.endswith("no output was written")
     assert output_path.read_text(encoding="utf-8") == "keep combined output\n"
     assert replay_path.read_text(encoding="utf-8") == "keep replay output\n"
@@ -129,6 +129,7 @@ def test_checkpoint_clean_verification_rechecks_interactions() -> None:
             x_window=None,
             y_window=None,
             required_interactions=(requirement,),
+            python_resimulate=True,
         )
 
 

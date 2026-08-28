@@ -5036,6 +5036,14 @@ class Player:
                             scheduler_events.append(("wake_bounce", obj.load_index))
                         if obj_type is HomingLauncher and self.dead:
                             # TestVsPlayer calls ExplodeMissile after KillPlayer.
+                            # ExplodeMissile calls EndUpdate and removes the
+                            # missile from the grid. KillPlayer has already
+                            # replaced StartIdle with StartIdle_Death, so the
+                            # launcher does not rejoin the thinker ring.
+                            if scheduler_events is not None:
+                                scheduler_events.append(
+                                    ("end_update", obj.load_index)
+                                )
                             grid_state.remove(ref)
                             removed_current = True
                 else:
@@ -5409,7 +5417,8 @@ class SimulationState:
                 [None] * (len(self.object_slots) - len(self.grid_state.object_cells))
             )
         self.scheduler_events_required = any(
-            type(obj) in (BounceBlock, TestDoor) for obj in self.objects
+            type(obj) in (BounceBlock, TestDoor, HomingLauncher)
+            for obj in self.objects
         )
         # Only these callbacks can mutate update_uids during ObjectManager's
         # update traversal.  Other exact supported types keep a stable list,
@@ -5889,6 +5898,8 @@ class SimulationState:
                         self.start_think(uid)
                     elif action == "start_update":
                         self.start_update(uid)
+                    elif action == "end_update":
+                        self.end_update(uid)
         self.frame += 1
         return alternate_player
 
@@ -6141,6 +6152,7 @@ class Level:
     initial_edge_overrides: EdgeOverrides = field(default_factory=dict)
     simulate_enemies: bool = False
     passive_thinker_uids: tuple[int, ...] = ()
+    source_level_string: str | None = None
     _initial_thinker_uids: tuple[int, ...] | None = field(
         default=None, init=False, repr=False
     )
@@ -6325,6 +6337,7 @@ def parse_level_string(
         initial_edge_overrides=initial_edge_overrides,
         simulate_enemies=simulate_enemies,
         passive_thinker_uids=tuple(passive_thinker_uids),
+        source_level_string=level_string,
     )
 
 

@@ -6,17 +6,13 @@ import multiprocessing
 import random
 import signal
 from bisect import bisect_right
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from dataclasses import dataclass
 
 from nv14_engine import (
     InputFrame,
-    LaunchPad,
     Level,
-    PlayerState,
-    SimulationState,
-    UnsupportedTileCollision,
 )
 from nv14_jump import (
     ImmutableJumpSpec,
@@ -31,10 +27,6 @@ from nv14_objectives import (
     InteractionAvoidance,
     InteractionRequirement,
     TargetSelection,
-    _avoided_interactions_triggered,
-    _compile_interaction_constraints,
-    _CompiledInteractionConstraints,
-    _evaluation_with_interactions,
     evaluate,
     format_interaction_avoidances,
     format_interaction_requirements,
@@ -42,11 +34,21 @@ from nv14_objectives import (
     merge_interaction_avoidances,
     merge_interaction_requirements,
     objective_function,
-    position_within_windows,
     reference_interaction_requirements,
-    state_before_frame,
 )
 from nv14_replay import editable_frames, input_symbol
+from nv14_search import (
+    ALL_INPUT_CHOICES,
+    NativeTerminalState,
+    NativeSearchSession,
+    SearchResult,
+    SearchSpec,
+    build_direction_choices,
+    compile_axis_window,
+    compile_interaction_groups,
+    compile_objective,
+    native_player_matches,
+)
 
 
 def _stop_local_executor(
@@ -119,50 +121,6 @@ class _LocalExecutorScope:
         else:
             _stop_local_executor_for_exception(self.executor)
         return False
-
-
-@dataclass(slots=True)
-class DirectionWindowStats:
-    """Counters for one direction-only local-window search."""
-
-    visited_nodes: int = 0
-    evaluated_leaves: int = 0
-    missed_jump_prunes: int = 0
-    dead_prunes: int = 0
-    deduplicated_prunes: int = 0
-    physics_prunes: int = 0
-    avoided_interaction_prunes: int = 0
-
-    def add(self, other: "DirectionWindowStats") -> None:
-        """Merge counters from an independently searched frontier batch."""
-        self.visited_nodes += other.visited_nodes
-        self.evaluated_leaves += other.evaluated_leaves
-        self.missed_jump_prunes += other.missed_jump_prunes
-        self.dead_prunes += other.dead_prunes
-        self.deduplicated_prunes += other.deduplicated_prunes
-        self.physics_prunes += other.physics_prunes
-        self.avoided_interaction_prunes += other.avoided_interaction_prunes
-
-
-@dataclass(slots=True)
-class AllInputWindowStats:
-    """Counters for one all-input local-window DFS."""
-
-    visited_nodes: int = 0
-    evaluated_leaves: int = 0
-    inactive_jump_prunes: int = 0
-    dead_prunes: int = 0
-    deduplicated_prunes: int = 0
-    avoided_interaction_prunes: int = 0
-
-    def add(self, other: "AllInputWindowStats") -> None:
-        """Merge counters from an independently searched frontier batch."""
-        self.visited_nodes += other.visited_nodes
-        self.evaluated_leaves += other.evaluated_leaves
-        self.inactive_jump_prunes += other.inactive_jump_prunes
-        self.dead_prunes += other.dead_prunes
-        self.deduplicated_prunes += other.deduplicated_prunes
-        self.avoided_interaction_prunes += other.avoided_interaction_prunes
 
 
 @dataclass(frozen=True, slots=True)
@@ -569,60 +527,6 @@ def _local_window_description(window: LocalWindow, *, sparse: bool) -> str:
     return "frames [" + ",".join(map(str, window.frames)) + "]"
 
 
-def _local_candidate_better(
-    candidate_eval: Evaluation,
-    candidate_missing_jump_frames: frozenset[int],
-    best_eval: Evaluation,
-    best_missing_jump_frames: frozenset[int],
-    *,
-    incumbent_eval: Evaluation,
-    incumbent_missing_jump_frames: frozenset[int],
-) -> bool:
-    """Compare local candidates without allowing hard-requirement exchanges.
-
-    A candidate may only remove requirements from the current incumbent's
-    missing sets; it may not exchange one required object/jump for another.
-    Feasibility comes first. A candidate then replaces the current best only if
-    its missing-interaction, forbidden-interaction, and missing-jump sets all
-    weakly improve on the best, with at least one strict improvement.
-    Incomparable candidates are not exchanged. Objective score only breaks a
-    tie between identical hard states.
-    """
-    if not candidate_eval.feasible:
-        return False
-    if not candidate_eval.missing_interactions <= incumbent_eval.missing_interactions:
-        return False
-    if not (
-        candidate_eval.violated_interactions
-        <= incumbent_eval.violated_interactions
-    ):
-        return False
-    if not candidate_missing_jump_frames <= incumbent_missing_jump_frames:
-        return False
-    if not best_eval.feasible:
-        return True
-
-    candidate_dominates = (
-        candidate_eval.missing_interactions <= best_eval.missing_interactions
-        and candidate_eval.violated_interactions
-        <= best_eval.violated_interactions
-        and candidate_missing_jump_frames <= best_missing_jump_frames
-    )
-    best_dominates = (
-        best_eval.missing_interactions <= candidate_eval.missing_interactions
-        and best_eval.violated_interactions
-        <= candidate_eval.violated_interactions
-        and best_missing_jump_frames <= candidate_missing_jump_frames
-    )
-    if candidate_dominates and not best_dominates:
-        return True
-    if best_dominates and not candidate_dominates:
-        return False
-    if candidate_dominates and best_dominates:
-        return candidate_eval.score > best_eval.score
-    return False
-
-
 def _hard_requirements_improved(
     candidate_eval: Evaluation,
     candidate_missing_jump_frames: frozenset[int],
@@ -700,1674 +604,6 @@ def _replace_mutated_jump_starts(
     return frozenset(result)
 
 
-def _direction_frame(frame: InputFrame, horizontal: int) -> InputFrame:
-    """Replace only left/right input while preserving held jump exactly."""
-    if horizontal not in (-1, 0, 1):
-        raise ValueError("horizontal direction must be -1, 0 or 1")
-    return InputFrame(horizontal < 0, horizontal > 0, frame.jump, None)
-
-
-def _future_jump_edge_frames(
-    frames: Sequence[InputFrame], *, start_frame: int, target_frame: int
-) -> frozenset[int]:
-    """Potential ordinary jump-trigger frames from the fixed held-jump inputs."""
-    if start_frame > target_frame:
-        return frozenset()
-    previous = frames[start_frame - 1].jump if start_frame > 0 else False
-    result: set[int] = set()
-    for frame_index in range(start_frame, target_frame + 1):
-        held = frames[frame_index].jump
-        if held and not previous:
-            result.add(frame_index)
-        previous = held
-    return frozenset(result)
-
-
-def optimistic_horizontal_bounds(
-    state: SimulationState,
-    frames: Sequence[InputFrame],
-    *,
-    target_frame: int,
-    jump_edges: frozenset[int] | None = None,
-) -> tuple[float, float]:
-    """Optimistic target-frame x bounds for optional branch-and-bound.
-
-    This deliberately gives the player more horizontal authority than ordinary
-    movement: every future frame may use twice ground acceleration (covering the
-    extra slope-running adjustment), controlled speed may reach the nominal
-    maximum immediately, and every future jump-button rising edge may supply a
-    maximally favourable 1.5-pixel wall-jump impulse. Existing overspeed is
-    retained. Object/collision-derived horizontal boosts are *not* modelled; the
-    caller exposes this limitation explicitly via ``--physics-prune``.
-    """
-    next_frame = state.frame
-    if next_frame > target_frame:
-        x = state.player.pos.x
-        return x, x
-
-    player = state.player
-    if jump_edges is None:
-        jump_edges = _future_jump_edge_frames(
-            frames, start_frame=next_frame, target_frame=target_frame
-        )
-    max_speed = max(player.maxspeed_ground, player.maxspeed_air)
-    # Source ground handling can apply the main ground acceleration and then a
-    # slope-tangent adjustment. 2x is a simple conservative envelope.
-    accel = 2.0 * player.ground_accel
-    jump_dx = 1.5 * player.jump_amt
-
-    def project(direction: int) -> float:
-        x = player.pos.x
-        v = player.pos.x - player.oldpos.x
-        for frame_index in range(next_frame, target_frame + 1):
-            # TickNormal drag/integration happens before control handling.
-            v *= player.d
-            x += v
-
-            # Give the branch maximally favourable controlled acceleration.
-            if direction > 0:
-                if v < max_speed:
-                    v = min(max_speed, v + accel)
-            else:
-                if v > -max_speed:
-                    v = max(-max_speed, v - accel)
-
-            # A fixed rising edge may become a successful floor/wall jump after
-            # direction changes. Give every such edge the strongest possible
-            # horizontal ordinary-jump impulse.
-            if frame_index in jump_edges:
-                x += direction * jump_dx
-                if direction > 0:
-                    v = max(jump_dx, v + jump_dx)
-                else:
-                    v = min(-jump_dx, v - jump_dx)
-        return x
-
-    lower = project(-1)
-    upper = project(1)
-    return min(lower, upper), max(lower, upper)
-
-
-def _loose_horizontal_bounds(
-    state: SimulationState,
-    frames: Sequence[InputFrame],
-    *,
-    target_frame: int,
-    jump_edges: frozenset[int] | None = None,
-) -> tuple[float, float]:
-    """Very cheap, deliberately loose pre-bound used before the tight projection."""
-    remaining = target_frame + 1 - state.frame
-    x = state.player.pos.x
-    if remaining <= 0:
-        return x, x
-    player = state.player
-    if jump_edges is None:
-        jump_edges = _future_jump_edge_frames(
-            frames, start_frame=state.frame, target_frame=target_frame
-        )
-    edges = sum(1 for frame_index in jump_edges if frame_index >= state.frame)
-    jump_dx = 1.5 * player.jump_amt
-    vx = player.pos.x - player.oldpos.x
-    base_speed = max(player.maxspeed_ground, player.maxspeed_air, abs(vx))
-    speed_envelope = base_speed + edges * jump_dx
-    displacement = remaining * speed_envelope + edges * jump_dx
-    return x - displacement, x + displacement
-
-
-def _horizontal_bound_can_improve(
-    lower_x: float,
-    upper_x: float,
-    *,
-    objective_name: str,
-    best_score: float,
-    x_window: AxisWindow | None,
-) -> bool:
-    """Whether an optimistic x interval can still be feasible/usefully better."""
-    feasible_low = lower_x
-    feasible_high = upper_x
-    if x_window is not None:
-        feasible_low = max(feasible_low, x_window.minimum)
-        feasible_high = min(feasible_high, x_window.maximum)
-        if feasible_low > feasible_high:
-            return False
-
-    if best_score == float("-inf"):
-        return True
-    if objective_name == "max-x":
-        return feasible_high > best_score
-    if objective_name == "min-x":
-        return -feasible_low > best_score
-    # Horizontal bounds cannot bound a y objective; x-window feasibility above
-    # is still useful when supplied.
-    return True
-
-
-def _physics_bound_allows_branch(
-    state: SimulationState,
-    frames: Sequence[InputFrame],
-    *,
-    target_frame: int,
-    objective_name: str,
-    best_score: float,
-    x_window: AxisWindow | None,
-    jump_edges: frozenset[int] | None = None,
-) -> bool:
-    """Two-stage optional horizontal branch-and-bound test."""
-    if objective_name not in ("max-x", "min-x") and x_window is None:
-        return True
-
-    loose_low, loose_high = _loose_horizontal_bounds(
-        state, frames, target_frame=target_frame, jump_edges=jump_edges
-    )
-    if not _horizontal_bound_can_improve(
-        loose_low,
-        loose_high,
-        objective_name=objective_name,
-        best_score=best_score,
-        x_window=x_window,
-    ):
-        return False
-
-    tight_low, tight_high = optimistic_horizontal_bounds(
-        state, frames, target_frame=target_frame, jump_edges=jump_edges
-    )
-    return _horizontal_bound_can_improve(
-        tight_low,
-        tight_high,
-        objective_name=objective_name,
-        best_score=best_score,
-        x_window=x_window,
-    )
-
-
-def _evaluate_direction_suffix(
-    level: Level,
-    state: SimulationState,
-    frames: Sequence[InputFrame],
-    *,
-    start_frame: int,
-    target_frame: int,
-    objective: Callable[[SimulationState], float],
-    required_jump_frames: frozenset[int],
-    allowed_missing_jump_frames: frozenset[int],
-    initial_missing_jump_frames: frozenset[int] = frozenset(),
-    required_suffix_frames: Sequence[int] | None = None,
-    x_window: AxisWindow | None,
-    y_window: AxisWindow | None,
-    required_interactions: Sequence[InteractionRequirement] = (),
-    avoided_interactions: Sequence[InteractionAvoidance] = (),
-    compiled_constraints: _CompiledInteractionConstraints | None = None,
-) -> tuple[Evaluation, frozenset[int], bool]:
-    """Replay a suffix while distinguishing old and newly-created jump misses.
-
-    A required press already missed by the incumbent may remain missed while a
-    local window attempts to repair other presses. Missing a required press that
-    currently succeeds is a new regression and is pruned immediately.
-
-    ``state`` is owned by the leaf that calls this helper. Mutating it in place
-    avoids a redundant full branch clone; callers never reuse that leaf state.
-    """
-    result_state = state
-    tiles = level.tiles
-    step = result_state.step
-    missing = set(initial_missing_jump_frames)
-    if compiled_constraints is None:
-        compiled_constraints = _compile_interaction_constraints(
-            tuple(required_interactions), tuple(avoided_interactions)
-        )
-    # Direction-only required jumps are held-input rising edges, so almost all
-    # suffix frames are ordinary fixed-input ticks.  Keep the hot ordinary
-    # spans free of jump-event reads and set membership checks; only inspect
-    # jump_events on frames that can actually add a required miss.
-    if required_suffix_frames is None:
-        required_suffix_frames = tuple(
-            frame_index
-            for frame_index in sorted(required_jump_frames)
-            if start_frame <= frame_index <= target_frame
-        )
-
-    if not required_suffix_frames:
-        # Most direction windows have no required jump edge in their fixed
-        # suffix.  Keep that ordinary-input path free of the per-leaf missing
-        # set and required-frame loop; the incumbent's missing set cannot
-        # change once there are no required frames left to tick.
-        try:
-            for frame_index in range(start_frame, target_frame + 1):
-                step(frames[frame_index], tiles)
-                if (
-                    compiled_constraints.avoidances
-                    and _avoided_interactions_triggered(
-                        compiled_constraints, result_state
-                    )
-                ):
-                    return (
-                        Evaluation(float("-inf"), result_state, False),
-                        initial_missing_jump_frames,
-                        False,
-                    )
-                if result_state.player.dead:
-                    return (
-                        _evaluation_with_interactions(
-                            float("-inf"), result_state, False,
-                            required_interactions, avoided_interactions,
-                            compiled_constraints=compiled_constraints,
-                        ),
-                        initial_missing_jump_frames,
-                        False,
-                    )
-        except UnsupportedTileCollision:
-            return (
-                _evaluation_with_interactions(
-                    float("-inf"), result_state, False,
-                    required_interactions, avoided_interactions,
-                    compiled_constraints=compiled_constraints,
-                ),
-                initial_missing_jump_frames,
-                False,
-            )
-
-        feasible = position_within_windows(
-            result_state, x_window=x_window, y_window=y_window
-        )
-        return (
-            _evaluation_with_interactions(
-                objective(result_state) if feasible else float("-inf"),
-                result_state,
-                feasible,
-                required_interactions,
-                avoided_interactions,
-                compiled_constraints=compiled_constraints,
-            ),
-            initial_missing_jump_frames,
-            False,
-        )
-
-    try:
-        next_frame = start_frame
-        for required_frame in required_suffix_frames:
-            for frame_index in range(next_frame, required_frame):
-                step(frames[frame_index], tiles)
-                if (
-                    compiled_constraints.avoidances
-                    and _avoided_interactions_triggered(
-                        compiled_constraints, result_state
-                    )
-                ):
-                    return (
-                        Evaluation(float("-inf"), result_state, False),
-                        frozenset(missing),
-                        False,
-                    )
-                if result_state.player.dead:
-                    return (
-                        _evaluation_with_interactions(
-                            float("-inf"), result_state, False,
-                            required_interactions, avoided_interactions,
-                            compiled_constraints=compiled_constraints,
-                        ),
-                        frozenset(missing),
-                        False,
-                    )
-
-            before_events = result_state.player.jump_events
-            step(frames[required_frame], tiles)
-            if (
-                compiled_constraints.avoidances
-                and _avoided_interactions_triggered(compiled_constraints, result_state)
-            ):
-                return (
-                    Evaluation(float("-inf"), result_state, False),
-                    frozenset(missing),
-                    False,
-                )
-            jumped = result_state.player.jump_events > before_events
-            if not jumped:
-                if required_frame not in allowed_missing_jump_frames:
-                    return (
-                        _evaluation_with_interactions(
-                            float("-inf"), result_state, False,
-                            required_interactions, avoided_interactions,
-                            compiled_constraints=compiled_constraints,
-                        ),
-                        frozenset(missing),
-                        True,
-                    )
-                missing.add(required_frame)
-            if result_state.player.dead:
-                return (
-                    _evaluation_with_interactions(
-                        float("-inf"), result_state, False,
-                        required_interactions, avoided_interactions,
-                        compiled_constraints=compiled_constraints,
-                    ),
-                    frozenset(missing),
-                    False,
-                )
-            next_frame = required_frame + 1
-
-        for frame_index in range(next_frame, target_frame + 1):
-            step(frames[frame_index], tiles)
-            if (
-                compiled_constraints.avoidances
-                and _avoided_interactions_triggered(compiled_constraints, result_state)
-            ):
-                return (
-                    Evaluation(float("-inf"), result_state, False),
-                    frozenset(missing),
-                    False,
-                )
-            if result_state.player.dead:
-                return (
-                    _evaluation_with_interactions(
-                        float("-inf"), result_state, False,
-                        required_interactions, avoided_interactions,
-                        compiled_constraints=compiled_constraints,
-                    ),
-                    frozenset(missing),
-                    False,
-                )
-    except UnsupportedTileCollision:
-        return (
-            _evaluation_with_interactions(
-                float("-inf"), result_state, False,
-                required_interactions, avoided_interactions,
-                compiled_constraints=compiled_constraints,
-            ),
-            frozenset(missing),
-            False,
-        )
-
-    feasible = position_within_windows(
-        result_state, x_window=x_window, y_window=y_window
-    )
-    return (
-        _evaluation_with_interactions(
-            objective(result_state) if feasible else float("-inf"),
-            result_state,
-            feasible,
-            required_interactions,
-            avoided_interactions,
-            compiled_constraints=compiled_constraints,
-        ),
-        frozenset(missing),
-        False,
-    )
-
-
-def _held_jump_would_invoke(
-    state_before: SimulationState,
-    released_state: SimulationState,
-) -> bool:
-    """Predict a fresh held-jump call from the already-stepped release branch.
-
-    ``Player.step`` performs world and object collision work before
-    ``Player._think`` reads the input. For a fresh jump edge, the held and
-    released branches are therefore identical through collision handling; the
-    only possible gameplay difference is the jump call in ``_think``. The
-    post-release ``in_air``/``near_wall`` flags retain the collision facts
-    needed by that decision, while the pre-step state retains the state
-    ordering used by ``_think``.
-
-    The all-input search calls this only for its candidate frame, whose jump
-    trigger is derived from ``previous_jump_held``. A held frame while already
-    jumping is deliberately excluded because ``jump_held`` changes the jump
-    timer even without a new jump event.
-    """
-    player = state_before.player
-    if player.previous_jump_held:
-        return False
-    if player.state in (PlayerState.JUMPING, PlayerState.CELEBRATING):
-        return False
-
-    released_player = released_state.player
-    if released_state.level_complete or released_player.state == PlayerState.CELEBRATING:
-        return False
-    if player.state < PlayerState.JUMPING:
-        # Grounded collision enables the ordinary jump path.
-        return not released_player.in_air
-    # Falling, wall-sliding, and ragdoll states can use a wall jump after the
-    # same collision pass when a wall remains adjacent.
-    return released_player.in_air and released_player.near_wall
-
-
-def _state_key_ignoring_previous_jump_held(state: SimulationState) -> tuple:
-    """Return an exact gameplay-state key ignoring only jump-edge history.
-
-    A fresh jump press that fails to invoke ``Player.jump()`` normally differs
-    from the released-input branch only because ``previous_jump_held`` becomes
-    true. Temporarily normalising that one bit lets all-input local search
-    distinguish such an inactive press from cases where holding jump still has
-    another gameplay effect (for example, extending an existing jump).
-    """
-    previous = state.player.previous_jump_held
-    state.player.previous_jump_held = False
-    try:
-        return state.state_key()
-    finally:
-        state.player.previous_jump_held = previous
-
-
-def _preserve_failed_jump_press(
-    frames: Sequence[InputFrame],
-    window_frame_set: frozenset[int],
-    *,
-    frame_index: int,
-    target_frame: int,
-) -> bool:
-    """Keep a failed pre-hold when the next fixed frame already holds jump.
-
-    Failed fresh presses are normally dominated, but they can intentionally
-    set ``previous_jump_held`` so a fixed held-jump input on the following frame
-    does not create a rising edge. This conservative boundary exception protects
-    the common contiguous-window suffix and sparse-window gap cases.
-    """
-    next_frame = frame_index + 1
-    return (
-        next_frame <= target_frame
-        and next_frame not in window_frame_set
-        and frames[next_frame].jump
-    )
-
-
-def _evaluate_all_input_suffix(
-    level: Level,
-    state: SimulationState,
-    frames: Sequence[InputFrame],
-    *,
-    start_frame: int,
-    target_frame: int,
-    objective: Callable[[SimulationState], float],
-    x_window: AxisWindow | None,
-    y_window: AxisWindow | None,
-    required_interactions: Sequence[InteractionRequirement] = (),
-    avoided_interactions: Sequence[InteractionAvoidance] = (),
-    compiled_constraints: _CompiledInteractionConstraints | None = None,
-) -> Evaluation:
-    """Replay the fixed suffix after an all-input DFS window.
-
-    The DFS gives each terminal leaf exclusive ownership of ``state``. The
-    suffix can therefore be applied in place instead of cloning the complete
-    object manager once more for every terminal candidate.
-    """
-    result_state = state
-    tiles = level.tiles
-    step = result_state.step
-    if compiled_constraints is None:
-        compiled_constraints = _compile_interaction_constraints(
-            tuple(required_interactions), tuple(avoided_interactions)
-        )
-
-    try:
-        for frame_index in range(start_frame, target_frame + 1):
-            step(frames[frame_index], tiles)
-            # Avoided interactions are persistent events. Once one has fired,
-            # no remaining fixed suffix input can restore feasibility.
-            if (
-                compiled_constraints.avoidances
-                and _avoided_interactions_triggered(compiled_constraints, result_state)
-            ):
-                return Evaluation(float("-inf"), result_state, False)
-            if result_state.player.dead:
-                return _evaluation_with_interactions(
-                    float("-inf"), result_state, False,
-                    required_interactions, avoided_interactions,
-                    compiled_constraints=compiled_constraints,
-                )
-    except UnsupportedTileCollision:
-        return _evaluation_with_interactions(
-            float("-inf"), result_state, False,
-            required_interactions, avoided_interactions,
-            compiled_constraints=compiled_constraints,
-        )
-
-    feasible = position_within_windows(
-        result_state, x_window=x_window, y_window=y_window
-    )
-    return _evaluation_with_interactions(
-        objective(result_state) if feasible else float("-inf"),
-        result_state,
-        feasible,
-        required_interactions,
-        avoided_interactions,
-        compiled_constraints=compiled_constraints,
-    )
-
-
-@dataclass(slots=True)
-class _AllInputSearchFrontier:
-    """Privately owned all-input DFS state paused at a mutable-depth cut."""
-
-    state: SimulationState
-    frame_index: int
-    chosen: tuple[InputFrame, ...]
-    changed: bool
-
-
-@dataclass(slots=True)
-class _DirectionSearchFrontier:
-    """Privately owned direction DFS state paused at a mutable-depth cut."""
-
-    state: SimulationState
-    frame_index: int
-    chosen: tuple[InputFrame, ...]
-    missed_so_far: frozenset[int]
-    can_consume: bool
-    changed: bool
-
-
-def _search_all_input_frames(
-    level: Level,
-    frames: Sequence[InputFrame],
-    *,
-    prefix_state: SimulationState | None,
-    window_frames: Sequence[int],
-    target_frame: int,
-    objective: Callable[[SimulationState], float],
-    incumbent_slice: Sequence[InputFrame],
-    incumbent_eval: Evaluation,
-    x_window: AxisWindow | None,
-    y_window: AxisWindow | None,
-    required_interactions: Sequence[InteractionRequirement] = (),
-    avoided_interactions: Sequence[InteractionAvoidance] = (),
-    compiled_constraints: _CompiledInteractionConstraints | None = None,
-    capture_after_choices: int | None = None,
-    frontier_out: list[_AllInputSearchFrontier] | None = None,
-    initial_frontier: Sequence[_AllInputSearchFrontier] | None = None,
-    jump_prediction_safe: bool | None = None,
-) -> tuple[list[InputFrame], Evaluation, AllInputWindowStats]:
-    """DFS over L/N/R x jump with default inactive-jump pruning.
-
-    The released branch supplies the collision result for a fresh held press.
-    When ``Player.jump()`` cannot run and the held/released outcomes would be
-    identical apart from edge history, the held branch is not stepped. Active
-    jumps, existing jump holds, and launch-pad levels use the exact simulator
-    path. The sole default pruning exception is a failed pre-hold immediately
-    before a fixed held-jump frame, where the changed edge history can
-    deliberately suppress the next jump trigger.
-    """
-    if not window_frames:
-        raise ValueError("all-input search requires at least one mutable frame")
-    if capture_after_choices is not None:
-        if capture_after_choices < 1:
-            raise ValueError("frontier depth must be at least one mutable frame")
-        if frontier_out is None:
-            raise ValueError("captured all-input frontier requires an output list")
-    if initial_frontier is not None and capture_after_choices is not None:
-        raise ValueError("cannot capture and resume an all-input frontier together")
-    window_frames_tuple = tuple(window_frames)
-    window_frame_set = frozenset(window_frames_tuple)
-    window_start = window_frames_tuple[0]
-    window_end = window_frames_tuple[-1]
-    best_slice = list(incumbent_slice)
-    best_eval = incumbent_eval
-    stats = AllInputWindowStats()
-    if compiled_constraints is None:
-        compiled_constraints = _compile_interaction_constraints(
-            tuple(required_interactions), tuple(avoided_interactions)
-        )
-    seen: set[tuple[int, tuple]] = set()
-    # Launch pads can overwrite the pre-step Player state with FALLING before
-    # _think runs. Keep the exact held-step fallback on such levels; all other
-    # supported object contacts preserve the pre-step state needed by the
-    # release-branch prediction.
-    if jump_prediction_safe is None:
-        prediction_state = (
-            prefix_state
-            if prefix_state is not None
-            else initial_frontier[0].state
-            if initial_frontier
-            else None
-        )
-        if prediction_state is None:
-            raise ValueError("all-input search requires a prefix or frontier state")
-        jump_prediction_safe = not any(
-            type(obj) is LaunchPad for obj in prediction_state.objects
-        )
-    candidate_frames = tuple(
-        tuple(
-            (
-                InputFrame(horizontal < 0, horizontal > 0, jump, None)
-                for jump in (False, True)
-            )
-        )
-        for horizontal in (-1, 0, 1)
-    )
-
-    def materialise_exact_held_sibling(
-        state_before: SimulationState,
-        held: InputFrame,
-        *,
-        previous_jump_held: bool,
-        frame_index: int,
-    ) -> SimulationState | None:
-        """Build a held sibling by exactly stepping its untouched parent.
-
-        This is used for an active jump hold or a press predicted to call
-        ``Player.jump()``. It intentionally does not depend on the released
-        child, so a terminal released leaf may finish its owned suffix first.
-        """
-        candidate_state = state_before.clone(copy_on_write_objects=True)
-        before_events = candidate_state.player.jump_events
-        try:
-            candidate_state.step(held, level.tiles)
-        except UnsupportedTileCollision:
-            stats.dead_prunes += 1
-            return None
-        if candidate_state.player.dead:
-            stats.dead_prunes += 1
-            return None
-        jumped = candidate_state.player.jump_events > before_events
-
-        if (
-            not previous_jump_held
-            and not jumped
-            and state_before.player.state != PlayerState.JUMPING
-            and not _preserve_failed_jump_press(
-                frames,
-                window_frame_set,
-                frame_index=frame_index,
-                target_frame=target_frame,
-            )
-        ):
-            stats.inactive_jump_prunes += 1
-            return None
-        return candidate_state
-
-    def recurse(
-        state: SimulationState,
-        frame_index: int,
-        chosen: list[InputFrame],
-        changed: bool,
-        *,
-        count_node: bool = True,
-    ) -> None:
-        nonlocal best_eval, best_slice
-        if count_node:
-            stats.visited_nodes += 1
-
-        # Gold, exit-switch, locked-door, and trapdoor avoidances all record
-        # persistent state. A branch which has fired one cannot become a
-        # feasible local candidate again, so do not carry it through the rest
-        # of the DFS or its fixed suffix.
-        if (
-            compiled_constraints.avoidances
-            and _avoided_interactions_triggered(compiled_constraints, state)
-        ):
-            stats.avoided_interaction_prunes += 1
-            return
-
-        if (
-            capture_after_choices is not None
-            and len(chosen) >= capture_after_choices
-        ):
-            assert frontier_out is not None
-            frontier_out.append(
-                _AllInputSearchFrontier(
-                    state,
-                    frame_index,
-                    tuple(chosen),
-                    changed,
-                )
-            )
-            return
-
-        if frame_index > window_end:
-            stats.evaluated_leaves += 1
-            if not changed:
-                # The source input tuple is the already-verified incumbent.
-                # It cannot improve score or hard constraints, so avoid
-                # replaying its unchanged fixed suffix.
-                return
-            evaluation = _evaluate_all_input_suffix(
-                level,
-                state,
-                frames,
-                start_frame=window_end + 1,
-                target_frame=target_frame,
-                objective=objective,
-                x_window=x_window,
-                y_window=y_window,
-                required_interactions=required_interactions,
-                avoided_interactions=avoided_interactions,
-                compiled_constraints=compiled_constraints,
-            )
-            if _local_candidate_better(
-                evaluation,
-                frozenset(),
-                best_eval,
-                frozenset(),
-                incumbent_eval=incumbent_eval,
-                incumbent_missing_jump_frames=frozenset(),
-            ):
-                best_eval = evaluation
-                best_slice = chosen.copy()
-            return
-
-        # The root is entered once for a window, so hashing its full emulator
-        # state cannot deduplicate anything. Deeper nodes can still converge
-        # after different input prefixes and retain the exact state-key check.
-        if frame_index != window_start:
-            state_key = (frame_index, state.state_key())
-            if state_key in seen:
-                stats.deduplicated_prunes += 1
-                return
-            seen.add(state_key)
-
-        if frame_index not in window_frame_set:
-            next_state = state.clone(copy_on_write_objects=True)
-            try:
-                next_state.step(frames[frame_index], level.tiles)
-            except UnsupportedTileCollision:
-                stats.dead_prunes += 1
-                return
-            if next_state.player.dead:
-                stats.dead_prunes += 1
-                return
-            recurse(next_state, frame_index + 1, chosen, changed)
-            return
-
-        previous_jump_held = state.player.previous_jump_held
-        for horizontal in (-1, 0, 1):
-            released, held = candidate_frames[horizontal + 1]
-            released_state = state.clone(copy_on_write_objects=True)
-            try:
-                released_state.step(released, level.tiles)
-            except UnsupportedTileCollision:
-                stats.dead_prunes += 1
-                continue
-            if released_state.player.dead:
-                stats.dead_prunes += 1
-            else:
-                predicted_jump = (
-                    jump_prediction_safe
-                    and _held_jump_would_invoke(state, released_state)
-                )
-                exact_held_step = (
-                    predicted_jump
-                    or state.player.state == PlayerState.JUMPING
-                    # The release-branch prediction is deliberately disabled
-                    # when a LaunchPad is present: its collision pass can
-                    # change the pre-Think player state. In that case a fresh
-                    # held press must be stepped before inactive pruning.
-                    or not jump_prediction_safe
-                )
-                retained_failed_press = (
-                    not exact_held_step
-                    and (
-                        previous_jump_held
-                        or _preserve_failed_jump_press(
-                            frames,
-                            window_frame_set,
-                            frame_index=frame_index,
-                            target_frame=target_frame,
-                        )
-                    )
-                )
-                held_state: SimulationState | None = None
-                if retained_failed_press and frame_index == window_end:
-                    # The final released leaf owns and advances this state
-                    # through the suffix. A failed press reuses that
-                    # post-collision state, so capture the held sibling before
-                    # release recursion can consume it.
-                    held_state = released_state.clone(copy_on_write_objects=True)
-                    if not released_state.level_complete:
-                        held_state.player.previous_jump_held = True
-                elif not exact_held_step and not retained_failed_press:
-                    stats.inactive_jump_prunes += 1
-
-                chosen.append(released)
-                recurse(
-                    released_state,
-                    frame_index + 1,
-                    chosen,
-                    changed or released != frames[frame_index],
-                )
-                chosen.pop()
-
-                if exact_held_step:
-                    # ``state`` is an untouched parent: only its released
-                    # clone recursed above. Delaying this exact branch keeps
-                    # the normal release-first lifetime while avoiding an
-                    # alias with a terminal released leaf.
-                    held_state = materialise_exact_held_sibling(
-                        state,
-                        held,
-                        previous_jump_held=previous_jump_held,
-                        frame_index=frame_index,
-                    )
-                elif retained_failed_press and held_state is None:
-                    # Non-terminal release subtrees clone before every later
-                    # input, so their released state remains available.
-                    held_state = released_state.clone(copy_on_write_objects=True)
-                    if not released_state.level_complete:
-                        held_state.player.previous_jump_held = True
-
-                if held_state is not None:
-                    chosen.append(held)
-                    recurse(
-                        held_state,
-                        frame_index + 1,
-                        chosen,
-                        changed or held != frames[frame_index],
-                    )
-                    chosen.pop()
-
-    if initial_frontier is None:
-        if prefix_state is None:
-            raise ValueError("all-input search requires a prefix state")
-        recurse(prefix_state, window_start, [], False)
-    else:
-        for item in initial_frontier:
-            recurse(
-                item.state,
-                item.frame_index,
-                list(item.chosen),
-                item.changed,
-                count_node=False,
-            )
-    return best_slice, best_eval, stats
-
-
-def _search_direction_frames(
-    level: Level,
-    frames: Sequence[InputFrame],
-    *,
-    prefix_state: SimulationState | None,
-    window_frames: Sequence[int],
-    target_frame: int,
-    objective_name: str,
-    objective: Callable[[SimulationState], float],
-    required_jump_frames: frozenset[int],
-    incumbent_missing_jump_frames: frozenset[int],
-    incumbent_slice: Sequence[InputFrame],
-    incumbent_eval: Evaluation,
-    x_window: AxisWindow | None,
-    y_window: AxisWindow | None,
-    physics_prune: bool,
-    required_interactions: Sequence[InteractionRequirement] = (),
-    avoided_interactions: Sequence[InteractionAvoidance] = (),
-    compiled_constraints: _CompiledInteractionConstraints | None = None,
-    capture_after_choices: int | None = None,
-    frontier_out: list[_DirectionSearchFrontier] | None = None,
-    initial_frontier: Sequence[_DirectionSearchFrontier] | None = None,
-) -> tuple[
-    list[InputFrame], Evaluation, frozenset[int], DirectionWindowStats
-]:
-    """Exact DFS over L/N/R on selected frames while all gaps stay fixed."""
-    if not window_frames:
-        raise ValueError("direction search requires at least one mutable frame")
-    if capture_after_choices is not None:
-        if capture_after_choices < 1:
-            raise ValueError("frontier depth must be at least one mutable frame")
-        if frontier_out is None:
-            raise ValueError("captured direction frontier requires an output list")
-    if initial_frontier is not None and capture_after_choices is not None:
-        raise ValueError("cannot capture and resume a direction frontier together")
-    window_frames_tuple = tuple(window_frames)
-    window_frame_set = frozenset(window_frames_tuple)
-    window_start = window_frames_tuple[0]
-    window_end = window_frames_tuple[-1]
-    contiguous_window = (
-        len(window_frames_tuple) == window_end - window_start + 1
-    )
-    best_slice = list(incumbent_slice)
-    best_eval = incumbent_eval
-    best_missing = incumbent_missing_jump_frames
-    stats = DirectionWindowStats()
-    if compiled_constraints is None:
-        compiled_constraints = _compile_interaction_constraints(
-            tuple(required_interactions), tuple(avoided_interactions)
-        )
-    seen: set[tuple[int, tuple, frozenset[int]]] = set()
-    direction_frames = {
-        frame_index: tuple(
-            _direction_frame(frames[frame_index], horizontal)
-            for horizontal in (-1, 0, 1)
-        )
-        for frame_index in window_frames_tuple
-    }
-    direction_order: dict[int, tuple[int, ...]] = {}
-    for frame_index in window_frames_tuple:
-        original_h = frames[frame_index].horizontal
-        favourable = (
-            1
-            if objective_name == "max-x"
-            else -1 if objective_name == "min-x" else original_h
-        )
-        order: list[int] = []
-        for value in (favourable, original_h, 0, -favourable):
-            if value in (-1, 0, 1) and value not in order:
-                order.append(value)
-        for value in (-1, 0, 1):
-            if value not in order:
-                order.append(value)
-        direction_order[frame_index] = tuple(order)
-    physics_jump_edges = (
-        _future_jump_edge_frames(
-            frames, start_frame=window_start, target_frame=target_frame
-        )
-        if physics_prune
-        else frozenset()
-    )
-    suffix_required_frames = tuple(
-        frame_index
-        for frame_index in sorted(required_jump_frames)
-        if window_end < frame_index <= target_frame
-    )
-
-    def recurse(
-        state: SimulationState,
-        frame_index: int,
-        chosen: list[InputFrame],
-        missed_so_far: frozenset[int],
-        can_consume: bool,
-        changed: bool,
-        *,
-        count_node: bool = True,
-    ) -> None:
-        nonlocal best_eval, best_missing, best_slice
-        if count_node:
-            stats.visited_nodes += 1
-
-        # All supported avoidances are persistent: once a gold, switch, locked
-        # door, or trapdoor trigger is touched, a later suffix cannot undo it.
-        # Reject such branches before they spend time on the remaining fixed
-        # frames. The root check also handles an already-forbidden immutable
-        # prefix without changing the final diagnostic.
-        if (
-            compiled_constraints.avoidances
-            and _avoided_interactions_triggered(compiled_constraints, state)
-        ):
-            stats.avoided_interaction_prunes += 1
-            return
-
-        # Missed jump frames are monotonic after their input tick has passed.
-        # Once a feasible incumbent has repaired one of them, a branch that
-        # already missed it cannot dominate that incumbent, regardless of its
-        # eventual positional score.
-        if best_eval.feasible and not missed_so_far <= best_missing:
-            stats.missed_jump_prunes += 1
-            return
-
-        # If this branch could still finish with fewer misses than the current
-        # best candidate, objective score is irrelevant. Passing -inf retains
-        # x-window feasibility pruning without discarding a jump repair merely
-        # because its target score is temporarily worse.
-        physics_best_score = (
-            float("-inf")
-            if (
-                best_eval.missing_interactions
-                or best_eval.violated_interactions
-                or missed_so_far < best_missing
-            )
-            else best_eval.score
-        )
-        if physics_prune and not _physics_bound_allows_branch(
-            state,
-            frames,
-            target_frame=target_frame,
-            objective_name=objective_name,
-            best_score=physics_best_score,
-            x_window=x_window,
-            jump_edges=physics_jump_edges,
-        ):
-            stats.physics_prunes += 1
-            return
-
-        if (
-            capture_after_choices is not None
-            and len(chosen) >= capture_after_choices
-        ):
-            assert frontier_out is not None
-            frontier_out.append(
-                _DirectionSearchFrontier(
-                    state,
-                    frame_index,
-                    tuple(chosen),
-                    missed_so_far,
-                    can_consume,
-                    changed,
-                )
-            )
-            return
-
-        if frame_index > window_end:
-            stats.evaluated_leaves += 1
-            if not changed:
-                # The unchanged window is already represented by the exact
-                # incumbent evaluation.  Its terminal suffix cannot improve
-                # any score or hard requirement, so avoid replaying it.
-                return
-            evaluation, candidate_missing, new_missed_jump = _evaluate_direction_suffix(
-                level,
-                state,
-                frames,
-                start_frame=window_end + 1,
-                target_frame=target_frame,
-                objective=objective,
-                required_jump_frames=required_jump_frames,
-                allowed_missing_jump_frames=incumbent_missing_jump_frames,
-                initial_missing_jump_frames=missed_so_far,
-                required_suffix_frames=suffix_required_frames,
-                x_window=x_window,
-                y_window=y_window,
-                required_interactions=required_interactions,
-                avoided_interactions=avoided_interactions,
-                compiled_constraints=compiled_constraints,
-            )
-            if new_missed_jump:
-                stats.missed_jump_prunes += 1
-                return
-            if _local_candidate_better(
-                evaluation,
-                candidate_missing,
-                best_eval,
-                best_missing,
-                incumbent_eval=incumbent_eval,
-                incumbent_missing_jump_frames=incumbent_missing_jump_frames,
-            ):
-                best_eval = evaluation
-                best_missing = candidate_missing
-                best_slice = chosen.copy()
-            return
-
-        # The root is reached exactly once for each window, so hashing its
-        # complete emulator state cannot deduplicate anything. Deeper nodes
-        # can converge after different direction prefixes and retain the
-        # exact state-key check.
-        if frame_index != window_start:
-            state_key = (frame_index, state.state_key(), missed_so_far)
-            if state_key in seen:
-                stats.deduplicated_prunes += 1
-                return
-            seen.add(state_key)
-
-        if not contiguous_window and frame_index not in window_frame_set:
-            next_state = (
-                state
-                if can_consume
-                else state.clone(copy_on_write_objects=True)
-            )
-            required = frame_index in required_jump_frames
-            before_events = next_state.player.jump_events if required else 0
-            try:
-                next_state.step(frames[frame_index], level.tiles)
-            except UnsupportedTileCollision:
-                stats.dead_prunes += 1
-                return
-            if next_state.player.dead:
-                stats.dead_prunes += 1
-                return
-            if required and next_state.player.jump_events <= before_events:
-                if frame_index not in incumbent_missing_jump_frames:
-                    stats.missed_jump_prunes += 1
-                    return
-                next_missing = missed_so_far | {frame_index}
-            else:
-                next_missing = missed_so_far
-            recurse(
-                next_state,
-                frame_index + 1,
-                chosen,
-                next_missing,
-                True,
-                changed,
-            )
-            return
-
-        directions = direction_order[frame_index]
-        last_direction_index = len(directions) - 1
-        for direction_index, horizontal in enumerate(directions):
-            # The final mutable frame has no later direction choice.  If the
-            # path has stayed on the incumbent input so far, its source
-            # candidate is exactly the already-evaluated incumbent replay.
-            # Count that leaf for diagnostics, but do not tick the state just
-            # to rediscover the same terminal result.
-            if (
-                not changed
-                and frame_index == window_end
-                and direction_frames[frame_index][horizontal + 1]
-                == frames[frame_index]
-            ):
-                stats.evaluated_leaves += 1
-                continue
-            next_state = (
-                state
-                if can_consume and direction_index == last_direction_index
-                else state.clone(copy_on_write_objects=True)
-            )
-            candidate = direction_frames[frame_index][horizontal + 1]
-            required = frame_index in required_jump_frames
-            before_events = next_state.player.jump_events if required else 0
-            try:
-                next_state.step(candidate, level.tiles)
-            except UnsupportedTileCollision:
-                stats.dead_prunes += 1
-                continue
-            if next_state.player.dead:
-                stats.dead_prunes += 1
-                continue
-            if required and next_state.player.jump_events <= before_events:
-                if frame_index not in incumbent_missing_jump_frames:
-                    stats.missed_jump_prunes += 1
-                    continue
-                next_missing = missed_so_far | {frame_index}
-            else:
-                next_missing = missed_so_far
-            chosen.append(candidate)
-            recurse(
-                next_state,
-                frame_index + 1,
-                chosen,
-                next_missing,
-                True,
-                changed or candidate != frames[frame_index],
-            )
-            chosen.pop()
-
-    prefix_missing = frozenset(
-        frame
-        for frame in incumbent_missing_jump_frames
-        if frame < window_start
-    )
-    # The prefix is retained by the caller for forward incremental windows.
-    # Every descendant is privately owned, so its final child can consume the
-    # parent state in place without another branch clone.
-    if initial_frontier is None:
-        if prefix_state is None:
-            raise ValueError("direction search requires a prefix state")
-        recurse(prefix_state, window_start, [], prefix_missing, False, False)
-    else:
-        for item in initial_frontier:
-            recurse(
-                item.state,
-                item.frame_index,
-                list(item.chosen),
-                item.missed_so_far,
-                item.can_consume,
-                item.changed,
-                count_node=False,
-            )
-    return best_slice, best_eval, best_missing, stats
-
-
-@dataclass(frozen=True, slots=True)
-class _LocalWindowWorkerContext:
-    """Run-constant inputs reconstructed once in each DFS worker process."""
-
-    level: Level
-    target_frame: int
-    objective_name: str
-    objective_target: TargetSelection | None
-    x_window: AxisWindow | None
-    y_window: AxisWindow | None
-    physics_prune: bool
-    required_jump_frames: frozenset[int]
-    required_interactions: tuple[InteractionRequirement, ...]
-    avoided_interactions: tuple[InteractionAvoidance, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class _LocalWindowIncumbent:
-    """Comparison fields sent to workers without the large terminal state."""
-
-    score: float
-    feasible: bool
-    missing_interactions: frozenset[InteractionRequirement]
-    violated_interactions: frozenset[InteractionAvoidance]
-
-
-@dataclass(frozen=True, slots=True)
-class _LocalWindowWorkItem:
-    """One contiguous batch of paused DFS branches for a worker."""
-
-    local_inputs: str
-    frames: tuple[InputFrame, ...]
-    window_frames: tuple[int, ...]
-    incumbent_slice: tuple[InputFrame, ...]
-    incumbent: _LocalWindowIncumbent
-    incumbent_missing_jump_frames: frozenset[int]
-    jump_prediction_safe: bool | None
-    frontier: tuple[_AllInputSearchFrontier | _DirectionSearchFrontier, ...]
-
-
-@dataclass(slots=True)
-class _LocalWindowWorkResult:
-    """Best strict improvement and counters from one DFS frontier batch."""
-
-    best_slice: list[InputFrame] | None
-    best_eval: Evaluation | None
-    best_missing_jump_frames: frozenset[int]
-    stats: AllInputWindowStats | DirectionWindowStats
-
-
-class _LazyLocalWindowPool:
-    """Open a persistent DFS process pool only when a window can use it."""
-
-    def __init__(
-        self,
-        worker_count: int,
-        context: _LocalWindowWorkerContext,
-        *,
-        run_label: str,
-        progress: Callable[[str], None] | None,
-    ) -> None:
-        self.worker_count = worker_count
-        self.context = context
-        self.run_label = run_label
-        self.progress = progress
-        self.executor: ProcessPoolExecutor | None = None
-
-    def map(
-        self,
-        function: Callable[[_LocalWindowWorkItem], _LocalWindowWorkResult],
-        work_items: Sequence[_LocalWindowWorkItem],
-    ) -> Iterator[_LocalWindowWorkResult]:
-        """Map a frontier batch, starting no more processes than it can feed."""
-        if self.executor is None:
-            actual_workers = min(self.worker_count, len(work_items))
-            if actual_workers < 1:
-                raise ValueError("local window pool requires at least one work item")
-            if self.progress is not None:
-                self.progress(
-                    f"{self.run_label} local DFS: {actual_workers} worker "
-                    "processes, persistent per-window frontier pool"
-                )
-            self.executor = ProcessPoolExecutor(
-                max_workers=actual_workers,
-                mp_context=multiprocessing.get_context(),
-                initializer=_initialise_local_window_worker,
-                initargs=(self.context,),
-            )
-        return self.executor.map(function, work_items)
-
-    def __enter__(self) -> _LazyLocalWindowPool:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: object,
-    ) -> None:
-        if self.executor is not None:
-            if exc_type is None:
-                self.executor.shutdown(wait=True)
-            else:
-                _stop_local_executor_for_exception(self.executor)
-
-
-_LOCAL_WINDOW_WORKER_CONTEXT: _LocalWindowWorkerContext | None = None
-_LOCAL_WINDOW_WORKER_OBJECTIVE: Callable[[SimulationState], float] | None = None
-_LOCAL_WINDOW_WORKER_CONSTRAINTS: _CompiledInteractionConstraints | None = None
-
-
-def _initialise_local_window_worker(context: _LocalWindowWorkerContext) -> None:
-    """Install picklable configuration and rebuild the objective callable."""
-    global _LOCAL_WINDOW_WORKER_CONTEXT
-    global _LOCAL_WINDOW_WORKER_OBJECTIVE
-    global _LOCAL_WINDOW_WORKER_CONSTRAINTS
-    _LOCAL_WINDOW_WORKER_CONTEXT = context
-    _LOCAL_WINDOW_WORKER_OBJECTIVE = objective_function(
-        context.objective_name, context.objective_target
-    )
-    _LOCAL_WINDOW_WORKER_CONSTRAINTS = _compile_interaction_constraints(
-        context.required_interactions, context.avoided_interactions
-    )
-    if multiprocessing.current_process().name != "MainProcess":
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-
-def _run_local_window_work_item(
-    item: _LocalWindowWorkItem,
-) -> _LocalWindowWorkResult:
-    """Resume one batch of a single local window's exact DFS frontier."""
-    context = _LOCAL_WINDOW_WORKER_CONTEXT
-    objective = _LOCAL_WINDOW_WORKER_OBJECTIVE
-    compiled_constraints = _LOCAL_WINDOW_WORKER_CONSTRAINTS
-    if context is None or objective is None or compiled_constraints is None:
-        raise RuntimeError("local-window worker was not initialised")
-    if not item.frontier:
-        raise RuntimeError("local-window worker received an empty frontier")
-    incumbent_eval = Evaluation(
-        item.incumbent.score,
-        item.frontier[0].state,
-        item.incumbent.feasible,
-        item.incumbent.missing_interactions,
-        item.incumbent.violated_interactions,
-    )
-
-    if item.local_inputs == "direction":
-        frontier = tuple(
-            branch
-            for branch in item.frontier
-            if isinstance(branch, _DirectionSearchFrontier)
-        )
-        if len(frontier) != len(item.frontier):
-            raise RuntimeError("direction worker received an all-input frontier")
-        best_slice, best_eval, best_missing, stats = _search_direction_frames(
-            context.level,
-            item.frames,
-            prefix_state=None,
-            window_frames=item.window_frames,
-            target_frame=context.target_frame,
-            objective_name=context.objective_name,
-            objective=objective,
-            required_jump_frames=context.required_jump_frames,
-            incumbent_missing_jump_frames=item.incumbent_missing_jump_frames,
-            incumbent_slice=item.incumbent_slice,
-            incumbent_eval=incumbent_eval,
-            x_window=context.x_window,
-            y_window=context.y_window,
-            physics_prune=context.physics_prune,
-            required_interactions=context.required_interactions,
-            avoided_interactions=context.avoided_interactions,
-            compiled_constraints=compiled_constraints,
-            initial_frontier=frontier,
-        )
-    else:
-        frontier = tuple(
-            branch
-            for branch in item.frontier
-            if isinstance(branch, _AllInputSearchFrontier)
-        )
-        if len(frontier) != len(item.frontier):
-            raise RuntimeError("all-input worker received a direction frontier")
-        best_slice, best_eval, stats = _search_all_input_frames(
-            context.level,
-            item.frames,
-            prefix_state=None,
-            window_frames=item.window_frames,
-            target_frame=context.target_frame,
-            objective=objective,
-            incumbent_slice=item.incumbent_slice,
-            incumbent_eval=incumbent_eval,
-            x_window=context.x_window,
-            y_window=context.y_window,
-            required_interactions=context.required_interactions,
-            avoided_interactions=context.avoided_interactions,
-            compiled_constraints=compiled_constraints,
-            initial_frontier=frontier,
-            jump_prediction_safe=item.jump_prediction_safe,
-        )
-        best_missing = frozenset()
-
-    if best_eval is incumbent_eval:
-        return _LocalWindowWorkResult(None, None, best_missing, stats)
-    return _LocalWindowWorkResult(best_slice, best_eval, best_missing, stats)
-
-
-def _local_frontier_depth(
-    mutable_frames: int,
-    worker_count: int,
-    *,
-    branch_factor: int,
-) -> int:
-    """Choose the shallowest cut capable of feeding the requested workers."""
-    target = max(2, worker_count)
-    depth = 1
-    capacity = branch_factor
-    while depth < mutable_frames and capacity < target:
-        depth += 1
-        capacity *= branch_factor
-    return depth
-
-
-def _contiguous_frontier_batches(
-    frontier: Sequence[_AllInputSearchFrontier | _DirectionSearchFrontier],
-    batch_count: int,
-) -> list[tuple[_AllInputSearchFrontier | _DirectionSearchFrontier, ...]]:
-    """Split DFS-order states evenly without changing inter-batch order."""
-    actual_batches = min(len(frontier), batch_count)
-    if actual_batches < 1:
-        return []
-    quotient, remainder = divmod(len(frontier), actual_batches)
-    batches: list[
-        tuple[_AllInputSearchFrontier | _DirectionSearchFrontier, ...]
-    ] = []
-    start = 0
-    for batch_index in range(actual_batches):
-        size = quotient + (batch_index < remainder)
-        end = start + size
-        batches.append(tuple(frontier[start:end]))
-        start = end
-    return batches
-
-
-def _parallel_direction_window(
-    executor: _LazyLocalWindowPool,
-    worker_count: int,
-    level: Level,
-    frames: Sequence[InputFrame],
-    *,
-    prefix_state: SimulationState,
-    window_frames: Sequence[int],
-    target_frame: int,
-    objective_name: str,
-    objective: Callable[[SimulationState], float],
-    required_jump_frames: frozenset[int],
-    incumbent_missing_jump_frames: frozenset[int],
-    incumbent_slice: Sequence[InputFrame],
-    incumbent_eval: Evaluation,
-    x_window: AxisWindow | None,
-    y_window: AxisWindow | None,
-    physics_prune: bool,
-    required_interactions: Sequence[InteractionRequirement],
-    avoided_interactions: Sequence[InteractionAvoidance],
-    compiled_constraints: _CompiledInteractionConstraints,
-) -> tuple[list[InputFrame], Evaluation, frozenset[int], DirectionWindowStats]:
-    """Split one score-ordered direction DFS at a shallow viable frontier."""
-    frontier: list[_DirectionSearchFrontier] = []
-    depth = _local_frontier_depth(
-        len(window_frames), worker_count, branch_factor=3
-    )
-    _unused_slice, _unused_eval, _unused_missing, stats = _search_direction_frames(
-        level,
-        frames,
-        prefix_state=prefix_state,
-        window_frames=window_frames,
-        target_frame=target_frame,
-        objective_name=objective_name,
-        objective=objective,
-        required_jump_frames=required_jump_frames,
-        incumbent_missing_jump_frames=incumbent_missing_jump_frames,
-        incumbent_slice=incumbent_slice,
-        incumbent_eval=incumbent_eval,
-        x_window=x_window,
-        y_window=y_window,
-        physics_prune=physics_prune,
-        required_interactions=required_interactions,
-        avoided_interactions=avoided_interactions,
-        compiled_constraints=compiled_constraints,
-        capture_after_choices=depth,
-        frontier_out=frontier,
-    )
-    if len(frontier) < 2:
-        if not frontier:
-            return (
-                list(incumbent_slice),
-                incumbent_eval,
-                incumbent_missing_jump_frames,
-                stats,
-            )
-        best_slice, best_eval, best_missing, resumed_stats = _search_direction_frames(
-            level,
-            frames,
-            prefix_state=None,
-            window_frames=window_frames,
-            target_frame=target_frame,
-            objective_name=objective_name,
-            objective=objective,
-            required_jump_frames=required_jump_frames,
-            incumbent_missing_jump_frames=incumbent_missing_jump_frames,
-            incumbent_slice=incumbent_slice,
-            incumbent_eval=incumbent_eval,
-            x_window=x_window,
-            y_window=y_window,
-            physics_prune=physics_prune,
-            required_interactions=required_interactions,
-            avoided_interactions=avoided_interactions,
-            compiled_constraints=compiled_constraints,
-            initial_frontier=frontier,
-        )
-        stats.add(resumed_stats)
-        return best_slice, best_eval, best_missing, stats
-
-    batches = _contiguous_frontier_batches(frontier, worker_count)
-    shared_frames = tuple(frames)
-    shared_window_frames = tuple(window_frames)
-    shared_incumbent_slice = tuple(incumbent_slice)
-    shared_incumbent = _LocalWindowIncumbent(
-        incumbent_eval.score,
-        incumbent_eval.feasible,
-        incumbent_eval.missing_interactions,
-        incumbent_eval.violated_interactions,
-    )
-    work_items = tuple(
-        _LocalWindowWorkItem(
-            "direction",
-            shared_frames,
-            shared_window_frames,
-            shared_incumbent_slice,
-            shared_incumbent,
-            incumbent_missing_jump_frames,
-            None,
-            batch,
-        )
-        for batch in batches
-    )
-    best_slice = list(incumbent_slice)
-    best_eval = incumbent_eval
-    best_missing = incumbent_missing_jump_frames
-    for result in executor.map(_run_local_window_work_item, work_items):
-        assert isinstance(result.stats, DirectionWindowStats)
-        stats.add(result.stats)
-        if result.best_eval is None or result.best_slice is None:
-            continue
-        if _local_candidate_better(
-            result.best_eval,
-            result.best_missing_jump_frames,
-            best_eval,
-            best_missing,
-            incumbent_eval=incumbent_eval,
-            incumbent_missing_jump_frames=incumbent_missing_jump_frames,
-        ):
-            best_slice = result.best_slice
-            best_eval = result.best_eval
-            best_missing = result.best_missing_jump_frames
-    return best_slice, best_eval, best_missing, stats
-
-
-def _parallel_all_input_window(
-    executor: _LazyLocalWindowPool,
-    worker_count: int,
-    level: Level,
-    frames: Sequence[InputFrame],
-    *,
-    prefix_state: SimulationState,
-    window_frames: Sequence[int],
-    target_frame: int,
-    objective: Callable[[SimulationState], float],
-    incumbent_slice: Sequence[InputFrame],
-    incumbent_eval: Evaluation,
-    x_window: AxisWindow | None,
-    y_window: AxisWindow | None,
-    required_interactions: Sequence[InteractionRequirement],
-    avoided_interactions: Sequence[InteractionAvoidance],
-    compiled_constraints: _CompiledInteractionConstraints,
-) -> tuple[list[InputFrame], Evaluation, AllInputWindowStats]:
-    """Split one score-ordered all-input DFS at a shallow viable frontier."""
-    frontier: list[_AllInputSearchFrontier] = []
-    jump_prediction_safe = not any(
-        type(obj) is LaunchPad for obj in prefix_state.objects
-    )
-    depth = _local_frontier_depth(
-        len(window_frames), worker_count, branch_factor=6
-    )
-    _unused_slice, _unused_eval, stats = _search_all_input_frames(
-        level,
-        frames,
-        prefix_state=prefix_state,
-        window_frames=window_frames,
-        target_frame=target_frame,
-        objective=objective,
-        incumbent_slice=incumbent_slice,
-        incumbent_eval=incumbent_eval,
-        x_window=x_window,
-        y_window=y_window,
-        required_interactions=required_interactions,
-        avoided_interactions=avoided_interactions,
-        compiled_constraints=compiled_constraints,
-        capture_after_choices=depth,
-        frontier_out=frontier,
-        jump_prediction_safe=jump_prediction_safe,
-    )
-    if len(frontier) < 2:
-        if not frontier:
-            return list(incumbent_slice), incumbent_eval, stats
-        best_slice, best_eval, resumed_stats = _search_all_input_frames(
-            level,
-            frames,
-            prefix_state=None,
-            window_frames=window_frames,
-            target_frame=target_frame,
-            objective=objective,
-            incumbent_slice=incumbent_slice,
-            incumbent_eval=incumbent_eval,
-            x_window=x_window,
-            y_window=y_window,
-            required_interactions=required_interactions,
-            avoided_interactions=avoided_interactions,
-            compiled_constraints=compiled_constraints,
-            initial_frontier=frontier,
-            jump_prediction_safe=jump_prediction_safe,
-        )
-        stats.add(resumed_stats)
-        return best_slice, best_eval, stats
-
-    batches = _contiguous_frontier_batches(frontier, worker_count)
-    shared_frames = tuple(frames)
-    shared_window_frames = tuple(window_frames)
-    shared_incumbent_slice = tuple(incumbent_slice)
-    shared_incumbent = _LocalWindowIncumbent(
-        incumbent_eval.score,
-        incumbent_eval.feasible,
-        incumbent_eval.missing_interactions,
-        incumbent_eval.violated_interactions,
-    )
-    work_items = tuple(
-        _LocalWindowWorkItem(
-            "all",
-            shared_frames,
-            shared_window_frames,
-            shared_incumbent_slice,
-            shared_incumbent,
-            frozenset(),
-            jump_prediction_safe,
-            batch,
-        )
-        for batch in batches
-    )
-    best_slice = list(incumbent_slice)
-    best_eval = incumbent_eval
-    for result in executor.map(_run_local_window_work_item, work_items):
-        assert isinstance(result.stats, AllInputWindowStats)
-        stats.add(result.stats)
-        if result.best_eval is None or result.best_slice is None:
-            continue
-        if _local_candidate_better(
-            result.best_eval,
-            frozenset(),
-            best_eval,
-            frozenset(),
-            incumbent_eval=incumbent_eval,
-            incumbent_missing_jump_frames=frozenset(),
-        ):
-            best_slice = result.best_slice
-            best_eval = result.best_eval
-    return best_slice, best_eval, stats
-
-
 @dataclass(slots=True)
 class LocalSearchRunResult:
     """Result of one independent local-search trajectory."""
@@ -2442,6 +678,42 @@ class _LocalRunContext:
     avoided_interactions: tuple[InteractionAvoidance, ...]
     baseline: Evaluation
     baseline_missing_jump_frames: frozenset[int]
+    python_resimulate: bool
+
+
+def _native_local_evaluation(
+    result: SearchResult,
+    *,
+    target_frame: int,
+    required_interactions: Sequence[InteractionRequirement],
+    avoided_interactions: Sequence[InteractionAvoidance],
+) -> Evaluation:
+    """Adapt one native winner without running the Python emulator."""
+    if result.player is None:
+        raise RuntimeError("native search omitted the winning terminal player")
+    try:
+        missing = frozenset(
+            required_interactions[index]
+            for index in result.missing_requirement_indices
+        )
+        violated = frozenset(
+            avoided_interactions[index]
+            for index in result.violated_avoidance_indices
+        )
+    except IndexError as exc:
+        raise RuntimeError(
+            "native search returned an out-of-range interaction index"
+        ) from exc
+    return Evaluation(
+        result.score,
+        NativeTerminalState.from_snapshot(
+            result.player,
+            frame=target_frame + 1,
+        ),
+        result.feasible,
+        missing,
+        violated,
+    )
 
 
 def _mutate_jump_inputs_in_ranges(
@@ -2493,7 +765,6 @@ def _execute_local_run(
     progress: Callable[[str], None] | None,
     *,
     improvement_progress: Callable[[_LocalImprovementEvent], None] | None = None,
-    window_workers: int = 1,
 ) -> LocalSearchRunResult:
     """Execute one independent trajectory, optionally collecting diagnostics."""
     run_frames: Sequence[InputFrame] = context.original_frames
@@ -2535,71 +806,42 @@ def _execute_local_run(
         source_text = "mutated replay" if spec.jump_rng is not None else "original replay"
         progress(f"starting {spec.label} from {source_text}")
 
-    def execute_with_window_pool(
-        window_executor: _LazyLocalWindowPool | None,
-    ) -> LocalSearchRunResult:
-        return _optimise_local_single_run(
-            context.level,
-            run_frames,
-            target_frame=context.target_frame,
-            range_start=context.range_start,
-            range_end=context.range_end,
-            frame_ranges=context.frame_ranges,
-            objective_name=context.objective_name,
-            objective_target=context.objective_target,
-            window_size=context.window_size,
-            passes=context.passes,
-            minimum_improvement=context.minimum_improvement,
-            x_window=context.x_window,
-            y_window=context.y_window,
-            local_inputs=context.local_inputs,
-            physics_prune=context.physics_prune,
-            required_jump_frames=run_required_jump_frames,
-            required_interactions=context.required_interactions,
-            avoided_interactions=context.avoided_interactions,
-            window_order=spec.order,
-            window_shape=context.window_shape,
-            window_span=context.window_span,
-            windows_per_pass=context.windows_per_pass,
-            rng=spec.rng,
-            run_label=spec.label,
-            progress=progress,
-            improvement_progress=improvement_progress,
-            initial_evaluation=(
-                context.baseline if spec.jump_rng is None else None
-            ),
-            initial_missing_jump_frames=(
-                context.baseline_missing_jump_frames
-                if spec.jump_rng is None
-                else None
-            ),
-            frames_are_editable=True,
-            window_executor=window_executor,
-            window_workers=window_workers,
-        )
-
-    if window_workers > 1:
-        window_context = _LocalWindowWorkerContext(
-            level=context.level,
-            target_frame=context.target_frame,
-            objective_name=context.objective_name,
-            objective_target=context.objective_target,
-            x_window=context.x_window,
-            y_window=context.y_window,
-            physics_prune=context.physics_prune,
-            required_jump_frames=run_required_jump_frames,
-            required_interactions=context.required_interactions,
-            avoided_interactions=context.avoided_interactions,
-        )
-        with _LazyLocalWindowPool(
-            window_workers,
-            window_context,
-            run_label=spec.label,
-            progress=progress,
-        ) as window_executor:
-            run = execute_with_window_pool(window_executor)
-    else:
-        run = execute_with_window_pool(None)
+    run = _optimise_local_single_run(
+        context.level,
+        run_frames,
+        target_frame=context.target_frame,
+        range_start=context.range_start,
+        range_end=context.range_end,
+        frame_ranges=context.frame_ranges,
+        objective_name=context.objective_name,
+        objective_target=context.objective_target,
+        window_size=context.window_size,
+        passes=context.passes,
+        minimum_improvement=context.minimum_improvement,
+        x_window=context.x_window,
+        y_window=context.y_window,
+        local_inputs=context.local_inputs,
+        physics_prune=context.physics_prune,
+        required_jump_frames=run_required_jump_frames,
+        required_interactions=context.required_interactions,
+        avoided_interactions=context.avoided_interactions,
+        window_order=spec.order,
+        window_shape=context.window_shape,
+        window_span=context.window_span,
+        windows_per_pass=context.windows_per_pass,
+        rng=spec.rng,
+        run_label=spec.label,
+        progress=progress,
+        improvement_progress=improvement_progress,
+        initial_evaluation=context.baseline if spec.jump_rng is None else None,
+        initial_missing_jump_frames=(
+            context.baseline_missing_jump_frames
+            if spec.jump_rng is None
+            else None
+        ),
+        frames_are_editable=True,
+        python_resimulate=context.python_resimulate,
+    )
     if progress is not None:
         p = run.evaluation.state.player
         interaction_text = format_interaction_requirements(
@@ -2763,30 +1005,6 @@ def _estimate_local_run_work(
     return int(total_window_count * leaves * average_suffix)
 
 
-def _automatic_local_window_worker_count(
-    estimated_run_work: int,
-    *,
-    estimated_windows: int,
-    local_inputs: str,
-) -> int:
-    """Open a persistent DFS pool only when a lone run can amortise IPC."""
-    available = _automatic_jump_worker_count()
-    if available < 2:
-        return 1
-    spawn = multiprocessing.get_context().get_start_method() == "spawn"
-    minimum_total = 150_000 if spawn else 30_000
-    minimum_per_window = 5_000 if spawn else 1_500
-    if estimated_run_work < minimum_total:
-        return 1
-    if estimated_run_work // max(1, estimated_windows) < minimum_per_window:
-        return 1
-    branch_factor = 3 if local_inputs == "direction" else 6
-    frontier_limit = min(available, branch_factor)
-    if spawn and estimated_run_work < 300_000:
-        frontier_limit = min(frontier_limit, 2)
-    return max(1, frontier_limit)
-
-
 def _automatic_local_trajectory_workers(
     task_count: int,
     *,
@@ -2911,8 +1129,7 @@ def _optimise_local_single_run(
     initial_evaluation: Evaluation | None = None,
     initial_missing_jump_frames: frozenset[int] | None = None,
     frames_are_editable: bool = False,
-    window_executor: _LazyLocalWindowPool | None = None,
-    window_workers: int = 1,
+    python_resimulate: bool = False,
 ) -> LocalSearchRunResult:
     """Run one greedy local optimisation from the untouched input replay.
 
@@ -2941,9 +1158,25 @@ def _optimise_local_single_run(
     range_end = normalized_ranges[-1][1]
 
     objective = objective_function(objective_name, objective_target)
-    compiled_interaction_constraints = _compile_interaction_constraints(
-        tuple(required_interactions), tuple(avoided_interactions)
+    native_objective, native_targets = compile_objective(
+        objective_name, objective_target
     )
+    native_required_groups = compile_interaction_groups(required_interactions)
+    native_avoided_groups = compile_interaction_groups(avoided_interactions)
+    native_x_window = compile_axis_window(x_window)
+    native_y_window = compile_axis_window(y_window)
+    search_session = NativeSearchSession(level)
+
+    def interaction_indices(
+        constraints: Sequence[InteractionRequirement | InteractionAvoidance],
+        selected: frozenset[InteractionRequirement]
+        | frozenset[InteractionAvoidance],
+    ) -> frozenset[int]:
+        return frozenset(
+            index
+            for index, constraint in enumerate(constraints)
+            if constraint in selected
+        )
     # Both the untouched baseline and jump-mutated restart inputs are already
     # normalized by optimise_local_windows. Avoid rebuilding every InputFrame
     # when opening each independent trajectory; retain a private mutable list.
@@ -3080,208 +1313,149 @@ def _optimise_local_single_run(
                     f"{run_label}, pass {pass_index + 1}: {window_order} window order"
                 )
 
-        # Forward contiguous windows advance by exactly one frame. Retain the
-        # state immediately before the previous window and advance it with the
-        # accepted input before the next search, rather than rebuilding every
-        # prefix from frame zero.
-        incremental_prefix: SimulationState | None = None
-        incremental_prefix_start: int | None = None
-        use_incremental_prefix = (
-            pass_window_shape == "contiguous" and window_order == "forward"
-        )
-        prefix_cache: dict[int, SimulationState] | None = None
-        prefix_cache_starts: set[int] = set()
-        if not use_incremental_prefix:
-            # Random and sparse windows can revisit the same prefix many times.
-            # Cache exact snapshots lazily, invalidating only snapshots whose
-            # prefix contains an accepted edit. Reverse contiguous order is a
-            # particularly useful case: warming all requested starts once
-            # changes an O(window-count * replay-length) setup into one forward
-            # walk. COW snapshots isolate the cache from both the warm-up walk
-            # and later DFS branches.
-            prefix_cache = {}
-            prefix_cache_starts = {window.start for window in ordered_windows}
-            prefix_cache[0] = level.initial_state()
-
-            def cached_prefix(start: int) -> SimulationState:
-                cached = prefix_cache.get(start)
-                if cached is not None:
-                    return cached
-                base_start = max(
-                    cached_start
-                    for cached_start in prefix_cache
-                    if cached_start < start
-                )
-                walking_prefix = prefix_cache[base_start].clone(
-                    copy_on_write_objects=True
-                )
-                for frame_index in range(base_start, start):
-                    if frame_index in prefix_cache_starts:
-                        prefix_cache[frame_index] = walking_prefix.clone(
-                            copy_on_write_objects=True
-                        )
-                    if not walking_prefix.player.dead:
-                        walking_prefix.step(current[frame_index], level.tiles)
-                prefix_cache[start] = walking_prefix
-                return walking_prefix
-
-            if pass_window_shape == "contiguous" and window_order == "reverse":
-                for start in sorted(prefix_cache_starts):
-                    cached_prefix(start)
-
         for window in ordered_windows:
-            if prefix_cache is not None:
-                prefix = cached_prefix(window.start)
-            elif incremental_prefix is None:
-                prefix = state_before_frame(level, current, window.start)
-            else:
-                assert incremental_prefix_start is not None
-                for frame_index in range(
-                    incremental_prefix_start, window.start
-                ):
-                    # ``simulate_through_frame`` also stops after death. The
-                    # search will reject this prefix, but continuing to tick a
-                    # dead branch here would give it a different frame count.
-                    if incremental_prefix.player.dead:
-                        break
-                    incremental_prefix.step(current[frame_index], level.tiles)
-                prefix = incremental_prefix
-            if use_incremental_prefix:
-                incremental_prefix = prefix
-                incremental_prefix_start = window.start
-            incumbent_slice = [current[index] for index in window.frames]
-            best_slice = list(incumbent_slice)
+            incumbent_slice = tuple(current[index] for index in window.frames)
             description = _local_window_description(
                 window, sparse=pass_window_shape == "sparse"
             )
-            # With no outstanding hard state, every admissible candidate has
-            # the same empty requirement tuple and local ranking is a stable
-            # maximum by score.  That comparison is associative, so contiguous
-            # DFS frontier batches can be searched independently and merged in
-            # their original order.  Repairing non-empty/incomparable hard sets
-            # retains the exact serial traversal.
-            use_parallel_window = (
-                window_executor is not None
-                and not current_eval.missing_interactions
-                and not current_eval.violated_interactions
-                and not current_missing_jump_frames
+            direction_search = local_inputs == "direction"
+            choices = (
+                build_direction_choices(current, window.frames, objective_name)
+                if direction_search
+                else tuple(ALL_INPUT_CHOICES for _ in window.frames)
             )
+            incumbent_missing_requirements = interaction_indices(
+                required_interactions, current_eval.missing_interactions
+            )
+            incumbent_violated_avoidances = interaction_indices(
+                avoided_interactions, current_eval.violated_interactions
+            )
+            search_result = search_session.search(
+                current,
+                SearchSpec(
+                    mutable_frames=window.frames,
+                    choices=choices,
+                    target_frame=target_frame,
+                    objective=native_objective,
+                    targets=native_targets,
+                    x_window=native_x_window,
+                    y_window=native_y_window,
+                    required_groups=native_required_groups,
+                    avoided_groups=native_avoided_groups,
+                    incumbent_missing_requirements=incumbent_missing_requirements,
+                    incumbent_violated_avoidances=incumbent_violated_avoidances,
+                    required_jump_frames=(
+                        tuple(sorted(required_jump_frames))
+                        if direction_search
+                        else ()
+                    ),
+                    incumbent_missing_jump_frames=(
+                        current_missing_jump_frames
+                        if direction_search
+                        else frozenset()
+                    ),
+                    incumbent_score=current_eval.score,
+                    incumbent_feasible=current_eval.feasible,
+                    prune_inactive_jump=not direction_search,
+                    physics_prune=physics_prune and direction_search,
+                    skip_unchanged_final_step=direction_search,
+                ),
+            )
+            stats = search_result.stats
+            best_slice = list(incumbent_slice)
+            best_eval = current_eval
+            best_missing_jump_frames = current_missing_jump_frames
 
-            if local_inputs == "direction":
-                best_eval = current_eval
-                best_missing_jump_frames = current_missing_jump_frames
-                if use_parallel_window:
-                    assert window_executor is not None
-                    (
-                        best_slice,
-                        best_eval,
-                        best_missing_jump_frames,
-                        stats,
-                    ) = _parallel_direction_window(
-                        window_executor,
-                        window_workers,
+            if search_result.improved:
+                if len(search_result.best_inputs) != len(window.frames):
+                    raise RuntimeError(
+                        "native search returned the wrong number of replacement inputs"
+                    )
+                best_slice = list(search_result.best_inputs)
+                candidate = list(current)
+                for frame_index, replacement_input in zip(
+                    window.frames, best_slice, strict=True
+                ):
+                    candidate[frame_index] = replacement_input
+                best_eval = _native_local_evaluation(
+                    search_result,
+                    target_frame=target_frame,
+                    required_interactions=required_interactions,
+                    avoided_interactions=avoided_interactions,
+                )
+                best_missing_jump_frames = search_result.missing_jump_frames
+                if python_resimulate:
+                    successful_jumps: set[int] | None = (
+                        set() if direction_search else None
+                    )
+                    python_evaluation = evaluate(
                         level,
-                        current,
-                        prefix_state=prefix,
-                        window_frames=window.frames,
-                        target_frame=target_frame,
-                        objective_name=objective_name,
-                        objective=objective,
-                        required_jump_frames=required_jump_frames,
-                        incumbent_missing_jump_frames=current_missing_jump_frames,
-                        incumbent_slice=incumbent_slice,
-                        incumbent_eval=best_eval,
+                        candidate,
+                        target_frame,
+                        objective,
                         x_window=x_window,
                         y_window=y_window,
-                        physics_prune=physics_prune,
                         required_interactions=required_interactions,
                         avoided_interactions=avoided_interactions,
-                        compiled_constraints=compiled_interaction_constraints,
+                        successful_jump_frames_out=successful_jumps,
                     )
-                else:
-                    (
-                        best_slice,
-                        best_eval,
-                        best_missing_jump_frames,
-                        stats,
-                    ) = _search_direction_frames(
-                        level,
-                        current,
-                        prefix_state=prefix,
-                        window_frames=window.frames,
-                        target_frame=target_frame,
-                        objective_name=objective_name,
-                        objective=objective,
-                        required_jump_frames=required_jump_frames,
-                        incumbent_missing_jump_frames=current_missing_jump_frames,
-                        incumbent_slice=incumbent_slice,
-                        incumbent_eval=best_eval,
-                        x_window=x_window,
-                        y_window=y_window,
-                        physics_prune=physics_prune,
-                        required_interactions=required_interactions,
-                        avoided_interactions=avoided_interactions,
-                        compiled_constraints=compiled_interaction_constraints,
+                    python_missing_jump_frames = (
+                        required_jump_frames - frozenset(successful_jumps)
+                        if successful_jumps is not None
+                        else frozenset()
                     )
-                if progress is not None:
-                    search_prefix = (
-                        "" if run_label == "forward" else f"{run_label}, "
+                    verified_missing = interaction_indices(
+                        required_interactions,
+                        python_evaluation.missing_interactions,
                     )
+                    verified_violated = interaction_indices(
+                        avoided_interactions,
+                        python_evaluation.violated_interactions,
+                    )
+                    if (
+                        python_evaluation.score != search_result.score
+                        or python_evaluation.feasible != search_result.feasible
+                        or verified_missing
+                        != search_result.missing_requirement_indices
+                        or verified_violated
+                        != search_result.violated_avoidance_indices
+                        or python_missing_jump_frames
+                        != search_result.missing_jump_frames
+                        or search_result.player is None
+                        or not native_player_matches(
+                            search_result.player,
+                            python_evaluation.state.player,
+                        )
+                    ):
+                        raise RuntimeError(
+                            "native search result disagrees with Python replay "
+                            "resimulation"
+                        )
+                    best_eval = python_evaluation
+                    best_missing_jump_frames = python_missing_jump_frames
+
+            if progress is not None:
+                search_prefix = "" if run_label == "forward" else f"{run_label}, "
+                if direction_search:
                     progress(
                         f"{search_prefix}{description} search: "
-                        f"nodes={stats.visited_nodes}, leaves={stats.evaluated_leaves}, "
+                        f"nodes={stats.visited_nodes}, "
+                        f"leaves={stats.evaluated_leaves}, "
                         f"missed-jump={stats.missed_jump_prunes}, "
                         f"dedup={stats.deduplicated_prunes}, "
-                        f"physics={stats.physics_prunes}, dead={stats.dead_prunes}"
-                        f", avoided={stats.avoided_interaction_prunes}"
-                    )
-            else:
-                best_missing_jump_frames = frozenset()
-                if use_parallel_window:
-                    assert window_executor is not None
-                    best_slice, best_eval, stats = _parallel_all_input_window(
-                        window_executor,
-                        window_workers,
-                        level,
-                        current,
-                        prefix_state=prefix,
-                        window_frames=window.frames,
-                        target_frame=target_frame,
-                        objective=objective,
-                        incumbent_slice=incumbent_slice,
-                        incumbent_eval=current_eval,
-                        x_window=x_window,
-                        y_window=y_window,
-                        required_interactions=required_interactions,
-                        avoided_interactions=avoided_interactions,
-                        compiled_constraints=compiled_interaction_constraints,
+                        f"physics={stats.physics_prunes}, "
+                        f"dead={stats.dead_prunes}, "
+                        f"avoided={stats.avoided_interaction_prunes}"
                     )
                 else:
-                    best_slice, best_eval, stats = _search_all_input_frames(
-                        level,
-                        current,
-                        prefix_state=prefix,
-                        window_frames=window.frames,
-                        target_frame=target_frame,
-                        objective=objective,
-                        incumbent_slice=incumbent_slice,
-                        incumbent_eval=current_eval,
-                        x_window=x_window,
-                        y_window=y_window,
-                        required_interactions=required_interactions,
-                        avoided_interactions=avoided_interactions,
-                        compiled_constraints=compiled_interaction_constraints,
-                    )
-                if progress is not None:
-                    search_prefix = (
-                        "" if run_label == "forward" else f"{run_label}, "
-                    )
                     progress(
                         f"{search_prefix}{description} search: "
-                        f"nodes={stats.visited_nodes}, leaves={stats.evaluated_leaves}, "
+                        f"nodes={stats.visited_nodes}, "
+                        f"leaves={stats.evaluated_leaves}, "
                         f"inactive-jump={stats.inactive_jump_prunes}, "
-                        f"dedup={stats.deduplicated_prunes}, dead={stats.dead_prunes}"
-                        f", avoided={stats.avoided_interaction_prunes}"
+                        f"dedup={stats.deduplicated_prunes}, "
+                        f"dead={stats.dead_prunes}, "
+                        f"avoided={stats.avoided_interaction_prunes}"
                     )
 
             hard_improves = _hard_requirements_improved(
@@ -3308,22 +1482,10 @@ def _optimise_local_single_run(
                 old_eval = current_eval
                 old_score = current_eval.score
                 old_missing_jump_frames = current_missing_jump_frames
-                changed_frames = [
-                    frame_index
-                    for frame_index, replacement in zip(
-                        window.frames, best_slice, strict=True
-                    )
-                    if current[frame_index] != replacement
-                ]
                 for frame_index, replacement in zip(
                     window.frames, best_slice, strict=True
                 ):
                     current[frame_index] = replacement
-                if prefix_cache is not None and changed_frames:
-                    earliest_change = min(changed_frames)
-                    for cached_start in tuple(prefix_cache):
-                        if cached_start > earliest_change:
-                            del prefix_cache[cached_start]
                 current_eval = best_eval
                 if local_inputs == "direction":
                     current_missing_jump_frames = best_missing_jump_frames
@@ -3457,11 +1619,9 @@ def _optimise_local_single_run(
             if window_shape == "contiguous":
                 break
 
-    # Every accepted candidate carries an exact terminal state from its own
-    # prefix/window/fixed-suffix simulation, and the incumbent is never
-    # mutated by a later search. Re-simulating the entire replay here only
-    # duplicates work; the bookkeeping above tracks the same terminal
-    # interaction and jump requirements.
+    # Accepted winners already carry either their native terminal view or, for
+    # the opt-in debug path, the exact Python resimulation state. Do not add a
+    # second trajectory-completion evaluation.
     final_eval = current_eval
     return LocalSearchRunResult(
         current,
@@ -3470,6 +1630,7 @@ def _optimise_local_single_run(
         current_missing_jump_frames,
         required_jump_frames,
     )
+
 
 def optimise_local_windows(
     level: Level,
@@ -3503,6 +1664,7 @@ def optimise_local_windows(
     workers: int = 1,
     progress: Callable[[str], None] | None = print,
     best_run_callback: Callable[[LocalSearchRunResult], bool | None] | None = None,
+    python_resimulate: bool = False,
 ) -> tuple[list[InputFrame], Evaluation]:
     """Optimise overlapping local windows using one or more order trajectories.
 
@@ -3543,13 +1705,12 @@ def optimise_local_windows(
     target frame. This is therefore the post-retime, pre-restart reference when
     called by the CLI. Explicit and reference-derived requirements are merged.
 
-    ``workers`` controls process parallelism in either local input mode. When
-    several trajectories exist, forward, reverse, and random runs share one
-    ordered pool. A lone trajectory keeps greedy windows serial and splits the
-    current window's score-ordered DFS frontier whenever its hard-requirement
-    sets are empty. ``0`` selects a cost-aware automatic CPU count and ``1``
-    keeps the unconditional low-overhead serial path. Worker trajectories and
-    frontier batches are merged in original order.
+    ``workers`` controls process parallelism between independent trajectories.
+    Forward, reverse, and random runs share one ordered pool when several are
+    present; each trajectory calls its native search session in-process for its
+    greedy window chain. ``0`` selects a cost-aware automatic trajectory count
+    and ``1`` keeps the unconditional low-overhead serial path. Worker results
+    are merged in original run-spec order.
 
     ``best_run_callback`` is called in the parent process whenever an accepted
     window improvement becomes the best checkpoint candidate so far under the
@@ -3562,6 +1723,12 @@ def optimise_local_windows(
     later, lower-ranked but valid trajectory from being offered. ``None`` keeps
     the historical accepted-callback behaviour. The deterministic final winner
     is still merged in run-spec order.
+
+    ``python_resimulate`` is an opt-in diagnostic. When true, every accepted
+    native winner is replayed through the Python reference emulator and all
+    exported player, score, feasibility, interaction and jump fields are
+    compared exactly. It is false by default so result adaptation stays out of
+    the simulation hot path.
     """
     if window_size < 1:
         raise ValueError("window size must be at least 1")
@@ -3977,6 +2144,7 @@ def optimise_local_windows(
         avoided_interactions=tuple(all_avoided_interactions),
         baseline=baseline,
         baseline_missing_jump_frames=baseline_missing_jump_frames,
+        python_resimulate=python_resimulate,
     )
 
     checkpoint_best_run = best_run
@@ -3994,26 +2162,6 @@ def optimise_local_windows(
         if _local_run_better(run, best_run):
             best_run = run
 
-    contiguous_count = len(
-        _contiguous_local_windows_for_ranges(
-            normalized_ranges, effective_window
-        )
-    )
-    if window_shape == "sparse":
-        estimated_windows = windows_per_pass or (
-            contiguous_count
-        )
-    elif window_shape == "mixed":
-        sparse_count = windows_per_pass or contiguous_count
-        sparse_passes = (passes + 1) // 2
-        contiguous_passes = passes // 2
-        total_windows = (
-            sparse_count * sparse_passes
-            + contiguous_count * contiguous_passes
-        )
-        estimated_windows = (total_windows + passes - 1) // passes
-    else:
-        estimated_windows = contiguous_count
     estimated_run_work = _estimate_local_run_work(
         target_frame=target_frame,
         range_start=range_start,
@@ -4028,9 +2176,7 @@ def optimise_local_windows(
 
     # Every trajectory starts from the untouched replay. Mixed forward/reverse
     # runs are therefore just as independent as random restarts and share one
-    # ordered pool. A lone trajectory instead keeps its greedy window chain in
-    # the parent and lends each sufficiently expensive window's DFS frontier to
-    # a persistent worker pool.
+    # ordered pool. Each trajectory owns one native search session.
     trajectory_workers = (
         _automatic_local_trajectory_workers(
             len(run_specs), estimated_run_work=estimated_run_work
@@ -4158,17 +2304,6 @@ def optimise_local_windows(
             if progress_queue is not None:
                 progress_queue.close()
     else:
-        window_workers = 1
-        if len(run_specs) == 1:
-            if workers == 0:
-                window_workers = _automatic_local_window_worker_count(
-                    estimated_run_work,
-                    estimated_windows=estimated_windows,
-                    local_inputs=local_inputs,
-                )
-            elif workers > 1:
-                branch_factor = 3 if local_inputs == "direction" else 6
-                window_workers = min(workers, branch_factor)
         for spec in run_specs:
             run = _execute_local_run(
                 run_context,
@@ -4179,7 +2314,6 @@ def optimise_local_windows(
                     if best_run_callback is not None
                     else None
                 ),
-                window_workers=window_workers,
             )
             checkpoint_candidate(run)
             consume_run(run)

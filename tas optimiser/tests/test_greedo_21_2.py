@@ -3,9 +3,12 @@ from pathlib import Path
 from nv14_engine import InputFrame, Thwomp, parse_level_string
 from nv14_replay import decode_complex_replay, parse_combined_level_replay
 
-
-HERE = Path(__file__).parent
-EXAMPLE = HERE / "example_21_2_greedo.txt"
+EXAMPLE = (
+    Path(__file__).parents[1]
+    / "examples"
+    / "replays"
+    / "example_21_2_greedo.txt"
+)
 
 
 def load_example():

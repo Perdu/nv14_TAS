@@ -1,0 +1,16 @@
+# Defaults for the auto subcommand.
+#
+# The mode section allows short names: objective means auto-objective,
+# runs means auto-runs, and require_reference_gold means
+# auto-require-reference-gold.
+
+[auto]
+objective = "highscore"
+require_reference_gold = true
+iterations = 10000
+beam = 64
+max_retime = 3
+workers = 8
+runs = 0
+seed = "random"
+

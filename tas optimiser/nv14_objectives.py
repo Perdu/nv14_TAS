@@ -99,13 +99,18 @@ class TargetSelection:
             raise ValueError("target selection is empty")
         px = state.player.pos.x
         py = state.player.pos.y
-        return min(
-            (
-                (target, (px - target.x) ** 2 + (py - target.y) ** 2)
-                for target in self.targets
-            ),
-            key=lambda item: item[1],
-        )
+        best_target = self.targets[0]
+        dx = px - best_target.x
+        dy = py - best_target.y
+        best_distance = dx * dx + dy * dy
+        for target in self.targets[1:]:
+            dx = px - target.x
+            dy = py - target.y
+            distance = dx * dx + dy * dy
+            if distance < best_distance:
+                best_target = target
+                best_distance = distance
+        return best_target, best_distance
 
 
 INTERACTION_GOLD = "gold"

@@ -1,0 +1,9 @@
+# Defaults for the local subcommand.
+
+[local]
+target_frame = 71
+range = "0:71"
+objective = "max-x"
+window = 4
+passes = 3
+

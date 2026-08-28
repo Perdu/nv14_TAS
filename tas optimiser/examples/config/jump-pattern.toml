@@ -1,0 +1,8 @@
+# Defaults for the jump-pattern subcommand.
+
+[jump-pattern]
+target_frame = 175
+range = "106:135"
+jumps = "2:3"
+objective = "min-x"
+

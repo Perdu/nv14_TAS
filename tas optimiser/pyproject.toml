@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nv14-tas-starter"
+version = "2.87"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+packages = ["tools"]
+py-modules = [
+    "nv14_engine",
+    "nv14_native",
+    "nv14_search",
+    "nv14_objectives",
+    "nv14_jump",
+    "nv14_local",
+    "nv14_auto",
+    "nv14_auto_parallel",
+    "nv14_cli",
+    "nv14_replay",
+    "nv14_ltm",
+    "optimize_replay",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

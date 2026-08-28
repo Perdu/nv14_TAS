@@ -20,6 +20,12 @@ from nv14_replay import (
     parse_combined_level_replay,
     simulate_through_frame,
 )
+from nv14_search import (
+    OBJECTIVE_MAX_X,
+    NativeSearchSession,
+    SearchSpec,
+    compile_interaction_groups,
+)
 
 
 EMPTY_MAP = "0" * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
@@ -110,7 +116,7 @@ def test_explicit_trapdoor_avoidance_repairs_even_when_max_x_is_worse() -> None:
     assert not optimised[0].right
     assert result.score < baseline.score
     assert not result.violated_interactions
-    assert door_control_masks(result.state)[1] == 0
+    assert door_control_masks(simulate_through_frame(level, optimised, 1))[1] == 0
     assert any("avoided forbidden interaction" in line for line in progress)
 
 
@@ -135,7 +141,10 @@ def test_safe_trapdoor_route_is_preserved_in_both_local_input_modes(
         progress=None,
     )
     assert unconstrained[0].right
-    assert door_control_masks(unconstrained_eval.state)[1] != 0
+    assert (
+        door_control_masks(simulate_through_frame(level, unconstrained, 1))[1]
+        != 0
+    )
 
     constrained, result = opt.optimise_local_windows(
         level,
@@ -152,71 +161,40 @@ def test_safe_trapdoor_route_is_preserved_in_both_local_input_modes(
     )
     assert not constrained[0].right
     assert not result.violated_interactions
-    assert door_control_masks(result.state)[1] == 0
+    assert door_control_masks(simulate_through_frame(level, constrained, 1))[1] == 0
 
 
-def test_direction_search_prunes_persistent_avoidance_before_fixed_suffix() -> None:
+@pytest.mark.parametrize("local_inputs", ("direction", "all"))
+def test_native_search_prunes_persistent_avoidance_before_fixed_suffix(
+    local_inputs: str,
+) -> None:
     level = make_level("9^115.05,100,0,1,20,20,0,0,0")
     frames = [InputFrame() for _ in range(121)]
     avoidance = opt.resolve_interaction_avoidance(level, "testdoor:0")
-    objective = opt.objective_function("max-x")
-    baseline = opt.evaluate(
-        level,
-        frames,
-        120,
-        objective,
-        avoided_interactions=(avoidance,),
-    )
+    logs: list[str] = []
 
-    _best_slice, _best_eval, _missing, stats = opt._search_direction_frames(
+    opt.optimise_local_windows(
         level,
         frames,
-        prefix_state=level.initial_state(),
-        window_frames=(0, 1, 2, 3),
         target_frame=120,
+        range_start=0,
+        range_end=3,
         objective_name="max-x",
-        objective=objective,
-        required_jump_frames=frozenset(),
-        incumbent_missing_jump_frames=frozenset(),
-        incumbent_slice=frames[:4],
-        incumbent_eval=baseline,
-        x_window=None,
-        y_window=None,
-        physics_prune=False,
+        window_size=4,
+        passes=1,
+        local_inputs=local_inputs,
         avoided_interactions=(avoidance,),
+        workers=1,
+        progress=logs.append,
     )
 
-    assert stats.avoided_interaction_prunes > 0
-
-
-def test_all_input_search_prunes_persistent_avoidance_before_fixed_suffix() -> None:
-    level = make_level("9^115.05,100,0,1,20,20,0,0,0")
-    frames = [InputFrame() for _ in range(121)]
-    avoidance = opt.resolve_interaction_avoidance(level, "testdoor:0")
-    objective = opt.objective_function("max-x")
-    baseline = opt.evaluate(
-        level,
-        frames,
-        120,
-        objective,
-        avoided_interactions=(avoidance,),
+    search_line = next(
+        line
+        for line in logs
+        if line.startswith("frames 0-3 search:")
     )
-
-    _best_slice, _best_eval, stats = opt._search_all_input_frames(
-        level,
-        frames,
-        prefix_state=level.initial_state(),
-        window_frames=(0, 1, 2, 3),
-        target_frame=120,
-        objective=objective,
-        incumbent_slice=frames[:4],
-        incumbent_eval=baseline,
-        x_window=None,
-        y_window=None,
-        avoided_interactions=(avoidance,),
-    )
-
-    assert stats.avoided_interaction_prunes > 0
+    avoided_prunes = int(search_line.rsplit("avoided=", 1)[1])
+    assert avoided_prunes > 0
 
 
 def test_forbidden_interaction_in_immutable_prefix_is_reported() -> None:
@@ -238,31 +216,52 @@ def test_forbidden_interaction_in_immutable_prefix_is_reported() -> None:
         )
 
 
-def test_candidate_comparison_does_not_exchange_forbidden_interactions() -> None:
-    level = make_level(
-        "9^80,100,0,1,20,20,0,0,0!9^120,100,0,1,21,20,0,0,0"
+def test_native_candidate_does_not_exchange_forbidden_interactions() -> None:
+    level = parse_level_string(
+        f"{EMPTY_MAP}|5^100,100!"
+        "9^84.95,100,0,1,20,20,0,0,0!"
+        "9^115.05,100,0,1,21,20,0,0,0"
     )
-    first = opt.resolve_interaction_avoidance(level, "testdoor:0")
-    second = opt.resolve_interaction_avoidance(level, "testdoor:1")
-    state = level.initial_state()
-    incumbent = opt.Evaluation(
-        0.0,
-        state,
-        True,
-        frozenset(),
-        frozenset((first, second)),
+    avoidances = tuple(
+        opt.resolve_interaction_avoidance(level, f"testdoor:{index}")
+        for index in range(2)
     )
-    best = opt.Evaluation(1.0, state, True, frozenset(), frozenset((second,)))
-    sideways = opt.Evaluation(100.0, state, True, frozenset(), frozenset((first,)))
+    frames = (InputFrame(left=True), InputFrame())
+    incumbent = opt.evaluate(
+        level,
+        frames,
+        1,
+        opt.objective_function("max-x"),
+        avoided_interactions=avoidances,
+    )
+    sideways = opt.evaluate(
+        level,
+        (InputFrame(right=True), InputFrame()),
+        1,
+        opt.objective_function("max-x"),
+        avoided_interactions=avoidances,
+    )
+    assert sideways.score > incumbent.score
+    assert incumbent.violated_interactions == frozenset((avoidances[0],))
+    assert sideways.violated_interactions == frozenset((avoidances[1],))
 
-    assert not opt._local_candidate_better(
-        sideways,
-        frozenset(),
-        best,
-        frozenset(),
-        incumbent_eval=incumbent,
-        incumbent_missing_jump_frames=frozenset(),
+    result = NativeSearchSession(level).search(
+        frames,
+        SearchSpec(
+            mutable_frames=(0,),
+            choices=((InputFrame(right=True),),),
+            target_frame=1,
+            objective=OBJECTIVE_MAX_X,
+            avoided_groups=compile_interaction_groups(avoidances),
+            incumbent_violated_avoidances=frozenset((0,)),
+            incumbent_score=incumbent.score,
+            incumbent_feasible=incumbent.feasible,
+        ),
     )
+
+    assert not result.improved
+    assert result.best_inputs == (InputFrame(left=True),)
+    assert result.violated_avoidance_indices == frozenset((0,))
 
 
 def test_list_objects_advertises_trapdoor_avoidance_selector() -> None:
@@ -406,7 +405,7 @@ def test_supplied_00_1_speedrun_avoids_trapdoor_and_completes() -> None:
     assert baseline_postroll.level_complete
     assert baseline_postroll.static_state.completed_exit_index == 1
 
-    _optimised, result = opt.optimise_local_windows(
+    optimised, result = opt.optimise_local_windows(
         level,
         frames,
         target_frame=300,
@@ -424,10 +423,11 @@ def test_supplied_00_1_speedrun_avoids_trapdoor_and_completes() -> None:
     assert result.score > baseline.score
     assert not result.missing_interactions
     assert not result.violated_interactions
-    assert result.state.static_state.open_exit_mask & (1 << 1)
-    assert door_control_masks(result.state)[1] == 0
-    assert not result.state.player.dead
-    postroll = result.state.clone()
+    checked = simulate_through_frame(level, optimised, 300)
+    assert checked.static_state.open_exit_mask & (1 << 1)
+    assert door_control_masks(checked)[1] == 0
+    assert not checked.player.dead
+    postroll = checked.clone()
     postroll.step(InputFrame(), level.tiles)
     assert postroll.level_complete
     assert postroll.static_state.completed_exit_index == 1

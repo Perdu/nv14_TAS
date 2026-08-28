@@ -59,6 +59,20 @@ def test_target_point_uses_same_metric() -> None:
     assert objective_function("min-distance", target)(state) == -25.0
 
 
+def test_min_distance_uses_native_matching_multiplication_rounding() -> None:
+    level = make_level("11^84,564,660,300")
+    state = level.initial_state()
+    state.player.pos.x = 60.041353420929184
+    state.player.pos.y = 561.5839583070459
+    target = resolve_target_object(level, "exit")
+
+    # At this exact rounding boundary, float exponentiation differs by one ULP
+    # from the explicit multiplications used by the native search kernel.
+    assert objective_function("min-distance", target)(state) == (
+        -579.8540033629141
+    )
+
+
 def test_parallel_local_window_reconstructs_distance_objective() -> None:
     level = make_level("0^160,100")
     frames = [InputFrame() for _ in range(6)]

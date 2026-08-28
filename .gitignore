@@ -10,3 +10,5 @@ __pycache__/
 volume/n_v14_patched.swf
 tas optimiser/__pycache__/
 tas optimiser/.pytest_cache/
+tas optimiser/build
+*.pyd
