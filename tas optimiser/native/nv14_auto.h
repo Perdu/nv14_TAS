@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define NV14_REPLAY_TRACE_ABI_VERSION 1u
+#define NV14_REPLAY_TRACE_ABI_VERSION 2u
 #define NV14_REPLAY_ANALYSIS_ABI_VERSION 1u
 
 typedef enum nv14_replay_trace_status {
@@ -60,6 +60,12 @@ typedef struct nv14_replay_gold_event {
     size_t gold_index;
     uint64_t tick;
 } nv14_replay_gold_event;
+
+/* Inclusive pre-Think tick range in which a fresh edge calls Player.jump(). */
+typedef struct nv14_replay_tick_window {
+    uint64_t start_tick;
+    uint64_t end_tick;
+} nv14_replay_tick_window;
 
 /* EXIT_SWITCH indices are exit state indices.  LOCKED_DOOR and TRAPDOOR
  * indices are serialized object load indices, matching the corresponding
@@ -124,6 +130,8 @@ typedef struct nv14_replay_trace_result {
     size_t jump_edge_count;
     uint64_t *missed_jump_edges;
     size_t missed_jump_edge_count;
+    nv14_replay_tick_window *jump_callable_windows;
+    size_t jump_callable_window_count;
 
     nv14_replay_gold_event *gold_events;
     size_t gold_event_count;

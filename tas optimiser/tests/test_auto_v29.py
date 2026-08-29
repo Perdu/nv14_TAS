@@ -107,6 +107,186 @@ def test_zero_jump_bounds_do_not_manufacture_plus_one_beam_mutation() -> None:
     assert not any("start +0 hold +1" in item for item in descriptions)
 
 
+def test_beam_jump_insertion_groups_safe_native_opportunities_by_window() -> None:
+    body = tuple(
+        InputFrame(jump=tick in (0, 5))
+        for tick in range(10)
+    )
+
+    windows = auto._jump_insertion_opportunity_windows(
+        body,
+        ((0, 9),),
+        range_start=0,
+        range_end=9,
+    )
+
+    # Tick 1 would extend the pulse at 0.  Tick 4 leaves no room for both a new
+    # trigger and a released separator before the pulse at 5.  Other starts
+    # can now sample holds reaching the next pulse; collision policy resolves
+    # those after length selection.
+    assert windows == (
+        ((2, 8), (3, 7)),
+        ((7, 3), (8, 2), (9, 1)),
+    )
+    changed = auto._mutate_jump_interval_known(
+        body,
+        start=2,
+        length=2,
+        held=True,
+    )
+    assert changed[2].jump and changed[3].jump
+    assert not changed[4].jump
+    assert changed[5].jump
+    assert changed[-1] == NEUTRAL_INPUT
+
+
+def test_beam_jump_insertion_selects_window_before_frame() -> None:
+    class SequenceRng:
+        def __init__(self) -> None:
+            self.bounds: list[int] = []
+            self.values = iter((1, 0))
+
+        def randrange(self, upper: int) -> int:
+            self.bounds.append(upper)
+            return next(self.values)
+
+    rng = SequenceRng()
+    selected = auto._choose_jump_insertion_opportunity(
+        rng, (((40, 31),) * 80, ((184, 2), (185, 1)), ((263, 1),))
+    )
+
+    assert selected == (184, 2)
+    assert rng.bounds == [3, 2]
+
+
+def test_beam_jump_insertion_uses_all_weighted_hold_lengths() -> None:
+    class TicketRng:
+        def __init__(self, ticket: int) -> None:
+            self.ticket = ticket
+            self.bounds: list[int] = []
+
+        def randrange(self, upper: int) -> int:
+            self.bounds.append(upper)
+            return self.ticket
+
+    tickets = (0, 120, 160, 180, 190, 195, 198)
+    observed = tuple(
+        auto._choose_jump_insertion_hold_length(TicketRng(ticket), 31)
+        for ticket in tickets
+    )
+
+    assert observed == (1, 2, 3, 6, 12, 20, 31)
+    assert tuple(weight for _length, weight in auto._JUMP_INSERT_HOLD_WEIGHTS) == (
+        120,
+        40,
+        20,
+        10,
+        5,
+        3,
+        2,
+    )
+
+
+def test_beam_jump_insertion_collision_split_is_exact() -> None:
+    class TicketRng:
+        def __init__(self, ticket: int) -> None:
+            self.ticket = ticket
+            self.bounds: list[int] = []
+
+        def randrange(self, upper: int) -> int:
+            self.bounds.append(upper)
+            return self.ticket
+
+    body = tuple(
+        InputFrame(jump=6 <= tick <= 8)
+        for tick in range(12)
+    )
+    expected = (
+        ("stop", 3, ((2, 4), (6, 8))),
+        ("stop", 3, ((2, 4), (6, 8))),
+        ("merge", 7, ((2, 8),)),
+        ("replace", 5, ((2, 6),)),
+    )
+
+    for ticket, (expected_outcome, expected_length, expected_pulses) in enumerate(
+        expected
+    ):
+        rng = TicketRng(ticket)
+        changed, final_length, outcome = auto._mutate_jump_insertion_known(
+            body, 2, 5, rng
+        )
+
+        assert outcome == expected_outcome
+        assert final_length == expected_length
+        assert auto._jump_pulses(changed[:-1]) == expected_pulses
+        assert rng.bounds == [4]
+
+    assert auto._JUMP_INSERT_COLLISION_OUTCOMES == (
+        "stop", "stop", "merge", "replace"
+    )
+
+
+def test_beam_jump_insertion_merge_is_capped_at_31_frames() -> None:
+    class MergeRng:
+        def randrange(self, upper: int) -> int:
+            assert upper == 4
+            return 2
+
+    body = tuple(
+        InputFrame(jump=29 <= tick <= 35)
+        for tick in range(40)
+    )
+    changed, final_length, outcome = auto._mutate_jump_insertion_known(
+        body, 0, 31, MergeRng()
+    )
+
+    assert outcome == "merge"
+    assert final_length == 31
+    assert auto._jump_pulses(changed[:-1]) == ((0, 30),)
+
+
+def test_beam_jump_insertion_does_not_randomly_merge_an_adjacent_hold() -> None:
+    class NoDrawRng:
+        def randrange(self, upper: int) -> int:
+            raise AssertionError("adjacency is not an overlapping-pulse collision")
+
+    body = tuple(
+        InputFrame(jump=6 <= tick <= 8)
+        for tick in range(12)
+    )
+    changed, final_length, outcome = auto._mutate_jump_insertion_known(
+        body, 2, 4, NoDrawRng()
+    )
+
+    assert outcome is None
+    assert final_length == 3
+    assert auto._jump_pulses(changed[:-1]) == ((2, 4), (6, 8))
+
+
+def test_beam_jump_insertion_can_change_only_the_trigger_direction() -> None:
+    original = InputFrame(right=True)
+
+    assert auto._JUMP_INSERT_COMPOUND_DIRECTION_PROBABILITY == 0.10
+    assert auto._JUMP_INSERT_TRIGGER_DIRECTIONS == (
+        "existing", "neutral", "left", "right"
+    )
+    assert auto._jump_insertion_trigger_frame(original, "existing") == InputFrame(
+        right=True,
+        jump=True,
+    )
+    assert auto._jump_insertion_trigger_frame(original, "neutral") == InputFrame(
+        jump=True,
+    )
+    assert auto._jump_insertion_trigger_frame(original, "left") == InputFrame(
+        left=True,
+        jump=True,
+    )
+    assert auto._jump_insertion_trigger_frame(original, "right") == InputFrame(
+        right=True,
+        jump=True,
+    )
+
+
 def test_integrated_v28_cli_aliases_are_accepted() -> None:
     args = opt.build_parser().parse_args(
         [

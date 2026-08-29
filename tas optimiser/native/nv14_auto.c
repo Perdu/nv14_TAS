@@ -155,6 +155,7 @@ static int nv14_replay_trace_result_is_clean(
         result->successful_jumps == NULL &&
         result->jump_edges == NULL &&
         result->missed_jump_edges == NULL &&
+        result->jump_callable_windows == NULL &&
         result->gold_events == NULL &&
         result->route_control_events == NULL;
 }
@@ -203,6 +204,7 @@ void nv14_replay_trace_result_destroy(nv14_replay_trace_result *result)
     free(result->successful_jumps);
     free(result->jump_edges);
     free(result->missed_jump_edges);
+    free(result->jump_callable_windows);
     free(result->gold_events);
     free(result->route_control_events);
     (void)nv14_replay_trace_result_init(result, caller_size);
@@ -1426,6 +1428,10 @@ static int nv14_replay_trace_allocate_result(
     result->missed_jump_edges = (uint64_t *)nv14_replay_trace_calloc_array(
         input_count, sizeof(*result->missed_jump_edges), &ok
     );
+    result->jump_callable_windows = (nv14_replay_tick_window *)
+        nv14_replay_trace_calloc_array(
+            input_count, sizeof(*result->jump_callable_windows), &ok
+        );
     result->gold_event_capacity = nv14_level_gold_count(level);
     result->gold_events = (nv14_replay_gold_event *)
         nv14_replay_trace_calloc_array(
@@ -1743,6 +1749,23 @@ nv14_replay_trace_status nv14_replay_trace_run(
             );
         }
 
+        if (step_result.jump_callable) {
+            if (result_out->jump_callable_window_count != 0 &&
+                result_out->jump_callable_windows[
+                    result_out->jump_callable_window_count - 1u
+                ].end_tick + UINT64_C(1) == (uint64_t)tick) {
+                result_out->jump_callable_windows[
+                    result_out->jump_callable_window_count - 1u
+                ].end_tick = (uint64_t)tick;
+            } else {
+                nv14_replay_tick_window *window =
+                    &result_out->jump_callable_windows[
+                        result_out->jump_callable_window_count++
+                    ];
+                window->start_tick = (uint64_t)tick;
+                window->end_tick = (uint64_t)tick;
+            }
+        }
         if (step_result.jumped)
             result_out->successful_jumps[
                 result_out->successful_jump_count++

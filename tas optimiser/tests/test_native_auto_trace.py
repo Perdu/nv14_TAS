@@ -210,6 +210,34 @@ def _python_reference_evaluation(
     )
 
 
+def _python_jump_opportunity_windows(
+    level: Level,
+    working_frames: Sequence[InputFrame],
+) -> tuple[tuple[int, int], ...]:
+    """Independently probe whether a forced fresh edge would call ``jump()``."""
+    state = level.initial_state()
+    windows: list[list[int]] = []
+    for tick, frame in enumerate(working_frames):
+        alternate = state.step(
+            frame,
+            level.tiles,
+            alternate_inputs=InputFrame(
+                frame.left,
+                frame.right,
+                True,
+                True,
+            ),
+        )
+        if alternate is not None:
+            if not windows or tick != windows[-1][1] + 1:
+                windows.append([tick, tick])
+            else:
+                windows[-1][1] = tick
+        if state.player.dead or state.level_complete:
+            break
+    return tuple((start, end) for start, end in windows)
+
+
 def _load_bundled_replay(relative_path: str) -> tuple[Level, tuple[InputFrame, ...]]:
     combined = parse_combined_level_replay(
         (PROJECT_ROOT / relative_path).read_text(encoding="utf-8")
@@ -276,6 +304,39 @@ def test_native_auto_evaluation_exactly_matches_python_engine_reference(
         if expected_ticks[-1] != native.finish_tick:
             expected_ticks += (native.finish_tick,)
         assert tuple(point.tick for point in native.trace) == expected_ticks
+
+
+def test_native_step_result_and_analysis_expose_exact_jump_opportunities() -> None:
+    _require_native_auto()
+    level, frames = _load_bundled_replay("examples/replays/example_motherlode.txt")
+    working = tuple(editable_frames(frames)) + (NEUTRAL,)
+    native_module = require_native_search()
+    floor_map = list(EMPTY_MAP)
+    for column in range(31):
+        floor_map[column * 23 + 5] = "1"
+    native_state = native_module.parse_level_string(
+        "".join(floor_map) + "|5^60,134",
+    ).initial_state()
+
+    neutral = native_state.step(False, False, False, False)
+    triggered = native_state.step(False, False, True, True)
+    held = native_state.step(False, False, True, False)
+
+    assert neutral["jump_callable"] is True
+    assert triggered["jump_callable"] is True
+    assert triggered["jumped"] is True
+    assert held["jump_callable"] is False
+
+    analysis = NativeSearchSession(level).evaluate_replay(
+        working,
+        trace_stride=7,
+    )
+    expected = _python_jump_opportunity_windows(level, working)
+
+    # The opportunity data is dense even though ordinary trace points are not.
+    assert analysis.jump_opportunity_windows() == expected
+    assert len(analysis.jump_opportunity_windows()) > 1
+    assert analysis.to_dict()["jump_opportunity_windows"] == expected
 
 
 def test_native_auto_decoder_preserves_wide_gold_and_door_masks() -> None:

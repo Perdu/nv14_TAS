@@ -3830,6 +3830,7 @@ static void nv14_fill_step_result(
     const nv14_state *state,
     uint64_t frame_before,
     uint64_t jumps_before,
+    uint8_t jump_callable,
     nv14_status status,
     nv14_step_result *result_out
 )
@@ -3848,6 +3849,19 @@ static void nv14_fill_step_result(
     result_out->opened_exit = state->event_opened_exit;
     result_out->unsupported = status == NV14_STATUS_UNSUPPORTED_TILE ||
         status == NV14_STATUS_UNSUPPORTED_OBJECTS;
+    result_out->jump_callable = jump_callable;
+}
+
+static int nv14_player_jump_callable(const nv14_player_snapshot *player)
+{
+    int state = player->state;
+    if (state == NV14_PLAYER_CELEBRATING) return 0;
+    if (player->in_air) {
+        if (state < NV14_PLAYER_JUMPING || state == NV14_PLAYER_JUMPING)
+            return 0;
+        return player->near_wall != 0;
+    }
+    return state <= NV14_PLAYER_SKIDDING;
 }
 
 static nv14_status nv14_finish_player_step_internal(
@@ -3866,6 +3880,7 @@ static nv14_status nv14_finish_player_step_internal(
     size_t module_index;
     int horizontal;
     int jump_trigger;
+    uint8_t jump_callable = 0;
     nv14_player_snapshot alternate_player;
     int have_alternate = alternate_input != NULL;
     if (state == NULL) return NV14_STATUS_INVALID_ARGUMENT;
@@ -3887,12 +3902,16 @@ static nv14_status nv14_finish_player_step_internal(
         int collision_j;
         status = nv14_collide_circle_tiles(state);
         if (status != NV14_STATUS_OK) {
-            nv14_fill_step_result(state, frame_before, jumps_before, status, result_out);
+            nv14_fill_step_result(
+                state, frame_before, jumps_before, jump_callable, status, result_out
+            );
             return status;
         }
         status = nv14_player_handle_collisions(&state->player, state->level);
         if (status != NV14_STATUS_OK) {
-            nv14_fill_step_result(state, frame_before, jumps_before, status, result_out);
+            nv14_fill_step_result(
+                state, frame_before, jumps_before, jump_callable, status, result_out
+            );
             return status;
         }
         if (state->player.pos.x == pre_tile_x && state->player.pos.y == pre_tile_y) {
@@ -3908,6 +3927,7 @@ static nv14_status nv14_finish_player_step_internal(
                        state->player.pos.y, NV14_TILE_H, &state->player.cell_j)) {
             return NV14_STATUS_OUT_OF_BOUNDS;
         }
+        jump_callable = (uint8_t)nv14_player_jump_callable(&state->player);
         if (have_alternate) {
             int alternate_jump_trigger;
             int alternate_horizontal;
@@ -3944,7 +3964,8 @@ static nv14_status nv14_finish_player_step_internal(
             status = module->post_player(state);
             if (status != NV14_STATUS_OK) {
                 nv14_fill_step_result(
-                    state, frame_before, jumps_before, status, result_out
+                    state, frame_before, jumps_before, jump_callable,
+                    status, result_out
                 );
                 return status;
             }
@@ -3955,13 +3976,17 @@ static nv14_status nv14_finish_player_step_internal(
             hooks->userdata, NV14_HOOK_POST_PLAYER, state->level, state, &input
         );
         if (status != NV14_STATUS_OK) {
-            nv14_fill_step_result(state, frame_before, jumps_before, status, result_out);
+            nv14_fill_step_result(
+                state, frame_before, jumps_before, jump_callable, status, result_out
+            );
             return NV14_STATUS_HOOK_ERROR;
         }
     }
     ++state->frame;
     state->phase = 0;
-    nv14_fill_step_result(state, frame_before, jumps_before, NV14_STATUS_OK, result_out);
+    nv14_fill_step_result(
+        state, frame_before, jumps_before, jump_callable, NV14_STATUS_OK, result_out
+    );
     if (have_alternate) {
         memset(alternate_result_out, 0, sizeof(*alternate_result_out));
         alternate_result_out->frame_before = frame_before;
@@ -3975,6 +4000,7 @@ static nv14_status nv14_finish_player_step_internal(
         alternate_result_out->collected_gold = state->event_collected_gold;
         alternate_result_out->exploded_mine = state->event_exploded_mine;
         alternate_result_out->opened_exit = state->event_opened_exit;
+        alternate_result_out->jump_callable = jump_callable;
         *alternate_player_out = alternate_player;
     }
     return NV14_STATUS_OK;
@@ -4007,14 +4033,14 @@ static nv14_status nv14_state_step_internal(
     jumps_before = state->player.jump_events;
     if ((state->level->capabilities & NV14_CAP_TILE_COLLISION) == 0) {
         nv14_fill_step_result(state, frame_before, jumps_before,
-            NV14_STATUS_UNSUPPORTED_TILE, result_out);
+            0, NV14_STATUS_UNSUPPORTED_TILE, result_out);
         return NV14_STATUS_UNSUPPORTED_TILE;
     }
     if (state->level->unsupported_object_mask != 0) {
         if (hooks == NULL ||
             (hooks->flags & NV14_HOOK_SUPPORTS_DYNAMIC_OBJECTS) == 0) {
             nv14_fill_step_result(state, frame_before, jumps_before,
-                NV14_STATUS_UNSUPPORTED_OBJECTS, result_out);
+                0, NV14_STATUS_UNSUPPORTED_OBJECTS, result_out);
             return NV14_STATUS_UNSUPPORTED_OBJECTS;
         }
     }
@@ -4030,7 +4056,9 @@ static nv14_status nv14_state_step_internal(
         state->event_exploded_mine = 0;
         state->event_opened_exit = 0;
         ++state->frame;
-        nv14_fill_step_result(state, frame_before, jumps_before, NV14_STATUS_OK, result_out);
+        nv14_fill_step_result(
+            state, frame_before, jumps_before, 0, NV14_STATUS_OK, result_out
+        );
         return NV14_STATUS_OK;
     }
     if (hooks != NULL && hooks->callback != NULL) {
@@ -4134,6 +4162,7 @@ nv14_status nv14_internal_state_step_alternate(
             state,
             frame_before,
             jumps_before,
+            0,
             NV14_STATUS_UNSUPPORTED_TILE,
             primary_result_out
         );
@@ -4144,6 +4173,7 @@ nv14_status nv14_internal_state_step_alternate(
             state,
             frame_before,
             jumps_before,
+            0,
             NV14_STATUS_UNSUPPORTED_OBJECTS,
             primary_result_out
         );

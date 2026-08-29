@@ -78,6 +78,28 @@ _TRACE_EXIT_BIT_PENALTY = 8.0
 _TRACE_LOCKED_DOOR_BIT_PENALTY = 24.0
 _TRACE_TRAPDOOR_BIT_PENALTY = 24.0
 
+# Beam jump-mutation split when a replay already contains jump pulses.
+_BEAM_JUMP_DELETE_PROBABILITY = 0.15
+_BEAM_JUMP_INSERT_CUTOFF = 0.40
+
+# Conditional on choosing insertion, longer holds remain available without
+# making them common.  Integer weights avoid cumulative floating-point drift.
+_JUMP_INSERT_HOLD_WEIGHTS: tuple[tuple[int, int], ...] = (
+    (1, 120),
+    (2, 40),
+    (3, 20),
+    (6, 10),
+    (12, 5),
+    (20, 3),
+    (31, 2),
+)
+_JUMP_INSERT_COMPOUND_DIRECTION_PROBABILITY = 0.10
+_JUMP_INSERT_TRIGGER_DIRECTIONS = ("existing", "neutral", "left", "right")
+# Four equal tickets give an exact 50%/25%/25% split when a generated hold
+# reaches an existing pulse.  The draw comes from the insertion's isolated RNG
+# stream, so it cannot perturb the legacy beam schedule.
+_JUMP_INSERT_COLLISION_OUTCOMES = ("stop", "stop", "merge", "replace")
+
 
 _ACTIVE_NATIVE_SESSION: ContextVar[
     tuple[Level, NativeSearchSession | None] | None
@@ -1516,6 +1538,220 @@ def _jump_pulses(frames: Sequence[InputFrame]) -> tuple[tuple[int, int], ...]:
     return tuple(pulses)
 
 
+def _jump_insertion_opportunity_windows(
+    body: Sequence[InputFrame],
+    callable_windows: Iterable[tuple[int, int]],
+    *,
+    range_start: int,
+    range_end: int,
+) -> tuple[tuple[tuple[int, int], ...], ...]:
+    """Return safe insertion starts grouped into uniformly sampled windows.
+
+    Native windows identify exact post-collision, pre-Think frames at which a
+    fresh jump edge can call ``Player.jump()``.  This policy layer additionally
+    excludes starts which would extend a previous hold.  A start immediately
+    before the next pulse is also excluded because no positive hold can retain
+    the released separator required by the collision policy's ``stop`` branch.
+    Each returned item is ``(start, maximum_in_range_hold_length)``; a sampled
+    hold which reaches the next pulse is resolved later by the 50/25/25 policy.
+    """
+    if not body:
+        return ()
+    lower = max(0, range_start)
+    upper = min(range_end, len(body) - 1)
+    if lower > upper:
+        return ()
+
+    pulse_starts = tuple(start for start, _end in _jump_pulses(body))
+    next_pulse_index = 0
+    previous_tick: int | None = None
+    current: list[tuple[int, int]] = []
+    windows: list[tuple[tuple[int, int], ...]] = []
+
+    for raw_start, raw_end in callable_windows:
+        start = max(lower, int(raw_start))
+        end = min(upper, int(raw_end))
+        if start > end:
+            continue
+        for tick in range(start, end + 1):
+            # ``jump`` must be released now and on the preceding frame, so
+            # setting it produces a new rising edge rather than extending an
+            # existing pulse.
+            if body[tick].jump or (tick > 0 and body[tick - 1].jump):
+                continue
+            while (
+                next_pulse_index < len(pulse_starts)
+                and pulse_starts[next_pulse_index] <= tick
+            ):
+                next_pulse_index += 1
+            if next_pulse_index < len(pulse_starts):
+                # The 50% stop outcome needs at least the trigger frame and a
+                # released separator before the existing rising edge.
+                if pulse_starts[next_pulse_index] == tick + 1:
+                    continue
+            maximum_hold = upper - tick + 1
+            if maximum_hold < 1:
+                continue
+            opportunity = (tick, maximum_hold)
+            if previous_tick is None or tick != previous_tick + 1:
+                if current:
+                    windows.append(tuple(current))
+                current = [opportunity]
+            else:
+                current.append(opportunity)
+            previous_tick = tick
+    if current:
+        windows.append(tuple(current))
+    return tuple(windows)
+
+
+def _choose_jump_insertion_hold_length(
+    rng: random.Random,
+    maximum_hold: int,
+) -> int:
+    """Sample an enabled hold length which fits the configured edit range."""
+    choices = tuple(
+        (length, weight)
+        for length, weight in _JUMP_INSERT_HOLD_WEIGHTS
+        if length <= maximum_hold
+    )
+    if not choices:
+        raise ValueError("no configured jump-insertion hold fits this opportunity")
+    ticket = rng.randrange(sum(weight for _length, weight in choices))
+    for length, weight in choices:
+        if ticket < weight:
+            return length
+        ticket -= weight
+    raise AssertionError("weighted jump-insertion choice did not resolve")
+
+
+def _choose_jump_insertion_collision_outcome(rng: random.Random) -> str:
+    """Choose stop/merge/replace with exact 50%/25%/25% probabilities."""
+    return _JUMP_INSERT_COLLISION_OUTCOMES[
+        rng.randrange(len(_JUMP_INSERT_COLLISION_OUTCOMES))
+    ]
+
+
+def _mutate_jump_insertion_known(
+    body: Sequence[InputFrame],
+    start: int,
+    length: int,
+    rng: random.Random,
+) -> tuple[tuple[InputFrame, ...], int, str | None]:
+    """Insert one jump hold and resolve contact with the next source pulse.
+
+    The returned tuple contains the mutated replay (including its sentinel),
+    the final inserted/merged pulse length, and the randomly selected collision
+    outcome.  ``None`` means that the generated interval contained no existing
+    held-jump frame.  A merely adjacent interval is shortened by one frame to
+    retain a released separator without consuming a collision-policy draw.
+    """
+    if start < 0 or length < 1 or start + length > len(body):
+        raise ValueError("jump insertion lies outside the editable replay body")
+    if body[start].jump or (start > 0 and body[start - 1].jump):
+        raise ValueError("jump insertion does not create a new rising edge")
+
+    requested_end = start + length - 1
+    following_pulses = tuple(
+        (pulse_start, pulse_end)
+        for pulse_start, pulse_end in _jump_pulses(body)
+        if pulse_start > start
+    )
+    if not following_pulses or following_pulses[0][0] > requested_end + 1:
+        return (
+            _mutate_jump_interval_known(body, start, length, held=True),
+            length,
+            None,
+        )
+
+    next_start, next_end = following_pulses[0]
+    if next_start == requested_end + 1:
+        # The sampled interval does not contain the old pulse, so the random
+        # collision split does not apply.  Preserve the old rising edge.
+        separated_length = length - 1
+        if separated_length < 1:
+            raise ValueError("jump insertion has no room before the next pulse")
+        return (
+            _mutate_jump_interval_known(
+                body, start, separated_length, held=True
+            ),
+            separated_length,
+            None,
+        )
+
+    outcome = _choose_jump_insertion_collision_outcome(rng)
+    if outcome == "stop":
+        separated_length = next_start - start - 1
+        if separated_length < 1:
+            raise ValueError("jump insertion has no room before the next pulse")
+        return (
+            _mutate_jump_interval_known(
+                body, start, separated_length, held=True
+            ),
+            separated_length,
+            outcome,
+        )
+
+    result = list(body)
+    if outcome == "merge":
+        merged_end = min(next_end, start + 30)
+        for tick in range(start, merged_end + 1):
+            result[tick] = _jump_only_frame(result[tick], True)
+        # When the combined pulse would exceed 31 frames, remove the old
+        # pulse's tail so the merged hold actually ends at the cap.
+        for tick in range(merged_end + 1, next_end + 1):
+            result[tick] = _jump_only_frame(result[tick], False)
+        return (
+            tuple(result) + (NEUTRAL_INPUT,),
+            merged_end - start + 1,
+            outcome,
+        )
+
+    if outcome != "replace":
+        raise AssertionError(f"unknown jump-insertion collision outcome {outcome!r}")
+    # Remove every source pulse touched by the generated interval.  Also remove
+    # a pulse beginning immediately afterward, if any, so replacement cannot
+    # accidentally turn into a merge while retaining the sampled hold length.
+    for pulse_start, pulse_end in following_pulses:
+        if pulse_start > requested_end + 1:
+            break
+        for tick in range(pulse_start, pulse_end + 1):
+            result[tick] = _jump_only_frame(result[tick], False)
+    for tick in range(start, requested_end + 1):
+        result[tick] = _jump_only_frame(result[tick], True)
+    return tuple(result) + (NEUTRAL_INPUT,), length, outcome
+
+
+def _choose_jump_insertion_opportunity(
+    rng: random.Random,
+    windows: Sequence[Sequence[tuple[int, int]]],
+) -> tuple[int, int]:
+    """Choose one physical-opportunity window, then one start within it."""
+    if not windows:
+        raise ValueError("no jump-insertion opportunity windows")
+    window = windows[rng.randrange(len(windows))]
+    if not window:
+        raise ValueError("jump-insertion opportunity window is empty")
+    return window[rng.randrange(len(window))]
+
+
+def _jump_insertion_trigger_frame(
+    frame: InputFrame,
+    direction: str,
+) -> InputFrame:
+    """Set the optional insertion's horizontal input on its rising edge."""
+    if direction == "existing":
+        return InputFrame(frame.left, frame.right, True, None)
+    horizontal = {
+        "neutral": 0,
+        "left": -1,
+        "right": 1,
+    }.get(direction)
+    if horizontal is None:
+        raise ValueError(f"unknown jump-insertion trigger direction {direction!r}")
+    return InputFrame(horizontal < 0, horizontal > 0, True, None)
+
+
 def mutate_jump_pulse(
     working_frames: Sequence[InputFrame],
     pulse_index: int,
@@ -1633,6 +1869,20 @@ def _derive_repair_search_rng(
         payload,
         digest_size=16,
         person=b"nv14-repair-v1",
+    ).digest()
+    return random.Random(int.from_bytes(digest, "big"))
+
+
+def _derive_beam_jump_insertion_rng(
+    master_seed: int,
+    attempt_number: int,
+) -> random.Random:
+    """Isolate new insertion detail from the legacy beam RNG schedule."""
+    payload = f"{master_seed}\0{attempt_number}".encode("utf-8")
+    digest = hashlib.blake2b(
+        payload,
+        digest_size=16,
+        person=b"nv14-jumpinsert",
     ).digest()
     return random.Random(int.from_bytes(digest, "big"))
 
@@ -3579,6 +3829,7 @@ class _AutonomousSearch:
         self.seen: set[bytes] = {source_replay_key}
         self.diagnostics = list(prepared.diagnostics)
         self.rng = random.Random(config.seed)
+        self.beam_jump_insertion_attempts = 0
         self.gold_repair_seen: set[tuple[bytes, int]] = set()
         self.counters = {
             "macro_candidates": 0,
@@ -5255,13 +5506,8 @@ class _AutonomousSearch:
         body = parent.working_frames[:-1]
         pulses = _jump_pulses(body)
         upper = min(self.range_end, len(body) - 1)
-        released = tuple(
-            tick
-            for tick in range(self.config.range_start, upper + 1)
-            if not body[tick].jump
-        )
         action = self.rng.random()
-        if pulses and action < 0.15:
+        if pulses and action < _BEAM_JUMP_DELETE_PROBABILITY:
             pulse_index = self.rng.randrange(len(pulses))
             start, end = pulses[pulse_index]
             try:
@@ -5277,57 +5523,124 @@ class _AutonomousSearch:
                 f"jump pulse {pulse_index} delete "
                 f"{start}+{end - start + 1}"
             )
-        elif released and (not pulses or action < 0.40):
-            # Weighted short insertion from integrated v2.8, factorised so the
-            # horizontal channel remains byte-for-byte unchanged.
-            start = released[self.rng.randrange(len(released))]
-            available = 0
-            while (
-                available < 3
-                and start + available < len(body)
-                and not body[start + available].jump
-            ):
-                available += 1
-            roll = self.rng.random()
-            requested = 1 if roll < 0.70 else 2 if roll < 0.94 else 3
-            length = min(requested, available)
-            try:
-                changed = mutate_jump_interval(
-                    parent.working_frames,
-                    start,
-                    length,
-                    held=True,
-                )
-            except ValueError:
-                return False
-            description = f"jump pulse insert {start}+{length}"
         else:
-            if not pulses:
-                return False
-            pulse_index = self.rng.randrange(len(pulses))
-            start_delta = self.rng.randint(
-                -self.config.max_jump_shift,
-                self.config.max_jump_shift,
+            inserted = False
+            insertion_selected = (
+                not pulses or action < _BEAM_JUMP_INSERT_CUTOFF
             )
-            hold_delta = self.rng.randint(
-                -self.config.max_jump_hold_delta,
-                self.config.max_jump_hold_delta,
-            )
-            if start_delta == 0 and hold_delta == 0:
-                return False
-            try:
-                changed = mutate_jump_pulse(
-                    parent.working_frames,
-                    pulse_index,
-                    start_delta=start_delta,
-                    hold_delta=hold_delta,
+            if insertion_selected:
+                # Preserve the established beam RNG stream for all other
+                # operators: v2.87's insertion branch consumed one start draw
+                # and one short-hold draw after ``action``. New policy detail
+                # is sampled from a stable per-attempt substream instead.
+                released_count = sum(
+                    not body[tick].jump
+                    for tick in range(self.config.range_start, upper + 1)
                 )
-            except ValueError:
-                return False
-            description = (
-                f"jump pulse {pulse_index} start {start_delta:+d} "
-                f"hold {hold_delta:+d}"
-            )
+                if released_count:
+                    self.rng.randrange(released_count)
+                    self.rng.random()
+                    attempt_number = self.beam_jump_insertion_attempts
+                    self.beam_jump_insertion_attempts += 1
+                    jump_rng = _derive_beam_jump_insertion_rng(
+                        self.config.seed,
+                        attempt_number,
+                    )
+                else:
+                    jump_rng = None
+                if jump_rng is not None:
+                    analysis = _native_trace_analysis(parent.evaluation)
+                    opportunity_query = (
+                        None
+                        if analysis is None
+                        else getattr(analysis, "jump_opportunity_windows", None)
+                    )
+                    if not callable(opportunity_query):
+                        raise RuntimeError(
+                            "the installed native replay-analysis kernel does not "
+                            "expose jump opportunities; run 'python build_native.py'"
+                        )
+                    opportunity_windows = _jump_insertion_opportunity_windows(
+                        body,
+                        opportunity_query(),
+                        range_start=self.config.range_start,
+                        range_end=upper,
+                    )
+                    if not opportunity_windows:
+                        # The previous policy would have tried one released
+                        # frame; do not replace an unavailable legal insertion
+                        # with an unrelated pulse move.
+                        return False
+                    # Pick the physical opportunity class first so a long
+                    # grounded run cannot drown out short wall/corner contacts.
+                    start, maximum_hold = _choose_jump_insertion_opportunity(
+                        jump_rng, opportunity_windows
+                    )
+                    length = _choose_jump_insertion_hold_length(
+                        jump_rng, maximum_hold
+                    )
+                    try:
+                        changed, final_length, collision_outcome = (
+                            _mutate_jump_insertion_known(
+                                body,
+                                start,
+                                length,
+                                jump_rng,
+                            )
+                        )
+                    except ValueError:
+                        return False
+                    description = f"jump pulse insert {start}+{final_length}"
+                    if collision_outcome is not None:
+                        description += (
+                            f" collision {collision_outcome}"
+                            f" (sampled {length})"
+                        )
+                    if (
+                        jump_rng.random()
+                        < _JUMP_INSERT_COMPOUND_DIRECTION_PROBABILITY
+                    ):
+                        direction = _JUMP_INSERT_TRIGGER_DIRECTIONS[
+                            jump_rng.randrange(
+                                len(_JUMP_INSERT_TRIGGER_DIRECTIONS)
+                            )
+                        ]
+                        changed_list = list(changed)
+                        changed_list[start] = _jump_insertion_trigger_frame(
+                            changed_list[start], direction
+                        )
+                        changed = tuple(changed_list)
+                        description += f" trigger {direction}"
+                    inserted = True
+                elif not pulses:
+                    return False
+            if not inserted:
+                if not pulses:
+                    return False
+                pulse_index = self.rng.randrange(len(pulses))
+                start_delta = self.rng.randint(
+                    -self.config.max_jump_shift,
+                    self.config.max_jump_shift,
+                )
+                hold_delta = self.rng.randint(
+                    -self.config.max_jump_hold_delta,
+                    self.config.max_jump_hold_delta,
+                )
+                if start_delta == 0 and hold_delta == 0:
+                    return False
+                try:
+                    changed = mutate_jump_pulse(
+                        parent.working_frames,
+                        pulse_index,
+                        start_delta=start_delta,
+                        hold_delta=hold_delta,
+                    )
+                except ValueError:
+                    return False
+                description = (
+                    f"jump pulse {pulse_index} start {start_delta:+d} "
+                    f"hold {hold_delta:+d}"
+                )
         if not self._mutation_allowed(
             _first_changed_frame(parent.working_frames, changed)
         ):

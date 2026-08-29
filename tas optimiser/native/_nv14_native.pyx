@@ -136,7 +136,7 @@ cdef extern from "nv14_core.h":
         uint8_t exploded_mine
         uint8_t opened_exit
         uint8_t unsupported
-        uint8_t reserved
+        uint8_t jump_callable
 
     nv14_level *nv14_level_create(
         const char *level_string,
@@ -359,6 +359,7 @@ cdef dict _step_result_dict(const nv14_step_result *result):
         "exploded_mine": bool(result.exploded_mine),
         "opened_exit": bool(result.opened_exit),
         "unsupported": bool(result.unsupported),
+        "jump_callable": bool(result.jump_callable),
     }
 
 
@@ -1088,6 +1089,10 @@ cdef extern from "nv14_auto.h":
         size_t gold_index
         uint64_t tick
 
+    ctypedef struct nv14_replay_tick_window:
+        uint64_t start_tick
+        uint64_t end_tick
+
     ctypedef struct nv14_replay_route_event:
         size_t index
         uint64_t tick
@@ -1125,6 +1130,8 @@ cdef extern from "nv14_auto.h":
         size_t jump_edge_count
         uint64_t *missed_jump_edges
         size_t missed_jump_edge_count
+        nv14_replay_tick_window *jump_callable_windows
+        size_t jump_callable_window_count
         nv14_replay_gold_event *gold_events
         size_t gold_event_count
         nv14_replay_route_event *route_control_events
@@ -2601,6 +2608,17 @@ cdef class NativeTrace:
             self._result.missed_jump_edge_count,
         )
 
+    def jump_opportunity_windows(self):
+        """Return exact inclusive pre-Think ranges that can invoke ``jump()``."""
+        cdef list windows = []
+        cdef size_t index
+        for index in range(self._result.jump_callable_window_count):
+            windows.append((
+                self._result.jump_callable_windows[index].start_tick,
+                self._result.jump_callable_windows[index].end_tick,
+            ))
+        return tuple(windows)
+
     def gold_events(self):
         cdef list events = []
         cdef size_t index
@@ -2789,6 +2807,7 @@ cdef class NativeTrace:
             "successful_jumps": self.successful_jumps(),
             "jump_edges": self.jump_edges(),
             "missed_jump_edges": self.missed_jump_edges(),
+            "jump_opportunity_windows": self.jump_opportunity_windows(),
             "gold_events": self.gold_events(),
             "route_control_events": self.route_control_events(),
             "final_gold_mask": _words_to_int(
@@ -3446,7 +3465,7 @@ def search_backend_info():
     """Return ABI metadata for search APIs in this unified extension."""
     return {
         "available": True,
-        "wrapper_api": 5,
+        "wrapper_api": 6,
         "search_abi": NV14_SEARCH_ABI_VERSION,
         "patch_abi": NV14_PATCH_ABI_VERSION,
         "trace_abi": NV14_REPLAY_TRACE_ABI_VERSION,

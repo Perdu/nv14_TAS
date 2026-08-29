@@ -161,7 +161,8 @@ typedef struct nv14_step_result {
     uint8_t exploded_mine;
     uint8_t opened_exit;
     uint8_t unsupported;
-    uint8_t reserved;
+    /* Set when a fresh jump edge at this tick would call Player.jump(). */
+    uint8_t jump_callable;
 } nv14_step_result;
 
 typedef enum nv14_hook_phase {
