@@ -61,7 +61,7 @@ And more.
 - Extract ninja state https://discord.com/channels/197765375503368192/199460839252688896/1465895994767183942
 - Use AI-generated bruteforcer an all levels
 - speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
-- TAS the remaining 169 levels ;)
+- TAS the remaining 168 levels ;)
 
 ## Install
 

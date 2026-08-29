@@ -1991,7 +1991,7 @@ When falling from the top section jumping was overall slower
 For the third locked door key jumping on the lower slope was slower
 
 # 88-4
-rerecords: 1219
+rerecords: 1220
 
 
 
@@ -2022,6 +2022,16 @@ rerecords: 100
 We're 0.18 pixels away from saving 1f. We can't make the third pipe jump earlier as all possible angles lead to an unclean landing
 
 I can't land a proper cj on the way to the switch that's actually faster
+
+# 91-2
+rerecords: 0
+
+
+
+# 92-1
+rerecords: 0
+
+
 
 # 92-2
 rerecords: 161
@@ -2083,4 +2093,4 @@ Corner jump + reverse corner jump in the end is slower
 # 99-9
 
 
-# Total rerecords: 241528
+# Total rerecords: 241529
