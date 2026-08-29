@@ -8,6 +8,8 @@ FROM debian:12 AS ruffle-builder
           pkg-config \
           libasound2-dev \
           libudev-dev \
+          libfontconfig-dev \
+          libssl-dev \
           default-jre-headless \
           g++ \
           curl
