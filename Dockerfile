@@ -16,8 +16,8 @@ FROM debian:12 AS ruffle-builder
   # Installs
     RUN mkdir /root/src
     # pin version
-    ARG RUFFLE_VERSION=nightly-2026-05-16
-    RUN cd /root/src && git clone https://github.com/ruffle-rs/ruffle.git && cd ruffle && git checkout $RUFFLE_VERSION
+    ARG RUFFLE_VERSION=pr-24565
+    RUN cd /root/src && git clone https://github.com/ruffle-rs/ruffle.git && cd ruffle && git fetch origin pull/24565/head:pr-24565 && git checkout $RUFFLE_VERSION
     WORKDIR /root/src/ruffle
     ENV PATH="/root/.cargo/bin:${PATH}"
     RUN cargo build --release --package=ruffle_desktop
