@@ -18,9 +18,10 @@ import hashlib
 import math
 import operator
 import random
+from bisect import bisect_left, bisect_right
 from collections.abc import Callable, Iterable, Sequence
 from contextvars import ContextVar
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from nv14_engine import (
     InputFrame,
@@ -52,6 +53,7 @@ from nv14_search import (
     SearchSpec,
     TraceTargetSpec,
 )
+from nv14_splice_index import PreparedSpliceTrace
 
 NEUTRAL_INPUT = InputFrame(False, False, False, None)
 AUTO_OBJECTIVE_SPEEDRUN = "speedrun"
@@ -133,6 +135,8 @@ class AutoConfig:
     repair_search_order: str = AUTO_REPAIR_SEARCH_ORDER_RANDOM
     frame_ahead_repair_multiplier: int = 10
     repair_campaign_local_limit: int = 10_000
+    beam_repair_revisit_limit: int = 2
+    splice_repair_revisit_limit: int = 3
     trace_stride: int = 1
     max_jump_shift: int = 3
     max_jump_hold_delta: int = 3
@@ -172,6 +176,10 @@ class AutoConfig:
             raise ValueError("frame_ahead_repair_multiplier must be at least 1")
         if self.repair_campaign_local_limit < 0:
             raise ValueError("repair_campaign_local_limit must be non-negative")
+        if self.beam_repair_revisit_limit < 1:
+            raise ValueError("beam_repair_revisit_limit must be positive")
+        if self.splice_repair_revisit_limit < 1:
+            raise ValueError("splice_repair_revisit_limit must be positive")
         if self.trace_stride != 1:
             raise ValueError(
                 "trace_stride must be 1 so stable frame-to-frame alignment remains available"
@@ -562,6 +570,342 @@ class AlignmentMatch:
 
 
 @dataclass(frozen=True, slots=True)
+class SpliceAlignmentSpec:
+    """Policy for finding stable inter-run splice anchor corridors.
+
+    Tick ranges and frame offsets are inclusive.  ``None`` leaves that side
+    unbounded by policy, although the captured trajectories still provide the
+    natural bound.  Gold is deliberately not a hard route key: it does not
+    normally affect player physics, and the returned runs retain exact gold
+    state/score information for highscore prediction and final verification.
+    """
+
+    minimum_run_length: int = 4
+    position_tolerance: float = 3.0
+    velocity_tolerance: float = 0.75
+    position_weight: float = _TRACE_POSITION_WEIGHT
+    velocity_weight: float = _TRACE_VELOCITY_WEIGHT
+    recipient_start_tick: int = 0
+    recipient_end_tick: int | None = None
+    donor_start_tick: int = 0
+    donor_end_tick: int | None = None
+    minimum_frame_offset: int | None = None
+    maximum_frame_offset: int | None = None
+    objective: str = AUTO_OBJECTIVE_SPEEDRUN
+
+    def __post_init__(self) -> None:
+        if self.minimum_run_length < 2:
+            raise ValueError("minimum_run_length must be at least 2")
+        for name, value in (
+            ("position_tolerance", self.position_tolerance),
+            ("velocity_tolerance", self.velocity_tolerance),
+            ("position_weight", self.position_weight),
+            ("velocity_weight", self.velocity_weight),
+        ):
+            if not math.isfinite(value) or value < 0.0:
+                raise ValueError(f"{name} must be finite and non-negative")
+        if self.recipient_start_tick < 0 or self.donor_start_tick < 0:
+            raise ValueError("splice trajectory start ticks must be non-negative")
+        if (
+            self.recipient_end_tick is not None
+            and self.recipient_end_tick < self.recipient_start_tick
+        ):
+            raise ValueError(
+                "recipient_end_tick must be at least recipient_start_tick"
+            )
+        if (
+            self.donor_end_tick is not None
+            and self.donor_end_tick < self.donor_start_tick
+        ):
+            raise ValueError("donor_end_tick must be at least donor_start_tick")
+        if (
+            self.minimum_frame_offset is not None
+            and self.maximum_frame_offset is not None
+            and self.maximum_frame_offset < self.minimum_frame_offset
+        ):
+            raise ValueError(
+                "maximum_frame_offset must be at least minimum_frame_offset"
+            )
+        if self.objective not in AUTO_OBJECTIVES:
+            raise ValueError(
+                "objective must be one of: " + ", ".join(AUTO_OBJECTIVES)
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class SpliceAnchorRun:
+    """One maximal stable match corridor between recipient and donor runs."""
+
+    recipient_start_tick: int
+    recipient_end_tick: int
+    donor_start_tick: int
+    donor_end_tick: int
+    frame_offset: int
+    best_recipient_tick: int
+    best_donor_tick: int
+    best_match_cost: float
+    mean_match_cost: float
+    best_position_error: float
+    best_velocity_error: float
+    max_position_error: float
+    max_velocity_error: float
+    gold_matches_throughout: bool
+    recipient_gold_mask_start: int
+    recipient_gold_mask_end: int
+    donor_gold_mask_start: int
+    donor_gold_mask_end: int
+    recipient_gold_bonus_start: int
+    recipient_gold_bonus_end: int
+    donor_gold_bonus_start: int
+    donor_gold_bonus_end: int
+
+    @property
+    def length(self) -> int:
+        return self.recipient_end_tick - self.recipient_start_tick + 1
+
+    @property
+    def donor_gold_bonus_change(self) -> int:
+        return self.donor_gold_bonus_end - self.donor_gold_bonus_start
+
+    @property
+    def recipient_gold_bonus_change(self) -> int:
+        return self.recipient_gold_bonus_end - self.recipient_gold_bonus_start
+
+    @property
+    def corridor_gold_bonus_delta(self) -> int:
+        """Gold-score change from replacing the complete recipient corridor."""
+        return self.donor_gold_bonus_change - self.recipient_gold_bonus_change
+
+
+@dataclass(frozen=True, slots=True)
+class SplicePlanSpec:
+    """Screening, joint ranking and deduplication policy for donor sections.
+
+    ``minimum_section_length`` applies to both replay spans.  Speedrun plans
+    must meet ``minimum_predicted_gain``.  Highscore plans may fall below that
+    threshold only when extra donor gold makes the local score gain meet
+    ``minimum_highscore_gain``.  The remaining weights score the entry and
+    exit as one decision.  A zero weight or lookahead disables that component.
+    """
+
+    minimum_section_length: int = 12
+    minimum_predicted_gain: int = 1
+    minimum_highscore_gain: int = 1
+    deduplication_tick_bucket: int = 12
+    deduplication_gain_bucket: int = 1
+    plans_per_bucket: int = 2
+    predicted_gain_weight: float = 16.0
+    route_state_penalty_weight: float = 1.0
+    jump_proximity_weight: float = 8.0
+    input_mismatch_weight: float = 2.0
+    corridor_support_weight: float = 4.0
+    section_length_risk_weight: float = 0.01
+    jump_rising_edge_lookahead: int = 4
+    input_similarity_lookahead: int = 6
+    objective: str = AUTO_OBJECTIVE_SPEEDRUN
+
+    def __post_init__(self) -> None:
+        if self.minimum_section_length < 1:
+            raise ValueError("minimum_section_length must be positive")
+        if self.minimum_predicted_gain < 1:
+            raise ValueError("minimum_predicted_gain must be positive")
+        if self.minimum_highscore_gain < 1:
+            raise ValueError("minimum_highscore_gain must be positive")
+        if self.deduplication_tick_bucket < 1:
+            raise ValueError("deduplication_tick_bucket must be positive")
+        if self.deduplication_gain_bucket < 1:
+            raise ValueError("deduplication_gain_bucket must be positive")
+        if not 1 <= self.plans_per_bucket <= 2:
+            raise ValueError("plans_per_bucket must be one or two")
+        if (
+            not math.isfinite(self.predicted_gain_weight)
+            or self.predicted_gain_weight <= 0.0
+        ):
+            raise ValueError("predicted_gain_weight must be finite and positive")
+        for name, value in (
+            ("route_state_penalty_weight", self.route_state_penalty_weight),
+            ("jump_proximity_weight", self.jump_proximity_weight),
+            ("input_mismatch_weight", self.input_mismatch_weight),
+            ("corridor_support_weight", self.corridor_support_weight),
+            ("section_length_risk_weight", self.section_length_risk_weight),
+        ):
+            if not math.isfinite(value) or value < 0.0:
+                raise ValueError(f"{name} must be finite and non-negative")
+        if self.jump_rising_edge_lookahead < 0:
+            raise ValueError("jump_rising_edge_lookahead must be non-negative")
+        if self.input_similarity_lookahead < 0:
+            raise ValueError("input_similarity_lookahead must be non-negative")
+        if self.objective not in AUTO_OBJECTIVES:
+            raise ValueError(
+                "objective must be one of: " + ", ".join(AUTO_OBJECTIVES)
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class SpliceSectionPlan:
+    """One locally beneficial donor section bounded by stable anchors."""
+
+    recipient_entry_tick: int
+    donor_entry_tick: int
+    recipient_exit_tick: int
+    donor_exit_tick: int
+    predicted_time_gain: int
+    recipient_section_length: int
+    donor_section_length: int
+    recipient_gold_bonus_gained: int
+    donor_gold_bonus_gained: int
+    local_gold_bonus_delta: int
+    local_score_gain: int
+    entry_match_cost: float
+    exit_match_cost: float
+    entry_mismatch_cost: float
+    exit_mismatch_cost: float
+    entry_position_error: float
+    entry_velocity_error: float
+    exit_position_error: float
+    exit_velocity_error: float
+    entry_corridor_support: int
+    exit_corridor_support: int
+    route_state_penalty: float
+    jump_proximity_penalty: float
+    input_mismatch_penalty: float
+    corridor_support_penalty: float
+    seam_sensitivity_penalty: float
+    section_length_risk_penalty: float
+    plan_utility: float
+    entry_anchor_run: SpliceAnchorRun
+    exit_anchor_run: SpliceAnchorRun
+
+    @property
+    def predicted_gain(self) -> int:
+        """Concise alias for the donor's local predicted time gain."""
+        return self.predicted_time_gain
+
+    @property
+    def combined_match_cost(self) -> float:
+        return self.entry_match_cost + self.exit_match_cost
+
+    @property
+    def combined_mismatch_cost(self) -> float:
+        """Full trace-distance cost used by the joint plan utility."""
+        return self.entry_mismatch_cost + self.exit_mismatch_cost
+
+    def objective_gain(self, objective: str) -> int:
+        if objective == AUTO_OBJECTIVE_SPEEDRUN:
+            return self.predicted_time_gain
+        if objective == AUTO_OBJECTIVE_HIGHSCORE:
+            return self.local_score_gain
+        raise ValueError(
+            "objective must be one of: " + ", ".join(AUTO_OBJECTIVES)
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PiecewiseReferenceLeg:
+    """One inclusive child-tick interval mapped to one reference trajectory.
+
+    The mapping follows Auto's existing convention::
+
+        reference_tick = candidate_tick + reference_offset
+
+    ``child_end=None`` leaves the final leg open ended.  Adjacent legs are
+    deliberately non-overlapping so an event at a splice anchor is mapped from
+    the input stream which actually produced that child state.
+    """
+
+    child_start: int
+    child_end: int | None
+    reference: AutoEvaluation
+    reference_offset: int
+
+    def __post_init__(self) -> None:
+        if self.child_start < 0:
+            raise ValueError("piecewise reference child_start must be non-negative")
+        if self.child_end is not None and self.child_end < self.child_start:
+            raise ValueError(
+                "piecewise reference child_end must be at least child_start"
+            )
+        if not isinstance(self.reference, AutoEvaluation):
+            raise TypeError("piecewise reference must be an AutoEvaluation")
+        if self.child_start + self.reference_offset < 0:
+            raise ValueError(
+                "piecewise reference maps child_start before reference tick zero"
+            )
+
+    def contains(self, child_tick: int) -> bool:
+        return child_tick >= self.child_start and (
+            self.child_end is None or child_tick <= self.child_end
+        )
+
+    def reference_tick(self, child_tick: int) -> int:
+        if not self.contains(child_tick):
+            raise ValueError("child tick lies outside this piecewise reference leg")
+        return child_tick + self.reference_offset
+
+
+@dataclass(frozen=True, slots=True)
+class SpliceRepairSpec:
+    """Campaign policy layered over Auto's existing local-repair settings."""
+
+    initial_bridge_window: int = 6
+    maximum_bridge_window: int = 24
+    bridge_growth_factor: int = 2
+    failure_region_size: int = 8
+    failure_region_revisit_limit: int = 3
+    alignment_run_length: int = 2
+
+    def __post_init__(self) -> None:
+        if self.initial_bridge_window < 1:
+            raise ValueError("initial_bridge_window must be positive")
+        if self.maximum_bridge_window < self.initial_bridge_window:
+            raise ValueError(
+                "maximum_bridge_window must be at least initial_bridge_window"
+            )
+        if self.bridge_growth_factor < 2:
+            raise ValueError("bridge_growth_factor must be at least two")
+        if self.failure_region_size < 1:
+            raise ValueError("failure_region_size must be positive")
+        if self.failure_region_revisit_limit < 1:
+            raise ValueError("failure_region_revisit_limit must be positive")
+        if self.alignment_run_length < 2:
+            raise ValueError("alignment_run_length must be at least two")
+
+
+@dataclass(frozen=True, slots=True)
+class SpliceGoldPrediction:
+    """Cheap objective prediction for a proposed two-anchor splice."""
+
+    final_gold_mask: int
+    gold_bonus_ticks: int
+    gold_bonus_delta: int
+    finish_tick_delta: int
+    missing_required_gold_mask: int
+
+    @property
+    def preserves_required_gold(self) -> bool:
+        return self.missing_required_gold_mask == 0
+
+    @property
+    def speedrun_objective_delta(self) -> int:
+        """Predicted change on Auto's larger-is-better speedrun scale."""
+        return -self.finish_tick_delta
+
+    @property
+    def highscore_objective_delta(self) -> int:
+        """Predicted change in ``gold bonus - finish tick``."""
+        return self.gold_bonus_delta - self.finish_tick_delta
+
+    def objective_delta(self, objective: str) -> int:
+        if objective == AUTO_OBJECTIVE_SPEEDRUN:
+            return self.speedrun_objective_delta
+        if objective == AUTO_OBJECTIVE_HIGHSCORE:
+            return self.highscore_objective_delta
+        raise ValueError(
+            "objective must be one of: " + ", ".join(AUTO_OBJECTIVES)
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GoldCollectionEvent:
     gold_index: int
     tick: int
@@ -638,6 +982,26 @@ class AutoCandidate:
     @property
     def output_valid(self) -> bool:
         return self.evaluation.valid and self.sentinel_verified
+
+
+@dataclass(frozen=True, slots=True)
+class SpliceRepairResult:
+    """Outcome of simulating and, when needed, repairing one bounded splice."""
+
+    raw_candidate: AutoCandidate
+    candidate: AutoCandidate
+    piecewise_reference: tuple[PiecewiseReferenceLeg, ...]
+    accepted: bool
+    attempts: int
+    local_simulations: int
+    failure_regions: tuple[int, ...]
+    frame_ahead_seen: bool
+    diagnostics: tuple[str, ...] = ()
+    rejection_reason: str | None = None
+
+    @property
+    def accepted_candidate(self) -> AutoCandidate | None:
+        return self.candidate if self.accepted else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -744,6 +1108,54 @@ class _RepairFrontier:
     failure_regions: tuple[int, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class _RepairAttemptOutcome:
+    """Local-search proposal and accounting produced by _RepairController."""
+
+    working_frames: tuple[InputFrame, ...] | None
+    repair_method: str | None
+    failure_tick: int
+    label: str
+    local_branches: int
+    local_simulations: int
+    jump_repair_attempts: int
+    all_input_repairs: int
+    route_control_repair: bool
+    route_control_target: RouteControlRepairTarget | None
+    frame_ahead_active: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _SpliceProgressSnapshot:
+    first_failure: int
+    last_tick: int
+    exit_alignment_distance: float
+    suffix_lead: int | None
+    mapped_misses: tuple[int, ...]
+    route_control_target: RouteControlRepairTarget | None
+    frame_ahead: bool
+
+
+@dataclass(slots=True)
+class _SpliceRepairFrontier:
+    """One bounded-splice candidate advanced across its three references."""
+
+    candidate: AutoCandidate
+    splice_plan: SpliceSectionPlan
+    piecewise_reference: tuple[PiecewiseReferenceLeg, ...]
+    predicted_gain: int
+    progress_snapshot: _SpliceProgressSnapshot
+    failure_regions: tuple[int, ...] = ()
+    attempts: int = 0
+    local_simulations: int = 0
+    frame_ahead_seen: bool = False
+    entry_bridge_window: int = 0
+    exit_bridge_window: int = 0
+    inherited_misses: tuple[int, ...] = ()
+    seen_replays: set[bytes] = field(default_factory=set)
+    diagnostics: list[str] = field(default_factory=list)
+
+
 def _has_measured_frame_lead(candidate: AutoCandidate) -> bool:
     """Return whether trajectory alignment places the candidate ahead in time."""
     return candidate.alignment is not None and candidate.alignment.offset > 0
@@ -799,6 +1211,35 @@ def auto_objective_value(evaluation: AutoEvaluation, objective: str) -> int | No
     if objective == AUTO_OBJECTIVE_HIGHSCORE:
         return evaluation.gold_bonus_ticks - evaluation.finish_tick
     return -evaluation.finish_tick
+
+
+def auto_candidate_outcome_key(
+    candidate: AutoCandidate,
+    objective: str,
+) -> tuple[int | float, ...]:
+    """Return Auto's persisted completed-run ordering for one candidate.
+
+    This deliberately differs from the internal beam ordering: once a replay
+    can be written, the complete objective is primary and the pre-sentinel
+    exit distance is the deterministic same-objective tie-break.  Keeping the
+    comparison here lets section-splice repair use precisely the same rule as
+    the multi-worker population coordinator.
+    """
+    evaluation = candidate.evaluation
+    if not candidate.output_valid or evaluation.finish_tick is None:
+        return (1, float("inf"), float("inf"))
+    proximity = evaluation.pre_finish_exit_distance
+    if proximity is None or not math.isfinite(proximity):
+        proximity = float("inf")
+    if objective == AUTO_OBJECTIVE_HIGHSCORE:
+        value = auto_objective_value(evaluation, objective)
+        assert value is not None
+        return (0, -value, proximity)
+    if objective == AUTO_OBJECTIVE_SPEEDRUN:
+        return (0, evaluation.finish_tick, proximity)
+    raise ValueError(
+        "objective must be one of: " + ", ".join(AUTO_OBJECTIVES)
+    )
 
 
 def _gold_requirement_satisfied(
@@ -1119,6 +1560,1235 @@ def _alignment_route_matches(
     bit = 1 << completed_exit_index
     return not (
         reference.open_exit_mask & bit and not candidate.open_exit_mask & bit
+    )
+
+
+def _splice_trace_points(analysis: object) -> tuple[CompactTracePoint, ...]:
+    """Materialise the small public trace needed by an inter-run scan."""
+    if isinstance(analysis, PreparedSpliceTrace):
+        # Prepared round members already own a sorted, public Python trace.
+        # Returning it directly is the critical no-rematerialisation path for
+        # every ordered pair and every plan-level gold prediction.
+        return analysis.trace  # type: ignore[return-value]
+    if isinstance(analysis, AutoEvaluation):
+        return analysis.materialize_trace()
+    if isinstance(analysis, _NativeTraceView):
+        return analysis.materialize()
+    materialize = getattr(analysis, "materialize_trace", None)
+    if callable(materialize):
+        raw_trace = materialize()
+    elif isinstance(analysis, Sequence):
+        raw_trace = analysis
+    else:
+        raise TypeError(
+            "splice analysis must expose materialize_trace() or be a trace sequence"
+        )
+    points: list[CompactTracePoint] = []
+    for row in raw_trace:
+        if isinstance(row, CompactTracePoint):
+            points.append(row)
+            continue
+        if not isinstance(row, Sequence) or len(row) < 21:
+            raise TypeError("splice analysis returned an invalid trace row")
+        points.append(_compact_trace_point(row))
+    points.sort(key=lambda point: point.tick)
+    return tuple(points)
+
+
+def _splice_match_key(point: CompactTracePoint) -> tuple:
+    """Exact contact and future-affecting non-gold route state."""
+    return (
+        point.contact_key,
+        point.exploded_mine_mask,
+        point.open_exit_mask,
+        point.opened_locked_door_mask,
+        point.triggered_trapdoor_mask,
+    )
+
+
+def _splice_match_metrics(
+    recipient: CompactTracePoint,
+    donor: CompactTracePoint,
+    spec: SpliceAlignmentSpec,
+) -> tuple[float, float, float] | None:
+    """Return kinematic errors/cost when a frame pair is splice-compatible."""
+    if (
+        recipient.dead
+        or recipient.complete
+        or donor.dead
+        or donor.complete
+        or _splice_match_key(recipient) != _splice_match_key(donor)
+    ):
+        return None
+    values = (
+        recipient.x,
+        recipient.y,
+        recipient.vx,
+        recipient.vy,
+        donor.x,
+        donor.y,
+        donor.vx,
+        donor.vy,
+    )
+    if not all(math.isfinite(value) for value in values):
+        return None
+    dx = recipient.x - donor.x
+    dy = recipient.y - donor.y
+    if (
+        abs(dx) > spec.position_tolerance
+        or abs(dy) > spec.position_tolerance
+    ):
+        return None
+    position_error = math.hypot(dx, dy)
+    if position_error > spec.position_tolerance:
+        return None
+    dvx = recipient.vx - donor.vx
+    dvy = recipient.vy - donor.vy
+    if (
+        abs(dvx) > spec.velocity_tolerance
+        or abs(dvy) > spec.velocity_tolerance
+    ):
+        return None
+    velocity_error = math.hypot(dvx, dvy)
+    if velocity_error > spec.velocity_tolerance:
+        return None
+    match_cost = (
+        spec.position_weight * position_error**2
+        + spec.velocity_weight * velocity_error**2
+    )
+    return position_error, velocity_error, match_cost
+
+
+def find_splice_anchor_runs(
+    recipient_analysis: object,
+    donor_analysis: object,
+    splice_alignment_spec: SpliceAlignmentSpec | None = None,
+) -> tuple[SpliceAnchorRun, ...]:
+    """Return every stable constant-offset match corridor in two trajectories.
+
+    Unlike :func:`find_baseline_alignment`, this scans the complete configured
+    tick ranges and does not select a single winner.  A frame pair is eligible
+    only when both players are live and incomplete; contact state (including
+    ``previous_jump_held``) matches exactly; position and velocity are within
+    tolerance; and mines, exits, locked doors and trapdoors match exactly.
+
+    Gold differences remain soft in both objectives because accumulated gold
+    is not player physics.  Each result carries its exact endpoint masks and
+    bonus ticks.  Highscore splice planning should use
+    :func:`predict_splice_gold` before attempting repair, then apply the normal
+    full replay evaluation and ``require_reference_gold`` acceptance checks.
+    """
+    spec = splice_alignment_spec or SpliceAlignmentSpec()
+    if not isinstance(spec, SpliceAlignmentSpec):
+        raise TypeError("splice_alignment_spec must be a SpliceAlignmentSpec")
+    if isinstance(recipient_analysis, PreparedSpliceTrace):
+        recipients = recipient_analysis.eligible_between(
+            spec.recipient_start_tick,
+            spec.recipient_end_tick,
+        )
+    else:
+        recipients = tuple(
+            point
+            for point in _splice_trace_points(recipient_analysis)
+            if point.tick >= spec.recipient_start_tick
+            and (
+                spec.recipient_end_tick is None
+                or point.tick <= spec.recipient_end_tick
+            )
+            and not point.dead
+            and not point.complete
+            and all(
+                math.isfinite(value)
+                for value in (point.x, point.y, point.vx, point.vy)
+            )
+        )
+    if isinstance(donor_analysis, PreparedSpliceTrace):
+        donors = donor_analysis.eligible_between(
+            spec.donor_start_tick,
+            spec.donor_end_tick,
+        )
+    else:
+        donors = tuple(
+            point
+            for point in _splice_trace_points(donor_analysis)
+            if point.tick >= spec.donor_start_tick
+            and (
+                spec.donor_end_tick is None
+                or point.tick <= spec.donor_end_tick
+            )
+            and not point.dead
+            and not point.complete
+            and all(
+                math.isfinite(value)
+                for value in (point.x, point.y, point.vx, point.vy)
+            )
+        )
+    if not recipients or not donors:
+        return ()
+
+    # Exact route/contact grouping and an x-sorted window avoid comparing most
+    # trajectory pairs while preserving every match inside the true Euclidean
+    # tolerances.  The remaining scan is intentionally policy-only Python;
+    # native analysis materialises each trajectory just once between Auto runs.
+    donor_groups: dict[tuple, list[CompactTracePoint]] = {}
+    donor_xs: dict[tuple, tuple[float, ...]] = {}
+    if not isinstance(donor_analysis, PreparedSpliceTrace):
+        for point in donors:
+            donor_groups.setdefault(_splice_match_key(point), []).append(point)
+        for key, group in donor_groups.items():
+            group.sort(key=lambda point: (point.x, point.tick))
+            donor_xs[key] = tuple(point.x for point in group)
+
+    matches_by_offset: dict[
+        int,
+        list[
+            tuple[
+                CompactTracePoint,
+                CompactTracePoint,
+                float,
+                float,
+                float,
+            ]
+        ],
+    ] = {}
+    for recipient in recipients:
+        key = _splice_match_key(recipient)
+        if isinstance(donor_analysis, PreparedSpliceTrace):
+            prepared_group = donor_analysis.match_group(key)
+            if prepared_group is None:
+                continue
+            donor_window = prepared_group.iter_x_window(
+                recipient.x,
+                spec.position_tolerance,
+                start_tick=spec.donor_start_tick,
+                end_tick=spec.donor_end_tick,
+            )
+        else:
+            group = donor_groups.get(key)
+            if group is None:
+                continue
+            xs = donor_xs[key]
+            first = bisect_left(xs, recipient.x - spec.position_tolerance)
+            last = bisect_right(xs, recipient.x + spec.position_tolerance)
+            donor_window = group[first:last]
+        for donor in donor_window:
+            offset = donor.tick - recipient.tick
+            if (
+                spec.minimum_frame_offset is not None
+                and offset < spec.minimum_frame_offset
+            ):
+                continue
+            if (
+                spec.maximum_frame_offset is not None
+                and offset > spec.maximum_frame_offset
+            ):
+                continue
+            metrics = _splice_match_metrics(recipient, donor, spec)
+            if metrics is None:
+                continue
+            position_error, velocity_error, match_cost = metrics
+            matches_by_offset.setdefault(offset, []).append(
+                (
+                    recipient,
+                    donor,
+                    position_error,
+                    velocity_error,
+                    match_cost,
+                )
+            )
+
+    runs: list[SpliceAnchorRun] = []
+    for offset, matches in matches_by_offset.items():
+        matches.sort(key=lambda match: (match[0].tick, match[1].tick))
+        run_start = 0
+        for boundary in range(1, len(matches) + 1):
+            if boundary < len(matches):
+                previous = matches[boundary - 1]
+                current = matches[boundary]
+                if (
+                    current[0].tick == previous[0].tick + 1
+                    and current[1].tick == previous[1].tick + 1
+                ):
+                    continue
+            corridor = matches[run_start:boundary]
+            run_start = boundary
+            if len(corridor) < spec.minimum_run_length:
+                continue
+            centre = (len(corridor) - 1) / 2.0
+            _, best = min(
+                enumerate(corridor),
+                key=lambda item: (
+                    item[1][4],
+                    item[1][2],
+                    item[1][3],
+                    abs(item[0] - centre),
+                    item[1][0].tick,
+                ),
+            )
+            first_match = corridor[0]
+            last_match = corridor[-1]
+            recipient_start, donor_start = first_match[0], first_match[1]
+            recipient_end, donor_end = last_match[0], last_match[1]
+            runs.append(
+                SpliceAnchorRun(
+                    recipient_start_tick=recipient_start.tick,
+                    recipient_end_tick=recipient_end.tick,
+                    donor_start_tick=donor_start.tick,
+                    donor_end_tick=donor_end.tick,
+                    frame_offset=offset,
+                    best_recipient_tick=best[0].tick,
+                    best_donor_tick=best[1].tick,
+                    best_match_cost=best[4],
+                    mean_match_cost=sum(match[4] for match in corridor)
+                    / len(corridor),
+                    best_position_error=best[2],
+                    best_velocity_error=best[3],
+                    max_position_error=max(match[2] for match in corridor),
+                    max_velocity_error=max(match[3] for match in corridor),
+                    gold_matches_throughout=all(
+                        match[0].collected_gold_mask
+                        == match[1].collected_gold_mask
+                        for match in corridor
+                    ),
+                    recipient_gold_mask_start=(
+                        recipient_start.collected_gold_mask
+                    ),
+                    recipient_gold_mask_end=recipient_end.collected_gold_mask,
+                    donor_gold_mask_start=donor_start.collected_gold_mask,
+                    donor_gold_mask_end=donor_end.collected_gold_mask,
+                    recipient_gold_bonus_start=(
+                        recipient_start.gold_bonus_ticks
+                    ),
+                    recipient_gold_bonus_end=recipient_end.gold_bonus_ticks,
+                    donor_gold_bonus_start=donor_start.gold_bonus_ticks,
+                    donor_gold_bonus_end=donor_end.gold_bonus_ticks,
+                )
+            )
+    runs.sort(
+        key=lambda run: (
+            run.recipient_start_tick,
+            run.donor_start_tick,
+            run.recipient_end_tick,
+            run.donor_end_tick,
+        )
+    )
+    return tuple(runs)
+
+
+def _splice_anchor_points(
+    run: SpliceAnchorRun,
+    recipient_points: dict[int, CompactTracePoint],
+    donor_points: dict[int, CompactTracePoint],
+    alignment_spec: SpliceAlignmentSpec,
+) -> tuple[tuple[int, int, float, float, float], ...]:
+    """Reconstruct every verified point in one maximal anchor corridor."""
+    points: list[tuple[int, int, float, float, float]] = []
+    for recipient_tick in range(
+        run.recipient_start_tick,
+        run.recipient_end_tick + 1,
+    ):
+        donor_tick = recipient_tick + run.frame_offset
+        if not run.donor_start_tick <= donor_tick <= run.donor_end_tick:
+            continue
+        recipient = recipient_points.get(recipient_tick)
+        donor = donor_points.get(donor_tick)
+        if recipient is None or donor is None:
+            continue
+        metrics = _splice_match_metrics(recipient, donor, alignment_spec)
+        if metrics is None:
+            continue
+        position_error, velocity_error, match_cost = metrics
+        points.append(
+            (
+                recipient_tick,
+                donor_tick,
+                position_error,
+                velocity_error,
+                match_cost,
+            )
+        )
+    return tuple(points)
+
+
+_SpliceAnchorPoint = tuple[int, int, float, float, float]
+
+
+@dataclass(frozen=True, slots=True)
+class _SpliceSeamScore:
+    point: _SpliceAnchorPoint
+    mismatch_cost: float
+    route_state_penalty: float
+    corridor_support: int
+    jump_proximity_penalty: float
+    input_mismatch_penalty: float
+    corridor_support_penalty: float
+
+    @property
+    def seam_sensitivity_penalty(self) -> float:
+        return (
+            self.jump_proximity_penalty
+            + self.input_mismatch_penalty
+            + self.corridor_support_penalty
+        )
+
+    @property
+    def total_penalty(self) -> float:
+        return (
+            self.mismatch_cost
+            + self.route_state_penalty
+            + self.seam_sensitivity_penalty
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _SpliceFrameChoice:
+    entry: _SpliceSeamScore
+    exit: _SpliceSeamScore
+    recipient_section_length: int
+    donor_section_length: int
+    recipient_gold_bonus_gained: int
+    donor_gold_bonus_gained: int
+    local_gold_bonus_delta: int
+    local_score_gain: int
+    route_state_penalty: float
+    jump_proximity_penalty: float
+    input_mismatch_penalty: float
+    corridor_support_penalty: float
+    seam_sensitivity_penalty: float
+    section_length_risk_penalty: float
+    plan_utility: float
+
+
+def _splice_jump_edges(
+    analysis: object,
+    trace: Sequence[CompactTracePoint],
+    frames: Sequence[InputFrame] | None,
+) -> tuple[int, ...]:
+    """Return jump rising edges without requiring frames from old callers."""
+    if frames is not None:
+        edges: list[int] = []
+        previous_jump = False
+        for tick, frame in enumerate(frames):
+            current_jump = bool(frame.jump)
+            if current_jump and not previous_jump:
+                edges.append(tick)
+            previous_jump = current_jump
+        return tuple(edges)
+
+    raw_edges = getattr(analysis, "jump_edges", None)
+    if callable(raw_edges):
+        raw_edges = raw_edges()
+    if raw_edges is not None:
+        try:
+            return tuple(sorted({int(tick) for tick in raw_edges if int(tick) >= 0}))
+        except TypeError:
+            pass
+
+    # Compact traces retain the held-jump latch.  It gives a useful fallback
+    # for custom analysis objects which predate AutoEvaluation.jump_edges.
+    inferred: list[int] = []
+    previous: CompactTracePoint | None = None
+    for point in trace:
+        if (
+            previous is not None
+            and point.previous_jump_held
+            and not previous.previous_jump_held
+        ):
+            inferred.append(point.tick)
+        previous = point
+    return tuple(inferred)
+
+
+def _splice_route_state_penalty(
+    recipient: CompactTracePoint,
+    donor: CompactTracePoint,
+    weight: float,
+) -> float:
+    """Score future-affecting route differences separately from kinematics.
+
+    v2.90's hard splice key currently makes this zero for every accepted seam.
+    Keeping it explicit makes the plan score auditable and prevents a future
+    relaxation of corridor matching from silently making route differences
+    free.  Gold remains a soft trace-distance/objective concern, not route
+    control state.
+    """
+    raw_penalty = _TRACE_MINE_BIT_PENALTY * (
+        recipient.exploded_mine_mask ^ donor.exploded_mine_mask
+    ).bit_count()
+    raw_penalty += _TRACE_EXIT_BIT_PENALTY * (
+        recipient.open_exit_mask ^ donor.open_exit_mask
+    ).bit_count()
+    raw_penalty += _TRACE_LOCKED_DOOR_BIT_PENALTY * (
+        recipient.opened_locked_door_mask
+        ^ donor.opened_locked_door_mask
+    ).bit_count()
+    raw_penalty += _TRACE_TRAPDOOR_BIT_PENALTY * (
+        recipient.triggered_trapdoor_mask
+        ^ donor.triggered_trapdoor_mask
+    ).bit_count()
+    return weight * raw_penalty
+
+
+def _splice_corridor_support(
+    run: SpliceAnchorRun,
+    recipient_tick: int,
+) -> int:
+    """Matched frames centred on a seam, capped by the corridor bounds."""
+    before = recipient_tick - run.recipient_start_tick + 1
+    after = run.recipient_end_tick - recipient_tick + 1
+    return max(1, 2 * min(before, after) - 1)
+
+
+def _splice_jump_proximity_penalty(
+    jump_edges: Sequence[int],
+    seam_tick: int,
+    spec: SplicePlanSpec,
+) -> float:
+    lookahead = spec.jump_rising_edge_lookahead
+    if lookahead == 0 or spec.jump_proximity_weight == 0.0:
+        return 0.0
+    index = bisect_right(jump_edges, seam_tick)
+    if index >= len(jump_edges):
+        return 0.0
+    distance = jump_edges[index] - seam_tick
+    if distance > lookahead:
+        return 0.0
+    # A jump on the next input is maximally sensitive.  The penalty tapers to
+    # one/lookahead of its configured weight at the end of the lookahead.
+    return (
+        spec.jump_proximity_weight
+        * (lookahead - distance + 1)
+        / lookahead
+    )
+
+
+def _splice_future_input_mismatch_penalty(
+    recipient_frames: Sequence[InputFrame | int] | None,
+    donor_frames: Sequence[InputFrame | int] | None,
+    recipient_tick: int,
+    donor_tick: int,
+    spec: SplicePlanSpec,
+) -> float:
+    """Compare near-future held inputs after two aligned post-step states."""
+    lookahead = spec.input_similarity_lookahead
+    if (
+        recipient_frames is None
+        or donor_frames is None
+        or lookahead == 0
+        or spec.input_mismatch_weight == 0.0
+    ):
+        return 0.0
+    weighted_mismatches = 0.0
+    total_weight = 0.0
+    for step in range(1, lookahead + 1):
+        recipient_index = recipient_tick + step
+        donor_index = donor_tick + step
+        if (
+            recipient_index >= len(recipient_frames)
+            or donor_index >= len(donor_frames)
+        ):
+            break
+        recipient = recipient_frames[recipient_index]
+        donor = donor_frames[donor_index]
+        distance_weight = float(lookahead - step + 1)
+        recipient_code = (
+            recipient
+            if isinstance(recipient, int)
+            else int(bool(recipient.left))
+            | (int(bool(recipient.right)) << 1)
+            | (int(bool(recipient.jump)) << 2)
+        )
+        donor_code = (
+            donor
+            if isinstance(donor, int)
+            else int(bool(donor.left))
+            | (int(bool(donor.right)) << 1)
+            | (int(bool(donor.jump)) << 2)
+        )
+        mismatch_count = (recipient_code ^ donor_code).bit_count()
+        weighted_mismatches += distance_weight * mismatch_count
+        total_weight += distance_weight
+    if total_weight == 0.0:
+        return 0.0
+    return spec.input_mismatch_weight * weighted_mismatches / total_weight
+
+
+def _score_splice_seam(
+    point: _SpliceAnchorPoint,
+    run: SpliceAnchorRun,
+    recipient_points: dict[int, CompactTracePoint],
+    donor_points: dict[int, CompactTracePoint],
+    recipient_frames: Sequence[InputFrame | int] | None,
+    donor_frames: Sequence[InputFrame | int] | None,
+    active_jump_edges: Sequence[int],
+    active_tick: int,
+    spec: SplicePlanSpec,
+) -> _SpliceSeamScore:
+    recipient = recipient_points[point[0]]
+    donor = donor_points[point[1]]
+    support = _splice_corridor_support(run, point[0])
+    return _SpliceSeamScore(
+        point=point,
+        mismatch_cost=_trace_distance(recipient, donor),
+        route_state_penalty=_splice_route_state_penalty(
+            recipient,
+            donor,
+            spec.route_state_penalty_weight,
+        ),
+        corridor_support=support,
+        jump_proximity_penalty=_splice_jump_proximity_penalty(
+            active_jump_edges,
+            active_tick,
+            spec,
+        ),
+        input_mismatch_penalty=_splice_future_input_mismatch_penalty(
+            recipient_frames,
+            donor_frames,
+            point[0],
+            point[1],
+            spec,
+        ),
+        corridor_support_penalty=(
+            spec.corridor_support_weight / support
+        ),
+    )
+
+
+def _splice_persistent_state_is_monotonic(
+    recipient_entry: CompactTracePoint,
+    donor_entry: CompactTracePoint,
+    recipient_exit: CompactTracePoint,
+    donor_exit: CompactTracePoint,
+) -> bool:
+    pairs = (
+        (recipient_entry.collected_gold_mask, recipient_exit.collected_gold_mask),
+        (donor_entry.collected_gold_mask, donor_exit.collected_gold_mask),
+        (recipient_entry.exploded_mine_mask, recipient_exit.exploded_mine_mask),
+        (donor_entry.exploded_mine_mask, donor_exit.exploded_mine_mask),
+        (recipient_entry.open_exit_mask, recipient_exit.open_exit_mask),
+        (donor_entry.open_exit_mask, donor_exit.open_exit_mask),
+        (
+            recipient_entry.opened_locked_door_mask,
+            recipient_exit.opened_locked_door_mask,
+        ),
+        (donor_entry.opened_locked_door_mask, donor_exit.opened_locked_door_mask),
+        (
+            recipient_entry.triggered_trapdoor_mask,
+            recipient_exit.triggered_trapdoor_mask,
+        ),
+        (donor_entry.triggered_trapdoor_mask, donor_exit.triggered_trapdoor_mask),
+    )
+    return not any(start & ~end for start, end in pairs)
+
+
+def _best_splice_anchor_pair(
+    entry_scores: Sequence[_SpliceSeamScore],
+    exit_scores: Sequence[_SpliceSeamScore],
+    *,
+    predicted_time_gain: int,
+    recipient_points: dict[int, CompactTracePoint],
+    donor_points: dict[int, CompactTracePoint],
+    spec: SplicePlanSpec,
+) -> _SpliceFrameChoice | None:
+    """Jointly maximise utility over every feasible entry/exit combination.
+
+    The score is separable around the two seams.  A forward sweep therefore
+    retains the best eligible entry per highscore gold-offset state rather
+    than taking a quadratic Cartesian product.  For speedrun there is only one
+    such state.  The selected pair still receives exact span, objective and
+    persistent-state checks before it can become a plan.
+    """
+    if not entry_scores or not exit_scores:
+        return None
+
+    minimum_recipient_span = spec.minimum_section_length + max(
+        0,
+        predicted_time_gain,
+    )
+    entry_index = 0
+    # Gold bonus difference is piecewise constant and normally has only one or
+    # two values inside an anchor corridor.  Keeping one best entry per value
+    # makes the highscore threshold exact without a quadratic endpoint scan.
+    best_entries: dict[int, tuple[tuple, _SpliceSeamScore]] = {}
+    best_choice: _SpliceFrameChoice | None = None
+    best_choice_key: tuple | None = None
+
+    for exit_score in exit_scores:
+        exit_point = exit_score.point
+        latest_entry_tick = exit_point[0] - minimum_recipient_span
+        while (
+            entry_index < len(entry_scores)
+            and entry_scores[entry_index].point[0] <= latest_entry_tick
+        ):
+            entry_score = entry_scores[entry_index]
+            entry_index += 1
+            entry_point = entry_score.point
+            recipient_entry = recipient_points[entry_point[0]]
+            donor_entry = donor_points[entry_point[1]]
+            gold_difference = (
+                donor_entry.gold_bonus_ticks
+                - recipient_entry.gold_bonus_ticks
+                if spec.objective == AUTO_OBJECTIVE_HIGHSCORE
+                else 0
+            )
+            entry_contribution = -entry_score.total_penalty
+            entry_contribution += spec.section_length_risk_weight * 0.5 * (
+                entry_point[0] + entry_point[1]
+            )
+            if spec.objective == AUTO_OBJECTIVE_HIGHSCORE:
+                entry_contribution -= (
+                    spec.predicted_gain_weight * gold_difference
+                )
+            entry_key = (
+                entry_contribution,
+                -entry_score.total_penalty,
+                entry_score.corridor_support,
+                entry_point[0],
+                -entry_point[1],
+            )
+            current = best_entries.get(gold_difference)
+            if current is None or entry_key > current[0]:
+                best_entries[gold_difference] = (entry_key, entry_score)
+
+        if not best_entries:
+            continue
+        for _, entry_score in best_entries.values():
+            entry_point = entry_score.point
+            recipient_span = exit_point[0] - entry_point[0]
+            donor_span = exit_point[1] - entry_point[1]
+            if (
+                recipient_span < spec.minimum_section_length
+                or donor_span < spec.minimum_section_length
+                or recipient_span - donor_span != predicted_time_gain
+            ):
+                continue
+            recipient_entry = recipient_points[entry_point[0]]
+            donor_entry = donor_points[entry_point[1]]
+            recipient_exit = recipient_points[exit_point[0]]
+            donor_exit = donor_points[exit_point[1]]
+            if not _splice_persistent_state_is_monotonic(
+                recipient_entry,
+                donor_entry,
+                recipient_exit,
+                donor_exit,
+            ):
+                continue
+            recipient_gold_gain = (
+                recipient_exit.gold_bonus_ticks
+                - recipient_entry.gold_bonus_ticks
+            )
+            donor_gold_gain = (
+                donor_exit.gold_bonus_ticks - donor_entry.gold_bonus_ticks
+            )
+            if recipient_gold_gain < 0 or donor_gold_gain < 0:
+                continue
+            local_gold_delta = donor_gold_gain - recipient_gold_gain
+            local_score_gain = predicted_time_gain + local_gold_delta
+            if spec.objective == AUTO_OBJECTIVE_SPEEDRUN:
+                objective_gain = predicted_time_gain
+            else:
+                if local_score_gain < spec.minimum_highscore_gain:
+                    continue
+                if (
+                    predicted_time_gain < spec.minimum_predicted_gain
+                    and local_gold_delta <= 0
+                ):
+                    continue
+                objective_gain = local_score_gain
+
+            route_penalty = (
+                entry_score.route_state_penalty
+                + exit_score.route_state_penalty
+            )
+            jump_penalty = (
+                entry_score.jump_proximity_penalty
+                + exit_score.jump_proximity_penalty
+            )
+            input_penalty = (
+                entry_score.input_mismatch_penalty
+                + exit_score.input_mismatch_penalty
+            )
+            support_penalty = (
+                entry_score.corridor_support_penalty
+                + exit_score.corridor_support_penalty
+            )
+            seam_penalty = jump_penalty + input_penalty + support_penalty
+            risk_penalty = spec.section_length_risk_weight * 0.5 * (
+                recipient_span + donor_span
+            )
+            utility = (
+                spec.predicted_gain_weight * objective_gain
+                - entry_score.mismatch_cost
+                - exit_score.mismatch_cost
+                - route_penalty
+                - seam_penalty
+                - risk_penalty
+            )
+            choice = _SpliceFrameChoice(
+                entry=entry_score,
+                exit=exit_score,
+                recipient_section_length=recipient_span,
+                donor_section_length=donor_span,
+                recipient_gold_bonus_gained=recipient_gold_gain,
+                donor_gold_bonus_gained=donor_gold_gain,
+                local_gold_bonus_delta=local_gold_delta,
+                local_score_gain=local_score_gain,
+                route_state_penalty=route_penalty,
+                jump_proximity_penalty=jump_penalty,
+                input_mismatch_penalty=input_penalty,
+                corridor_support_penalty=support_penalty,
+                seam_sensitivity_penalty=seam_penalty,
+                section_length_risk_penalty=risk_penalty,
+                plan_utility=utility,
+            )
+            choice_key = (
+                -utility,
+                -objective_gain,
+                -predicted_time_gain,
+                entry_score.mismatch_cost + exit_score.mismatch_cost,
+                route_penalty,
+                seam_penalty,
+                risk_penalty,
+                -entry_score.corridor_support
+                - exit_score.corridor_support,
+                recipient_span + donor_span,
+                entry_point[0],
+                exit_point[0],
+                entry_point[1],
+                exit_point[1],
+            )
+            if best_choice_key is None or choice_key < best_choice_key:
+                best_choice_key = choice_key
+                best_choice = choice
+    return best_choice
+
+
+def _splice_plan_rank_key(
+    plan: SpliceSectionPlan,
+    objective: str,
+) -> tuple:
+    objective_gain = plan.objective_gain(objective)
+    return (
+        -plan.plan_utility,
+        -objective_gain,
+        -plan.predicted_time_gain,
+        plan.combined_mismatch_cost,
+        max(plan.entry_mismatch_cost, plan.exit_mismatch_cost),
+        plan.route_state_penalty,
+        plan.seam_sensitivity_penalty,
+        plan.section_length_risk_penalty,
+        plan.recipient_section_length + plan.donor_section_length,
+        plan.recipient_entry_tick,
+        plan.recipient_exit_tick,
+        plan.donor_entry_tick,
+        plan.donor_exit_tick,
+    )
+
+
+def find_splice_section_plans(
+    recipient_analysis: object,
+    donor_analysis: object,
+    splice_alignment_spec: SpliceAlignmentSpec | None = None,
+    splice_plan_spec: SplicePlanSpec | None = None,
+    *,
+    anchor_runs: Sequence[SpliceAnchorRun] | None = None,
+    recipient_frames: Sequence[InputFrame] | None = None,
+    donor_frames: Sequence[InputFrame] | None = None,
+    anchor_runs_observer: Callable[[tuple[SpliceAnchorRun, ...]], None]
+    | None = None,
+) -> tuple[SpliceSectionPlan, ...]:
+    """Return jointly scored donor sections with genuine local objective gain.
+
+    Entry and exit corridors are paired only when their selected frame matches
+    are forward and at least ``minimum_section_length`` apart in both replays.
+    The local time gain is the change in frame offset across the section, not
+    the donor's absolute lead at its exit::
+
+        (recipient_exit - recipient_entry)
+        - (donor_exit - donor_entry)
+
+    Within every corridor pair, entry and exit frames are selected together by
+    maximising objective gain minus full trace mismatch, route-state, seam
+    sensitivity and section-length risk costs.  Seam sensitivity favours
+    centred support in longer corridors, distance from the next active jump
+    edge and similar near-future held inputs.  Pass both replay frame streams
+    to enable exact input comparison; jump-edge metadata from AutoEvaluation
+    remains useful when frames are omitted.
+
+    Highscore screening adds only gold bonus gained between the two anchors.
+    This remains a cheap planning score: every assembled splice must still be
+    simulated and accepted by Auto's normal complete-run objective.
+
+    Supplying ``anchor_runs`` reuses a prior :func:`find_splice_anchor_runs`
+    result.  Endpoint compatibility is rechecked against both analyses.
+    The optional anchor-runs observer receives the exact corridor tuple
+    selected for planning, allowing callers to collect diagnostics without
+    scanning the trajectories a second time.
+    """
+    alignment_spec = splice_alignment_spec or SpliceAlignmentSpec()
+    if not isinstance(alignment_spec, SpliceAlignmentSpec):
+        raise TypeError("splice_alignment_spec must be a SpliceAlignmentSpec")
+    plan_spec = splice_plan_spec or SplicePlanSpec(
+        objective=alignment_spec.objective
+    )
+    if not isinstance(plan_spec, SplicePlanSpec):
+        raise TypeError("splice_plan_spec must be a SplicePlanSpec")
+    if (
+        recipient_frames is None
+        and isinstance(recipient_analysis, PreparedSpliceTrace)
+    ):
+        recipient_frames = recipient_analysis.frames  # type: ignore[assignment]
+    if donor_frames is None and isinstance(donor_analysis, PreparedSpliceTrace):
+        donor_frames = donor_analysis.frames  # type: ignore[assignment]
+    if (recipient_frames is None) != (donor_frames is None):
+        raise ValueError(
+            "recipient_frames and donor_frames must be supplied together"
+        )
+
+    recipient_trace = _splice_trace_points(recipient_analysis)
+    donor_trace = _splice_trace_points(donor_analysis)
+    if isinstance(recipient_analysis, PreparedSpliceTrace):
+        recipient_points = recipient_analysis.points_by_tick
+    else:
+        recipient_points = {point.tick: point for point in recipient_trace}
+    if isinstance(donor_analysis, PreparedSpliceTrace):
+        donor_points = donor_analysis.points_by_tick
+    else:
+        donor_points = {point.tick: point for point in donor_trace}
+    if (
+        isinstance(recipient_analysis, PreparedSpliceTrace)
+        and recipient_frames is recipient_analysis.frames
+    ):
+        recipient_jump_edges = recipient_analysis.jump_edges
+    else:
+        recipient_jump_edges = _splice_jump_edges(
+            recipient_analysis,
+            recipient_trace,
+            recipient_frames,
+        )
+    if (
+        isinstance(donor_analysis, PreparedSpliceTrace)
+        and donor_frames is donor_analysis.frames
+    ):
+        donor_jump_edges = donor_analysis.jump_edges
+    else:
+        donor_jump_edges = _splice_jump_edges(
+            donor_analysis,
+            donor_trace,
+            donor_frames,
+        )
+    recipient_scoring_frames: Sequence[InputFrame | int] | None = (
+        recipient_frames
+    )
+    if (
+        isinstance(recipient_analysis, PreparedSpliceTrace)
+        and recipient_frames is recipient_analysis.frames
+        and recipient_analysis.input_codes is not None
+    ):
+        recipient_scoring_frames = recipient_analysis.input_codes
+    donor_scoring_frames: Sequence[InputFrame | int] | None = donor_frames
+    if (
+        isinstance(donor_analysis, PreparedSpliceTrace)
+        and donor_frames is donor_analysis.frames
+        and donor_analysis.input_codes is not None
+    ):
+        donor_scoring_frames = donor_analysis.input_codes
+    if anchor_runs is None:
+        runs = find_splice_anchor_runs(
+            recipient_analysis,
+            donor_analysis,
+            alignment_spec,
+        )
+    else:
+        runs = tuple(anchor_runs)
+        if not all(isinstance(run, SpliceAnchorRun) for run in runs):
+            raise TypeError("anchor_runs must contain SpliceAnchorRun values")
+    if anchor_runs_observer is not None:
+        anchor_runs_observer(runs)
+    if not runs:
+        return ()
+
+    anchor_points = {
+        run: _splice_anchor_points(
+            run,
+            recipient_points,
+            donor_points,
+            alignment_spec,
+        )
+        for run in runs
+    }
+    # Seam terms depend on one corridor/role, not on its eventual partner.
+    # Cache them once so pairing many corridors does not repeatedly rescan
+    # input lookaheads or rebuild the same trace-distance components.
+    entry_seam_scores = {
+        run: tuple(
+            _score_splice_seam(
+                point,
+                run,
+                recipient_points,
+                donor_points,
+                recipient_scoring_frames,
+                donor_scoring_frames,
+                donor_jump_edges,
+                point[1],
+                plan_spec,
+            )
+            for point in points
+        )
+        for run, points in anchor_points.items()
+    }
+    exit_seam_scores = {
+        run: tuple(
+            _score_splice_seam(
+                point,
+                run,
+                recipient_points,
+                donor_points,
+                recipient_scoring_frames,
+                donor_scoring_frames,
+                recipient_jump_edges,
+                point[0],
+                plan_spec,
+            )
+            for point in points
+        )
+        for run, points in anchor_points.items()
+    }
+    plans: list[SpliceSectionPlan] = []
+    for entry_run in runs:
+        entry_scores = entry_seam_scores[entry_run]
+        if not entry_scores:
+            continue
+        for exit_run in runs:
+            exit_scores = exit_seam_scores[exit_run]
+            if not exit_scores:
+                continue
+            predicted_time_gain = (
+                entry_run.frame_offset - exit_run.frame_offset
+            )
+            if (
+                plan_spec.objective == AUTO_OBJECTIVE_SPEEDRUN
+                and predicted_time_gain < plan_spec.minimum_predicted_gain
+            ):
+                continue
+            if (
+                exit_run.recipient_end_tick
+                - entry_run.recipient_start_tick
+                < plan_spec.minimum_section_length
+                or exit_run.donor_end_tick - entry_run.donor_start_tick
+                < plan_spec.minimum_section_length
+            ):
+                continue
+            choice = _best_splice_anchor_pair(
+                entry_scores,
+                exit_scores,
+                predicted_time_gain=predicted_time_gain,
+                recipient_points=recipient_points,
+                donor_points=donor_points,
+                spec=plan_spec,
+            )
+            if choice is None:
+                continue
+            entry = choice.entry.point
+            exit = choice.exit.point
+            # Keep the explicit formula next to the stored value so a future
+            # absolute-lead regression cannot silently enter plan screening.
+            predicted_time_gain_from_spans = (
+                choice.recipient_section_length
+                - choice.donor_section_length
+            )
+            if predicted_time_gain_from_spans != predicted_time_gain:
+                continue
+            plans.append(
+                SpliceSectionPlan(
+                    recipient_entry_tick=entry[0],
+                    donor_entry_tick=entry[1],
+                    recipient_exit_tick=exit[0],
+                    donor_exit_tick=exit[1],
+                    predicted_time_gain=predicted_time_gain_from_spans,
+                    recipient_section_length=choice.recipient_section_length,
+                    donor_section_length=choice.donor_section_length,
+                    recipient_gold_bonus_gained=(
+                        choice.recipient_gold_bonus_gained
+                    ),
+                    donor_gold_bonus_gained=choice.donor_gold_bonus_gained,
+                    local_gold_bonus_delta=choice.local_gold_bonus_delta,
+                    local_score_gain=choice.local_score_gain,
+                    entry_match_cost=entry[4],
+                    exit_match_cost=exit[4],
+                    entry_mismatch_cost=choice.entry.mismatch_cost,
+                    exit_mismatch_cost=choice.exit.mismatch_cost,
+                    entry_position_error=entry[2],
+                    entry_velocity_error=entry[3],
+                    exit_position_error=exit[2],
+                    exit_velocity_error=exit[3],
+                    entry_corridor_support=choice.entry.corridor_support,
+                    exit_corridor_support=choice.exit.corridor_support,
+                    route_state_penalty=choice.route_state_penalty,
+                    jump_proximity_penalty=choice.jump_proximity_penalty,
+                    input_mismatch_penalty=choice.input_mismatch_penalty,
+                    corridor_support_penalty=(
+                        choice.corridor_support_penalty
+                    ),
+                    seam_sensitivity_penalty=(
+                        choice.seam_sensitivity_penalty
+                    ),
+                    section_length_risk_penalty=(
+                        choice.section_length_risk_penalty
+                    ),
+                    plan_utility=choice.plan_utility,
+                    entry_anchor_run=entry_run,
+                    exit_anchor_run=exit_run,
+                )
+            )
+
+    # Remove exact duplicates first, then retain the best one or two plans per
+    # approximate entry/exit/gain region.  Both replay coordinates participate
+    # so unrelated visits to the same recipient region are not conflated.
+    exact: dict[tuple[int, int, int, int], SpliceSectionPlan] = {}
+    for plan in plans:
+        key = (
+            plan.recipient_entry_tick,
+            plan.donor_entry_tick,
+            plan.recipient_exit_tick,
+            plan.donor_exit_tick,
+        )
+        current = exact.get(key)
+        if current is None or _splice_plan_rank_key(
+            plan,
+            plan_spec.objective,
+        ) < _splice_plan_rank_key(current, plan_spec.objective):
+            exact[key] = plan
+
+    tick_bucket = plan_spec.deduplication_tick_bucket
+    gain_bucket = plan_spec.deduplication_gain_bucket
+    buckets: dict[tuple[int, int, int, int, int], list[SpliceSectionPlan]] = {}
+    for plan in exact.values():
+        bucket = (
+            plan.recipient_entry_tick // tick_bucket,
+            plan.donor_entry_tick // tick_bucket,
+            plan.recipient_exit_tick // tick_bucket,
+            plan.donor_exit_tick // tick_bucket,
+            plan.predicted_time_gain // gain_bucket,
+        )
+        buckets.setdefault(bucket, []).append(plan)
+    deduplicated: list[SpliceSectionPlan] = []
+    for bucket_plans in buckets.values():
+        bucket_plans.sort(
+            key=lambda plan: _splice_plan_rank_key(
+                plan,
+                plan_spec.objective,
+            )
+        )
+        deduplicated.extend(bucket_plans[: plan_spec.plans_per_bucket])
+    deduplicated.sort(
+        key=lambda plan: _splice_plan_rank_key(plan, plan_spec.objective)
+    )
+    return tuple(deduplicated)
+
+
+def predict_splice_gold(
+    recipient_analysis: object,
+    donor_analysis: object,
+    *,
+    recipient_entry_tick: int,
+    donor_entry_tick: int,
+    recipient_exit_tick: int,
+    donor_exit_tick: int,
+    require_reference_gold: bool = False,
+    required_reference_gold_mask: int | None = None,
+) -> SpliceGoldPrediction:
+    """Predict objective/gold state after splicing one donor section into a run.
+
+    This is a ranking/pre-filter only.  The assembled replay must still be
+    simulated and pass the existing final objective and reference-gold checks.
+    When ``required_reference_gold_mask`` is omitted, the recipient's final
+    gold mask is the reference requirement.
+    """
+    if min(
+        recipient_entry_tick,
+        donor_entry_tick,
+        recipient_exit_tick,
+        donor_exit_tick,
+    ) < 0:
+        raise ValueError("splice ticks must be non-negative")
+    if recipient_exit_tick < recipient_entry_tick:
+        raise ValueError("recipient exit tick must not precede its entry tick")
+    if donor_exit_tick < donor_entry_tick:
+        raise ValueError("donor exit tick must not precede its entry tick")
+    if isinstance(recipient_analysis, PreparedSpliceTrace):
+        recipient_points = recipient_analysis.points_by_tick
+    else:
+        recipient_points = {
+            point.tick: point
+            for point in _splice_trace_points(recipient_analysis)
+        }
+    if isinstance(donor_analysis, PreparedSpliceTrace):
+        donor_points = donor_analysis.points_by_tick
+    else:
+        donor_points = {
+            point.tick: point for point in _splice_trace_points(donor_analysis)
+        }
+    try:
+        recipient_entry = recipient_points[recipient_entry_tick]
+        recipient_exit = recipient_points[recipient_exit_tick]
+        donor_entry = donor_points[donor_entry_tick]
+        donor_exit = donor_points[donor_exit_tick]
+    except KeyError as error:
+        raise ValueError(
+            f"splice tick {error.args[0]} is absent from its trace"
+        ) from None
+
+    if isinstance(recipient_analysis, PreparedSpliceTrace):
+        recipient_final_gold_mask = recipient_analysis.final_gold_mask
+        recipient_final_bonus = recipient_analysis.gold_bonus_ticks
+    elif isinstance(recipient_analysis, AutoEvaluation):
+        recipient_final_gold_mask = recipient_analysis.final_gold_mask
+        recipient_final_bonus = recipient_analysis.gold_bonus_ticks
+    else:
+        summary = getattr(recipient_analysis, "summary", None)
+        if not callable(summary):
+            raise TypeError(
+                "recipient analysis must expose summary() for gold prediction"
+            )
+        raw_summary = summary()
+        if not isinstance(raw_summary, Sequence) or len(raw_summary) < 9:
+            raise TypeError("recipient analysis returned an invalid summary")
+        recipient_final_bonus = int(raw_summary[7])
+        recipient_final_gold_mask = int(raw_summary[8])
+
+    predicted_mask = (
+        recipient_entry.collected_gold_mask
+        | (
+            donor_exit.collected_gold_mask
+            & ~donor_entry.collected_gold_mask
+        )
+        | (
+            recipient_final_gold_mask
+            & ~recipient_exit.collected_gold_mask
+        )
+    )
+    predicted_bonus = GOLD_BONUS_TICKS * predicted_mask.bit_count()
+    if required_reference_gold_mask is None:
+        required_reference_gold_mask = recipient_final_gold_mask
+    if required_reference_gold_mask < 0:
+        raise ValueError("required_reference_gold_mask must be non-negative")
+    missing_required = (
+        required_reference_gold_mask & ~predicted_mask
+        if require_reference_gold
+        else 0
+    )
+    finish_tick_delta = (
+        donor_exit_tick
+        - donor_entry_tick
+        - (recipient_exit_tick - recipient_entry_tick)
+    )
+    return SpliceGoldPrediction(
+        final_gold_mask=predicted_mask,
+        gold_bonus_ticks=predicted_bonus,
+        gold_bonus_delta=predicted_bonus - recipient_final_bonus,
+        finish_tick_delta=finish_tick_delta,
+        missing_required_gold_mask=missing_required,
     )
 
 
@@ -1502,6 +3172,66 @@ def apply_reference_suffix_splice(
     return body + (NEUTRAL_INPUT,) * (target_body_length - len(body) + 1)
 
 
+def apply_reference_segment_splice(
+    recipient_working: Sequence[InputFrame],
+    donor_working: Sequence[InputFrame],
+    plan: SpliceSectionPlan,
+    *,
+    max_body_length: int,
+) -> tuple[InputFrame, ...]:
+    """Replace one bounded recipient interval with its planned donor inputs.
+
+    Splice-plan ticks identify post-input states.  Consequently the recipient
+    owns inputs through its entry tick, the donor starts at the following
+    input and runs through its exit tick, and the recipient resumes at the
+    first input after its exit tick::
+
+        A[:a0 + 1] + B[b0 + 1:b1 + 1] + A[a1 + 1:]
+
+    ``recipient_working`` and ``donor_working`` each include one trailing
+    neutral sentinel; the slices above operate only on their editable bodies.
+    The result is truncated or neutral-padded to ``max_body_length`` and ends
+    in exactly one additional neutral sentinel, matching Auto's fixed working
+    replay convention.
+    """
+    if not recipient_working or not donor_working:
+        raise ValueError("working replays cannot be empty")
+    if max_body_length < 0:
+        raise ValueError("max_body_length must be non-negative")
+
+    a0 = plan.recipient_entry_tick
+    b0 = plan.donor_entry_tick
+    a1 = plan.recipient_exit_tick
+    b1 = plan.donor_exit_tick
+    if min(a0, b0, a1, b1) < 0:
+        raise ValueError("splice ticks must be non-negative")
+    if a1 <= a0 or b1 <= b0:
+        raise ValueError("splice exit ticks must follow their entry ticks")
+
+    recipient_body_length = len(recipient_working) - 1
+    donor_body_length = len(donor_working) - 1
+    if a1 >= recipient_body_length:
+        raise ValueError("recipient splice lies beyond its editable body")
+    if b1 >= donor_body_length:
+        raise ValueError("donor splice lies beyond its editable body")
+
+    predicted_gain = (a1 - a0) - (b1 - b0)
+    if predicted_gain != plan.predicted_time_gain:
+        raise ValueError(
+            "splice plan predicted_time_gain is inconsistent with its ticks"
+        )
+
+    recipient_prefix = tuple(recipient_working[: a0 + 1])
+    donor_segment = _editable_tuple(donor_working[b0 + 1 : b1 + 1])
+    recipient_suffix = _editable_tuple(
+        recipient_working[a1 + 1 : recipient_body_length]
+    )
+    body = (recipient_prefix + donor_segment + recipient_suffix)[
+        :max_body_length
+    ]
+    return body + (NEUTRAL_INPUT,) * (max_body_length - len(body) + 1)
+
+
 def detect_shifted_missed_jumps(
     reference_successful_jumps: Iterable[int],
     candidate: AutoEvaluation,
@@ -1520,6 +3250,924 @@ def detect_shifted_missed_jumps(
         ):
             missing.append(expected)
     return tuple(missing)
+
+
+def build_splice_piecewise_reference(
+    recipient_reference: AutoEvaluation,
+    donor_reference: AutoEvaluation,
+    plan: SpliceSectionPlan,
+) -> tuple[PiecewiseReferenceLeg, ...]:
+    """Build the three exact reference legs implied by a bounded splice."""
+    a0 = plan.recipient_entry_tick
+    b0 = plan.donor_entry_tick
+    a1 = plan.recipient_exit_tick
+    b1 = plan.donor_exit_tick
+    if min(a0, b0, a1, b1) < 0:
+        raise ValueError("splice ticks must be non-negative")
+    if a1 <= a0 or b1 <= b0:
+        raise ValueError("splice exit ticks must follow their entry ticks")
+    predicted_gain = (a1 - a0) - (b1 - b0)
+    if predicted_gain != plan.predicted_time_gain:
+        raise ValueError(
+            "splice plan predicted_time_gain is inconsistent with its ticks"
+        )
+    if a1 > recipient_reference.last_tick:
+        raise ValueError("recipient splice lies beyond its reference trace")
+    if b1 > donor_reference.last_tick:
+        raise ValueError("donor splice lies beyond its reference trace")
+
+    child_end = a0 + (b1 - b0)
+    legs = (
+        PiecewiseReferenceLeg(0, a0, recipient_reference, 0),
+        PiecewiseReferenceLeg(
+            a0 + 1,
+            child_end,
+            donor_reference,
+            b0 - a0,
+        ),
+        PiecewiseReferenceLeg(
+            child_end + 1,
+            None,
+            recipient_reference,
+            predicted_gain,
+        ),
+    )
+    _validate_piecewise_reference(legs)
+    return legs
+
+
+def _validate_piecewise_reference(
+    piecewise_reference: Sequence[PiecewiseReferenceLeg],
+) -> tuple[PiecewiseReferenceLeg, ...]:
+    legs = tuple(piecewise_reference)
+    if not legs:
+        raise ValueError("piecewise reference must contain at least one leg")
+    if not all(isinstance(leg, PiecewiseReferenceLeg) for leg in legs):
+        raise TypeError(
+            "piecewise reference must contain PiecewiseReferenceLeg values"
+        )
+    if legs[0].child_start != 0:
+        raise ValueError("piecewise reference must begin at child tick zero")
+    for index, leg in enumerate(legs):
+        if leg.child_end is None and index != len(legs) - 1:
+            raise ValueError("only the final piecewise reference leg may be open")
+        if index:
+            previous = legs[index - 1]
+            assert previous.child_end is not None
+            if leg.child_start != previous.child_end + 1:
+                raise ValueError(
+                    "piecewise reference legs must be contiguous and non-overlapping"
+                )
+    return legs
+
+
+def _piecewise_reference_leg(
+    piecewise_reference: Sequence[PiecewiseReferenceLeg],
+    child_tick: int,
+) -> PiecewiseReferenceLeg:
+    if child_tick < 0:
+        raise ValueError("child tick must be non-negative")
+    legs = _validate_piecewise_reference(piecewise_reference)
+    for leg in legs:
+        if leg.contains(child_tick):
+            return leg
+    raise ValueError("child tick is not covered by the piecewise reference")
+
+
+def map_piecewise_reference_events(
+    piecewise_reference: Sequence[PiecewiseReferenceLeg],
+    events: Callable[[AutoEvaluation], Iterable[int]],
+) -> tuple[int, ...]:
+    """Map per-reference event ticks into the assembled child's timeline."""
+    legs = _validate_piecewise_reference(piecewise_reference)
+    mapped: set[int] = set()
+    for leg in legs:
+        reference_start = leg.child_start + leg.reference_offset
+        reference_end = (
+            leg.reference.last_tick
+            if leg.child_end is None
+            else min(
+                leg.reference.last_tick,
+                leg.child_end + leg.reference_offset,
+            )
+        )
+        for raw_tick in events(leg.reference):
+            tick = int(raw_tick)
+            if reference_start <= tick <= reference_end:
+                child_tick = tick - leg.reference_offset
+                if leg.contains(child_tick):
+                    mapped.add(child_tick)
+    return tuple(sorted(mapped))
+
+
+def detect_piecewise_missed_jumps(
+    piecewise_reference: Sequence[PiecewiseReferenceLeg],
+    candidate: AutoEvaluation,
+) -> tuple[int, ...]:
+    """Diagnose mapped successful jumps which became failed child edges."""
+    expected_successes = map_piecewise_reference_events(
+        piecewise_reference,
+        lambda evaluation: evaluation.successful_jumps,
+    )
+    actual_edges = set(candidate.jump_edges)
+    actual_successes = set(candidate.successful_jumps)
+    return tuple(
+        tick
+        for tick in expected_successes
+        if tick <= candidate.last_tick
+        and tick in actual_edges
+        and tick not in actual_successes
+    )
+
+
+def _piecewise_leg_match_run(
+    evaluation: AutoEvaluation,
+    leg: PiecewiseReferenceLeg,
+    config: AutoConfig,
+) -> int:
+    """Return the longest exact-offset stable match run inside one leg."""
+    alignment_spec = SpliceAlignmentSpec(
+        minimum_run_length=2,
+        position_tolerance=config.alignment_position_tolerance,
+        velocity_tolerance=config.alignment_velocity_tolerance,
+        objective=config.objective,
+    )
+    child_end = min(
+        evaluation.last_tick,
+        evaluation.last_tick if leg.child_end is None else leg.child_end,
+    )
+    candidate_analysis = _native_trace_analysis(evaluation)
+    reference_analysis = _native_trace_analysis(leg.reference)
+    if (
+        child_end >= leg.child_start
+        and candidate_analysis is not None
+        and reference_analysis is not None
+        and -(1 << 63) <= leg.reference_offset <= (1 << 63) - 1
+    ):
+        raw_match = candidate_analysis.find_splice_alignment(
+            reference_analysis,
+            candidate_start_tick=leg.child_start,
+            candidate_end_tick=child_end,
+            minimum_offset=leg.reference_offset,
+            maximum_offset=leg.reference_offset,
+            minimum_run_length=1,
+            position_tolerance=alignment_spec.position_tolerance,
+            velocity_tolerance=alignment_spec.velocity_tolerance,
+            position_weight=_TRACE_POSITION_WEIGHT,
+            velocity_weight=_TRACE_VELOCITY_WEIGHT,
+            contact_mismatch_penalty=_TRACE_CONTACT_MISMATCH_PENALTY,
+            in_air_mismatch_penalty=_TRACE_IN_AIR_MISMATCH_PENALTY,
+            near_wall_mismatch_penalty=_TRACE_NEAR_WALL_MISMATCH_PENALTY,
+            gold_bit_penalty=_TRACE_GOLD_BIT_PENALTY,
+            mine_bit_penalty=_TRACE_MINE_BIT_PENALTY,
+            exit_bit_penalty=_TRACE_EXIT_BIT_PENALTY,
+            locked_door_bit_penalty=_TRACE_LOCKED_DOOR_BIT_PENALTY,
+            trapdoor_bit_penalty=_TRACE_TRAPDOOR_BIT_PENALTY,
+        )
+        return 0 if raw_match is None else int(raw_match[7])
+    best = 0
+    current = 0
+    previous_tick: int | None = None
+    for child_tick in range(leg.child_start, child_end + 1):
+        candidate_point = evaluation.point(child_tick)
+        reference_point = leg.reference.point(
+            child_tick + leg.reference_offset
+        )
+        if (
+            candidate_point is None
+            or reference_point is None
+            or _splice_match_metrics(
+                candidate_point,
+                reference_point,
+                alignment_spec,
+            )
+            is None
+        ):
+            current = 0
+            previous_tick = None
+            continue
+        current = (
+            current + 1
+            if previous_tick is not None and child_tick == previous_tick + 1
+            else 1
+        )
+        best = max(best, current)
+        previous_tick = child_tick
+    return best
+
+
+def _find_splice_suffix_alignment(
+    evaluation: AutoEvaluation,
+    suffix_leg: PiecewiseReferenceLeg,
+    config: AutoConfig,
+    *,
+    minimum_run_length: int,
+) -> AlignmentMatch | None:
+    """Find stable recipient-suffix alignment around the planned frame lead."""
+    planned_offset = suffix_leg.reference_offset
+    offset_slack = config.max_alignment
+    minimum_offset = planned_offset - offset_slack
+    maximum_offset = planned_offset + offset_slack
+    alignment_spec = SpliceAlignmentSpec(
+        minimum_run_length=2,
+        position_tolerance=config.alignment_position_tolerance,
+        velocity_tolerance=config.alignment_velocity_tolerance,
+        objective=config.objective,
+    )
+    best: tuple[
+        tuple[int, int, int, float, int],
+        CompactTracePoint,
+        CompactTracePoint,
+        float,
+    ] | None = None
+    child_end = evaluation.last_tick
+    if child_end < suffix_leg.child_start:
+        return None
+
+    candidate_analysis = _native_trace_analysis(evaluation)
+    reference_analysis = _native_trace_analysis(suffix_leg.reference)
+    if (
+        minimum_run_length >= 1
+        and candidate_analysis is not None
+        and reference_analysis is not None
+        and -(1 << 63) <= minimum_offset <= (1 << 63) - 1
+        and -(1 << 63) <= maximum_offset <= (1 << 63) - 1
+    ):
+        raw_match = candidate_analysis.find_splice_alignment(
+            reference_analysis,
+            candidate_start_tick=suffix_leg.child_start,
+            candidate_end_tick=child_end,
+            minimum_offset=minimum_offset,
+            maximum_offset=maximum_offset,
+            minimum_run_length=minimum_run_length,
+            position_tolerance=alignment_spec.position_tolerance,
+            velocity_tolerance=alignment_spec.velocity_tolerance,
+            position_weight=_TRACE_POSITION_WEIGHT,
+            velocity_weight=_TRACE_VELOCITY_WEIGHT,
+            contact_mismatch_penalty=_TRACE_CONTACT_MISMATCH_PENALTY,
+            in_air_mismatch_penalty=_TRACE_IN_AIR_MISMATCH_PENALTY,
+            near_wall_mismatch_penalty=_TRACE_NEAR_WALL_MISMATCH_PENALTY,
+            gold_bit_penalty=_TRACE_GOLD_BIT_PENALTY,
+            mine_bit_penalty=_TRACE_MINE_BIT_PENALTY,
+            exit_bit_penalty=_TRACE_EXIT_BIT_PENALTY,
+            locked_door_bit_penalty=_TRACE_LOCKED_DOOR_BIT_PENALTY,
+            trapdoor_bit_penalty=_TRACE_TRAPDOOR_BIT_PENALTY,
+        )
+        if raw_match is None:
+            return None
+        return AlignmentMatch(
+            candidate_tick=int(raw_match[0]),
+            reference_tick=int(raw_match[1]),
+            offset=int(raw_match[2]),
+            distance=float(raw_match[3]),
+            contact_matches=bool(raw_match[4]),
+            static_matches=bool(raw_match[5]),
+            score_lead=int(raw_match[6]),
+        )
+
+    for offset in range(minimum_offset, maximum_offset + 1):
+        run_length = 0
+        run_distance = 0.0
+        previous_tick: int | None = None
+        for child_tick in range(suffix_leg.child_start, child_end + 1):
+            reference_tick = child_tick + offset
+            candidate_point = evaluation.point(child_tick)
+            reference_point = suffix_leg.reference.point(reference_tick)
+            if (
+                candidate_point is None
+                or reference_point is None
+                or _splice_match_metrics(
+                    candidate_point,
+                    reference_point,
+                    alignment_spec,
+                )
+                is None
+            ):
+                run_length = 0
+                run_distance = 0.0
+                previous_tick = None
+                continue
+            distance = _trace_distance(candidate_point, reference_point)
+            if previous_tick is None or child_tick != previous_tick + 1:
+                run_length = 1
+                run_distance = distance
+            else:
+                run_length += 1
+                run_distance += distance
+            previous_tick = child_tick
+            if run_length < minimum_run_length:
+                continue
+            average_distance = run_distance / run_length
+            score_lead = (
+                offset
+                + candidate_point.gold_bonus_ticks
+                - reference_point.gold_bonus_ticks
+            )
+            rank = (
+                run_length,
+                child_tick,
+                score_lead,
+                -average_distance,
+                offset,
+            )
+            if best is None or rank > best[0]:
+                best = (
+                    rank,
+                    candidate_point,
+                    reference_point,
+                    average_distance,
+                )
+    if best is None:
+        return None
+    rank, candidate_point, reference_point, average_distance = best
+    return AlignmentMatch(
+        candidate_tick=candidate_point.tick,
+        reference_tick=reference_point.tick,
+        offset=reference_point.tick - candidate_point.tick,
+        distance=average_distance,
+        contact_matches=True,
+        static_matches=candidate_point.static_key == reference_point.static_key,
+        score_lead=rank[2],
+    )
+
+
+def _piecewise_route_control_target(
+    evaluation: AutoEvaluation,
+    piecewise_reference: Sequence[PiecewiseReferenceLeg],
+) -> RouteControlRepairTarget | None:
+    targets: list[RouteControlRepairTarget] = []
+    for leg in _validate_piecewise_reference(piecewise_reference):
+        child_end = min(
+            evaluation.last_tick,
+            evaluation.last_tick if leg.child_end is None else leg.child_end,
+        )
+        if child_end < leg.child_start:
+            continue
+        target = _find_route_control_repair_target(
+            evaluation,
+            leg.reference,
+            reference_offset=leg.reference_offset,
+            candidate_start_tick=leg.child_start,
+            candidate_end_tick=child_end,
+        )
+        if target is not None:
+            targets.append(target)
+    return (
+        min(targets, key=lambda target: target.candidate_tick)
+        if targets
+        else None
+    )
+
+
+def _splice_progress_snapshot(
+    candidate: AutoCandidate,
+    piecewise_reference: Sequence[PiecewiseReferenceLeg],
+    config: AutoConfig,
+    repair_spec: SpliceRepairSpec,
+    *,
+    inherited_misses: Sequence[int] = (),
+) -> _SpliceProgressSnapshot:
+    """Summarise one evaluated splice, consuming its cached suffix alignment."""
+    legs = _validate_piecewise_reference(piecewise_reference)
+    mapped_misses = detect_piecewise_missed_jumps(
+        legs,
+        candidate.evaluation,
+    )
+    first_failure = _first_failure(
+        candidate.evaluation,
+        mapped_misses,
+        inherited_misses,
+    )
+    route_control_target = _piecewise_route_control_target(
+        candidate.evaluation,
+        legs,
+    )
+    if route_control_target is not None:
+        first_failure = min(
+            first_failure,
+            route_control_target.candidate_tick,
+        )
+
+    suffix_leg = legs[-1]
+    # Splice candidates are constructed by _evaluate_splice_candidate(), which
+    # records this exact suffix search on the immutable candidate.  Reusing the
+    # cached result here avoids immediately repeating the bounded alignment scan
+    # (including when the cached result is the meaningful negative result None).
+    suffix_alignment = candidate.alignment
+    child_exit_tick = suffix_leg.child_start - 1
+    recipient_exit_tick = child_exit_tick + suffix_leg.reference_offset
+    child_exit_point = candidate.evaluation.point(child_exit_tick)
+    recipient_exit_point = suffix_leg.reference.point(recipient_exit_tick)
+    exit_alignment_distance = (
+        _trace_distance(child_exit_point, recipient_exit_point)
+        if child_exit_point is not None
+        and recipient_exit_point is not None
+        and not child_exit_point.dead
+        else math.inf
+    )
+    return _SpliceProgressSnapshot(
+        first_failure=first_failure,
+        last_tick=candidate.evaluation.last_tick,
+        exit_alignment_distance=exit_alignment_distance,
+        suffix_lead=(
+            None if suffix_alignment is None else suffix_alignment.offset
+        ),
+        mapped_misses=mapped_misses,
+        route_control_target=route_control_target,
+        frame_ahead=(
+            suffix_alignment is not None and suffix_alignment.offset > 0
+        ),
+    )
+
+
+def _evaluate_splice_candidate(
+    level: Level,
+    working_frames: Sequence[InputFrame],
+    *,
+    parent: AutoCandidate,
+    recipient_working: Sequence[InputFrame],
+    piecewise_reference: Sequence[PiecewiseReferenceLeg],
+    config: AutoConfig,
+    repair_spec: SpliceRepairSpec,
+    max_body_length: int,
+    origin: str,
+    description: str,
+) -> AutoCandidate:
+    fixed = tuple(working_frames)
+    evaluation = _evaluate_working(
+        level,
+        fixed,
+        trace_stride=config.trace_stride,
+    )
+    fixed, evaluation, sentinel_verified = _normalise_completed_working(
+        level,
+        fixed,
+        evaluation,
+        trace_stride=config.trace_stride,
+        preserve_body_length=max_body_length,
+    )
+    suffix_alignment = _find_splice_suffix_alignment(
+        evaluation,
+        _validate_piecewise_reference(piecewise_reference)[-1],
+        config,
+        minimum_run_length=repair_spec.alignment_run_length,
+    )
+    return AutoCandidate(
+        working_frames=fixed,
+        evaluation=evaluation,
+        origin=origin,
+        mutations=parent.mutations + (description,),
+        generation=parent.generation + 1,
+        alignment=suffix_alignment,
+        edit_count=_count_edits(recipient_working, fixed),
+        sentinel_verified=sentinel_verified,
+        replay_key=_frame_key(fixed),
+        input_transitions=input_transition_frames(fixed[:-1]),
+    )
+
+
+def _splice_acceptance_rejection(
+    candidate: AutoCandidate,
+    recipient: AutoCandidate,
+    plan: SpliceSectionPlan,
+    config: AutoConfig,
+    *,
+    required_gold_mask: int,
+) -> str | None:
+    if not candidate.output_valid:
+        return "splice did not produce a sentinel-verified completion"
+    if recipient.finish_tick is None or candidate.finish_tick is None:
+        return "splice acceptance requires completed recipient and child replays"
+    if not _gold_requirement_satisfied(
+        candidate.evaluation,
+        required_gold_mask,
+        config,
+    ):
+        return "completed splice did not preserve required reference gold"
+    if auto_candidate_outcome_key(
+        candidate, config.objective
+    ) >= auto_candidate_outcome_key(recipient, config.objective):
+        return "completed splice did not improve the selected campaign outcome"
+    return None
+
+
+def _splice_repair_stage(
+    frontier: _SpliceRepairFrontier,
+    snapshot: _SpliceProgressSnapshot,
+    config: AutoConfig,
+    repair_spec: SpliceRepairSpec,
+) -> tuple[str, AutoConfig, PiecewiseReferenceLeg] | None:
+    legs = frontier.piecewise_reference
+    prefix_leg, donor_leg, suffix_leg = legs
+    body_end = len(frontier.candidate.working_frames) - 2
+    failure_tick = min(snapshot.first_failure, max(0, body_end))
+    leg = _piecewise_reference_leg(legs, failure_tick)
+
+    if leg is prefix_leg:
+        stage = "entry bridge"
+    elif leg is donor_leg:
+        donor_run = _piecewise_leg_match_run(
+            frontier.candidate.evaluation,
+            donor_leg,
+            config,
+        )
+        stage = (
+            "donor section"
+            if donor_run >= repair_spec.alignment_run_length
+            else "entry bridge"
+        )
+    else:
+        recipient_finish = suffix_leg.reference.finish_tick
+        expected_finish = (
+            None
+            if recipient_finish is None
+            else recipient_finish - frontier.predicted_gain
+        )
+        if snapshot.suffix_lead is None:
+            stage = "exit bridge"
+        elif (
+            expected_finish is not None
+            and failure_tick
+            >= expected_finish
+            - max(config.repair_window, config.repair_lookahead)
+        ):
+            stage = "completion repair"
+        else:
+            stage = "suffix continuation"
+
+    configured_end = body_end if config.range_end is None else config.range_end
+    global_start = max(0, config.range_start)
+    global_end = min(body_end, configured_end)
+    if stage == "entry bridge":
+        seam = donor_leg.child_start - 1
+        range_start = seam - frontier.entry_bridge_window + 1
+        range_end = seam + frontier.entry_bridge_window
+    elif stage == "donor section":
+        range_start = donor_leg.child_start
+        assert donor_leg.child_end is not None
+        range_end = donor_leg.child_end
+    elif stage == "exit bridge":
+        assert donor_leg.child_end is not None
+        seam = donor_leg.child_end
+        range_start = seam - frontier.exit_bridge_window + 1
+        range_end = seam + frontier.exit_bridge_window
+    else:
+        range_start = suffix_leg.child_start
+        range_end = global_end
+    range_start = max(global_start, range_start)
+    range_end = min(global_end, range_end)
+    if range_start > range_end:
+        return None
+    return (
+        stage,
+        replace(config, range_start=range_start, range_end=range_end),
+        leg,
+    )
+
+
+def _widen_splice_bridge(
+    frontier: _SpliceRepairFrontier,
+    stage: str,
+    repair_spec: SpliceRepairSpec,
+) -> bool:
+    if stage == "entry bridge":
+        before = frontier.entry_bridge_window
+        after = min(
+            repair_spec.maximum_bridge_window,
+            before * repair_spec.bridge_growth_factor,
+        )
+        if after == before:
+            return False
+        frontier.entry_bridge_window = after
+    elif stage == "exit bridge":
+        before = frontier.exit_bridge_window
+        after = min(
+            repair_spec.maximum_bridge_window,
+            before * repair_spec.bridge_growth_factor,
+        )
+        if after == before:
+            return False
+        frontier.exit_bridge_window = after
+    else:
+        return False
+    frontier.diagnostics.append(
+        f"{stage}: widened editable seam window {before}->{after}"
+    )
+    return True
+
+
+def _splice_repair_progressed(
+    before: _SpliceProgressSnapshot,
+    after: _SpliceProgressSnapshot,
+    *,
+    predicted_gain: int,
+) -> bool:
+    before_control = before.route_control_target
+    after_control = after.route_control_target
+    control_progress = bool(
+        before_control is not None
+        and (
+            after_control is None
+            or after_control.candidate_tick > before_control.candidate_tick
+        )
+    )
+    suffix_progress = bool(
+        after.suffix_lead is not None
+        and (
+            before.suffix_lead is None
+            or after.suffix_lead > before.suffix_lead
+            or (
+                before.suffix_lead < predicted_gain
+                and after.suffix_lead >= predicted_gain
+            )
+        )
+    )
+    return bool(
+        after.first_failure > before.first_failure
+        or after.last_tick > before.last_tick
+        or after.exit_alignment_distance + 1e-9
+        < before.exit_alignment_distance
+        or suffix_progress
+        or len(after.mapped_misses) < len(before.mapped_misses)
+        or control_progress
+        or (after.frame_ahead and not before.frame_ahead)
+    )
+
+
+def repair_reference_segment_splice(
+    level: Level,
+    recipient: AutoCandidate,
+    donor: AutoCandidate,
+    plan: SpliceSectionPlan,
+    *,
+    config: AutoConfig,
+    max_body_length: int,
+    repair_spec: SpliceRepairSpec | None = None,
+    required_gold_mask: int | None = None,
+) -> SpliceRepairResult:
+    """Simulate and repair one bounded splice against its piecewise route.
+
+    This is intentionally independent of ``_AutonomousSearch`` admission and
+    scheduling.  A later inter-run scheduler can screen plans, call this
+    controller, and admit only ``result.accepted_candidate`` values.
+    """
+    if not isinstance(recipient, AutoCandidate) or not isinstance(
+        donor, AutoCandidate
+    ):
+        raise TypeError("recipient and donor must be AutoCandidate values")
+    if not recipient.output_valid or not donor.output_valid:
+        raise ValueError(
+            "recipient and donor must be sentinel-verified completions"
+        )
+    if not isinstance(config, AutoConfig):
+        raise TypeError("config must be an AutoConfig")
+    if max_body_length < 0:
+        raise ValueError("max_body_length must be non-negative")
+    policy = repair_spec or SpliceRepairSpec(
+        failure_region_revisit_limit=config.splice_repair_revisit_limit,
+    )
+    if not isinstance(policy, SpliceRepairSpec):
+        raise TypeError("repair_spec must be a SpliceRepairSpec")
+    piecewise_reference = build_splice_piecewise_reference(
+        recipient.evaluation,
+        donor.evaluation,
+        plan,
+    )
+    if required_gold_mask is None:
+        required_mask = (
+            recipient.evaluation.final_gold_mask
+            if config.require_reference_gold
+            else 0
+        )
+    else:
+        required_mask = required_gold_mask
+    if required_mask < 0:
+        raise ValueError("required_gold_mask must be non-negative")
+
+    raw_working = apply_reference_segment_splice(
+        recipient.working_frames,
+        donor.working_frames,
+        plan,
+        max_body_length=max_body_length,
+    )
+    raw_candidate = _evaluate_splice_candidate(
+        level,
+        raw_working,
+        parent=recipient,
+        recipient_working=recipient.working_frames,
+        piecewise_reference=piecewise_reference,
+        config=config,
+        repair_spec=policy,
+        max_body_length=max_body_length,
+        origin="segment-splice",
+        description=(
+            "bounded donor section "
+            f"A[{plan.recipient_entry_tick}:{plan.recipient_exit_tick}] "
+            f"<- B[{plan.donor_entry_tick}:{plan.donor_exit_tick}]"
+        ),
+    )
+    inherited_misses = map_piecewise_reference_events(
+        piecewise_reference,
+        lambda evaluation: evaluation.missed_jump_edges,
+    )
+    raw_snapshot = _splice_progress_snapshot(
+        raw_candidate,
+        piecewise_reference,
+        config,
+        policy,
+        inherited_misses=inherited_misses,
+    )
+    frontier = _SpliceRepairFrontier(
+        candidate=raw_candidate,
+        splice_plan=plan,
+        piecewise_reference=piecewise_reference,
+        predicted_gain=plan.predicted_time_gain,
+        progress_snapshot=raw_snapshot,
+        frame_ahead_seen=raw_snapshot.frame_ahead,
+        entry_bridge_window=policy.initial_bridge_window,
+        exit_bridge_window=policy.initial_bridge_window,
+        inherited_misses=inherited_misses,
+        seen_replays={_candidate_replay_key(raw_candidate)},
+        diagnostics=[
+            "raw splice simulated before repair; "
+            f"last tick {raw_candidate.evaluation.last_tick}"
+        ],
+    )
+
+    def finish(
+        accepted: bool,
+        rejection_reason: str | None,
+    ) -> SpliceRepairResult:
+        return SpliceRepairResult(
+            raw_candidate=raw_candidate,
+            candidate=frontier.candidate,
+            piecewise_reference=piecewise_reference,
+            accepted=accepted,
+            attempts=frontier.attempts,
+            local_simulations=frontier.local_simulations,
+            failure_regions=frontier.failure_regions,
+            frame_ahead_seen=frontier.frame_ahead_seen,
+            diagnostics=tuple(frontier.diagnostics),
+            rejection_reason=rejection_reason,
+        )
+
+    if raw_candidate.output_valid:
+        rejection = _splice_acceptance_rejection(
+            raw_candidate,
+            recipient,
+            plan,
+            config,
+            required_gold_mask=required_mask,
+        )
+        frontier.diagnostics.append(
+            "raw splice completed and passed acceptance"
+            if rejection is None
+            else f"raw splice completion rejected: {rejection}"
+        )
+        return finish(rejection is None, rejection)
+
+    rejection_reason: str
+    while True:
+        before = frontier.progress_snapshot
+        campaign_limit = _repair_campaign_local_limit(
+            config,
+            frame_ahead=frontier.frame_ahead_seen,
+        )
+        if campaign_limit and frontier.local_simulations >= campaign_limit:
+            rejection_reason = "splice repair campaign local budget exhausted"
+            break
+        region = before.first_failure // policy.failure_region_size
+        if (
+            frontier.failure_regions.count(region)
+            >= policy.failure_region_revisit_limit
+        ):
+            rejection_reason = (
+                f"splice failure region {region} was revisited repeatedly"
+            )
+            break
+        staged = _splice_repair_stage(frontier, before, config, policy)
+        if staged is None:
+            rejection_reason = "no editable bridge or reference region remains"
+            break
+        stage, attempt_config, reference_leg = staged
+        frontier.failure_regions += (region,)
+        frontier.attempts += 1
+        controller = _RepairController(level, attempt_config)
+        outcome = controller.attempt(
+            frontier.candidate,
+            reference_leg.reference,
+            failure_tick=before.first_failure,
+            reference_offset=reference_leg.reference_offset,
+            repair_number=frontier.attempts,
+            label=stage,
+            strategic=True,
+            required_gold_mask=(
+                required_mask if stage == "completion repair" else 0
+            ),
+            require_failure_jump=True,
+            frame_ahead_seen=frontier.frame_ahead_seen,
+            candidate_start_tick=reference_leg.child_start,
+            candidate_end_tick=reference_leg.child_end,
+            local_simulations_before=frontier.local_simulations,
+        )
+        frontier.local_simulations += outcome.local_simulations
+        if outcome.working_frames is None:
+            frontier.diagnostics.append(
+                f"{stage}: no local repair proposal near "
+                f"{outcome.failure_tick}"
+            )
+            if _widen_splice_bridge(frontier, stage, policy):
+                continue
+            rejection_reason = "splice repair stopped without a local proposal"
+            break
+
+        proposal_key = _frame_key(outcome.working_frames)
+        if proposal_key in frontier.seen_replays:
+            frontier.diagnostics.append(f"{stage}: repeated an existing replay")
+            if _widen_splice_bridge(frontier, stage, policy):
+                continue
+            rejection_reason = "splice repair repeated an existing replay"
+            break
+        frontier.seen_replays.add(proposal_key)
+        repaired = _evaluate_splice_candidate(
+            level,
+            outcome.working_frames,
+            parent=frontier.candidate,
+            recipient_working=recipient.working_frames,
+            piecewise_reference=piecewise_reference,
+            config=config,
+            repair_spec=policy,
+            max_body_length=max_body_length,
+            origin="splice-repair",
+            description=(
+                f"{outcome.repair_method} {stage} near "
+                f"{outcome.failure_tick}"
+            ),
+        )
+        after = _splice_progress_snapshot(
+            repaired,
+            piecewise_reference,
+            config,
+            policy,
+            inherited_misses=frontier.inherited_misses,
+        )
+
+        if repaired.output_valid:
+            frontier.candidate = repaired
+            frontier.progress_snapshot = after
+            rejection = _splice_acceptance_rejection(
+                repaired,
+                recipient,
+                plan,
+                config,
+                required_gold_mask=required_mask,
+            )
+            frontier.diagnostics.append(
+                f"{stage}: verified completion"
+                if rejection is None
+                else f"{stage}: completion rejected: {rejection}"
+            )
+            return finish(rejection is None, rejection)
+
+        if (
+            frontier.frame_ahead_seen
+            and plan.predicted_time_gain > 0
+            and (
+                after.suffix_lead is None
+                or after.suffix_lead < plan.predicted_time_gain
+            )
+        ):
+            frontier.diagnostics.append(
+                "repair no longer has the full predicted recipient-suffix lead; "
+                "continuing while the completed campaign outcome can still improve"
+            )
+        if not _splice_repair_progressed(
+            before,
+            after,
+            predicted_gain=plan.predicted_time_gain,
+        ):
+            frontier.diagnostics.append(
+                f"{stage}: proposal made no retained frontier progress"
+            )
+            if _widen_splice_bridge(frontier, stage, policy):
+                continue
+            rejection_reason = "splice repair attempt made no progress"
+            break
+
+        frontier.candidate = repaired
+        frontier.progress_snapshot = after
+        frontier.frame_ahead_seen = bool(
+            frontier.frame_ahead_seen or after.frame_ahead
+        )
+        frontier.diagnostics.append(
+            f"{stage}: failure {before.first_failure}->{after.first_failure}; "
+            f"last tick {before.last_tick}->{after.last_tick}; "
+            f"mapped misses {len(before.mapped_misses)}->"
+            f"{len(after.mapped_misses)}"
+        )
+
+    frontier.diagnostics.append(rejection_reason)
+    return finish(False, rejection_reason)
 
 
 def _jump_pulses(frames: Sequence[InputFrame]) -> tuple[tuple[int, int], ...]:
@@ -2472,6 +5120,7 @@ def repair_jump_mutation_lookback(
     working_frames: Sequence[InputFrame],
     baseline: AutoEvaluation,
     *,
+    seed_evaluation: AutoEvaluation | None = None,
     failure_tick: int,
     reference_offset: int,
     config: AutoConfig,
@@ -2482,7 +5131,12 @@ def repair_jump_mutation_lookback(
     forbidden_trapdoor_mask: int = 0,
     require_failure_jump: bool = True,
 ) -> tuple[tuple[InputFrame, ...] | None, int, int]:
-    """Evaluate policy-selected jump-boundary patches in native C."""
+    """Evaluate policy-selected jump-boundary patches in native C.
+
+    ``seed_evaluation`` may be supplied by a repair campaign which already
+    evaluated ``working_frames``.  Direct callers retain the exact historical
+    behaviour by leaving it unset.
+    """
     if failure_tick < 0:
         return None, 0, 0
     seed = tuple(working_frames)
@@ -2510,9 +5164,10 @@ def repair_jump_mutation_lookback(
         and (failure_tick == 0 or not seed[failure_tick - 1].jump)
         else None
     )
-    seed_evaluation = _evaluate_working(
-        level, seed, trace_stride=config.trace_stride
-    )
+    if seed_evaluation is None:
+        seed_evaluation = _evaluate_working(
+            level, seed, trace_stride=config.trace_stride
+        )
     seed_successes = frozenset(
         tick
         for tick in seed_evaluation.successful_jumps
@@ -2622,6 +5277,7 @@ def repair_direction_window(
     working_frames: Sequence[InputFrame],
     baseline: AutoEvaluation,
     *,
+    seed_evaluation: AutoEvaluation | None = None,
     failure_tick: int,
     reference_offset: int,
     config: AutoConfig,
@@ -2633,7 +5289,10 @@ def repair_direction_window(
     forbidden_trapdoor_mask: int = 0,
     require_failure_jump: bool = True,
 ) -> tuple[tuple[InputFrame, ...] | None, int, int]:
-    """Choose horizontal probes in Python and execute them in native C."""
+    """Choose horizontal probes in Python and execute them in native C.
+
+    ``seed_evaluation`` avoids resimulating an immutable campaign candidate.
+    """
     if failure_tick < 0:
         return None, 0, 0
     search_rng = _effective_repair_search_rng(
@@ -2666,9 +5325,10 @@ def repair_direction_window(
     required_jump_frames = (
         (required_jump,) if required_jump is not None else ()
     )
-    seed_evaluation = _evaluate_working(
-        level, seed, trace_stride=config.trace_stride
-    )
+    if seed_evaluation is None:
+        seed_evaluation = _evaluate_working(
+            level, seed, trace_stride=config.trace_stride
+        )
     base_point = seed_evaluation.point(target_tick)
     base_score = _repair_evaluation_score(
         seed_evaluation,
@@ -3083,6 +5743,316 @@ def repair_all_input_window(
     proposal = _native_apply_search_result(seed, mutable_frames, result)
     return proposal, branches, simulations
 
+
+class _RepairController:
+    """Reusable policy controller for one existing local-repair attempt.
+
+    The controller owns method ordering, RNG streams, route requirements and
+    the shared local allowance.  It deliberately does not admit or rank the
+    resulting working replay; Auto and sectional-splice campaigns each retain
+    their own candidate lifecycle.
+    """
+
+    def __init__(self, level: Level, config: AutoConfig) -> None:
+        self.level = level
+        self.config = config
+
+    def attempt(
+        self,
+        candidate: AutoCandidate,
+        repair_reference: AutoEvaluation,
+        *,
+        failure_tick: int,
+        reference_offset: int,
+        repair_number: int,
+        label: str,
+        strategic: bool = False,
+        required_gold_mask: int = 0,
+        require_failure_jump: bool = True,
+        frame_ahead_seen: bool = False,
+        candidate_start_tick: int | None = None,
+        candidate_end_tick: int | None = None,
+        local_simulations_before: int = 0,
+        progress: Callable[[str, int], None] | None = None,
+    ) -> _RepairAttemptOutcome:
+        if repair_number < 1:
+            raise ValueError("repair_number must be positive")
+
+        config = self.config
+        primary_repair_order = _seeded_primary_repair_order(
+            config.seed,
+            repair_number,
+        )
+        direction_repair_rng = (
+            _derive_repair_search_rng(config.seed, repair_number, "direction")
+            if config.repair_search_order == AUTO_REPAIR_SEARCH_ORDER_RANDOM
+            else None
+        )
+        all_input_repair_rng = (
+            _derive_repair_search_rng(config.seed, repair_number, "all-input")
+            if config.repair_search_order == AUTO_REPAIR_SEARCH_ORDER_RANDOM
+            else None
+        )
+
+        control_target = _find_route_control_repair_target(
+            candidate.evaluation,
+            repair_reference,
+            reference_offset=reference_offset,
+            candidate_start_tick=candidate_start_tick,
+            candidate_end_tick=candidate_end_tick,
+        )
+        required_exit_mask = 0
+        required_locked_door_mask = 0
+        forbidden_trapdoor_mask = 0
+        route_control_repair = False
+        if (
+            control_target is not None
+            and control_target.candidate_tick <= failure_tick
+        ):
+            failure_tick = control_target.candidate_tick
+            required_exit_mask = control_target.required_exit_mask
+            required_locked_door_mask = control_target.required_locked_door_mask
+            forbidden_trapdoor_mask = control_target.forbidden_trapdoor_mask
+            expected_tick = min(
+                repair_reference.last_tick,
+                max(
+                    0,
+                    failure_tick
+                    + config.repair_lookahead
+                    + reference_offset,
+                ),
+            )
+            expected_point = repair_reference.point(expected_tick)
+            if (
+                expected_point is not None
+                and repair_reference.completed_exit_index is not None
+            ):
+                exit_bit = 1 << repair_reference.completed_exit_index
+                if expected_point.open_exit_mask & exit_bit:
+                    required_exit_mask |= exit_bit
+            label = f"{label}; route control {control_target.label}"
+            route_control_repair = True
+
+        frame_ahead_active = _frame_ahead_repair_eligible(
+            candidate,
+            frame_ahead_seen=frame_ahead_seen,
+        )
+        effective_local_limit = _repair_attempt_local_limit(
+            config,
+            frame_ahead=frame_ahead_active,
+        )
+        repair_config = (
+            config
+            if effective_local_limit == config.repair_local_limit
+            else replace(config, repair_local_limit=effective_local_limit)
+        )
+        direction_repair_config = repair_config
+        if (
+            not strategic
+            and not route_control_repair
+            and direction_repair_config.repair_lookback > 24
+        ):
+            direction_repair_config = replace(
+                direction_repair_config,
+                repair_lookback=max(
+                    direction_repair_config.repair_window, 24
+                ),
+            )
+
+        if (
+            frame_ahead_active
+            and config.repair_local_limit
+            and config.frame_ahead_repair_multiplier > 1
+        ):
+            budget_note = (
+                f"; frame-ahead x{config.frame_ahead_repair_multiplier}; "
+                f"local limit {effective_local_limit}"
+            )
+        elif frame_ahead_active and not config.repair_local_limit:
+            budget_note = "; frame-ahead; local limit unlimited"
+        else:
+            budget_note = ""
+
+        def emit(message: str, local_simulations: int) -> None:
+            if progress is not None:
+                progress(message, local_simulations)
+
+        def remaining_repair_config(
+            consumed: int,
+            *,
+            direction_only: bool = False,
+        ) -> AutoConfig | None:
+            template = (
+                direction_repair_config if direction_only else repair_config
+            )
+            if not repair_config.repair_local_limit:
+                return template
+            remaining = max(0, repair_config.repair_local_limit - consumed)
+            if remaining <= 0:
+                return None
+            if remaining == template.repair_local_limit:
+                return template
+            return replace(template, repair_local_limit=remaining)
+
+        repaired: tuple[InputFrame, ...] | None = None
+        repair_method: str | None = None
+        consumed_local_steps = 0
+        local_branches = 0
+        jump_repair_attempts = 0
+        all_input_repairs = 0
+        attempted_primary_labels: list[str] = []
+        jump_repair_enabled = (
+            repair_config.max_jump_shift >= 1
+            or repair_config.max_jump_hold_delta >= 1
+        )
+        primary_methods = tuple(
+            method
+            for method in primary_repair_order
+            if method != "jump" or jump_repair_enabled
+        )
+
+        for method in primary_methods:
+            method_config = remaining_repair_config(
+                consumed_local_steps,
+                direction_only=method == "direction",
+            )
+            if method_config is None:
+                break
+            method_label = "jump mutation" if method == "jump" else "direction"
+            method_local_before = local_simulations_before + consumed_local_steps
+
+            def show_primary_repair(
+                branches: int,
+                simulations: int,
+                *,
+                _method_label: str = method_label,
+                _method_local_before: int = method_local_before,
+            ) -> None:
+                emit(
+                    f"{_method_label} repair near frame {failure_tick}; "
+                    f"{label}{budget_note}",
+                    _method_local_before + simulations,
+                )
+
+            if attempted_primary_labels:
+                emit(
+                    f"{attempted_primary_labels[-1]} repair missed; trying "
+                    f"{method_label} repair near frame {failure_tick}",
+                    method_local_before,
+                )
+            else:
+                emit(
+                    f"starting {method_label} repair near frame "
+                    f"{failure_tick}; {label}{budget_note}",
+                    method_local_before,
+                )
+
+            if method == "jump":
+                jump_repair_attempts += 1
+                proposal, branches, simulations = repair_jump_mutation_lookback(
+                    self.level,
+                    candidate.working_frames,
+                    repair_reference,
+                    seed_evaluation=candidate.evaluation,
+                    failure_tick=failure_tick,
+                    reference_offset=reference_offset,
+                    config=method_config,
+                    progress=show_primary_repair,
+                    required_gold_mask=required_gold_mask,
+                    required_exit_mask=required_exit_mask,
+                    required_locked_door_mask=required_locked_door_mask,
+                    forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+                    require_failure_jump=require_failure_jump,
+                )
+            else:
+                proposal, branches, simulations = repair_direction_window(
+                    self.level,
+                    candidate.working_frames,
+                    repair_reference,
+                    seed_evaluation=candidate.evaluation,
+                    failure_tick=failure_tick,
+                    reference_offset=reference_offset,
+                    config=method_config,
+                    rng=direction_repair_rng,
+                    progress=show_primary_repair,
+                    required_gold_mask=required_gold_mask,
+                    required_exit_mask=required_exit_mask,
+                    required_locked_door_mask=required_locked_door_mask,
+                    forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+                    require_failure_jump=require_failure_jump,
+                )
+            local_branches += branches
+            consumed_local_steps += simulations
+            attempted_primary_labels.append(method_label)
+            if proposal is not None:
+                repaired = proposal
+                repair_method = method_label
+                break
+
+        fallback_config = remaining_repair_config(consumed_local_steps)
+        if (
+            repaired is None
+            and config.all_input_repair
+            and fallback_config is not None
+        ):
+            all_input_repairs += 1
+            local_before_fallback = local_simulations_before + consumed_local_steps
+
+            def show_all_input_repair(
+                branches: int, simulations: int
+            ) -> None:
+                emit(
+                    f"all-input fallback near frame {failure_tick}; "
+                    f"{label}{budget_note}",
+                    local_before_fallback + simulations,
+                )
+
+            missed_label = (
+                "/".join(attempted_primary_labels)
+                if attempted_primary_labels
+                else "primary"
+            )
+            emit(
+                f"{missed_label} repair missed; trying all-input fallback "
+                f"near frame {failure_tick}",
+                local_before_fallback,
+            )
+            repaired, branches, simulations = repair_all_input_window(
+                self.level,
+                candidate.working_frames,
+                repair_reference,
+                seed_evaluation=candidate.evaluation,
+                failure_tick=failure_tick,
+                reference_offset=reference_offset,
+                config=fallback_config,
+                rng=all_input_repair_rng,
+                progress=show_all_input_repair,
+                required_gold_mask=required_gold_mask,
+                required_exit_mask=required_exit_mask,
+                required_locked_door_mask=required_locked_door_mask,
+                forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+                require_failure_jump=require_failure_jump,
+            )
+            local_branches += branches
+            consumed_local_steps += simulations
+            if repaired is not None:
+                repair_method = "all-input"
+
+        return _RepairAttemptOutcome(
+            working_frames=repaired,
+            repair_method=repair_method,
+            failure_tick=failure_tick,
+            label=label,
+            local_branches=local_branches,
+            local_simulations=consumed_local_steps,
+            jump_repair_attempts=jump_repair_attempts,
+            all_input_repairs=all_input_repairs,
+            route_control_repair=route_control_repair,
+            route_control_target=control_target,
+            frame_ahead_active=frame_ahead_active,
+        )
+
+
 def _candidate_key(
     candidate: AutoCandidate,
     baseline_tick: int,
@@ -3334,15 +6304,35 @@ def _find_route_control_repair_target(
     reference: AutoEvaluation,
     *,
     reference_offset: int = 0,
+    candidate_start_tick: int | None = None,
+    candidate_end_tick: int | None = None,
 ) -> RouteControlRepairTarget | None:
     """Find the first control divergence which can explain a failed route."""
     if candidate.completed:
         return None
+    if candidate_start_tick is not None and candidate_start_tick < 0:
+        raise ValueError("candidate_start_tick must be non-negative")
+    if (
+        candidate_start_tick is not None
+        and candidate_end_tick is not None
+        and candidate_end_tick < candidate_start_tick
+    ):
+        return None
     candidate_analysis = _native_trace_analysis(candidate)
     reference_analysis = _native_trace_analysis(reference)
+    native_start_tick = (
+        0 if candidate_start_tick is None else candidate_start_tick
+    )
+    native_end_tick = (
+        candidate.last_tick
+        if candidate_end_tick is None
+        else candidate_end_tick
+    )
     if (
         candidate_analysis is not None
         and reference_analysis is not None
+        and 0 <= native_start_tick <= (1 << 64) - 1
+        and 0 <= native_end_tick <= (1 << 64) - 1
         and -(1 << 63) <= reference_offset <= (1 << 63) - 1
     ):
         raw_target = candidate_analysis.find_route_divergence(
@@ -3353,6 +6343,8 @@ def _find_route_control_repair_target(
                 if reference.completed_exit_index is None
                 else reference.completed_exit_index
             ),
+            candidate_start_tick=native_start_tick,
+            candidate_end_tick=native_end_tick,
         )
         if raw_target is None:
             return None
@@ -3369,6 +6361,10 @@ def _find_route_control_repair_target(
         else 1 << reference.completed_exit_index
     )
     for point in candidate.trace:
+        if candidate_start_tick is not None and point.tick < candidate_start_tick:
+            continue
+        if candidate_end_tick is not None and point.tick > candidate_end_tick:
+            break
         reference_tick = point.tick + reference_offset
         reference_point = reference.point(reference_tick)
         if reference_point is None:
@@ -4195,32 +7191,12 @@ class _AutonomousSearch:
         frame_ahead_seen: bool = False,
     ) -> AutoCandidate | None:
         # A repair is useful only if one macro-evaluation slot remains to admit
-        # and rank its result. Avoid an expensive local search whose proposal
-        # would be unconditionally discarded by ``_consider``.
+        # and rank its result.
         if self._budget_exhausted():
             return None
+
         self.counters["repair_attempts"] += 1
         repair_number = self.counters["repair_attempts"]
-        primary_repair_order = _seeded_primary_repair_order(
-            self.config.seed,
-            repair_number,
-        )
-        direction_repair_rng = (
-            _derive_repair_search_rng(
-                self.config.seed, repair_number, "direction"
-            )
-            if self.config.repair_search_order
-            == AUTO_REPAIR_SEARCH_ORDER_RANDOM
-            else None
-        )
-        all_input_repair_rng = (
-            _derive_repair_search_rng(
-                self.config.seed, repair_number, "all-input"
-            )
-            if self.config.repair_search_order
-            == AUTO_REPAIR_SEARCH_ORDER_RANDOM
-            else None
-        )
         offset = (
             reference_offset
             if reference_offset is not None
@@ -4231,270 +7207,47 @@ class _AutonomousSearch:
         target_reference = (
             self.reference_eval if repair_reference is None else repair_reference
         )
-        control_target = self._route_control_target(
-            candidate,
-            repair_reference=target_reference,
-            reference_offset=offset,
-        )
-        required_exit_mask = 0
-        required_locked_door_mask = 0
-        forbidden_trapdoor_mask = 0
-        route_control_repair = False
-        if (
-            control_target is not None
-            and control_target.candidate_tick <= failure_tick
-        ):
-            failure_tick = control_target.candidate_tick
-            required_exit_mask = control_target.required_exit_mask
-            required_locked_door_mask = control_target.required_locked_door_mask
-            forbidden_trapdoor_mask = control_target.forbidden_trapdoor_mask
-            expected_tick = min(
-                target_reference.last_tick,
-                max(
-                    0,
-                    failure_tick
-                    + self.config.repair_lookahead
-                    + offset,
-                ),
-            )
-            expected_point = target_reference.point(expected_tick)
-            if (
-                expected_point is not None
-                and target_reference.completed_exit_index is not None
-            ):
-                exit_bit = 1 << target_reference.completed_exit_index
-                if expected_point.open_exit_mask & exit_bit:
-                    required_exit_mask |= exit_bit
-            label = f"{label}; route control {control_target.label}"
-            route_control_repair = True
-            self.counters["route_control_repair_attempts"] += 1
-        frame_ahead_active = _frame_ahead_repair_eligible(
-            candidate,
-            frame_ahead_seen=frame_ahead_seen,
-        )
-        effective_local_limit = _repair_attempt_local_limit(
-            self.config,
-            frame_ahead=frame_ahead_active,
-        )
-        repair_config = (
-            self.config
-            if effective_local_limit == self.config.repair_local_limit
-            else replace(
-                self.config, repair_local_limit=effective_local_limit
-            )
-        )
-        direction_repair_config = repair_config
-        if (
-            not strategic
-            and not route_control_repair
-            and direction_repair_config.repair_lookback > 24
-        ):
-            direction_repair_config = replace(
-                direction_repair_config,
-                repair_lookback=max(
-                    direction_repair_config.repair_window, 24
-                ),
-            )
-        attempt_local_before = self.counters["local_simulations"]
-        if (
-            frame_ahead_active
-            and self.config.repair_local_limit
-            and self.config.frame_ahead_repair_multiplier > 1
-        ):
-            budget_note = (
-                f"; frame-ahead x{self.config.frame_ahead_repair_multiplier}; "
-                f"local limit {effective_local_limit}"
-            )
-        elif frame_ahead_active and not self.config.repair_local_limit:
-            budget_note = "; frame-ahead; local limit unlimited"
-        else:
-            budget_note = ""
+        local_before = self.counters["local_simulations"]
 
-        def remaining_repair_config(
-            consumed: int,
-            *,
-            direction_only: bool = False,
-        ) -> AutoConfig | None:
-            template = (
-                direction_repair_config if direction_only else repair_config
-            )
-            if not repair_config.repair_local_limit:
-                return template
-            remaining = max(
-                0, repair_config.repair_local_limit - consumed
-            )
-            if remaining <= 0:
-                return None
-            if remaining == template.repair_local_limit:
-                return template
-            return replace(template, repair_local_limit=remaining)
-
-        repaired: tuple[InputFrame, ...] | None = None
-        repair_method: str | None = None
-        consumed_local_steps = 0
-        attempted_primary_labels: list[str] = []
-        jump_repair_enabled = (
-            repair_config.max_jump_shift >= 1
-            or repair_config.max_jump_hold_delta >= 1
-        )
-        primary_methods = tuple(
-            method
-            for method in primary_repair_order
-            if method != "jump" or jump_repair_enabled
-        )
-
-        for method in primary_methods:
-            method_config = remaining_repair_config(
-                consumed_local_steps,
-                direction_only=method == "direction",
-            )
-            if method_config is None:
-                break
-            method_label = (
-                "jump mutation" if method == "jump" else "direction"
-            )
-            method_local_before = self.counters["local_simulations"]
-
-            def show_primary_repair(
-                branches: int,
-                simulations: int,
-                *,
-                _method_label: str = method_label,
-                _local_before: int = method_local_before,
-            ) -> None:
-                self._emit(
-                    phase,
-                    f"{_method_label} repair near frame {failure_tick}; "
-                    f"{label}{budget_note}",
-                    local_simulations=_local_before + simulations,
-                    repair_index=repair_number,
-                    campaign_index=campaign_index,
-                )
-
-            if attempted_primary_labels:
-                self._emit(
-                    phase,
-                    f"{attempted_primary_labels[-1]} repair missed; trying "
-                    f"{method_label} repair near frame {failure_tick}",
-                    local_simulations=method_local_before,
-                    repair_index=repair_number,
-                    campaign_index=campaign_index,
-                )
-            else:
-                self._emit(
-                    phase,
-                    f"starting {method_label} repair near frame "
-                    f"{failure_tick}; {label}{budget_note}",
-                    local_simulations=attempt_local_before,
-                    repair_index=repair_number,
-                    campaign_index=campaign_index,
-                )
-
-            if method == "jump":
-                self.counters["jump_repair_attempts"] += 1
-                proposal, branches, simulations = (
-                    repair_jump_mutation_lookback(
-                        self.level,
-                        candidate.working_frames,
-                        target_reference,
-                        failure_tick=failure_tick,
-                        reference_offset=offset,
-                        config=method_config,
-                        progress=show_primary_repair,
-                        required_gold_mask=required_gold_mask,
-                        required_exit_mask=required_exit_mask,
-                        required_locked_door_mask=required_locked_door_mask,
-                        forbidden_trapdoor_mask=forbidden_trapdoor_mask,
-                        require_failure_jump=require_failure_jump,
-                    )
-                )
-            else:
-                proposal, branches, simulations = repair_direction_window(
-                    self.level,
-                    candidate.working_frames,
-                    target_reference,
-                    failure_tick=failure_tick,
-                    reference_offset=offset,
-                    config=method_config,
-                    rng=direction_repair_rng,
-                    progress=show_primary_repair,
-                    required_gold_mask=required_gold_mask,
-                    required_exit_mask=required_exit_mask,
-                    required_locked_door_mask=required_locked_door_mask,
-                    forbidden_trapdoor_mask=forbidden_trapdoor_mask,
-                    require_failure_jump=require_failure_jump,
-                )
-            self.counters["local_branches"] += branches
-            self.counters["local_simulations"] += simulations
-            consumed_local_steps += simulations
-            attempted_primary_labels.append(method_label)
-            if proposal is not None:
-                repaired = proposal
-                repair_method = method_label
-                break
-
-        fallback_config = remaining_repair_config(consumed_local_steps)
-        if (
-            repaired is None
-            and self.config.all_input_repair
-            and fallback_config is not None
-        ):
-            local_before_fallback = self.counters["local_simulations"]
-
-            def show_all_input_repair(
-                branches: int, simulations: int
-            ) -> None:
-                self._emit(
-                    phase,
-                    f"all-input fallback near frame {failure_tick}; "
-                    f"{label}{budget_note}",
-                    local_simulations=local_before_fallback + simulations,
-                    repair_index=repair_number,
-                    campaign_index=campaign_index,
-                )
-
-            missed_label = (
-                "/".join(attempted_primary_labels)
-                if attempted_primary_labels
-                else "primary"
-            )
+        def show_repair(message: str, local_simulations: int) -> None:
             self._emit(
                 phase,
-                f"{missed_label} repair missed; trying all-input fallback "
-                f"near frame {failure_tick}",
-                local_simulations=local_before_fallback,
+                message,
+                local_simulations=local_simulations,
                 repair_index=repair_number,
                 campaign_index=campaign_index,
             )
-            repaired, branches, simulations = repair_all_input_window(
-                self.level,
-                candidate.working_frames,
-                target_reference,
-                seed_evaluation=candidate.evaluation,
-                failure_tick=failure_tick,
-                reference_offset=offset,
-                config=fallback_config,
-                rng=all_input_repair_rng,
-                progress=show_all_input_repair,
-                required_gold_mask=required_gold_mask,
-                required_exit_mask=required_exit_mask,
-                required_locked_door_mask=required_locked_door_mask,
-                forbidden_trapdoor_mask=forbidden_trapdoor_mask,
-                require_failure_jump=require_failure_jump,
-            )
-            self.counters["local_branches"] += branches
-            self.counters["local_simulations"] += simulations
-            self.counters["all_input_repairs"] += 1
-            if repaired is not None:
-                repair_method = "all-input"
-        if repaired is None:
+
+        outcome = _RepairController(self.level, self.config).attempt(
+            candidate,
+            target_reference,
+            failure_tick=failure_tick,
+            reference_offset=offset,
+            repair_number=repair_number,
+            label=label,
+            strategic=strategic,
+            required_gold_mask=required_gold_mask,
+            require_failure_jump=require_failure_jump,
+            frame_ahead_seen=frame_ahead_seen,
+            local_simulations_before=local_before,
+            progress=show_repair,
+        )
+        self.counters["local_branches"] += outcome.local_branches
+        self.counters["local_simulations"] += outcome.local_simulations
+        self.counters["jump_repair_attempts"] += outcome.jump_repair_attempts
+        self.counters["all_input_repairs"] += outcome.all_input_repairs
+        if outcome.route_control_repair:
+            self.counters["route_control_repair_attempts"] += 1
+        if outcome.working_frames is None:
             return None
+
         result = self._consider(
-            repaired,
+            outcome.working_frames,
             origin="repair",
             parent=candidate,
             description=(
-                f"{repair_method} repair near {failure_tick} ({label})"
+                f"{outcome.repair_method} repair near "
+                f"{outcome.failure_tick} ({outcome.label})"
             ),
             phase=phase,
             allow_gold_repair=False,
@@ -4511,7 +7264,7 @@ class _AutonomousSearch:
             )
         ):
             self.counters["successful_repairs"] += 1
-        if result is not None and route_control_repair and (
+        if result is not None and outcome.route_control_repair and (
             result.output_valid
             or self._route_control_target(
                 result,
@@ -4814,7 +7567,10 @@ class _AutonomousSearch:
                 break
             failure_tick = self._frontier_failure(frontier)
             region = failure_tick // 8
-            if frontier.failure_regions.count(region) >= 2:
+            if (
+                frontier.failure_regions.count(region)
+                >= self.config.beam_repair_revisit_limit
+            ):
                 break
             attempted = True
             self._record_repair_attempt(strategic=frontier.strategic)
@@ -5284,7 +8040,10 @@ class _AutonomousSearch:
                 ),
             )
             region = failure_tick // 8
-            if failure_regions.count(region) >= 2:
+            if (
+                failure_regions.count(region)
+                >= self.config.beam_repair_revisit_limit
+            ):
                 break
             self._record_repair_attempt(strategic=True)
             if not campaign_counted:
@@ -6076,17 +8835,34 @@ __all__ = [
     "BestCallback",
     "CompactTracePoint",
     "GoldCollectionEvent",
+    "PiecewiseReferenceLeg",
     "RouteControlEvent",
+    "SpliceAlignmentSpec",
+    "SpliceAnchorRun",
+    "SpliceGoldPrediction",
+    "SplicePlanSpec",
+    "SpliceRepairResult",
+    "SpliceRepairSpec",
+    "SpliceSectionPlan",
+    "apply_reference_segment_splice",
     "apply_reference_suffix_splice",
+    "auto_candidate_outcome_key",
     "auto_objective_value",
+    "build_splice_piecewise_reference",
+    "detect_piecewise_missed_jumps",
     "detect_shifted_missed_jumps",
     "evaluate_replay_with_sentinel",
     "find_baseline_alignment",
+    "find_splice_anchor_runs",
+    "find_splice_section_plans",
+    "map_piecewise_reference_events",
     "mutate_jump_pulse",
     "optimise_autonomous",
     "optimize_autonomous",
+    "predict_splice_gold",
     "repair_all_input_window",
     "repair_direction_window",
     "repair_jump_mutation_lookback",
+    "repair_reference_segment_splice",
     "verify_trimmed_replay",
 ]

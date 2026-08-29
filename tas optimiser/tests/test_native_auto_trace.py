@@ -583,3 +583,196 @@ def test_native_route_scan_and_multiprocessing_materialisation_are_portable(
     assert isinstance(restored.trace, tuple)
     assert restored == baseline
     assert restored.valid
+
+
+def test_native_bounded_splice_alignment_matches_python_fallback_and_stays_lazy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _require_native_auto()
+    candidate_level, candidate_frames = _load_benchmark_replay(342)
+    reference_level, reference_frames = _load_benchmark_replay(343)
+    candidate = auto.evaluate_replay_with_sentinel(
+        candidate_level, candidate_frames
+    )
+    reference = auto.evaluate_replay_with_sentinel(
+        reference_level, reference_frames
+    )
+    config = auto.AutoConfig(iterations=1, beam_width=1, max_alignment=3)
+    suffix = auto.PiecewiseReferenceLeg(
+        child_start=240,
+        child_end=None,
+        reference=reference,
+        reference_offset=1,
+    )
+
+    created = 0
+    point_type = auto.CompactTracePoint
+
+    def counted_point(*args, **kwargs):
+        nonlocal created
+        created += 1
+        return point_type(*args, **kwargs)
+
+    monkeypatch.setattr(auto, "CompactTracePoint", counted_point)
+    native_match = auto._find_splice_suffix_alignment(
+        candidate,
+        suffix,
+        config,
+        minimum_run_length=2,
+    )
+    assert native_match is not None
+    assert created == 0
+
+    monkeypatch.setattr(auto, "CompactTracePoint", point_type)
+    material_candidate = replace(candidate, trace=tuple(candidate.trace))
+    material_reference = replace(reference, trace=tuple(reference.trace))
+    python_match = auto._find_splice_suffix_alignment(
+        material_candidate,
+        replace(suffix, reference=material_reference),
+        config,
+        minimum_run_length=2,
+    )
+    assert native_match == python_match
+
+    one_tick = auto.PiecewiseReferenceLeg(
+        child_start=100,
+        child_end=100,
+        reference=reference,
+        reference_offset=0,
+    )
+    material_one_tick = replace(one_tick, reference=material_reference)
+    assert auto._piecewise_leg_match_run(candidate, one_tick, config) == 1
+    assert auto._piecewise_leg_match_run(
+        material_candidate,
+        material_one_tick,
+        config,
+    ) == 1
+
+
+def test_native_splice_alignment_preserves_sparse_trace_no_match_semantics() -> None:
+    _require_native_auto()
+    level, frames = _load_benchmark_replay(343)
+    sparse = auto.evaluate_replay_with_sentinel(level, frames, trace_stride=7)
+    material = replace(sparse, trace=tuple(sparse.trace))
+    config = auto.AutoConfig(iterations=1, beam_width=1, max_alignment=0)
+    native_leg = auto.PiecewiseReferenceLeg(0, None, sparse, 0)
+    material_leg = replace(native_leg, reference=material)
+
+    native_match = auto._find_splice_suffix_alignment(
+        sparse,
+        native_leg,
+        config,
+        minimum_run_length=2,
+    )
+    python_match = auto._find_splice_suffix_alignment(
+        material,
+        material_leg,
+        config,
+        minimum_run_length=2,
+    )
+
+    assert native_match is None
+    assert native_match == python_match
+    assert auto._piecewise_leg_match_run(sparse, native_leg, config) == 1
+    assert auto._piecewise_leg_match_run(
+        material,
+        material_leg,
+        config,
+    ) == 1
+
+
+def test_native_bounded_route_scan_is_inclusive_and_matches_python_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _require_native_auto()
+    level, frames = _load_benchmark_replay(302)
+    reference = auto.evaluate_replay_with_sentinel(level, frames)
+    changed = list(frames)
+    changed[0] = InputFrame(jump=True)
+    candidate = auto.evaluate_replay_with_sentinel(level, changed)
+    material_candidate = replace(candidate, trace=tuple(candidate.trace))
+    material_reference = replace(reference, trace=tuple(reference.trace))
+
+    created = 0
+    point_type = auto.CompactTracePoint
+
+    def counted_point(*args, **kwargs):
+        nonlocal created
+        created += 1
+        return point_type(*args, **kwargs)
+
+    monkeypatch.setattr(auto, "CompactTracePoint", counted_point)
+    native_at_boundary = auto._find_route_control_repair_target(
+        candidate,
+        reference,
+        candidate_start_tick=169,
+        candidate_end_tick=169,
+    )
+    native_before = auto._find_route_control_repair_target(
+        candidate,
+        reference,
+        candidate_start_tick=0,
+        candidate_end_tick=168,
+    )
+    assert created == 0
+
+    monkeypatch.setattr(auto, "CompactTracePoint", point_type)
+    python_at_boundary = auto._find_route_control_repair_target(
+        material_candidate,
+        material_reference,
+        candidate_start_tick=169,
+        candidate_end_tick=169,
+    )
+    python_before = auto._find_route_control_repair_target(
+        material_candidate,
+        material_reference,
+        candidate_start_tick=0,
+        candidate_end_tick=168,
+    )
+    assert native_at_boundary == python_at_boundary
+    assert native_at_boundary is not None
+    assert native_at_boundary.candidate_tick == 169
+    assert native_before is None
+    assert native_before == python_before
+
+
+def test_native_bounded_route_scan_preserves_wide_masks() -> None:
+    _require_native_auto()
+    padding = "!".join("0^500,500" for _ in range(70))
+    reference_objects = (
+        f"{padding}!0^90,84"
+        "!9^90,84,0,0,10,3,1,0,0"
+        "!9^90,84,0,1,11,3,0,0,0"
+        "!5^90,84"
+    )
+    candidate_objects = (
+        f"{padding}!0^90,84"
+        "!0^500,500"
+        "!0^500,500"
+        "!5^90,84"
+    )
+    reference = auto.evaluate_replay_with_sentinel(
+        parse_level_string(f"{EMPTY_MAP}|{reference_objects}"),
+        (NEUTRAL,),
+    )
+    candidate = auto.evaluate_replay_with_sentinel(
+        parse_level_string(f"{EMPTY_MAP}|{candidate_objects}"),
+        (NEUTRAL,),
+    )
+
+    native_target = auto._find_route_control_repair_target(
+        candidate,
+        reference,
+        candidate_start_tick=1,
+        candidate_end_tick=1,
+    )
+    python_target = auto._find_route_control_repair_target(
+        replace(candidate, trace=tuple(candidate.trace)),
+        replace(reference, trace=tuple(reference.trace)),
+        candidate_start_tick=1,
+        candidate_end_tick=1,
+    )
+
+    assert native_target == python_target
+    assert native_target is not None
+    assert native_target.required_locked_door_mask == 1 << 71

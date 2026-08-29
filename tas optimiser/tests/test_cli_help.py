@@ -21,6 +21,12 @@ def test_subcommand_help_lists_only_relevant_mode_options() -> None:
 
     assert _lists_option(help_text["auto"], "--iterations")
     assert _lists_option(help_text["auto"], "--auto-objective")
+    assert _lists_option(
+        help_text["auto"], "--auto-beam-repair-revisit-limit"
+    )
+    assert _lists_option(
+        help_text["auto"], "--auto-splice-repair-revisit-limit"
+    )
     assert _lists_option(help_text["auto"], "--workers")
     assert not _lists_option(help_text["auto"], "--target-frame")
     assert not _lists_option(help_text["auto"], "--window")

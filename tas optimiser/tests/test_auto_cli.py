@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -47,11 +48,14 @@ def test_auto_parser_defaults_and_overrides() -> None:
     defaults = parser.parse_args(["auto", "input.txt"])
     assert defaults.iterations == 5000
     assert defaults.auto_runs == 1
+    assert defaults.auto_parents == []
     assert defaults.beam == 32
     assert defaults.max_retime == 3
     assert defaults.auto_repair_window == 6
     assert defaults.auto_repair_lookback == 192
     assert defaults.auto_max_alignment == 3
+    assert defaults.auto_beam_repair_revisit_limit == 2
+    assert defaults.auto_splice_repair_revisit_limit == 3
     assert not hasattr(defaults, "auto_deep_repairs")
     assert not hasattr(defaults, "auto_repair_refill")
     assert defaults.auto_objective == "speedrun"
@@ -76,6 +80,10 @@ def test_auto_parser_defaults_and_overrides() -> None:
             "80",
             "--auto-max-alignment",
             "5",
+            "--auto-beam-repair-revisit-limit",
+            "6",
+            "--auto-splice-repair-revisit-limit",
+            "9",
             "--auto-objective",
             "highscore",
             "--auto-require-reference-gold",
@@ -93,6 +101,8 @@ def test_auto_parser_defaults_and_overrides() -> None:
     assert configured.auto_repair_window == 4
     assert configured.auto_repair_lookback == 80
     assert configured.auto_max_alignment == 5
+    assert configured.auto_beam_repair_revisit_limit == 6
+    assert configured.auto_splice_repair_revisit_limit == 9
     assert configured.auto_objective == "highscore"
     assert configured.auto_require_reference_gold is True
     assert configured.auto_max_extra_ticks == 160
@@ -105,10 +115,44 @@ def test_auto_parser_defaults_and_overrides() -> None:
     assert random_seed.seed == "random"
 
 
+def test_auto_parser_accepts_repeatable_starting_parents() -> None:
+    args = opt.parse_arguments(
+        [
+            "auto",
+            "parent-a.ltm",
+            "--auto-parent",
+            "parent-b.ltm",
+            "--auto-parent",
+            "parent-c.ltm",
+        ]
+    )
+
+    assert args.auto_parents == [Path("parent-b.ltm"), Path("parent-c.ltm")]
+
+    with pytest.raises(SystemExit):
+        opt.parse_arguments(
+            ["local", "input.txt", "--auto-parent", "parent.txt"]
+        )
+
+
 def test_seed_parser_rejects_non_integer_non_random() -> None:
     parser = opt.build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["auto", "input.txt", "--seed", "banana"])
+
+
+@pytest.mark.parametrize(
+    "option",
+    (
+        "--auto-beam-repair-revisit-limit",
+        "--auto-splice-repair-revisit-limit",
+    ),
+)
+def test_auto_repair_revisit_limits_must_be_positive(option: str) -> None:
+    parser = opt.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["auto", "input.txt", option, "0"])
 
 
 def test_local_subcommand_still_requires_target_frame(tmp_path, monkeypatch) -> None:
@@ -188,6 +232,80 @@ def test_auto_cli_needs_no_target_and_writes_verified_trimmed_replay(
     assert verified.valid
     assert verified.finish_tick == packed.tick_count
     assert enemy_settings == [True]
+
+
+def test_v300_auto_cli_zero_iteration_selects_the_best_starting_parent(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    input_path = _write_completed_input(tmp_path)
+    primary = parse_combined_level_replay(input_path.read_text(encoding="utf-8"))
+    faster_replay = encode_complex_replay([InputFrame(right=True)] * 100)
+    parent_path = tmp_path / "faster-parent.txt"
+    parent_path.write_text(
+        primary.replace_replay(faster_replay).dump() + "\n",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "multi-parent-output.txt"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "optimize_replay.py",
+            "auto",
+            str(input_path),
+            "--auto-parent",
+            str(parent_path),
+            "--iterations",
+            "0",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    opt.main()
+
+    stdout = capsys.readouterr().out
+    output = parse_combined_level_replay(output_path.read_text(encoding="utf-8"))
+    packed = decode_complex_replay(output.replay_string)
+    assert output.name == primary.name
+    assert output.author == primary.author
+    assert packed.tick_count == 29
+    assert "auto baseline finish tick: 34" in stdout
+    assert "auto optimised finish tick: 29" in stdout
+    assert "starting parent #2" in stdout
+    assert "2 unique starting parent(s) from 2 supplied" in stdout
+
+
+def test_v300_auto_cli_rejects_a_parent_from_a_different_level(
+    tmp_path, monkeypatch
+) -> None:
+    input_path = _write_completed_input(tmp_path)
+    primary = parse_combined_level_replay(input_path.read_text(encoding="utf-8"))
+    different_level = "1" + primary.level_string[1:]
+    fields = primary.fields.copy()
+    fields[primary.level_index] = different_level
+    parent_path = tmp_path / "different-level.txt"
+    parent_path.write_text("#".join(fields) + "\n", encoding="utf-8")
+    output_path = tmp_path / "must-not-exist.txt"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "optimize_replay.py",
+            "auto",
+            str(input_path),
+            "--auto-parent",
+            str(parent_path),
+            "--iterations",
+            "0",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="exactly the same level"):
+        opt.main()
+    assert not output_path.exists()
 
 
 def test_auto_highscore_cli_reports_and_verifies_gold_score(

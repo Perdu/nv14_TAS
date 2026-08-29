@@ -326,6 +326,7 @@ def test_v263_campaign_history_pruning_keeps_only_live_scheduler_state() -> None
             offspring_index=1,
             seed=task_id,
             output=output,
+            output_member_id=task_id if completed else None,
         )
 
     task_records = {
@@ -343,7 +344,7 @@ def test_v263_campaign_history_pruning_keeps_only_live_scheduler_state() -> None
         member_id: parallel._AutoPopulationMember(
             member_id=member_id,
             result=_result(10, float(member_id)),
-            parent_member_id=None,
+            parent_member_ids=(),
             generation=member_id,
             mutations=(),
         )

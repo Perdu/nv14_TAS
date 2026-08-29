@@ -186,6 +186,46 @@ typedef struct nv14_replay_alignment_result {
     double distance;
 } nv14_replay_alignment_result;
 
+/* Bounds and policy for the exact route/contact matcher used by sectional
+ * splice repair.  Tick and offset bounds are inclusive.  Gold remains a soft
+ * distance component; every other persistent route mask must match exactly. */
+typedef struct nv14_replay_splice_alignment_spec {
+    uint32_t abi_version;
+    uint32_t struct_size;
+    uint64_t candidate_start_tick;
+    uint64_t candidate_end_tick;
+    uint64_t minimum_run_length;
+    int64_t minimum_offset;
+    int64_t maximum_offset;
+    double position_tolerance;
+    double velocity_tolerance;
+    double position_weight;
+    double velocity_weight;
+    double contact_mismatch_penalty;
+    double in_air_mismatch_penalty;
+    double near_wall_mismatch_penalty;
+    double gold_bit_penalty;
+    double mine_bit_penalty;
+    double exit_bit_penalty;
+    double locked_door_bit_penalty;
+    double trapdoor_bit_penalty;
+} nv14_replay_splice_alignment_spec;
+
+typedef struct nv14_replay_splice_alignment_result {
+    uint32_t abi_version;
+    uint32_t struct_size;
+    uint8_t found;
+    uint8_t contact_matches;
+    uint8_t static_matches;
+    uint8_t reserved[5];
+    int64_t candidate_tick;
+    int64_t reference_tick;
+    int64_t offset;
+    int64_t score_lead;
+    uint64_t run_length;
+    double distance;
+} nv14_replay_splice_alignment_result;
+
 /* Pass sizeof(*result) as caller_size.  Returns zero for NULL, undersized, or
  * unrepresentably large buffers. */
 int nv14_replay_trace_result_init(
@@ -215,6 +255,16 @@ int nv14_replay_trace_find_alignment(
     nv14_replay_alignment_result *result_out
 );
 
+/* Find the best stable splice match run in one bounded candidate region and
+ * inclusive offset range.  Ranking exactly follows the Python sectional
+ * suffix scan: run length, end tick, score lead, mean distance, then offset. */
+int nv14_replay_trace_find_splice_alignment(
+    const nv14_replay_trace_result *candidate,
+    const nv14_replay_trace_result *reference,
+    const nv14_replay_splice_alignment_spec *spec,
+    nv14_replay_splice_alignment_result *result_out
+);
+
 /* Find the first persistent route-control divergence.  Only row indices are
  * returned; language bindings may materialise the few differing masks on
  * demand.  Return values follow the same -1/0/1 convention. */
@@ -223,6 +273,18 @@ int nv14_replay_trace_find_route_divergence(
     const nv14_replay_trace_result *reference,
     int64_t reference_offset,
     int64_t reference_completion_exit_index,
+    size_t *candidate_index_out,
+    size_t *reference_index_out
+);
+
+/* Bounded form used by piecewise splice legs.  Bounds are inclusive. */
+int nv14_replay_trace_find_route_divergence_bounded(
+    const nv14_replay_trace_result *candidate,
+    const nv14_replay_trace_result *reference,
+    int64_t reference_offset,
+    int64_t reference_completion_exit_index,
+    uint64_t candidate_start_tick,
+    uint64_t candidate_end_tick,
     size_t *candidate_index_out,
     size_t *reference_index_out
 );

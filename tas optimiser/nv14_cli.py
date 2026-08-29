@@ -419,6 +419,18 @@ def parse_nonnegative_int(text: str) -> int:
     return value
 
 
+def parse_positive_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "value must be a positive integer"
+        ) from exc
+    if value < 1:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return value
+
+
 def parse_retime_spec(text: str) -> tuple[str | int, int]:
     """Parse ``START:DELTA`` where START is a transition frame or ``whole``."""
     if ":" not in text:
@@ -984,7 +996,7 @@ _CONFIG_TABLE_NAMES = frozenset(
     {"common", "auto", "local", "jump-pattern", "jump_pattern"}
 )
 _CONFIG_APPEND_DESTS = frozenset(
-    {"retime", "require_interaction", "avoid_interaction"}
+    {"retime", "auto_parents", "require_interaction", "avoid_interaction"}
 )
 _CONFIG_RESERVED_DESTS = frozenset({"config", "input", "mode"})
 
@@ -1480,6 +1492,20 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     command.add_argument(
+        "--auto-parent",
+        modes=auto_modes,
+        dest="auto_parents",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="FILE",
+        help=(
+            "additional completed replay used as a generation-0 Auto parent; "
+            "must contain exactly the same level as positional INPUT. "
+            "Repeatable"
+        ),
+    )
+    command.add_argument(
         "--beam",
         modes=auto_modes,
         type=int,
@@ -1626,6 +1652,28 @@ def build_parser() -> argparse.ArgumentParser:
             "between attempts; frame-ahead campaigns multiply this by "
             "--auto-frame-ahead-repair-multiplier; 0 disables it "
             "(default: 10000)"
+        ),
+    )
+    command.add_argument(
+        "--auto-beam-repair-revisit-limit",
+        modes=auto_modes,
+        type=parse_positive_int,
+        default=2,
+        metavar="N",
+        help=(
+            "maximum visits to the same eight-frame failure region in one "
+            "beam repair campaign before that campaign stops (default: 2)"
+        ),
+    )
+    command.add_argument(
+        "--auto-splice-repair-revisit-limit",
+        modes=auto_modes,
+        type=parse_positive_int,
+        default=3,
+        metavar="N",
+        help=(
+            "maximum visits to the same eight-frame failure region in one "
+            "splice repair campaign before that campaign stops (default: 3)"
         ),
     )
     command.add_argument(
@@ -2103,6 +2151,50 @@ def main() -> None:
         raise SystemExit(
             "a combined text input cannot create an .ltm output without an LTM template"
         )
+
+    auto_parent_sources: list[tuple[Path, _LoadedSource]] = []
+    if args.mode == "auto":
+        for parent_number, parent_path in enumerate(args.auto_parents, start=2):
+            try:
+                parent_source = _load_source(
+                    parent_path,
+                    levels_file_path=(
+                        common_config.levels_file_path
+                        if parent_path.suffix.lower() == ".ltm"
+                        else None
+                    ),
+                    explicit_level_id=(
+                        common_config.level_id
+                        if parent_path.suffix.lower() == ".ltm"
+                        else None
+                    ),
+                    ltm_postroll=(
+                        common_config.ltm_postroll
+                        if parent_path.suffix.lower() == ".ltm"
+                        else None
+                    ),
+                )
+            except LtmError as exc:
+                raise SystemExit(
+                    f"could not load auto parent #{parent_number} "
+                    f"{parent_path}: {exc}"
+                ) from exc
+            if parent_source.combined.level_string != combined.level_string:
+                raise SystemExit(
+                    f"auto parent #{parent_number} {parent_path} is not for "
+                    "exactly the same level as positional INPUT"
+                )
+            if (
+                parent_source.ltm_movie is not None
+                and parent_source.ltm_movie.warning is not None
+            ):
+                print(
+                    f"warning: auto parent #{parent_number}: "
+                    f"{parent_source.ltm_movie.warning}",
+                    file=sys.stderr,
+                )
+            auto_parent_sources.append((parent_path, parent_source))
+
     try:
         _validate_output_paths(
             input_path,
@@ -2114,6 +2206,17 @@ def main() -> None:
             output_path,
             replay_output_path,
         )
+        for parent_path, parent_source in auto_parent_sources:
+            _validate_output_paths(
+                parent_path,
+                output_path,
+                replay_output_path,
+            )
+            _validate_levels_output_paths(
+                parent_source.levels_file_path,
+                output_path,
+                replay_output_path,
+            )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     if args.mode != "auto" and (
@@ -2145,6 +2248,37 @@ def main() -> None:
             f"{mutation.delta:+d} frame(s)"
         )
     replay = ComplexReplay(retimed_frames)
+
+    auto_parent_frames: list[tuple[InputFrame, ...]] = []
+    for parent_number, (_parent_path, parent_source) in enumerate(
+        auto_parent_sources,
+        start=2,
+    ):
+        parent_replay = decode_complex_replay(parent_source.combined.replay_string)
+        parent_retimed_frames = editable_frames(parent_replay.frames)
+        for spec_index, (start_spec, delta) in enumerate(
+            common_config.retime,
+            start=1,
+        ):
+            transitions = input_transition_frames(parent_retimed_frames)
+            if not transitions:
+                raise SystemExit(
+                    f"cannot apply --retime #{spec_index} to auto parent "
+                    f"#{parent_number}: replay has no input transitions"
+                )
+            suffix_start = transitions[0] if start_spec == "whole" else start_spec
+            mutation = RetimeMutation(int(suffix_start), delta)
+            try:
+                parent_retimed_frames = apply_suffix_retime(
+                    parent_retimed_frames,
+                    mutation,
+                )
+            except ValueError as exc:
+                raise SystemExit(
+                    f"invalid --retime #{spec_index} for auto parent "
+                    f"#{parent_number}: {exc}"
+                ) from exc
+        auto_parent_frames.append(tuple(parent_retimed_frames))
 
     if args.mode == "auto":
         if args.auto_postroll != 1:
@@ -2207,6 +2341,12 @@ def main() -> None:
                     args.auto_frame_ahead_repair_multiplier
                 ),
                 repair_campaign_local_limit=args.auto_campaign_local_steps,
+                beam_repair_revisit_limit=(
+                    args.auto_beam_repair_revisit_limit
+                ),
+                splice_repair_revisit_limit=(
+                    args.auto_splice_repair_revisit_limit
+                ),
                 range_start=auto_range_start,
                 range_end=auto_range_end,
                 cheap_pulse_limit=args.auto_cheap_pulses,
@@ -2353,6 +2493,7 @@ def main() -> None:
                 level,
                 replay.frames,
                 auto_config,
+                parent_frames=auto_parent_frames,
                 workers=args.workers,
                 runs=args.auto_runs,
                 progress=show_auto_progress,

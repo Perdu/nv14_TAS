@@ -558,6 +558,44 @@ static int nv14_replay_trace_static_equal(
         );
 }
 
+static int nv14_replay_trace_splice_route_equal(
+    const nv14_replay_trace_result *candidate,
+    size_t candidate_row,
+    const nv14_replay_trace_result *reference,
+    size_t reference_row
+)
+{
+    return nv14_replay_trace_masks_equal(
+            candidate->trace_exploded_mine_words,
+            candidate_row,
+            candidate->exploded_mine_word_count,
+            reference->trace_exploded_mine_words,
+            reference_row,
+            reference->exploded_mine_word_count
+        ) && nv14_replay_trace_masks_equal(
+            candidate->trace_open_exit_words,
+            candidate_row,
+            candidate->open_exit_word_count,
+            reference->trace_open_exit_words,
+            reference_row,
+            reference->open_exit_word_count
+        ) && nv14_replay_trace_masks_equal(
+            candidate->trace_opened_locked_door_words,
+            candidate_row,
+            candidate->door_word_count,
+            reference->trace_opened_locked_door_words,
+            reference_row,
+            reference->door_word_count
+        ) && nv14_replay_trace_masks_equal(
+            candidate->trace_triggered_trapdoor_words,
+            candidate_row,
+            candidate->door_word_count,
+            reference->trace_triggered_trapdoor_words,
+            reference_row,
+            reference->door_word_count
+        );
+}
+
 static uint64_t nv14_replay_trace_abs_offset(int64_t value)
 {
     return value < 0 ? (uint64_t)(-(value + 1)) + UINT64_C(1)
@@ -880,11 +918,281 @@ int nv14_replay_trace_find_alignment(
     return 1;
 }
 
+static int nv14_replay_splice_alignment_spec_valid(
+    const nv14_replay_splice_alignment_spec *spec,
+    const nv14_replay_splice_alignment_result *result
+)
+{
+    if (spec == NULL || result == NULL ||
+        spec->abi_version != NV14_REPLAY_ANALYSIS_ABI_VERSION ||
+        spec->struct_size < sizeof(*spec) ||
+        result->abi_version != NV14_REPLAY_ANALYSIS_ABI_VERSION ||
+        result->struct_size < sizeof(*result) ||
+        spec->minimum_run_length == 0 ||
+        spec->minimum_offset > spec->maximum_offset)
+        return 0;
+    return isfinite(spec->position_tolerance) &&
+        spec->position_tolerance >= 0.0 &&
+        isfinite(spec->velocity_tolerance) &&
+        spec->velocity_tolerance >= 0.0 &&
+        isfinite(spec->position_weight) && spec->position_weight >= 0.0 &&
+        isfinite(spec->velocity_weight) && spec->velocity_weight >= 0.0 &&
+        isfinite(spec->contact_mismatch_penalty) &&
+        spec->contact_mismatch_penalty >= 0.0 &&
+        isfinite(spec->in_air_mismatch_penalty) &&
+        spec->in_air_mismatch_penalty >= 0.0 &&
+        isfinite(spec->near_wall_mismatch_penalty) &&
+        spec->near_wall_mismatch_penalty >= 0.0 &&
+        isfinite(spec->gold_bit_penalty) && spec->gold_bit_penalty >= 0.0 &&
+        isfinite(spec->mine_bit_penalty) && spec->mine_bit_penalty >= 0.0 &&
+        isfinite(spec->exit_bit_penalty) && spec->exit_bit_penalty >= 0.0 &&
+        isfinite(spec->locked_door_bit_penalty) &&
+        spec->locked_door_bit_penalty >= 0.0 &&
+        isfinite(spec->trapdoor_bit_penalty) &&
+        spec->trapdoor_bit_penalty >= 0.0;
+}
+
+int nv14_replay_trace_find_splice_alignment(
+    const nv14_replay_trace_result *candidate,
+    const nv14_replay_trace_result *reference,
+    const nv14_replay_splice_alignment_spec *spec,
+    nv14_replay_splice_alignment_result *result_out
+)
+{
+    uint64_t candidate_end_tick;
+    int candidate_dense;
+    int reference_dense;
+    int64_t offset;
+    uint64_t best_run_length = 0;
+    uint64_t best_run_tick = 0;
+    double best_average = INFINITY;
+    int64_t best_offset = 0;
+    int64_t best_score_lead = 0;
+    size_t best_candidate_row = 0;
+    size_t best_reference_row = 0;
+    uint32_t result_size;
+    nv14_replay_alignment_spec distance_spec;
+
+    if (!nv14_replay_trace_result_queryable(candidate) ||
+        !nv14_replay_trace_result_queryable(reference) ||
+        !nv14_replay_splice_alignment_spec_valid(spec, result_out))
+        return -1;
+    result_size = result_out->struct_size;
+    memset(result_out, 0, sizeof(*result_out));
+    result_out->abi_version = NV14_REPLAY_ANALYSIS_ABI_VERSION;
+    result_out->struct_size = result_size;
+    result_out->candidate_tick = -1;
+    result_out->reference_tick = -1;
+
+    if (candidate->trace_count == 0 || reference->trace_count == 0 ||
+        candidate->last_tick < 0)
+        return 0;
+    candidate_end_tick = spec->candidate_end_tick;
+    if (candidate_end_tick > (uint64_t)candidate->last_tick)
+        candidate_end_tick = (uint64_t)candidate->last_tick;
+    if (spec->candidate_start_tick > candidate_end_tick)
+        return 0;
+    candidate_dense = nv14_replay_trace_is_dense(candidate);
+    reference_dense = nv14_replay_trace_is_dense(reference);
+
+    /* Reuse the bit-exact generic distance implementation.  It reads only
+     * these policy fields from the temporary specification. */
+    memset(&distance_spec, 0, sizeof(distance_spec));
+    distance_spec.position_weight = spec->position_weight;
+    distance_spec.velocity_weight = spec->velocity_weight;
+    distance_spec.contact_mismatch_penalty =
+        spec->contact_mismatch_penalty;
+    distance_spec.in_air_mismatch_penalty =
+        spec->in_air_mismatch_penalty;
+    distance_spec.near_wall_mismatch_penalty =
+        spec->near_wall_mismatch_penalty;
+    distance_spec.gold_bit_penalty = spec->gold_bit_penalty;
+    distance_spec.mine_bit_penalty = spec->mine_bit_penalty;
+    distance_spec.exit_bit_penalty = spec->exit_bit_penalty;
+    distance_spec.locked_door_bit_penalty =
+        spec->locked_door_bit_penalty;
+    distance_spec.trapdoor_bit_penalty = spec->trapdoor_bit_penalty;
+
+    for (offset = spec->minimum_offset; ; ++offset) {
+        uint64_t child_tick;
+        uint64_t run_length = 0;
+        double run_distance = 0.0;
+        for (child_tick = spec->candidate_start_tick; ; ++child_tick) {
+            size_t candidate_row = 0;
+            size_t reference_row = 0;
+            int candidate_lookup;
+            int reference_lookup = 0;
+            int eligible = 0;
+            int64_t reference_tick = -1;
+            int64_t score_lead = 0;
+            double distance = INFINITY;
+            double average;
+            int replace_best = 0;
+
+            candidate_lookup = nv14_replay_trace_find_point_index_known(
+                candidate, candidate_dense, child_tick, &candidate_row
+            );
+            if (candidate_lookup < 0) return -1;
+            if (candidate_lookup > 0 && child_tick <= (uint64_t)INT64_MAX) {
+                int64_t signed_child_tick = (int64_t)child_tick;
+                if (!((offset > 0 &&
+                       signed_child_tick > INT64_MAX - offset) ||
+                      (offset < 0 &&
+                       signed_child_tick < INT64_MIN - offset))) {
+                    reference_tick = signed_child_tick + offset;
+                    if (reference_tick >= 0) {
+                        reference_lookup =
+                            nv14_replay_trace_find_point_index_known(
+                                reference,
+                                reference_dense,
+                                (uint64_t)reference_tick,
+                                &reference_row
+                            );
+                        if (reference_lookup < 0) return -1;
+                    }
+                }
+            }
+            if (candidate_lookup > 0 && reference_lookup > 0) {
+                const nv14_replay_trace_point *point =
+                    &candidate->trace[candidate_row];
+                const nv14_replay_trace_point *reference_point =
+                    &reference->trace[reference_row];
+                eligible = !point->dead && !point->complete &&
+                    !reference_point->dead && !reference_point->complete &&
+                    isfinite(point->x) && isfinite(point->y) &&
+                    isfinite(point->vx) && isfinite(point->vy) &&
+                    isfinite(reference_point->x) &&
+                    isfinite(reference_point->y) &&
+                    isfinite(reference_point->vx) &&
+                    isfinite(reference_point->vy) &&
+                    nv14_replay_trace_contact_equal(point, reference_point) &&
+                    nv14_replay_trace_splice_route_equal(
+                        candidate,
+                        candidate_row,
+                        reference,
+                        reference_row
+                    );
+                if (eligible) {
+                    double dx = point->x - reference_point->x;
+                    double dy = point->y - reference_point->y;
+                    if (fabs(dx) > spec->position_tolerance ||
+                        fabs(dy) > spec->position_tolerance ||
+                        hypot(dx, dy) > spec->position_tolerance)
+                        eligible = 0;
+                }
+                if (eligible) {
+                    double dvx = point->vx - reference_point->vx;
+                    double dvy = point->vy - reference_point->vy;
+                    if (fabs(dvx) > spec->velocity_tolerance ||
+                        fabs(dvy) > spec->velocity_tolerance ||
+                        hypot(dvx, dvy) > spec->velocity_tolerance)
+                        eligible = 0;
+                }
+                if (eligible) {
+                    distance = nv14_replay_trace_distance(
+                        candidate,
+                        candidate_row,
+                        reference,
+                        reference_row,
+                        &distance_spec
+                    );
+                    if (!nv14_replay_trace_score_lead(
+                            offset,
+                            point->gold_bonus_ticks,
+                            reference_point->gold_bonus_ticks,
+                            &score_lead
+                        ))
+                        return -1;
+                }
+            }
+
+            if (!eligible) {
+                run_length = 0;
+                run_distance = 0.0;
+            } else {
+                ++run_length;
+                run_distance += distance;
+                if (run_length >= spec->minimum_run_length) {
+                    average = run_distance / (double)run_length;
+                    if (best_run_length == 0 ||
+                        run_length > best_run_length)
+                        replace_best = 1;
+                    else if (run_length == best_run_length &&
+                             child_tick > best_run_tick)
+                        replace_best = 1;
+                    else if (run_length == best_run_length &&
+                             child_tick == best_run_tick) {
+                        if (score_lead > best_score_lead)
+                            replace_best = 1;
+                        else if (score_lead == best_score_lead &&
+                                 average < best_average)
+                            replace_best = 1;
+                        else if (score_lead == best_score_lead &&
+                                 average == best_average &&
+                                 offset > best_offset)
+                            replace_best = 1;
+                    }
+                    if (replace_best) {
+                        best_run_length = run_length;
+                        best_run_tick = child_tick;
+                        best_average = average;
+                        best_offset = offset;
+                        best_score_lead = score_lead;
+                        best_candidate_row = candidate_row;
+                        best_reference_row = reference_row;
+                    }
+                }
+            }
+            if (child_tick == candidate_end_tick) break;
+        }
+        if (offset == spec->maximum_offset) break;
+    }
+
+    if (best_run_length == 0) return 0;
+    result_out->found = 1;
+    result_out->contact_matches = 1;
+    result_out->static_matches = (uint8_t)nv14_replay_trace_static_equal(
+        candidate, best_candidate_row, reference, best_reference_row
+    );
+    result_out->candidate_tick =
+        (int64_t)candidate->trace[best_candidate_row].tick;
+    result_out->reference_tick =
+        (int64_t)reference->trace[best_reference_row].tick;
+    result_out->offset = best_offset;
+    result_out->score_lead = best_score_lead;
+    result_out->run_length = best_run_length;
+    result_out->distance = best_average;
+    return 1;
+}
+
 int nv14_replay_trace_find_route_divergence(
     const nv14_replay_trace_result *candidate,
     const nv14_replay_trace_result *reference,
     int64_t reference_offset,
     int64_t reference_completion_exit_index,
+    size_t *candidate_index_out,
+    size_t *reference_index_out
+)
+{
+    return nv14_replay_trace_find_route_divergence_bounded(
+        candidate,
+        reference,
+        reference_offset,
+        reference_completion_exit_index,
+        UINT64_C(0),
+        UINT64_MAX,
+        candidate_index_out,
+        reference_index_out
+    );
+}
+
+int nv14_replay_trace_find_route_divergence_bounded(
+    const nv14_replay_trace_result *candidate,
+    const nv14_replay_trace_result *reference,
+    int64_t reference_offset,
+    int64_t reference_completion_exit_index,
+    uint64_t candidate_start_tick,
+    uint64_t candidate_end_tick,
     size_t *candidate_index_out,
     size_t *reference_index_out
 )
@@ -902,6 +1210,8 @@ int nv14_replay_trace_find_route_divergence(
         int required_exit = 0;
         int required_locked;
         int forbidden_trap;
+        if (candidate_tick < candidate_start_tick) continue;
+        if (candidate_tick > candidate_end_tick) break;
         if (candidate_tick > (uint64_t)INT64_MAX) return -1;
         if ((reference_offset > 0 &&
              (int64_t)candidate_tick > INT64_MAX - reference_offset) ||

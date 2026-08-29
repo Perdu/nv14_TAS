@@ -27,6 +27,8 @@ cheap-pulses = 96
 position-tolerance = 3.0
 velocity-tolerance = 0.75
 all-input-repair = true
+beam_repair_revisit_limit = 4
+splice_repair_revisit_limit = 100
 
 [local]
 

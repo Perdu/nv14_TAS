@@ -321,6 +321,46 @@ and simulated again before it is written. On an equal primary result, exit
 proximity immediately before the neutral sentinel is used as a tie-break, so an
 equal-time or equal-score alternate may replace the source.
 
+### Multiple starting parents
+
+Keep the positional replay as the primary reference/template and repeat
+`--auto-parent` for additional founders:
+
+```bash
+python optimize_replay.py auto parent_A.ltm \
+  --auto-parent parent_B.ltm \
+  --auto-parent parent_C.ltm \
+  --workers 8 \
+  --auto-runs 0 \
+  --output run_next.ltm
+```
+
+The same setup in TOML is:
+
+```toml
+[auto]
+parents = [
+    "parent_B.ltm",
+    "parent_C.ltm",
+]
+```
+
+All parents must carry exactly the same serialized level. Auto applies any
+configured pre-search `--retime` sequence to each parent, then runs its normal
+zero-iteration canonical trimming and sentinel verification on every result.
+Canonical held-input duplicates are collapsed only after verification. Input
+formats may be mixed, but the positional input alone supplies the combined-text
+or LTM output template.
+
+The positional replay remains the reported campaign baseline and supplies the
+reference-gold mask for `--auto-require-reference-gold`; an additional founder
+which already misses that mask is rejected. The best unique founder under the
+selected complete-run ordering is the starting global incumbent. Round one
+distributes the worker count evenly over ranked founders: eight workers give
+`4+4` for two founders, `3+3+2` for three, and one search each for eight. If
+there are more unique founders than workers, only the best-ranked founders
+receive a round-one search.
+
 ### Speedrun and highscore objectives
 
 `--auto-objective speedrun` is the default and minimises raw completion tick.
@@ -1082,9 +1122,10 @@ The tables below include every v2.70 optimiser option and its default.
 |---|---:|---|
 | `--iterations N` | `5000` | Macro candidate-evaluation budget per worker search and round. Must be non-negative. `0` verifies/canonicalises the source without macro search work. |
 | `--auto-runs N` | `1` | Population rounds. `0` means indefinite; an indefinite campaign requires positive iterations. |
+| `--auto-parent FILE` | none | Repeatable additional generation-0 parent. Every parent must contain exactly the positional input's level and pass canonical Auto verification; duplicates are collapsed. TOML: `[auto].parents`. |
 | `--beam N` | `32` | Retained candidate population per independent search. Must be positive. |
 | `--max-retime N` | `3` | Maximum Auto-generated suffix shift. Must be 1–3. |
-| `--auto-objective speedrun\|highscore` | `speedrun` | Whole-route objective. |
+| `--auto-objective speedrun|highscore` | `speedrun` | Whole-route objective. |
 | `--auto-require-reference-gold` | off | Highscore-only hard constraint preserving every exact post-retime source gold. |
 | `--auto-max-extra-ticks N` | highscore: up to `80`; speedrun: `0` | Editable workspace after source finish. Must be non-negative. A positive value is invalid for speedrun. |
 | `--auto-repair-window N`, `--auto-window N` | `6` | Consecutive direction frames in a bounded repair. Must be 1–10. |
@@ -1093,9 +1134,11 @@ The tables below include every v2.70 optimiser option and its default.
 | `--auto-max-alignment N`, `--auto-alignment N` | `3` | Maximum future reference offset used for trajectory matching. Must be non-negative. |
 | `--auto-no-deterministic` | off | Skip structured retime/pulse/jump bootstrap and start with the stochastic beam. |
 | `--auto-repair-local-steps N` | `1000` | Fresh local-simulation limit per admitted repair. `0` is unlimited. |
-| `--auto-repair-search-order random\|fixed` | `random` | Seeded random repair traversal or the fixed legacy order; primary jump/direction ordering remains seed-derived. |
+| `--auto-repair-search-order random|fixed` | `random` | Seeded random repair traversal or the fixed legacy order; primary jump/direction ordering remains seed-derived. |
 | `--auto-frame-ahead-repair-multiplier N` | `10` | Multiplies repair and campaign allowances after a measured positive trajectory offset. Must be at least 1. |
 | `--auto-campaign-local-steps N` | `10000` | Soft local-simulation ceiling per repair campaign. `0` disables the ceiling. |
+| `--auto-beam-repair-revisit-limit N` | `2` | Maximum visits to one eight-frame failure region in a beam repair campaign. Must be positive. |
+| `--auto-splice-repair-revisit-limit N` | `3` | Maximum visits to one eight-frame failure region in a splice repair campaign. Must be positive. Splice repair has no separate total-attempt ceiling. |
 | `--auto-cheap-pulses N` | `96` | Budget for the deterministic one-frame horizontal pre-sweep. `0` disables it. |
 | `--auto-position-tolerance D` | `3` | Position tolerance for trajectory alignment. Must be finite and non-negative. |
 | `--auto-velocity-tolerance D` | `0.75` | Velocity tolerance for trajectory alignment. Must be finite and non-negative. |
@@ -1103,7 +1146,7 @@ The tables below include every v2.70 optimiser option and its default.
 | `--auto-postroll N` | `1` | Compatibility spelling. Only `1` is accepted because one neutral sentinel is invariant. |
 | `--auto-no-all-input-repair` | off | Disable the third-stage bounded all-input repair fallback. |
 | `--range START:END` | complete verified replay/highscore workspace | Bounds mutation seams/starts, not all downstream suffix effects. One interval only. |
-| `--seed N\|random` | `0` | Master search seed. `random` prints a fresh seed. |
+| `--seed N|random` | `0` | Master search seed. `random` prints a fresh seed. |
 
 ### Local options
 
@@ -1118,19 +1161,20 @@ The tables below include every v2.70 optimiser option and its default.
 | `--require-reference-interactions` | off | Preserve every supported exact interaction made by the post-retime reference. |
 | `--avoid-interaction SELECTOR` | none | Repeatable persistent hard prohibition. |
 | `--window N` | `4` | Mutable frames searched together. Must be at least 1. |
-| `--window-shape contiguous\|sparse\|mixed` | `contiguous` | Consecutive, random sparse, or alternating sparse/contiguous passes. |
+| `--window-shape contiguous|sparse|mixed` | `contiguous` | Consecutive, random sparse, or alternating sparse/contiguous passes. |
 | `--window-span N` | full mutable span | Sparse-pass inclusive span limit; invalid with contiguous shape. |
 | `--windows-per-pass N` | contiguous-window count | Number of distinct sparse frame sets; invalid with contiguous shape. |
-| `--local-inputs all\|direction` | `all` | Six-state all-input alphabet or three-state direction-only alphabet with jump stream preserved. |
+| `--local-inputs all|direction` | `all` | Six-state all-input alphabet or three-state direction-only alphabet with jump stream preserved. |
 | `--jump-start-mutation X` | `0` | Per-pulse start offset bound for random/mixed direction-only restarts. |
 | `--jump-length-mutation Y` | `0` | Per-pulse hold-length offset bound for random/mixed direction-only restarts. |
 | `--immutable-jumps F[:PROPERTY],...` | none | Preserve `start`, `length` or `both` for named source pulses. Requires jump mutation. |
 | `--physics-prune` | off | Optional horizontal bound for direction-only mode; relies on the no-future-boost assumption. |
 | `--passes N` | `2` | Passes within each trajectory. Must be at least 1. |
-| `--window-order forward\|reverse\|random\|mixed` | `forward` | Window traversal and independent trajectory portfolio. |
+| `--window-order forward|reverse|random|mixed` | `forward` | Window traversal and independent trajectory portfolio. |
 | `--restarts N` | `10` | Random trajectories used by random/mixed order. Must be at least 1. |
 | `--seed N` | generated when needed | Integer seed for Local randomness. The literal `random` is not supported. |
 | `--minimum-improvement D` | `0` | Positional score gain threshold for an ordinary greedy improvement; hard-state repairs take priority. Non-negative values are recommended. |
+| `--python-resimulate` | off | Debug only: replay each accepted native winner and packed checkpoint through the Python reference emulator and require exact parity. |
 | `--x-window MIN:MAX` | unset | Inclusive target-frame x constraint; either endpoint may be omitted. |
 | `--y-window MIN:MAX` | unset | Inclusive target-frame y constraint. |
 
@@ -1148,6 +1192,7 @@ The tables below include every v2.70 optimiser option and its default.
 | `--minimum-gap N` | `1` | Minimum released frames between pulses. Must be at least 1. |
 | `--top-results N` | `10` | Feasible ranked patterns retained and printed. Must be at least 1. |
 | `--fixed-jump-frames F1,F2,...` | none | Source rising edges whose starts are fixed while lengths remain searchable. |
+| `--python-resimulate` | off | Debug only: replay each retained native top-K result and packed output through the Python reference emulator and require exact parity. |
 | `--x-window MIN:MAX` | unset | Inclusive target-frame x constraint. |
 | `--y-window MIN:MAX` | unset | Inclusive target-frame y constraint. |
 
@@ -1161,7 +1206,7 @@ The tables below include every v2.70 optimiser option and its default.
 | `--ltm-postroll N` | exact metadata; otherwise infer n-idle tail | Treat exactly the final `N` active-input rows as authoritative raw-LTM post-roll; `0` retains every post-Space row. Must leave a replay frame. LTM-only. |
 | `--retime START:DELTA` | none | Repeatable pre-search transition-suffix retime. |
 | `--list-objects` | off | Print selectors and exit without searching. |
-| `--workers N\|auto` | `auto` | Positive process count, or the mode-aware automatic policy. |
+| `--workers N|auto` | `auto` | Positive worker count, or the mode-aware automatic policy. Auto/Local use processes; jump-pattern uses native shards in threads. |
 | `-o FILE`, `--output FILE` | required for search | Same-format main output: combined text for text input, `.ltm` for LTM input. |
 | `--config FILE` | none | TOML defaults. |
 | `--replay-output FILE` | none | Optional replay-only output. |

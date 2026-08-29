@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from concurrent.futures import Future
+from dataclasses import replace
 from queue import Queue
+from threading import Event, Thread, current_thread
+from types import SimpleNamespace
 
 import nv14_auto_parallel as parallel
 from nv14_auto import (
@@ -87,7 +90,7 @@ def _member(member_id: int, parent_id: int, rank: int) -> parallel._AutoPopulati
     return parallel._AutoPopulationMember(
         member_id=member_id,
         result=_result(100, float(rank)),
-        parent_member_id=parent_id,
+        parent_member_ids=(parent_id,),
         generation=2,
         mutations=(),
     )
@@ -110,7 +113,80 @@ def test_v248_survivor_filter_keeps_three_immediate_parent_lineages() -> None:
         members, 4, enforce_parent_diversity=True
     )
     assert [member.member_id for member in selected] == [1, 2, 3, 5]
-    assert len({member.parent_member_id for member in selected}) == 3
+    assert len(
+        {
+            lineage
+            for member in selected
+            for lineage in member.parent_member_ids
+        }
+    ) == 3
+
+
+def test_v295_survivors_reserve_ordinary_elite_and_defer_splice_duplicates() -> None:
+    splice_one = parallel._AutoPopulationMember(
+        member_id=1,
+        result=_result(99, 1.0),
+        parent_member_ids=(10, 20),
+        generation=3,
+        mutations=("splice one",),
+        splice_parent_pair=(10, 20),
+        splice_interval=(20, 40, 22, 39),
+    )
+    same_pair = parallel._AutoPopulationMember(
+        member_id=2,
+        result=_result(99, 2.0),
+        parent_member_ids=(10, 20),
+        generation=3,
+        mutations=("splice two",),
+        splice_parent_pair=(10, 20),
+        splice_interval=(50, 70, 53, 69),
+    )
+    same_interval = parallel._AutoPopulationMember(
+        member_id=3,
+        result=_result(99, 3.0),
+        parent_member_ids=(30, 40),
+        generation=3,
+        mutations=("splice three",),
+        splice_parent_pair=(30, 40),
+        splice_interval=(20, 40, 22, 39),
+    )
+    ordinary = _member(4, 50, 4)
+
+    selected = parallel._select_population_survivors(
+        (splice_one, same_pair, same_interval, ordinary),
+        3,
+        enforce_parent_diversity=True,
+    )
+
+    # The ordinary result is reserved even though all splice results rank
+    # above it.  Only then is a same-pair/interval duplicate allowed to fill
+    # the remaining slot.
+    assert [member.member_id for member in selected] == [1, 4, 2]
+    assert selected[0].parent_member_ids == (10, 20)
+
+
+def test_v295_splice_admission_requires_canonical_trimmed_verification(
+    monkeypatch,
+) -> None:
+    candidate = _result(9, 1.0, marker=InputFrame(right=True)).best
+    seen: list[tuple[object, tuple[InputFrame, ...], int]] = []
+
+    def verified(level, frames, *, expected_finish_tick, **kwargs):
+        seen.append((level, tuple(frames), expected_finish_tick))
+        return candidate.evaluation
+
+    monkeypatch.setattr(parallel, "verify_trimmed_replay", verified)
+    canonical = parallel._canonical_splice_candidate(object(), candidate)
+    assert canonical is not None
+    assert canonical.working_frames == candidate.frames + (InputFrame(),)
+    assert seen[0][1] == candidate.frames
+    assert seen[0][2] == candidate.finish_tick
+
+    def drifted(*args, **kwargs):
+        raise ValueError("completion drift")
+
+    monkeypatch.setattr(parallel, "verify_trimmed_replay", drifted)
+    assert parallel._canonical_splice_candidate(object(), candidate) is None
 
 
 class _SteppedPool:
@@ -145,6 +221,92 @@ def _stepped_wait(futures, timeout=None, return_when=None):
     except BaseException as exc:  # mirror Future execution semantics
         future.set_exception(exc)
     _SteppedPool.events.append(("complete", task.run_index, task.task_id))
+    return {future}, set(futures) - {future}
+
+
+class _RunningSteppedPool(_SteppedPool):
+    """Harness whose submitted work has already entered Future.RUNNING."""
+
+    def submit(self, function, task):
+        future = super().submit(function, task)
+        assert future.set_running_or_notify_cancel()
+        return future
+
+
+class _ObservedBoundedQueue(Queue):
+    consumer_thread: Thread | None = None
+
+    def get(self, block=True, timeout=None):
+        self.consumer_thread = current_thread()
+        return super().get(block=block, timeout=timeout)
+
+
+class _BackpressurePool:
+    def __init__(self, worker: Thread) -> None:
+        self.worker = worker
+        self.shutdown_calls = 0
+        self._processes = {}
+
+    def shutdown(self, wait=True, cancel_futures=False) -> None:
+        self.shutdown_calls += 1
+        self.worker.join(timeout=1.0)
+        assert not self.worker.is_alive()
+
+
+def test_v297_shutdown_pumps_checkpoint_queue_until_worker_finishes() -> None:
+    """A full checkpoint queue must not deadlock executor shutdown."""
+    checkpoint_queue = _ObservedBoundedQueue(maxsize=1)
+    checkpoint_queue.put("first")
+    future: Future[str] = Future()
+    assert future.set_running_or_notify_cancel()
+    put_started = Event()
+
+    def produce() -> None:
+        put_started.set()
+        checkpoint_queue.put("second")
+        future.set_result("finished")
+
+    worker = Thread(target=produce, name="blocked-checkpoint-producer")
+    worker.start()
+    assert put_started.wait(timeout=1.0)
+    assert not future.done()
+    executor = _BackpressurePool(worker)
+    stop_event = Event()
+
+    completed, buffered = parallel._stop_executor(
+        executor,
+        (future,),
+        stop_event,
+        checkpoint_queue,
+    )
+
+    assert completed == (future,)
+    assert buffered == ("first", "second")
+    assert stop_event.is_set()
+    assert executor.shutdown_calls == 1
+    assert checkpoint_queue.consumer_thread is not None
+    assert not checkpoint_queue.consumer_thread.is_alive()
+
+
+def _running_stepped_wait(futures, timeout=None, return_when=None):
+    candidates = [future for future in futures if not future.done()]
+    if not candidates:
+        done = {future for future in futures if future.done()}
+        return done, set(futures) - done
+    future = min(
+        candidates,
+        key=lambda item: _RunningSteppedPool.work[item][1].task_id,
+    )
+    function, task = _RunningSteppedPool.work[future]
+    event = "complete"
+    try:
+        future.set_result(function(task))
+    except parallel._AutoWorkerCancelled as exc:
+        event = "cancelled"
+        future.set_exception(exc)
+    except BaseException as exc:
+        future.set_exception(exc)
+    _RunningSteppedPool.events.append((event, task.run_index, task.task_id))
     return {future}, set(futures) - {future}
 
 
@@ -275,6 +437,102 @@ def test_v248_worker_checkpoint_carries_exact_evaluation_count(monkeypatch) -> N
     assert output.result.stats.macro_evaluations == 137
 
 
+def test_v297_splice_round_prepares_each_member_once_for_all_pairs(
+    monkeypatch,
+) -> None:
+    """Four traces are indexed once although the scheduler runs 12 pairs."""
+
+    worker_count = 4
+    neutral = InputFrame()
+    preparation_ids: list[int] = []
+    pair_calls: list[tuple[object, object]] = []
+    real_prepare = parallel.prepare_splice_trace
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        if config.iterations == 0:
+            return _result(10, 20.0, marker=neutral, seed=config.seed)
+        return _result(
+            10,
+            float(config.seed),
+            marker=InputFrame(right=True),
+            baseline_tick=len(tuple(frames)),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    def counting_prepare(evaluation, frames):
+        preparation_ids.append(id(evaluation))
+        return real_prepare(evaluation, frames)
+
+    def no_splice_plans(recipient, donor, *args, **kwargs):
+        pair_calls.append((recipient, donor))
+        observer = kwargs.get("anchor_runs_observer")
+        if observer is not None:
+            observer(())
+        return ()
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
+    monkeypatch.setattr(parallel, "wait", _stepped_wait)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+    monkeypatch.setattr(parallel, "prepare_splice_trace", counting_prepare)
+    monkeypatch.setattr(
+        parallel,
+        "find_splice_section_plans",
+        no_splice_plans,
+    )
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 10,
+        AutoConfig(iterations=1, beam_width=2, seed=73),
+        workers=worker_count,
+        runs=1,
+        search=fake_search,
+    )
+
+    assert campaign.completed_runs == 1
+    assert len(pair_calls) == worker_count * (worker_count - 1) == 12
+    assert len(preparation_ids) == worker_count == 4
+    assert len(set(preparation_ids)) == worker_count
+
+
+def test_v297_native_splice_parent_cache_is_per_generation_and_member(
+    monkeypatch,
+) -> None:
+    class _FakeLevel:
+        pass
+
+    level = _FakeLevel()
+    first_member = _member(1, 10, 1)
+    second_member = _member(2, 10, 2)
+    evaluations: list[AutoEvaluation] = []
+
+    def fake_evaluate(_level, _frames):
+        evaluation = _result(90 + len(evaluations), 1.0).best.evaluation
+        evaluations.append(evaluation)
+        return evaluation
+
+    monkeypatch.setattr(parallel, "Level", _FakeLevel)
+    monkeypatch.setattr(parallel, "evaluate_replay_with_sentinel", fake_evaluate)
+    monkeypatch.setattr(parallel, "_AUTO_WORKER_SPLICE_PARENT_CACHE", {})
+
+    first = parallel._native_splice_parent(level, 3, first_member)
+    repeated = parallel._native_splice_parent(level, 3, first_member)
+    second = parallel._native_splice_parent(level, 3, second_member)
+
+    assert repeated is first
+    assert len(evaluations) == 2
+    assert first.result.best.evaluation is evaluations[0]
+    assert second.result.best.evaluation is evaluations[1]
+    assert set(parallel._AUTO_WORKER_SPLICE_PARENT_CACHE) == {(3, 1), (3, 2)}
+
+    next_generation = parallel._native_splice_parent(level, 4, first_member)
+
+    assert len(evaluations) == 3
+    assert next_generation.result.best.evaluation is evaluations[2]
+    assert set(parallel._AUTO_WORKER_SPLICE_PARENT_CACHE) == {(4, 1)}
+
+
 def test_v248_forced_spawn_two_round_population_smoke(monkeypatch) -> None:
     import multiprocessing
     from nv14_engine import APP_NUM_GRIDCOLS, APP_NUM_GRIDROWS, parse_level_string
@@ -289,16 +547,25 @@ def test_v248_forced_spawn_two_round_population_smoke(monkeypatch) -> None:
     spawn_context = multiprocessing.get_context("spawn")
     monkeypatch.setattr(parallel.multiprocessing, "get_context", lambda: spawn_context)
     source = [InputFrame()] * 5 + [InputFrame(right=True)] * 80
+    status_messages: list[str] = []
     campaign = parallel.optimise_autonomous_campaign(
         level,
         source,
         AutoConfig(iterations=1, beam_width=2, seed=456),
         workers=4,
         runs=2,
+        status=status_messages.append,
     )
     assert campaign.completed_runs == 2
     assert campaign.completed_searches >= 8
     assert campaign.result.finish_tick <= campaign.result.baseline_finish_tick
+    splice_summaries = [
+        message
+        for message in status_messages
+        if message.startswith("[auto:splice] round ") and "pairs=" in message
+    ]
+    assert len(splice_summaries) == 2
+    assert all("pairs=12," in message for message in splice_summaries)
 
 
 def test_v248_pruned_speculation_is_replaced_by_true_survivor_children(
@@ -372,3 +639,810 @@ def test_v248_pruned_speculation_is_replaced_by_true_survivor_children(
     ]
     for marker in markers[4:]:
         assert round_two_completed_sources.count(marker) == 2
+
+
+def test_v295_splice_parent_reconciles_speculative_children(monkeypatch) -> None:
+    """A final splice can replace a provisional parent without losing speculation."""
+    worker_count = 4
+    neutral = InputFrame()
+    ordinary_marker = InputFrame(left=True)
+    splice_marker = InputFrame(jump=True)
+    calls: list[tuple[int, tuple[InputFrame, ...]]] = []
+    plan = SimpleNamespace(
+        recipient_entry_tick=2,
+        recipient_exit_tick=8,
+        donor_entry_tick=3,
+        donor_exit_tick=8,
+        predicted_time_gain=1,
+    )
+    splice_candidate = _result(
+        9,
+        0.5,
+        marker=splice_marker,
+        baseline_tick=10,
+    ).best
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        source = tuple(frames)
+        calls.append((config.seed, source))
+        if config.iterations == 0:
+            return _result(10, 99.0, marker=neutral, seed=config.seed)
+        if source and source[0] == splice_marker:
+            return _result(
+                8,
+                0.25,
+                marker=splice_marker,
+                baseline_tick=len(source),
+                seed=config.seed,
+                iterations=config.iterations,
+            )
+        return _result(
+            10,
+            float(config.seed),
+            marker=ordinary_marker,
+            baseline_tick=len(source),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    def fake_repair(*args, **kwargs):
+        return SimpleNamespace(
+            accepted=True,
+            candidate=splice_candidate,
+            attempts=0,
+            local_simulations=0,
+        )
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
+    monkeypatch.setattr(parallel, "wait", _stepped_wait)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+    monkeypatch.setattr(
+        parallel,
+        "find_splice_section_plans",
+        lambda *args, **kwargs: (plan,),
+    )
+    monkeypatch.setattr(parallel, "repair_reference_segment_splice", fake_repair)
+    monkeypatch.setattr(
+        parallel,
+        "_canonical_splice_candidate",
+        lambda level, candidate: candidate,
+    )
+    status_messages: list[str] = []
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 10,
+        AutoConfig(iterations=1, beam_width=2, seed=41),
+        workers=worker_count,
+        runs=2,
+        search=fake_search,
+        status=status_messages.append,
+    )
+
+    events = _SteppedPool.events
+    # Task 6 is a speculative descendant of a provisional ordinary parent. It
+    # now fills spare capacity and can complete during the splice tail, but the
+    # final population still replaces that ancestry with the synthetic splice
+    # member. Task 8 is then run from the selected splice replay.
+    assert ("submit", 2, 6) in events
+    assert ("complete", 2, 6) in events
+    assert ("submit", 2, 8) in events
+    assert any(source and source[0] == splice_marker for _, source in calls)
+    assert campaign.result.finish_tick == 8
+    summary = next(
+        message
+        for message in status_messages
+        if message.startswith("[auto:splice] round 1:")
+        and "pairs=" in message
+    )
+    assert "pairs=12" in summary
+    assert "plans=12" in summary
+    assert "attempted=12" in summary
+    assert "completed=12" in summary
+    assert "canonical=12" in summary
+    assert "beat-recipient=1" in summary
+    assert "admitted=1" in summary
+    assert "survivors=1" in summary
+    assert "predicted gain=1" in summary
+    assert "realised gain=1" in summary
+    assert "duplicate-replay:11" in summary
+
+
+def test_v296_splice_summary_formats_rejection_and_gain_ranges() -> None:
+    stats = parallel._SpliceRoundStats(
+        pairs=56,
+        corridors=183,
+        plans=71,
+        attempted=42,
+        repaired=11,
+        completed=15,
+        canonical=14,
+        beat_recipient=6,
+        admitted=5,
+        survivors=2,
+        rejection_counts={
+            "canonical-verification": 1,
+            "population-selection": 3,
+            "repair-no-proposal": 12,
+        },
+        predicted_gains=[1, 8],
+        realised_gains=[1, 6],
+    )
+    messages: list[str] = []
+
+    parallel._emit_splice_round_summary(3, stats, messages.append)
+
+    assert messages == [
+        "[auto:splice] round 3: pairs=56, corridors=183, plans=71, "
+        "attempted=42, repaired=11, completed=15, canonical=14, "
+        "beat-recipient=6, admitted=5, survivors=2; predicted gain=1..8, "
+        "realised gain=1..6; rejected=canonical-verification:1,"
+        "population-selection:3,repair-no-proposal:12"
+    ]
+
+
+def test_v298_ready_splice_pairs_preempt_then_refill_with_speculation(
+    monkeypatch,
+) -> None:
+    """Pair jobs outrank provisional Auto without leaving spare slots idle."""
+    worker_count = 4
+    neutral = InputFrame()
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        if config.iterations == 0:
+            return _result(10, 99.0, marker=neutral, seed=config.seed)
+        return _result(
+            10,
+            float(config.seed),
+            marker=InputFrame(left=True),
+            baseline_tick=len(frames),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
+    monkeypatch.setattr(parallel, "wait", _stepped_wait)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 10,
+        AutoConfig(iterations=1, beam_width=2, seed=123),
+        workers=worker_count,
+        runs=2,
+        search=fake_search,
+    )
+
+    events = _SteppedPool.events
+    round_one_pair_submits = [
+        (index, event)
+        for index, event in enumerate(events)
+        if event[0] == "submit"
+        and event[1] == 1
+        and event[2] >= parallel._SPLICE_TASK_ID_BASE
+    ]
+    round_one_pair_completes = [
+        index
+        for index, event in enumerate(events)
+        if event[0] == "complete"
+        and event[1] == 1
+        and event[2] >= parallel._SPLICE_TASK_ID_BASE
+    ]
+
+    assert len(round_one_pair_submits) == worker_count * (worker_count - 1)
+    assert len({event[2] for _, event in round_one_pair_submits}) == 12
+    assert len(round_one_pair_completes) == 12
+    # Parent two makes both ordered 1/2 pairs ready.  One is submitted before
+    # parent three completes, rather than waiting for the old round-end pass.
+    second_parent = events.index(("complete", 1, 2))
+    third_parent = events.index(("complete", 1, 3))
+    assert second_parent < round_one_pair_submits[0][0] < third_parent
+
+    speculative_submits = [
+        index
+        for index, event in enumerate(events)
+        if event[0] == "submit"
+        and event[1] == 2
+        and event[2] < parallel._SPLICE_TASK_ID_BASE
+    ]
+    speculative_completes = [
+        index
+        for index, event in enumerate(events)
+        if event[0] == "complete"
+        and event[1] == 2
+        and event[2] < parallel._SPLICE_TASK_ID_BASE
+    ]
+    assert speculative_submits
+    # Speculation starts after parent one and is cooperatively displaced when
+    # parent two creates a pair backlog.  Once every ready pair has a worker,
+    # the same deterministic task is resubmitted into spare capacity while the
+    # splice tail is still running.
+    resumed_task_id = worker_count + 1
+    resumed_submits = [
+        index
+        for index, event in enumerate(events)
+        if event == ("submit", 2, resumed_task_id)
+    ]
+    assert len(resumed_submits) == 2
+    assert resumed_submits[0] < round_one_pair_submits[0][0]
+    last_pair_submit = max(index for index, _event in round_one_pair_submits)
+    assert last_pair_submit < resumed_submits[1]
+    assert resumed_submits[1] < max(round_one_pair_completes)
+    assert min(speculative_completes) < max(round_one_pair_completes)
+    assert campaign.completed_runs == 2
+
+
+def test_v298_running_speculation_is_cancelled_then_resumed_during_splice_tail(
+    monkeypatch,
+) -> None:
+    """A RUNNING speculative Future resumes safely in spare splice capacity."""
+    worker_count = 4
+    base_seed = 321
+    neutral = InputFrame()
+    first_seeds = {
+        parallel._derive_auto_task_seed(base_seed, task_id): task_id
+        for task_id in range(1, worker_count + 1)
+    }
+    resumed_seed = parallel._derive_auto_task_seed(base_seed, worker_count + 1)
+    search_calls: list[tuple[int, int]] = []
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        search_calls.append((config.seed, config.iterations))
+        if config.iterations == 0:
+            return _result(10, 99.0, marker=neutral, seed=config.seed)
+        first_id = first_seeds.get(config.seed)
+        if first_id is not None:
+            # The first completed parent is also the best survivor, so its
+            # preempted offspring record is authoritative in round two.
+            return _result(
+                10,
+                float(first_id),
+                marker=InputFrame(left=True),
+                baseline_tick=len(frames),
+                seed=config.seed,
+                iterations=config.iterations,
+            )
+        return _result(
+            9,
+            1.0,
+            marker=InputFrame(right=True),
+            baseline_tick=len(frames),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _RunningSteppedPool)
+    monkeypatch.setattr(parallel, "wait", _running_stepped_wait)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 10,
+        AutoConfig(iterations=1, beam_width=2, seed=base_seed),
+        workers=worker_count,
+        runs=2,
+        search=fake_search,
+    )
+
+    events = _RunningSteppedPool.events
+    resumed_task_id = worker_count + 1
+    assert events.count(("submit", 2, resumed_task_id)) == 2
+    assert events.count(("cancelled", 2, resumed_task_id)) == 1
+    assert events.count(("complete", 2, resumed_task_id)) == 1
+    pair_completions = [
+        index
+        for index, event in enumerate(events)
+        if event[0] == "complete"
+        and event[1] == 1
+        and event[2] >= parallel._SPLICE_TASK_ID_BASE
+    ]
+    resumed_completion = events.index(("complete", 2, resumed_task_id))
+    assert len(pair_completions) == worker_count * (worker_count - 1)
+    assert resumed_completion < max(pair_completions)
+    # The cancelled attempt exits before fake_search; only the resubmission
+    # performs and contributes one successful Auto search.
+    assert search_calls.count((resumed_seed, 1)) == 1
+    assert campaign.completed_runs == 2
+    assert campaign.completed_searches == 2 * worker_count
+    assert campaign.result.stats.macro_evaluations == 2 * worker_count
+
+
+def test_v297_splice_worker_returns_and_checkpoints_partial_success_on_cancel(
+    monkeypatch,
+) -> None:
+    """Cancellation before plan two must not discard verified plan one."""
+    recipient = parallel._AutoPopulationMember(
+        member_id=1,
+        result=_result(10, 5.0),
+        parent_member_ids=(0,),
+        generation=1,
+        mutations=(),
+    )
+    donor = parallel._AutoPopulationMember(
+        member_id=2,
+        result=_result(10, 6.0, marker=InputFrame(left=True)),
+        parent_member_ids=(0,),
+        generation=1,
+        mutations=(),
+    )
+    candidate = _result(
+        9,
+        1.0,
+        marker=InputFrame(jump=True),
+        baseline_tick=10,
+    ).best
+    plan = SimpleNamespace(
+        recipient_entry_tick=2,
+        recipient_exit_tick=8,
+        donor_entry_tick=3,
+        donor_exit_tick=8,
+        predicted_time_gain=1,
+    )
+    checkpoint_queue = Queue()
+    cancellation_checks = iter((False, False, True))
+
+    def plans(*args, **kwargs):
+        observer = kwargs.get("anchor_runs_observer")
+        if observer is not None:
+            observer((object(),))
+        return (plan, plan)
+
+    repair = SimpleNamespace(
+        accepted=True,
+        candidate=candidate,
+        raw_candidate=candidate,
+        attempts=0,
+        local_simulations=0,
+        rejection_reason=None,
+    )
+    monkeypatch.setattr(
+        parallel,
+        "_worker_cancelled",
+        lambda task=None: next(cancellation_checks),
+    )
+    monkeypatch.setattr(parallel, "find_splice_section_plans", plans)
+    monkeypatch.setattr(
+        parallel,
+        "repair_reference_segment_splice",
+        lambda *args, **kwargs: repair,
+    )
+    monkeypatch.setattr(
+        parallel,
+        "_canonical_splice_candidate",
+        lambda level, value: value,
+    )
+    monkeypatch.setattr(
+        parallel,
+        "_AUTO_WORKER_CHECKPOINT_QUEUE",
+        checkpoint_queue,
+    )
+    task = parallel._SpliceWorkerTask(
+        recipient=recipient,
+        donor=donor,
+        recipient_trace=parallel.prepare_splice_trace(
+            recipient.result.best.evaluation,
+            recipient.result.frames,
+        ),
+        donor_trace=parallel.prepare_splice_trace(
+            donor.result.best.evaluation,
+            donor.result.frames,
+        ),
+        run_index=1,
+        task_id=parallel._SPLICE_TASK_ID_BASE + 1,
+    )
+
+    output = parallel._run_splice_worker_in_session(
+        task,
+        parallel._AutoWorkerContext(object(), AutoConfig(iterations=1)),
+    )
+    checkpoint = checkpoint_queue.get_nowait()
+
+    assert len(output.candidates) == 1
+    assert output.candidates[0].candidate is candidate
+    assert output.splice_stats.attempted == 1
+    assert output.splice_stats.canonical == 1
+    assert isinstance(checkpoint, parallel._SpliceWorkerCheckpoint)
+    assert checkpoint.task_id == task.task_id
+    assert checkpoint.proposal.candidate is candidate
+
+
+def test_v297_interrupt_reaps_splice_finishing_during_shutdown_grace(
+    monkeypatch,
+) -> None:
+    """A successful pair future finishing after Ctrl+C remains recoverable."""
+    neutral = InputFrame()
+    candidate = _result(
+        9,
+        0.5,
+        marker=InputFrame(jump=True),
+        baseline_tick=10,
+    ).best
+    normal_waits = 0
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        if config.iterations == 0:
+            return _result(10, 99.0, marker=neutral, seed=config.seed)
+        return _result(
+            10,
+            float(config.seed),
+            marker=InputFrame(left=True),
+            baseline_tick=len(frames),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    def fake_splice_worker(task):
+        proposal = parallel._SpliceWorkerCandidate(
+            candidate=candidate,
+            recipient_entry_tick=2,
+            recipient_exit_tick=8,
+            donor_entry_tick=3,
+            donor_exit_tick=8,
+            predicted_time_gain=1,
+        )
+        return parallel._SpliceWorkerResult(
+            task_id=task.task_id,
+            run_index=task.run_index,
+            recipient_member_id=task.recipient.member_id,
+            donor_member_id=task.donor.member_id,
+            candidates=(proposal,),
+            splice_stats=parallel._SpliceRoundStats(
+                pairs=1,
+                plans=1,
+                attempted=1,
+                completed=1,
+                canonical=1,
+            ),
+            auto_stats=AutoStats(),
+        )
+
+    def interrupt_then_finish(futures, timeout=None, return_when=None):
+        nonlocal normal_waits
+        pending = [future for future in futures if not future.done()]
+        if timeout == 2.0:
+            for future in pending:
+                function, task = _RunningSteppedPool.work[future]
+                try:
+                    future.set_result(function(task))
+                except BaseException as exc:
+                    future.set_exception(exc)
+            return set(pending), set()
+
+        normal_waits += 1
+        if normal_waits > 2:
+            raise KeyboardInterrupt
+        future = next(
+            item
+            for item in pending
+            if _RunningSteppedPool.work[item][1].task_id == normal_waits
+        )
+        function, task = _RunningSteppedPool.work[future]
+        try:
+            future.set_result(function(task))
+        except BaseException as exc:
+            future.set_exception(exc)
+        return {future}, set(futures) - {future}
+
+    saved: list[AutoCandidate] = []
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _RunningSteppedPool)
+    monkeypatch.setattr(parallel, "wait", interrupt_then_finish)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+    monkeypatch.setattr(parallel, "_run_splice_worker", fake_splice_worker)
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 10,
+        AutoConfig(iterations=1, beam_width=2, seed=91),
+        workers=4,
+        runs=1,
+        search=fake_search,
+        best_callback=saved.append,
+    )
+
+    assert campaign.interrupted is True
+    assert campaign.result.finish_tick == 9
+    assert saved[-1].finish_tick == 9
+
+
+def test_v297_final_round_runs_splices_without_starting_speculation(
+    monkeypatch,
+) -> None:
+    neutral = InputFrame()
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        return _result(
+            10,
+            float(config.seed),
+            marker=neutral,
+            baseline_tick=None if config.iterations == 0 else len(frames),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
+    monkeypatch.setattr(parallel, "wait", _stepped_wait)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 10,
+        AutoConfig(iterations=1, beam_width=2, seed=77),
+        workers=4,
+        runs=1,
+        search=fake_search,
+    )
+
+    pair_submits = [
+        event
+        for event in _SteppedPool.events
+        if event[0] == "submit" and event[2] >= parallel._SPLICE_TASK_ID_BASE
+    ]
+    assert len(pair_submits) == 12
+    assert not any(
+        event[0] == "submit"
+        and event[1] == 2
+        and event[2] < parallel._SPLICE_TASK_ID_BASE
+        for event in _SteppedPool.events
+    )
+    assert campaign.completed_searches == 4
+
+
+def test_v297_splice_future_completion_order_does_not_change_admission(
+    monkeypatch,
+) -> None:
+    neutral = InputFrame()
+    splice_candidate = _result(
+        9,
+        0.5,
+        marker=InputFrame(jump=True),
+        baseline_tick=10,
+    ).best
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        if config.iterations == 0:
+            return _result(10, 99.0, marker=neutral, seed=config.seed)
+        return _result(
+            10,
+            float(config.seed),
+            marker=InputFrame(left=True),
+            baseline_tick=len(frames),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    def fake_splice_worker(task):
+        proposal = parallel._SpliceWorkerCandidate(
+            candidate=splice_candidate,
+            recipient_entry_tick=2,
+            recipient_exit_tick=8,
+            donor_entry_tick=3,
+            donor_exit_tick=8,
+            predicted_time_gain=1,
+        )
+        return parallel._SpliceWorkerResult(
+            task_id=task.task_id,
+            run_index=task.run_index,
+            recipient_member_id=task.recipient.member_id,
+            donor_member_id=task.donor.member_id,
+            candidates=(proposal,),
+            splice_stats=parallel._SpliceRoundStats(
+                pairs=1,
+                plans=1,
+                attempted=1,
+                completed=1,
+                canonical=1,
+                predicted_gains=[1],
+                realised_gains=[1],
+            ),
+            auto_stats=AutoStats(),
+        )
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+    monkeypatch.setattr(parallel, "_run_splice_worker", fake_splice_worker)
+
+    def run_campaign(*, reverse_pairs: bool):
+        def ordered_wait(futures, timeout=None, return_when=None):
+            candidates = [future for future in futures if not future.done()]
+            if not candidates:
+                done = {future for future in futures if future.done()}
+                return done, set(futures) - done
+            auto_candidates = [
+                future
+                for future in candidates
+                if _SteppedPool.work[future][1].task_id
+                < parallel._SPLICE_TASK_ID_BASE
+            ]
+            pool = auto_candidates or candidates
+            future = (max if reverse_pairs and not auto_candidates else min)(
+                pool,
+                key=lambda item: _SteppedPool.work[item][1].task_id,
+            )
+            function, task = _SteppedPool.work[future]
+            try:
+                future.set_result(function(task))
+            except BaseException as exc:
+                future.set_exception(exc)
+            _SteppedPool.events.append(
+                ("complete", task.run_index, task.task_id)
+            )
+            return {future}, set(futures) - {future}
+
+        monkeypatch.setattr(parallel, "wait", ordered_wait)
+        messages: list[str] = []
+        campaign = parallel.optimise_autonomous_campaign(
+            object(),
+            (neutral,) * 10,
+            AutoConfig(iterations=1, beam_width=2, seed=222),
+            workers=4,
+            runs=1,
+            search=fake_search,
+            status=messages.append,
+        )
+        summary = next(
+            message
+            for message in messages
+            if message.startswith("[auto:splice] round 1:")
+            and "pairs=" in message
+        )
+        return campaign, summary
+
+    forward, forward_summary = run_campaign(reverse_pairs=False)
+    reverse, reverse_summary = run_campaign(reverse_pairs=True)
+
+    assert forward.result.frames == reverse.result.frames
+    assert forward.result.best.mutations == reverse.result.best.mutations
+    assert forward.result.finish_tick == reverse.result.finish_tick == 9
+    assert forward_summary == reverse_summary
+    assert "admitted=1" in forward_summary
+    assert "duplicate-replay:11" in forward_summary
+
+
+def test_v300_round_one_distributes_searches_across_ranked_unique_founders(
+    monkeypatch,
+) -> None:
+    neutral = InputFrame()
+    right = InputFrame(right=True)
+    left = InputFrame(left=True)
+    finish_by_marker = {
+        neutral: 12,
+        right: 9,
+        left: 10,
+    }
+    searched_markers: list[InputFrame] = []
+    verification_markers: list[InputFrame] = []
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        source = tuple(frames)
+        marker = source[0]
+        finish = finish_by_marker[marker]
+        if config.iterations == 0:
+            verification_markers.append(marker)
+            return _result(finish, 1.0, marker=marker)
+        searched_markers.append(marker)
+        return _result(
+            finish,
+            1.0,
+            marker=marker,
+            baseline_tick=len(source),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    def no_splice_plans(*args, **kwargs):
+        observer = kwargs.get("anchor_runs_observer")
+        if observer is not None:
+            observer(())
+        return ()
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
+    monkeypatch.setattr(parallel, "wait", _stepped_wait)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+    monkeypatch.setattr(parallel, "find_splice_section_plans", no_splice_plans)
+    messages: list[str] = []
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 20,
+        AutoConfig(iterations=1, beam_width=2, seed=300),
+        parent_frames=(
+            (right,) * 30,
+            (left,) * 25,
+            (right,) * 40,
+        ),
+        workers=8,
+        runs=1,
+        search=fake_search,
+        status=messages.append,
+    )
+
+    assert verification_markers == [neutral, right, left, right]
+    assert searched_markers.count(right) == 3
+    assert searched_markers.count(left) == 3
+    assert searched_markers.count(neutral) == 2
+    assert campaign.completed_searches == 8
+    assert campaign.result.baseline_finish_tick == 12
+    assert campaign.result.finish_tick == 9
+    assert campaign.result.best.mutations[0] == "starting parent #2"
+    assert any(
+        "3 unique starting parent(s) from 4 supplied" in message
+        and "collapsed 1 canonical duplicate(s)" in message
+        for message in messages
+    )
+
+
+def test_v300_zero_iteration_campaign_returns_best_supplied_parent() -> None:
+    neutral = InputFrame()
+    right = InputFrame(right=True)
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        marker = tuple(frames)[0]
+        return _result(12 if marker == neutral else 9, 1.0, marker=marker)
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 20,
+        AutoConfig(iterations=0, beam_width=2),
+        parent_frames=((right,) * 20,),
+        workers=4,
+        runs=1,
+        search=fake_search,
+    )
+
+    assert campaign.completed_runs == 0
+    assert campaign.completed_searches == 0
+    assert campaign.result.baseline_finish_tick == 12
+    assert campaign.result.finish_tick == 9
+    assert campaign.result.frames == (right,) * 9
+    assert campaign.result.best.mutations == ("starting parent #2",)
+
+
+def test_v300_strict_gold_rejects_a_founder_missing_positional_reference_gold() -> None:
+    neutral = InputFrame()
+    right = InputFrame(right=True)
+
+    def with_gold(result: AutoResult, mask: int) -> AutoResult:
+        evaluation = replace(
+            result.best.evaluation,
+            final_gold_mask=mask,
+            gold_bonus_ticks=80 * mask.bit_count(),
+        )
+        candidate = replace(result.best, evaluation=evaluation)
+        return replace(
+            result,
+            best=candidate,
+            objective="highscore",
+            baseline_gold_mask=mask,
+            gold_mask=mask,
+            baseline_gold_bonus_ticks=evaluation.gold_bonus_ticks,
+            gold_bonus_ticks=evaluation.gold_bonus_ticks,
+            baseline_objective_value=(
+                evaluation.gold_bonus_ticks - result.finish_tick
+            ),
+            objective_value=evaluation.gold_bonus_ticks - result.finish_tick,
+            require_reference_gold=True,
+        )
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        marker = tuple(frames)[0]
+        result = _result(12 if marker == neutral else 9, 1.0, marker=marker)
+        return with_gold(result, 0b1 if marker == neutral else 0)
+
+    try:
+        parallel.optimise_autonomous_campaign(
+            object(),
+            (neutral,) * 20,
+            AutoConfig(
+                iterations=0,
+                objective="highscore",
+                require_reference_gold=True,
+            ),
+            parent_frames=((right,) * 20,),
+            workers=4,
+            runs=1,
+            search=fake_search,
+        )
+    except ValueError as exc:
+        assert "auto parent #2 is missing positional reference gold: gold:0" in str(exc)
+    else:
+        raise AssertionError("missing positional reference gold was accepted")

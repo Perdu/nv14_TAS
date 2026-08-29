@@ -1174,6 +1174,40 @@ cdef extern from "nv14_auto.h":
         int64_t score_lead
         double distance
 
+    ctypedef struct nv14_replay_splice_alignment_spec:
+        uint32_t abi_version
+        uint32_t struct_size
+        uint64_t candidate_start_tick
+        uint64_t candidate_end_tick
+        uint64_t minimum_run_length
+        int64_t minimum_offset
+        int64_t maximum_offset
+        double position_tolerance
+        double velocity_tolerance
+        double position_weight
+        double velocity_weight
+        double contact_mismatch_penalty
+        double in_air_mismatch_penalty
+        double near_wall_mismatch_penalty
+        double gold_bit_penalty
+        double mine_bit_penalty
+        double exit_bit_penalty
+        double locked_door_bit_penalty
+        double trapdoor_bit_penalty
+
+    ctypedef struct nv14_replay_splice_alignment_result:
+        uint32_t abi_version
+        uint32_t struct_size
+        uint8_t found
+        uint8_t contact_matches
+        uint8_t static_matches
+        int64_t candidate_tick
+        int64_t reference_tick
+        int64_t offset
+        int64_t score_lead
+        uint64_t run_length
+        double distance
+
     int nv14_replay_trace_result_init(
         nv14_replay_trace_result *result,
         size_t caller_size,
@@ -1192,11 +1226,27 @@ cdef extern from "nv14_auto.h":
         const nv14_replay_alignment_spec *spec,
         nv14_replay_alignment_result *result_out,
     ) noexcept nogil
+    int nv14_replay_trace_find_splice_alignment(
+        const nv14_replay_trace_result *candidate,
+        const nv14_replay_trace_result *reference,
+        const nv14_replay_splice_alignment_spec *spec,
+        nv14_replay_splice_alignment_result *result_out,
+    ) noexcept nogil
     int nv14_replay_trace_find_route_divergence(
         const nv14_replay_trace_result *candidate,
         const nv14_replay_trace_result *reference,
         int64_t reference_offset,
         int64_t reference_completion_exit_index,
+        size_t *candidate_index_out,
+        size_t *reference_index_out,
+    ) noexcept nogil
+    int nv14_replay_trace_find_route_divergence_bounded(
+        const nv14_replay_trace_result *candidate,
+        const nv14_replay_trace_result *reference,
+        int64_t reference_offset,
+        int64_t reference_completion_exit_index,
+        uint64_t candidate_start_tick,
+        uint64_t candidate_end_tick,
         size_t *candidate_index_out,
         size_t *reference_index_out,
     ) noexcept nogil
@@ -2734,16 +2784,103 @@ cdef class NativeTrace:
             result.score_lead,
         )
 
+    def find_splice_alignment(
+        self,
+        NativeTrace reference,
+        *,
+        candidate_start_tick,
+        candidate_end_tick,
+        minimum_offset,
+        maximum_offset,
+        minimum_run_length,
+        position_tolerance,
+        velocity_tolerance,
+        position_weight,
+        velocity_weight,
+        contact_mismatch_penalty,
+        in_air_mismatch_penalty,
+        near_wall_mismatch_penalty,
+        gold_bit_penalty,
+        mine_bit_penalty,
+        exit_bit_penalty,
+        locked_door_bit_penalty,
+        trapdoor_bit_penalty,
+    ):
+        """Find the best exact-route match in bounded splice tick ranges."""
+        cdef nv14_replay_splice_alignment_spec spec
+        cdef nv14_replay_splice_alignment_result result
+        cdef int status
+        memset(&spec, 0, sizeof(nv14_replay_splice_alignment_spec))
+        memset(&result, 0, sizeof(nv14_replay_splice_alignment_result))
+        spec.abi_version = NV14_REPLAY_ANALYSIS_ABI_VERSION
+        spec.struct_size = sizeof(nv14_replay_splice_alignment_spec)
+        result.abi_version = NV14_REPLAY_ANALYSIS_ABI_VERSION
+        result.struct_size = sizeof(nv14_replay_splice_alignment_result)
+        _as_u64(
+            candidate_start_tick,
+            &spec.candidate_start_tick,
+            "splice candidate start tick",
+        )
+        _as_u64(
+            candidate_end_tick,
+            &spec.candidate_end_tick,
+            "splice candidate end tick",
+        )
+        _as_u64(
+            minimum_run_length,
+            &spec.minimum_run_length,
+            "splice minimum run length",
+        )
+        _as_i64(minimum_offset, &spec.minimum_offset, "splice minimum offset")
+        _as_i64(maximum_offset, &spec.maximum_offset, "splice maximum offset")
+        spec.position_tolerance = float(position_tolerance)
+        spec.velocity_tolerance = float(velocity_tolerance)
+        spec.position_weight = float(position_weight)
+        spec.velocity_weight = float(velocity_weight)
+        spec.contact_mismatch_penalty = float(contact_mismatch_penalty)
+        spec.in_air_mismatch_penalty = float(in_air_mismatch_penalty)
+        spec.near_wall_mismatch_penalty = float(near_wall_mismatch_penalty)
+        spec.gold_bit_penalty = float(gold_bit_penalty)
+        spec.mine_bit_penalty = float(mine_bit_penalty)
+        spec.exit_bit_penalty = float(exit_bit_penalty)
+        spec.locked_door_bit_penalty = float(locked_door_bit_penalty)
+        spec.trapdoor_bit_penalty = float(trapdoor_bit_penalty)
+        with nogil:
+            status = nv14_replay_trace_find_splice_alignment(
+                &self._result,
+                &reference._result,
+                &spec,
+                &result,
+            )
+        if status < 0:
+            raise RuntimeError("query native replay-analysis splice alignment")
+        if status == 0 or not result.found:
+            return None
+        return (
+            result.candidate_tick,
+            result.reference_tick,
+            result.offset,
+            result.distance,
+            bool(result.contact_matches),
+            bool(result.static_matches),
+            result.score_lead,
+            result.run_length,
+        )
+
     def find_route_divergence(
         self,
         NativeTrace reference,
         *,
         reference_offset=0,
         reference_completion_exit_index=-1,
+        candidate_start_tick=None,
+        candidate_end_tick=None,
     ):
         """Return the first persistent route-control mask divergence."""
         cdef int64_t native_offset
         cdef int64_t native_exit_index
+        cdef uint64_t native_start_tick = 0
+        cdef uint64_t native_end_tick = 0
         cdef size_t candidate_index = 0
         cdef size_t reference_index = 0
         cdef int status
@@ -2756,12 +2893,31 @@ cdef class NativeTrace:
             &native_exit_index,
             "reference completion exit index",
         )
+        if candidate_start_tick is not None:
+            _as_u64(
+                candidate_start_tick,
+                &native_start_tick,
+                "route candidate start tick",
+            )
+        if candidate_end_tick is None:
+            if self._result.last_tick >= 0:
+                native_end_tick = <uint64_t>self._result.last_tick
+        else:
+            _as_u64(
+                candidate_end_tick,
+                &native_end_tick,
+                "route candidate end tick",
+            )
+        if native_end_tick < native_start_tick:
+            return None
         with nogil:
-            status = nv14_replay_trace_find_route_divergence(
+            status = nv14_replay_trace_find_route_divergence_bounded(
                 &self._result,
                 &reference._result,
                 native_offset,
                 native_exit_index,
+                native_start_tick,
+                native_end_tick,
                 &candidate_index,
                 &reference_index,
             )
@@ -3465,7 +3621,7 @@ def search_backend_info():
     """Return ABI metadata for search APIs in this unified extension."""
     return {
         "available": True,
-        "wrapper_api": 6,
+        "wrapper_api": 7,
         "search_abi": NV14_SEARCH_ABI_VERSION,
         "patch_abi": NV14_PATCH_ABI_VERSION,
         "trace_abi": NV14_REPLAY_TRACE_ABI_VERSION,

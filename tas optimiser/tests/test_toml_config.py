@@ -27,6 +27,8 @@ require_reference_gold = true
 runs = 0
 iterations = 10000
 beam = 64
+beam_repair_revisit_limit = 5
+splice_repair_revisit_limit = 8
 seed = "random"
 deterministic = false
 """,
@@ -56,9 +58,38 @@ deterministic = false
     assert args.auto_runs == 0
     assert args.iterations == 7
     assert args.beam == 64
+    assert args.auto_beam_repair_revisit_limit == 5
+    assert args.auto_splice_repair_revisit_limit == 8
     assert args.seed == "random"
     assert args.auto_deterministic is False
     assert args.retime == [("whole", 1), (120, -1)]
+
+
+def test_v300_auto_toml_parents_append_repeatable_cli_parents(tmp_path) -> None:
+    config = _write_config(
+        tmp_path,
+        """
+[auto]
+parents = ["parent-b.ltm", "parent-c.ltm"]
+""",
+    )
+
+    args = opt.parse_arguments(
+        [
+            "auto",
+            "parent-a.ltm",
+            "--config",
+            str(config),
+            "--auto-parent",
+            "parent-d.ltm",
+        ]
+    )
+
+    assert args.auto_parents == [
+        Path("parent-b.ltm"),
+        Path("parent-c.ltm"),
+        Path("parent-d.ltm"),
+    ]
 
 
 def test_build_parser_applies_config_defaults_and_restores_plain_defaults(
@@ -153,6 +184,15 @@ def test_config_errors_are_reported_for_unknown_keys_and_invalid_values(tmp_path
     invalid = _write_config(tmp_path, "[auto]\nworkers = 0\n")
     with pytest.raises(SystemExit, match="invalid value for TOML key"):
         opt.parse_arguments(["auto", "input.txt", "--config", str(invalid)])
+
+    invalid_revisit = _write_config(
+        tmp_path,
+        "[auto]\nsplice_repair_revisit_limit = 0\n",
+    )
+    with pytest.raises(SystemExit, match="invalid value for TOML key"):
+        opt.parse_arguments(
+            ["auto", "input.txt", "--config", str(invalid_revisit)]
+        )
 
 
 @pytest.mark.parametrize("mode", ("auto", "local", "jump-pattern"))

@@ -24,6 +24,8 @@ def test_v213_auto_parser_uses_local_step_controls_without_a_bank() -> None:
     assert defaults.auto_repair_search_order == "random"
     assert defaults.auto_frame_ahead_repair_multiplier == 10
     assert defaults.auto_campaign_local_steps == 10_000
+    assert defaults.auto_beam_repair_revisit_limit == 2
+    assert defaults.auto_splice_repair_revisit_limit == 3
 
     configured = parser.parse_args(
         [
@@ -37,6 +39,10 @@ def test_v213_auto_parser_uses_local_step_controls_without_a_bank() -> None:
             "7",
             "--auto-campaign-local-steps",
             "123456",
+            "--auto-beam-repair-revisit-limit",
+            "4",
+            "--auto-splice-repair-revisit-limit",
+            "7",
         ]
     )
     assert configured.auto_deterministic is False
@@ -44,6 +50,8 @@ def test_v213_auto_parser_uses_local_step_controls_without_a_bank() -> None:
     assert configured.auto_repair_search_order == "fixed"
     assert configured.auto_frame_ahead_repair_multiplier == 7
     assert configured.auto_campaign_local_steps == 123456
+    assert configured.auto_beam_repair_revisit_limit == 4
+    assert configured.auto_splice_repair_revisit_limit == 7
 
 
 @pytest.mark.parametrize(
@@ -88,6 +96,10 @@ def test_v213_local_step_config_accepts_zero_but_rejects_negative() -> None:
         AutoConfig(iterations=0, frame_ahead_repair_multiplier=0)
     with pytest.raises(ValueError, match="repair_campaign_local_limit"):
         AutoConfig(iterations=0, repair_campaign_local_limit=-1)
+    with pytest.raises(ValueError, match="beam_repair_revisit_limit"):
+        AutoConfig(iterations=0, beam_repair_revisit_limit=0)
+    with pytest.raises(ValueError, match="splice_repair_revisit_limit"):
+        AutoConfig(iterations=0, splice_repair_revisit_limit=0)
 
 
 def test_v213_cli_forwards_local_repair_controls_to_auto_config(
@@ -105,7 +117,7 @@ def test_v213_cli_forwards_local_repair_controls_to_auto_config(
         f"{encode_complex_replay(source)}#\n",
         encoding="utf-8",
     )
-    observed: list[tuple[bool, int, str, int, int]] = []
+    observed: list[tuple[bool, int, str, int, int, int, int]] = []
     real_optimise = opt.optimise_autonomous
 
     def recording_optimise(level, frames, config, *, progress=None, best_callback=None):
@@ -116,6 +128,8 @@ def test_v213_cli_forwards_local_repair_controls_to_auto_config(
                 config.repair_search_order,
                 config.frame_ahead_repair_multiplier,
                 config.repair_campaign_local_limit,
+                config.beam_repair_revisit_limit,
+                config.splice_repair_revisit_limit,
             )
         )
         return real_optimise(
@@ -144,6 +158,10 @@ def test_v213_cli_forwards_local_repair_controls_to_auto_config(
             "7",
             "--auto-campaign-local-steps",
             "123456",
+            "--auto-beam-repair-revisit-limit",
+            "4",
+            "--auto-splice-repair-revisit-limit",
+            "7",
             "--output",
             str(output_path),
         ],
@@ -151,8 +169,56 @@ def test_v213_cli_forwards_local_repair_controls_to_auto_config(
 
     opt.main()
 
-    assert observed == [(False, 777, "fixed", 7, 123456)]
+    assert observed == [(False, 777, "fixed", 7, 123456, 4, 7)]
     assert output_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("revisit_limit", "attempted"),
+    ((2, False), (3, True)),
+)
+def test_beam_repair_frontier_uses_configured_revisit_limit(
+    revisit_limit: int,
+    attempted: bool,
+) -> None:
+    candidate = _candidate_with_alignment(offset=0, score_lead=0)
+    frontier = auto._RepairFrontier(
+        candidate=candidate,
+        phase="beam-repair",
+        label="test",
+        strategic=True,
+        intended_lead=0,
+        reference_offset=0,
+        repair_reference=candidate.evaluation,
+        inherited_misses=(),
+        failure_regions=(0, 0),
+    )
+    search = object.__new__(auto._AutonomousSearch)
+    search.config = AutoConfig(
+        iterations=10,
+        beam_repair_revisit_limit=revisit_limit,
+    )
+    search.repair_frontiers = [frontier]
+    search.repair_frontier_keys = {auto._candidate_replay_key(candidate)}
+    search.last_frontier_dispatch = 0
+    search.counters = {
+        "macro_evaluations": 0,
+        "reference_epochs": 0,
+        "repair_frontiers_dropped": 0,
+        "repair_campaigns": 0,
+        "repair_campaign_attempts": 0,
+        "local_simulations": 0,
+    }
+    search._budget_exhausted = lambda: False
+    search._frontier_priority = lambda _frontier: (0,)
+    search._frontier_failure = lambda _frontier, _candidate=None: 0
+    search._frontier_misses = lambda _frontier, _candidate=None: ()
+    search._route_control_target = lambda *_args, **_kwargs: None
+    search._record_repair_attempt = lambda **_kwargs: None
+    search._attempt_repair = lambda *_args, **_kwargs: None
+
+    assert search._dispatch_repair_frontier(force=True) is attempted
+    assert frontier.attempts == (1 if attempted else 0)
 
 
 def _candidate_with_alignment(*, offset: int, score_lead: int) -> auto.AutoCandidate:
