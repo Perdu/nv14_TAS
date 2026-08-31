@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from concurrent.futures import Future
 from dataclasses import replace
 from queue import Queue
@@ -48,6 +49,7 @@ def _result(
     proximity: float,
     *,
     marker: InputFrame | None = None,
+    replay_id: int | None = None,
     baseline_tick: int | None = None,
     seed: int = 0,
     iterations: int = 0,
@@ -65,7 +67,24 @@ def _result(
         gold_bonus_ticks=0,
         pre_finish_exit_distance=proximity,
     )
-    frames = (marker,) * tick
+    if replay_id is None:
+        frames = (marker,) * tick
+    else:
+        # Encode a stable exact-replay identity without relying on
+        # jump_trigger, which is not part of the serialized held-input body.
+        value = replay_id
+        prefix: list[InputFrame] = []
+        for _index in range(min(4, tick)):
+            bits = value & 0b111
+            prefix.append(
+                InputFrame(
+                    left=bool(bits & 0b001),
+                    right=bool(bits & 0b010),
+                    jump=bool(bits & 0b100),
+                )
+            )
+            value >>= 3
+        frames = tuple(prefix) + (marker,) * (tick - len(prefix))
     candidate = AutoCandidate(
         working_frames=frames + (InputFrame(),),
         evaluation=evaluation,
@@ -89,64 +108,70 @@ def _result(
 def _member(member_id: int, parent_id: int, rank: int) -> parallel._AutoPopulationMember:
     return parallel._AutoPopulationMember(
         member_id=member_id,
-        result=_result(100, float(rank)),
+        result=_result(100, float(rank), replay_id=member_id),
         parent_member_ids=(parent_id,),
         generation=2,
         mutations=(),
+        recipient_member_id=member_id,
+        primary_family_id=parent_id,
     )
 
 
-def test_v248_survivor_filter_keeps_three_immediate_parent_lineages() -> None:
-    # Natural top four would be A1, A2, B1, B2. The one-generation diversity
-    # rule reserves the final slot for C1 instead.
+def test_v303_fixed_selection_caps_recipient_and_primary_family() -> None:
+    # Natural top four would all come from family A, including three variants
+    # of the same current recipient. Strict selection instead keeps four
+    # current recipient routes and no more than two from either real family.
     members = (
-        _member(1, 10, 1),
-        _member(2, 10, 2),
-        _member(3, 20, 3),
-        _member(4, 20, 4),
-        _member(5, 30, 5),
-        _member(6, 40, 6),
-        _member(7, 30, 7),
-        _member(8, 40, 8),
+        replace(_member(1, 10, 1), recipient_member_id=101),
+        replace(_member(2, 10, 2), recipient_member_id=101),
+        replace(_member(3, 10, 3), recipient_member_id=101),
+        replace(_member(4, 10, 4), recipient_member_id=102),
+        replace(_member(5, 20, 5), recipient_member_id=201),
+        replace(_member(6, 20, 6), recipient_member_id=202),
+        replace(_member(7, 30, 7), recipient_member_id=301),
+        replace(_member(8, 40, 8), recipient_member_id=401),
     )
     selected = parallel._select_population_survivors(
         members, 4, enforce_parent_diversity=True
     )
-    assert [member.member_id for member in selected] == [1, 2, 3, 5]
-    assert len(
-        {
-            lineage
-            for member in selected
-            for lineage in member.parent_member_ids
-        }
-    ) == 3
+    assert [member.member_id for member in selected] == [1, 4, 5, 6]
+    assert len({member.selection_recipient_member_id for member in selected}) == 4
+    assert sorted(
+        Counter(member.selection_primary_family_id for member in selected).values()
+    ) == [2, 2]
 
 
-def test_v295_survivors_reserve_ordinary_elite_and_defer_splice_duplicates() -> None:
+def test_v303_fixed_selection_prefers_recipient_and_splice_niche_breadth() -> None:
     splice_one = parallel._AutoPopulationMember(
         member_id=1,
-        result=_result(99, 1.0),
+        result=_result(99, 1.0, replay_id=1),
         parent_member_ids=(10, 20),
         generation=3,
         mutations=("splice one",),
+        recipient_member_id=10,
+        primary_family_id=100,
         splice_parent_pair=(10, 20),
         splice_interval=(20, 40, 22, 39),
     )
     same_pair = parallel._AutoPopulationMember(
         member_id=2,
-        result=_result(99, 2.0),
+        result=_result(99, 2.0, replay_id=2),
         parent_member_ids=(10, 20),
         generation=3,
         mutations=("splice two",),
+        recipient_member_id=10,
+        primary_family_id=100,
         splice_parent_pair=(10, 20),
         splice_interval=(50, 70, 53, 69),
     )
     same_interval = parallel._AutoPopulationMember(
         member_id=3,
-        result=_result(99, 3.0),
+        result=_result(99, 3.0, replay_id=3),
         parent_member_ids=(30, 40),
         generation=3,
         mutations=("splice three",),
+        recipient_member_id=30,
+        primary_family_id=200,
         splice_parent_pair=(30, 40),
         splice_interval=(20, 40, 22, 39),
     )
@@ -158,11 +183,275 @@ def test_v295_survivors_reserve_ordinary_elite_and_defer_splice_duplicates() -> 
         enforce_parent_diversity=True,
     )
 
-    # The ordinary result is reserved even though all splice results rank
-    # above it.  Only then is a same-pair/interval duplicate allowed to fill
-    # the remaining slot.
-    assert [member.member_id for member in selected] == [1, 4, 2]
+    # The second splice from recipient 10 waits behind the best member from a
+    # different recipient. The ordinary candidate supplies the third route.
+    assert [member.member_id for member in selected] == [1, 3, 4]
     assert selected[0].parent_member_ids == (10, 20)
+
+
+def _splice_member(
+    member_id: int,
+    *,
+    recipient_id: int,
+    family_id: int,
+    finish_tick: int = 99,
+    proximity: float = 1.0,
+    interval: tuple[int, int, int, int] = (12, 36, 14, 34),
+    replay_id: int | None = None,
+) -> parallel._AutoPopulationMember:
+    donor_id = 10_000 + member_id
+    return parallel._AutoPopulationMember(
+        member_id=member_id,
+        result=_result(
+            finish_tick,
+            proximity,
+            replay_id=member_id if replay_id is None else replay_id,
+        ),
+        parent_member_ids=(recipient_id, donor_id),
+        generation=3,
+        mutations=("splice",),
+        recipient_member_id=recipient_id,
+        primary_family_id=family_id,
+        splice_parent_pair=tuple(sorted((recipient_id, donor_id))),
+        splice_interval=interval,
+    )
+
+
+def _eight_population_recipients() -> tuple[parallel._AutoPopulationMember, ...]:
+    return tuple(
+        replace(
+            _member(member_id, 100 + (member_id - 1) // 2, member_id),
+            recipient_member_id=member_id,
+        )
+        for member_id in range(1, 9)
+    )
+
+
+def test_v303_adaptive_population_adds_up_to_four_competitive_niches() -> None:
+    ordinary = _eight_population_recipients()
+    expected_sizes = (4, 5, 6, 7, 8, 8)
+    for niche_count, expected_size in enumerate(expected_sizes):
+        splices = tuple(
+            _splice_member(
+                100 + index,
+                recipient_id=index + 1,
+                family_id=100 + index // 2,
+                proximity=float(index),
+                interval=(12 * index, 12 * index + 24, 12 * index + 2, 12 * index + 22),
+            )
+            for index in range(niche_count)
+        )
+        selection = parallel._select_adaptive_population(
+            (*ordinary, *splices),
+            8,
+        )
+        assert len(selection.survivors) == expected_size
+        assert selection.target == expected_size
+        assert selection.competitive_splice_niches == min(niche_count, 4)
+        assert len(
+            {parallel._population_replay_key(member) for member in selection.survivors}
+        ) == expected_size
+
+
+def test_v303_population_counts_only_distinct_competitive_splice_niches() -> None:
+    ordinary = _eight_population_recipients()
+    same_niche_best = _splice_member(
+        101,
+        recipient_id=1,
+        family_id=100,
+        proximity=1.0,
+        interval=(13, 35, 15, 33),
+    )
+    same_niche_shifted = _splice_member(
+        102,
+        recipient_id=1,
+        family_id=100,
+        proximity=2.0,
+        interval=(18, 34, 20, 32),
+    )
+    distinct_recipient = _splice_member(
+        103,
+        recipient_id=3,
+        family_id=101,
+        proximity=3.0,
+        interval=(13, 35, 15, 33),
+    )
+    selection = parallel._select_adaptive_population(
+        (*ordinary, same_niche_best, same_niche_shifted, distinct_recipient),
+        8,
+    )
+    assert selection.competitive_splice_niches == 2
+    assert selection.target == 6
+    assert same_niche_best in selection.survivors
+    assert same_niche_shifted not in selection.survivors
+    assert distinct_recipient in selection.survivors
+
+    different_section_same_recipient = _splice_member(
+        105,
+        recipient_id=1,
+        family_id=100,
+        proximity=4.0,
+        interval=(48, 72, 50, 70),
+    )
+    same_recipient_sections = parallel._select_adaptive_population(
+        (*ordinary, same_niche_best, different_section_same_recipient),
+        8,
+    )
+    # Both sections expand the target even though initial survivor selection
+    # keeps only the better replay from current recipient 1. The added breadth
+    # is filled from other recipient trajectories.
+    assert same_recipient_sections.competitive_splice_niches == 2
+    assert same_recipient_sections.target == 6
+    assert same_recipient_sections.selected_splice_niches == 1
+
+    ordinary_same_family = tuple(
+        replace(member, primary_family_id=100)
+        if member.member_id <= 3
+        else member
+        for member in ordinary
+    )
+    same_family_niches = parallel._select_adaptive_population(
+        (
+            *ordinary_same_family,
+            same_niche_best,
+            _splice_member(
+                106,
+                recipient_id=2,
+                family_id=100,
+                proximity=5.0,
+                interval=(48, 72, 50, 70),
+            ),
+            _splice_member(
+                107,
+                recipient_id=3,
+                family_id=100,
+                proximity=6.0,
+                interval=(84, 108, 86, 106),
+            ),
+        ),
+        8,
+    )
+    assert same_family_niches.competitive_splice_niches == 3
+    assert same_family_niches.target == 7
+
+    poor_recipient = replace(
+        _member(9, 104, 9),
+        result=_result(110, 1.0, replay_id=9),
+        recipient_member_id=9,
+        primary_family_id=104,
+    )
+    noncompetitive_success = _splice_member(
+        104,
+        recipient_id=9,
+        family_id=104,
+        finish_tick=109,
+        proximity=1.0,
+    )
+    without_competitive_addition = parallel._select_adaptive_population(
+        (*ordinary, poor_recipient, noncompetitive_success),
+        8,
+    )
+    assert without_competitive_addition.competitive_splice_niches == 0
+    assert without_competitive_addition.target == 4
+
+
+def test_v303_population_exact_dedup_is_hard_and_prefers_ordinary() -> None:
+    ordinary = _eight_population_recipients()
+    duplicate_splice = replace(
+        _splice_member(
+            101,
+            recipient_id=1,
+            family_id=100,
+            replay_id=1,
+        ),
+        result=ordinary[0].result,
+    )
+    selection = parallel._select_adaptive_population(
+        (*ordinary, duplicate_splice),
+        8,
+    )
+    assert selection.exact_unique_candidates == 8
+    assert selection.competitive_splice_niches == 0
+    assert selection.target == 4
+    assert duplicate_splice not in selection.survivors
+    assert ordinary[0] in selection.survivors
+
+
+def test_v303_population_progressively_relaxes_only_soft_caps() -> None:
+    same_family = tuple(
+        replace(
+            _member(index, 77, index),
+            recipient_member_id=100 + index,
+            primary_family_id=77,
+        )
+        for index in range(1, 5)
+    )
+    selected_family = parallel._select_population_survivors(
+        same_family,
+        4,
+        enforce_parent_diversity=True,
+    )
+    assert len(selected_family) == 4
+    assert {member.selection_primary_family_id for member in selected_family} == {77}
+
+    same_recipient = tuple(
+        replace(member, recipient_member_id=500)
+        for member in same_family
+    )
+    selected_recipient = parallel._select_population_survivors(
+        same_recipient,
+        4,
+        enforce_parent_diversity=True,
+    )
+    assert len(selected_recipient) == 4
+    assert {member.selection_recipient_member_id for member in selected_recipient} == {500}
+    assert len(
+        {parallel._population_replay_key(member) for member in selected_recipient}
+    ) == 4
+
+
+def test_v303_eight_worker_quotas_and_keys_are_breadth_first() -> None:
+    ordinary = _eight_population_recipients()
+    expected = {
+        4: [2, 2, 2, 2],
+        5: [2, 2, 2, 1, 1],
+        6: [2, 2, 1, 1, 1, 1],
+        7: [2, 1, 1, 1, 1, 1, 1],
+        8: [1, 1, 1, 1, 1, 1, 1, 1],
+    }
+    for population_size, quota_values in expected.items():
+        survivors = ordinary[:population_size]
+        quotas = parallel._offspring_quota_by_parent(survivors, 8)
+        assert list(quotas.values()) == quota_values
+        assert sum(quotas.values()) == 8
+        keys = parallel._offspring_keys_breadth_first(3, survivors, 8)
+        assert [key[2] for key in keys] == sorted(key[2] for key in keys)
+        assert len(keys) == 8
+
+
+def test_v303_population_summary_reports_requested_diagnostics() -> None:
+    selection = parallel._select_adaptive_population(
+        (
+            *_eight_population_recipients(),
+            _splice_member(
+                101,
+                recipient_id=1,
+                family_id=100,
+            ),
+        ),
+        8,
+    )
+    message = parallel._format_population_round_summary(
+        3,
+        selection,
+        candidate_count=9,
+        global_best_finish_tick=99,
+    )
+    assert "selected population=5/9" in message
+    assert "exact-unique replays=5/9 selected/eligible" in message
+    assert "primary-family occupancy=" in message
+    assert "splice niches=1 selected" in message
+    assert "competitive splice additions=1" in message
 
 
 def test_v295_splice_admission_requires_canonical_trimmed_verification(
@@ -393,6 +682,16 @@ def test_v248_top_half_seeds_two_children_each_and_starts_speculatively(
     for marker in markers[:4]:
         assert parent_markers.count(marker) == 2
     assert all(marker in markers[:4] for marker in parent_markers)
+    round_two_tasks = {
+        task.task_id: task
+        for _function, task in _SteppedPool.work.values()
+        if isinstance(task, parallel._AutoWorkerTask) and task.run_index == 2
+    }
+    breadth_order = [
+        task.offspring_index
+        for task in sorted(round_two_tasks.values(), key=lambda item: item.task_id)
+    ]
+    assert breadth_order == [1, 1, 1, 1, 2, 2, 2, 2]
 
 
 def test_v248_worker_checkpoint_carries_exact_evaluation_count(monkeypatch) -> None:
@@ -565,7 +864,15 @@ def test_v248_forced_spawn_two_round_population_smoke(monkeypatch) -> None:
         if message.startswith("[auto:splice] round ") and "pairs=" in message
     ]
     assert len(splice_summaries) == 2
-    assert all("pairs=12," in message for message in splice_summaries)
+    pair_counts = [
+        int(message.split("pairs=", 1)[1].split(",", 1)[0])
+        for message in splice_summaries
+    ]
+    # Four worker winners still contribute the original 12 ordered pairs.
+    # Every retained sectional donor adds its own independent per-recipient
+    # pair job (including its same-worker winner as a recipient).
+    assert all(count >= 12 for count in pair_counts)
+    assert any("sectional donors=" in message for message in splice_summaries)
 
 
 def test_v248_pruned_speculation_is_replaced_by_true_survivor_children(

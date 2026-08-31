@@ -1,10 +1,11 @@
 """Population-based process parallelism for :mod:`nv14_auto`.
 
 Each worker runs one complete, independent Auto search. Completed searches
-form a small evolutionary population: the best half survive each round and
-seed the next one. The coordinator may speculatively start one generation
-ahead as worker slots become free, then cancels descendants whose provisional
-parent is pruned when the round is finalised.
+form a small evolutionary population.  A half-worker minimum survives each
+round, while competitive trajectory-distinct splice niches can expand the
+population up to one survivor per worker.  The coordinator may speculatively
+start one generation ahead as worker slots become free, then cancels
+descendants whose provisional parent is pruned when the round is finalised.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import multiprocessing
 import os
 import signal
 import threading
+from collections import Counter
 from collections.abc import Callable, Sequence
 from concurrent.futures import (
     FIRST_COMPLETED,
@@ -26,6 +28,7 @@ from dataclasses import dataclass, field, fields, replace
 from queue import Empty
 from typing import Any
 
+import nv14_auto as _auto_policy
 from nv14_auto import (
     _ACTIVE_NATIVE_SESSION,
     AutoCandidate,
@@ -57,7 +60,28 @@ SearchFunction = Callable[..., AutoResult]
 # while this bound keeps a round-end splice pass proportional to population
 # size rather than the number of overlapping anchor windows.
 _SECTION_SPLICE_PLANS_PER_PAIR = 2
+_SECTIONAL_PROFILE_MAX_WINDOWS = 24
 _SPLICE_TASK_ID_BASE = 1 << 63
+_POPULATION_SPLICE_NICHE_TICKS = 12
+
+
+@dataclass(frozen=True, slots=True)
+class AutoSpliceDonor:
+    """Lightweight completed replay retained only as a splice donor.
+
+    ``frames`` is the canonically trimmed serialized body and therefore omits
+    the neutral sentinel.  Native evaluations and trajectories deliberately do
+    not cross the worker boundary; the coordinator verifies and prepares these
+    few bodies once.
+    """
+
+    frames: tuple[InputFrame, ...]
+    finish_tick: int
+    objective_value: int
+    pre_finish_exit_distance: float
+    mutations: tuple[str, ...]
+    gold_mask: int = 0
+    gold_bonus_ticks: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +123,7 @@ class _AutoWorkerResult:
     task_id: int = 0
     parent_member_id: int = 0
     offspring_index: int = 1
+    splice_donors: tuple[AutoSpliceDonor, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,8 +145,18 @@ class _AutoPopulationMember:
     parent_member_ids: tuple[int, ...]
     generation: int
     mutations: tuple[str, ...]
+    # Selection identities deliberately describe two different generations.
+    # ``recipient_member_id`` is the current-round worker result whose
+    # prefix/suffix this replay retains. ``primary_family_id`` is the actual
+    # previous-round survivor which bred that recipient.  A splice's ordinary
+    # immediate parents alone cannot recover the latter after older members
+    # have been pruned from coordinator history.
+    recipient_member_id: int | None = None
+    primary_family_id: int | None = None
     splice_parent_pair: tuple[int, int] | None = None
     splice_interval: tuple[int, int, int, int] | None = None
+    splice_donors: tuple[AutoSpliceDonor, ...] = ()
+    splice_donor_index: int = 0
 
     @property
     def parent_member_id(self) -> int | None:
@@ -131,6 +166,38 @@ class _AutoPopulationMember:
     @property
     def is_splice(self) -> bool:
         return self.splice_parent_pair is not None
+
+    @property
+    def selection_recipient_member_id(self) -> int:
+        """Return the current-round recipient represented by this replay."""
+        if self.recipient_member_id is not None:
+            return self.recipient_member_id
+        if self.is_splice and self.parent_member_ids:
+            return self.parent_member_ids[0]
+        return self.member_id
+
+    @property
+    def selection_primary_family_id(self) -> int:
+        """Return the previous-round breeding family used for occupancy."""
+        if self.primary_family_id is not None:
+            return self.primary_family_id
+        if self.parent_member_ids:
+            return self.parent_member_ids[0]
+        return self.member_id
+
+
+@dataclass(frozen=True, slots=True)
+class _PopulationSelection:
+    """Selected survivors plus stable population-policy diagnostics."""
+
+    survivors: tuple[_AutoPopulationMember, ...]
+    minimum_target: int
+    maximum_target: int
+    target: int
+    exact_unique_candidates: int
+    competitive_splice_niches: int
+    selected_splice_niches: int
+    primary_family_occupancy: tuple[tuple[int, int], ...]
 
 
 @dataclass(slots=True)
@@ -152,6 +219,12 @@ class _SpliceRoundStats:
     beat_recipient: int = 0
     admitted: int = 0
     survivors: int = 0
+    sectional_donors: int = 0
+    sectional_pairs: int = 0
+    sectional_plans: int = 0
+    sectional_attempted: int = 0
+    sectional_admitted: int = 0
+    sectional_survivors: int = 0
     rejection_counts: dict[str, int] = field(default_factory=dict)
     predicted_gains: list[int] = field(default_factory=list)
     realised_gains: list[int] = field(default_factory=list)
@@ -176,6 +249,12 @@ class _SpliceRoundStats:
             "beat_recipient",
             "admitted",
             "survivors",
+            "sectional_donors",
+            "sectional_pairs",
+            "sectional_plans",
+            "sectional_attempted",
+            "sectional_admitted",
+            "sectional_survivors",
         ):
             setattr(self, name, getattr(self, name) + getattr(other, name))
         for reason, count in other.rejection_counts.items():
@@ -204,6 +283,24 @@ def _format_splice_round_summary(
     round_index: int,
     stats: _SpliceRoundStats,
 ) -> str:
+    sectional = ""
+    if any(
+        (
+            stats.sectional_donors,
+            stats.sectional_pairs,
+            stats.sectional_plans,
+            stats.sectional_attempted,
+            stats.sectional_admitted,
+            stats.sectional_survivors,
+        )
+    ):
+        sectional = (
+            f"sectional donors={stats.sectional_donors}, "
+            f"pairs={stats.sectional_pairs}, plans={stats.sectional_plans}, "
+            f"attempted={stats.sectional_attempted}, "
+            f"admitted={stats.sectional_admitted}, "
+            f"survivors={stats.sectional_survivors}; "
+        )
     return (
         f"[auto:splice] round {round_index}: "
         f"pairs={stats.pairs}, corridors={stats.corridors}, "
@@ -212,6 +309,7 @@ def _format_splice_round_summary(
         f"canonical={stats.canonical}, "
         f"beat-recipient={stats.beat_recipient}, admitted={stats.admitted}, "
         f"survivors={stats.survivors}; "
+        f"{sectional}"
         f"predicted gain={_format_splice_gain_range(stats.predicted_gains)}, "
         f"realised gain={_format_splice_gain_range(stats.realised_gains)}; "
         f"rejected={_format_splice_rejections(stats.rejection_counts)}"
@@ -224,6 +322,50 @@ def _emit_splice_round_summary(
     status: StatusCallback | None,
 ) -> None:
     message = _format_splice_round_summary(round_index, stats)
+    if status is None:
+        print(message, flush=True)
+    else:
+        status(message)
+
+
+def _format_population_round_summary(
+    round_index: int,
+    selection: _PopulationSelection,
+    *,
+    candidate_count: int,
+    global_best_finish_tick: int,
+) -> str:
+    occupancy = ",".join(
+        f"{family_id}:{count}"
+        for family_id, count in selection.primary_family_occupancy
+    ) or "none"
+    return (
+        f"[auto:parallel] round {round_index} complete: "
+        f"selected population={len(selection.survivors)}/{candidate_count}; "
+        f"exact-unique replays={len(selection.survivors)}/"
+        f"{selection.exact_unique_candidates} selected/eligible; "
+        f"primary-family occupancy={occupancy}; "
+        f"splice niches={selection.selected_splice_niches} selected; "
+        f"competitive splice additions="
+        f"{selection.competitive_splice_niches}; "
+        f"global best finish {global_best_finish_tick}"
+    )
+
+
+def _emit_population_round_summary(
+    round_index: int,
+    selection: _PopulationSelection,
+    *,
+    candidate_count: int,
+    global_best_finish_tick: int,
+    status: StatusCallback | None,
+) -> None:
+    message = _format_population_round_summary(
+        round_index,
+        selection,
+        candidate_count=candidate_count,
+        global_best_finish_tick=global_best_finish_tick,
+    )
     if status is None:
         print(message, flush=True)
     else:
@@ -260,6 +402,7 @@ class _SpliceWorkerTask:
     required_gold_mask: int = 0
     worker_index: int = 0
     cancel_slot: int = -1
+    donor_source: "_SpliceDonorSource | None" = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +415,7 @@ class _SpliceWorkerCandidate:
     donor_entry_tick: int
     donor_exit_tick: int
     predicted_time_gain: int
+    donor_index: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -283,6 +427,7 @@ class _SpliceWorkerCheckpoint:
     recipient_member_id: int
     donor_member_id: int
     proposal: _SpliceWorkerCandidate
+    donor_index: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,6 +441,7 @@ class _SpliceWorkerResult:
     candidates: tuple[_SpliceWorkerCandidate, ...]
     splice_stats: _SpliceRoundStats
     auto_stats: AutoStats
+    donor_index: int = 0
 
 
 @dataclass(slots=True)
@@ -307,10 +453,25 @@ class _SpliceTaskRecord:
     recipient_member_id: int
     donor_member_id: int
     pair_order: int
+    donor_index: int = 0
     worker_index: int = 0
     cancel_slot: int = -1
     future: Future[_SpliceWorkerResult] | None = None
     output: _SpliceWorkerResult | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _SpliceDonorSource:
+    """One verified donor-only source prepared once by the coordinator."""
+
+    owner_member_id: int
+    donor_index: int
+    donor: AutoSpliceDonor
+    trace: PreparedSpliceTrace
+
+    @property
+    def is_sectional(self) -> bool:
+        return self.donor_index > 0
 
 
 class _AutoWorkerCancelled(Exception):
@@ -323,6 +484,9 @@ _AUTO_WORKER_CHECKPOINT_QUEUE: Any | None = None
 _AUTO_WORKER_CANCEL_TOKENS: Any | None = None
 _AUTO_WORKER_SPLICE_PARENT_CACHE: dict[
     tuple[int, int], _AutoPopulationMember
+] = {}
+_AUTO_WORKER_SPLICE_DONOR_CACHE: dict[
+    tuple[int, int, int], AutoCandidate
 ] = {}
 _AUTO_WORKER_NATIVE_SESSION: NativeSearchSession | None = None
 
@@ -379,12 +543,14 @@ def _initialise_auto_worker(
     global _AUTO_WORKER_CHECKPOINT_QUEUE
     global _AUTO_WORKER_CANCEL_TOKENS
     global _AUTO_WORKER_SPLICE_PARENT_CACHE
+    global _AUTO_WORKER_SPLICE_DONOR_CACHE
     global _AUTO_WORKER_NATIVE_SESSION
     _AUTO_WORKER_CONTEXT = context
     _AUTO_WORKER_STOP_EVENT = stop_event
     _AUTO_WORKER_CHECKPOINT_QUEUE = checkpoint_queue
     _AUTO_WORKER_CANCEL_TOKENS = cancel_tokens
     _AUTO_WORKER_SPLICE_PARENT_CACHE = {}
+    _AUTO_WORKER_SPLICE_DONOR_CACHE = {}
     _AUTO_WORKER_NATIVE_SESSION = None
     if multiprocessing.current_process().name != "MainProcess":
         signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -403,6 +569,328 @@ def _worker_cancelled(
         return int(tokens[task.cancel_slot]) != task.task_id
     except (IndexError, TypeError):
         return False
+
+
+@dataclass(frozen=True, slots=True)
+class _SectionalDonorProfile:
+    """Cheap native-screening evidence for one locally superior section."""
+
+    objective_gain: int
+    predicted_time_gain: int
+    entry_recipient_tick: int
+    exit_recipient_tick: int
+    entry_donor_tick: int
+    exit_donor_tick: int
+    support: int
+    distance: float
+
+    @property
+    def niche(self) -> tuple[int, int]:
+        return (
+            self.entry_recipient_tick // 12,
+            self.exit_recipient_tick // 12,
+        )
+
+
+def _sectional_profile_centres(
+    donor: AutoCandidate,
+    donor_end: int,
+) -> tuple[int, ...]:
+    """Return one event-aware profiling centre per temporal route stratum."""
+
+    if donor_end <= 0:
+        return (0,)
+    events = tuple(
+        sorted(
+            set(_auto_policy._candidate_input_transitions(donor))
+            | set(donor.evaluation.jump_edges)
+            | set(donor.evaluation.successful_jumps)
+        )
+    )
+    centres: list[int] = []
+    for index in range(_SECTIONAL_PROFILE_MAX_WINDOWS):
+        start = math.floor(
+            donor_end * index / _SECTIONAL_PROFILE_MAX_WINDOWS
+        )
+        end = math.ceil(
+            donor_end * (index + 1) / _SECTIONAL_PROFILE_MAX_WINDOWS
+        )
+        target = round(
+            donor_end
+            * (2 * index + 1)
+            / (2 * _SECTIONAL_PROFILE_MAX_WINDOWS)
+        )
+        nearby = (tick for tick in events if start <= tick <= end)
+        centre = min(
+            nearby,
+            key=lambda tick: (abs(tick - target), tick),
+            default=target,
+        )
+        if centre in centres and target not in centres:
+            centre = target
+        if centre not in centres:
+            centres.append(centre)
+    return tuple(centres)
+
+
+def _native_sectional_donor_profile(
+    recipient: AutoCandidate,
+    donor: AutoCandidate,
+    config: AutoConfig,
+) -> _SectionalDonorProfile | None:
+    """Profile bounded route-wide windows with the native matcher.
+
+    This is screening policy, not splice acceptance.  Exact corridor planning,
+    repair, canonical verification and campaign-outcome gates still run in the
+    normal pair job for every retained donor.  Each temporal stratum snaps to
+    its nearest input/jump event, preserving short gains around corner inputs,
+    and falls back to its midpoint when no event is nearby.
+    """
+
+    recipient_analysis = _auto_policy._native_trace_analysis(
+        recipient.evaluation
+    )
+    donor_analysis = _auto_policy._native_trace_analysis(donor.evaluation)
+    if recipient_analysis is None or donor_analysis is None:
+        return None
+    if recipient.finish_tick is None or donor.finish_tick is None:
+        return None
+    donor_end = donor.finish_tick - 1
+    recipient_end = min(
+        recipient.finish_tick - 1,
+        recipient.finish_tick - 1
+        if config.range_end is None
+        else config.range_end,
+    )
+    recipient_start = config.range_start
+    if donor_end < 0 or recipient_end < recipient_start:
+        return None
+
+    window_radius = 6
+    offset_limit = max(
+        16,
+        4 * config.max_alignment,
+        min(64, config.effective_max_extra_ticks + config.max_alignment),
+    )
+    anchors: list[tuple[int, int, int, float, int, int]] = []
+    for centre in _sectional_profile_centres(donor, donor_end):
+        start = max(0, centre - window_radius)
+        end = min(donor_end, centre + window_radius)
+        minimum_offset = max(-offset_limit, recipient_start - end)
+        maximum_offset = min(offset_limit, recipient_end - start)
+        if minimum_offset > maximum_offset:
+            continue
+        try:
+            raw = donor_analysis.find_splice_alignment(
+                recipient_analysis,
+                candidate_start_tick=start,
+                candidate_end_tick=end,
+                minimum_offset=minimum_offset,
+                maximum_offset=maximum_offset,
+                minimum_run_length=4,
+                position_tolerance=config.alignment_position_tolerance,
+                velocity_tolerance=config.alignment_velocity_tolerance,
+                position_weight=_auto_policy._TRACE_POSITION_WEIGHT,
+                velocity_weight=_auto_policy._TRACE_VELOCITY_WEIGHT,
+                contact_mismatch_penalty=(
+                    _auto_policy._TRACE_CONTACT_MISMATCH_PENALTY
+                ),
+                in_air_mismatch_penalty=(
+                    _auto_policy._TRACE_IN_AIR_MISMATCH_PENALTY
+                ),
+                near_wall_mismatch_penalty=(
+                    _auto_policy._TRACE_NEAR_WALL_MISMATCH_PENALTY
+                ),
+                gold_bit_penalty=_auto_policy._TRACE_GOLD_BIT_PENALTY,
+                mine_bit_penalty=_auto_policy._TRACE_MINE_BIT_PENALTY,
+                exit_bit_penalty=_auto_policy._TRACE_EXIT_BIT_PENALTY,
+                locked_door_bit_penalty=(
+                    _auto_policy._TRACE_LOCKED_DOOR_BIT_PENALTY
+                ),
+                trapdoor_bit_penalty=(
+                    _auto_policy._TRACE_TRAPDOOR_BIT_PENALTY
+                ),
+            )
+        except (AttributeError, OverflowError, RuntimeError, TypeError, ValueError):
+            return None
+        if raw is None:
+            continue
+        donor_tick = int(raw[0])
+        recipient_tick = int(raw[1])
+        if not recipient_start <= recipient_tick <= recipient_end:
+            continue
+        anchor = (
+            donor_tick,
+            recipient_tick,
+            int(raw[2]),
+            float(raw[3]),
+            int(raw[6]),
+            int(raw[7]),
+        )
+        if anchor not in anchors:
+            anchors.append(anchor)
+    anchors.sort(key=lambda item: (item[0], item[1]))
+
+    best: tuple[tuple[object, ...], _SectionalDonorProfile] | None = None
+    for entry_index, entry in enumerate(anchors):
+        for exit_anchor in anchors[entry_index + 1 :]:
+            donor_span = exit_anchor[0] - entry[0]
+            recipient_span = exit_anchor[1] - entry[1]
+            if donor_span < 12 or recipient_span < 12:
+                continue
+            predicted_gain = exit_anchor[2] - entry[2]
+            objective_gain = (
+                exit_anchor[4] - entry[4]
+                if config.objective == _auto_policy.AUTO_OBJECTIVE_HIGHSCORE
+                else predicted_gain
+            )
+            if objective_gain < 1:
+                continue
+            profile = _SectionalDonorProfile(
+                objective_gain=objective_gain,
+                predicted_time_gain=predicted_gain,
+                entry_recipient_tick=entry[1],
+                exit_recipient_tick=exit_anchor[1],
+                entry_donor_tick=entry[0],
+                exit_donor_tick=exit_anchor[0],
+                support=min(entry[5], exit_anchor[5]),
+                distance=entry[3] + exit_anchor[3],
+            )
+            rank = (
+                -profile.objective_gain,
+                -profile.predicted_time_gain,
+                -profile.support,
+                profile.distance,
+                profile.entry_recipient_tick,
+                profile.exit_recipient_tick,
+                profile.entry_donor_tick,
+                profile.exit_donor_tick,
+            )
+            if best is None or rank < best[0]:
+                best = (rank, profile)
+    return None if best is None else best[1]
+
+
+def _select_worker_splice_donors(
+    result: AutoResult,
+    config: AutoConfig,
+    *,
+    limit: int = _auto_policy._SECTIONAL_ELITE_LIMIT,
+) -> tuple[AutoSpliceDonor, ...]:
+    """Reduce one worker's historical prearchive to bounded light payloads."""
+
+    if limit < 1:
+        return ()
+    winner_key = bytes(
+        int(frame.left)
+        | (int(frame.right) << 1)
+        | (int(frame.jump) << 2)
+        for frame in result.frames
+    )
+    # Production searches maintain the bounded archive incrementally.  The
+    # beam fallback supports older/custom SearchFunction results without making
+    # normal worker finalisation scale with beam_width.
+    archive = result.sectional_elites or result.beam
+    candidates = _auto_policy._select_sectional_prearchive(
+        archive,
+        objective=result.objective,
+        limit=_auto_policy._SECTIONAL_PREARCHIVE_LIMIT,
+    )
+    unique: dict[bytes, AutoCandidate] = {}
+    for candidate in candidates:
+        if not candidate.output_valid or candidate.finish_tick is None:
+            continue
+        body = candidate.frames
+        if len(body) != candidate.finish_tick:
+            continue
+        key = bytes(
+            int(frame.left)
+            | (int(frame.right) << 1)
+            | (int(frame.jump) << 2)
+            for frame in body
+        )
+        if key == winner_key:
+            continue
+        incumbent = unique.get(key)
+        if incumbent is None or auto_candidate_outcome_key(
+            candidate, result.objective
+        ) < auto_candidate_outcome_key(incumbent, result.objective):
+            unique[key] = candidate
+
+    ordered = sorted(
+        unique.items(),
+        key=lambda item: (
+            auto_candidate_outcome_key(item[1], result.objective),
+            item[0],
+        ),
+    )
+    profiled = [
+        (
+            key,
+            candidate,
+            _native_sectional_donor_profile(result.best, candidate, config),
+        )
+        for key, candidate in ordered
+    ]
+    with_gain = sorted(
+        (item for item in profiled if item[2] is not None),
+        key=lambda item: (
+            -item[2].objective_gain,
+            -item[2].predicted_time_gain,
+            -item[2].support,
+            item[2].distance,
+            auto_candidate_outcome_key(item[1], result.objective),
+            item[0],
+        ),
+    )
+    selected: list[tuple[bytes, AutoCandidate]] = []
+    selected_keys: set[bytes] = set()
+    selected_niches: set[tuple[int, int]] = set()
+    for allow_duplicate_niche in (False, True):
+        for key, candidate, profile in with_gain:
+            if len(selected) >= limit:
+                break
+            if key in selected_keys:
+                continue
+            assert profile is not None
+            if not allow_duplicate_niche and profile.niche in selected_niches:
+                continue
+            selected.append((key, candidate))
+            selected_keys.add(key)
+            selected_niches.add(profile.niche)
+        if len(selected) >= limit:
+            break
+
+    # A donor can match another worker even when it has no beneficial bounded
+    # section against its own winner.  Fill spare slots from the already
+    # trajectory-diverse prearchive rather than discarding that opportunity.
+    for key, candidate, _profile in profiled:
+        if len(selected) >= limit:
+            break
+        if key in selected_keys:
+            continue
+        selected.append((key, candidate))
+        selected_keys.add(key)
+
+    donors: list[AutoSpliceDonor] = []
+    for _key, candidate in selected:
+        value = auto_objective_value(candidate.evaluation, result.objective)
+        assert value is not None and candidate.finish_tick is not None
+        proximity = candidate.evaluation.pre_finish_exit_distance
+        if proximity is None or not math.isfinite(proximity):
+            proximity = float("inf")
+        donors.append(
+            AutoSpliceDonor(
+                frames=candidate.frames,
+                finish_tick=candidate.finish_tick,
+                objective_value=value,
+                pre_finish_exit_distance=proximity,
+                mutations=candidate.mutations,
+                gold_mask=candidate.evaluation.final_gold_mask,
+                gold_bonus_ticks=candidate.evaluation.gold_bonus_ticks,
+            )
+        )
+    return tuple(donors)
 
 
 def _run_auto_worker(task: _AutoWorkerTask) -> _AutoWorkerResult:
@@ -444,14 +932,16 @@ def _run_auto_worker(task: _AutoWorkerTask) -> _AutoWorkerResult:
         progress=check_cancelled,
         best_callback=checkpoint,
     )
+    splice_donors = _select_worker_splice_donors(result, context.config)
     return _AutoWorkerResult(
-        result=replace(result, beam=()),
+        result=replace(result, beam=(), sectional_elites=()),
         seed=task.seed,
         run_index=task.run_index,
         worker_index=task.worker_index,
         task_id=task.task_id,
         parent_member_id=task.parent_member_id,
         offspring_index=task.offspring_index,
+        splice_donors=splice_donors,
     )
 
 
@@ -470,8 +960,267 @@ def _derive_auto_task_seed(base_seed: int, task_id: int) -> int:
 
 
 def _population_survivor_count(worker_count: int) -> int:
-    """Keep the best half of a population, rounding odd sizes upward."""
+    """Return the minimum survivor target, rounding half upward."""
     return max(1, (worker_count + 1) // 2)
+
+
+def _population_replay_key(member: _AutoPopulationMember) -> bytes:
+    """Return the exact serialized held-input identity of one member."""
+    return bytes(
+        int(frame.left)
+        | (int(frame.right) << 1)
+        | (int(frame.jump) << 2)
+        for frame in member.result.frames
+    )
+
+
+def _population_rank_key(
+    member: _AutoPopulationMember,
+) -> tuple[object, ...]:
+    """Return a stable outcome-first rank independent of input ordering."""
+    return (
+        *auto_result_outcome_key(member.result),
+        _population_replay_key(member),
+        member.member_id,
+    )
+
+
+def _exact_unique_population_members(
+    members: Sequence[_AutoPopulationMember],
+) -> tuple[_AutoPopulationMember, ...]:
+    """Rank and collapse canonical held-input duplicates.
+
+    Canonically identical trajectories cannot consume two worker-parent slots.
+    Metadata should agree after verification; the outcome key remains the
+    defensive first choice, followed by an ordinary member before an otherwise
+    identical splice and finally stable member allocation order.
+    """
+    by_replay: dict[bytes, _AutoPopulationMember] = {}
+    for member in members:
+        replay_key = _population_replay_key(member)
+        incumbent = by_replay.get(replay_key)
+        choice_key = (
+            auto_result_outcome_key(member.result),
+            int(member.is_splice),
+            member.member_id,
+        )
+        if incumbent is None or choice_key < (
+            auto_result_outcome_key(incumbent.result),
+            int(incumbent.is_splice),
+            incumbent.member_id,
+        ):
+            by_replay[replay_key] = member
+    return tuple(sorted(by_replay.values(), key=_population_rank_key))
+
+
+def _population_splice_niche(
+    member: _AutoPopulationMember,
+) -> tuple[int, int, int] | None:
+    """Return the coarse recipient-trajectory section replaced by a splice.
+
+    Twelve-tick buckets match sectional-donor profiling.  Recipient identity
+    is required at population scope because the same tick range on two worker
+    trajectories represents two genuinely different route opportunities.
+    """
+    if not member.is_splice:
+        return None
+    interval = member.splice_interval
+    if interval is None:
+        return (member.selection_recipient_member_id, -1, -1)
+    return (
+        member.selection_recipient_member_id,
+        interval[0] // _POPULATION_SPLICE_NICHE_TICKS,
+        interval[1] // _POPULATION_SPLICE_NICHE_TICKS,
+    )
+
+
+def _greedy_population_slate(
+    ranked: Sequence[_AutoPopulationMember],
+    target: int,
+    *,
+    recipient_cap: int,
+    family_cap: int,
+    splice_niche_cap: int,
+) -> tuple[_AutoPopulationMember, ...]:
+    """Select one deterministic slate under explicit diversity caps."""
+    if target < 1:
+        return ()
+    selected: list[_AutoPopulationMember] = []
+    recipients: Counter[int] = Counter()
+    families: Counter[int] = Counter()
+    niches: Counter[tuple[int, int, int]] = Counter()
+    for member in ranked:
+        if len(selected) >= target:
+            break
+        recipient_id = member.selection_recipient_member_id
+        family_id = member.selection_primary_family_id
+        niche = _population_splice_niche(member)
+        if recipients[recipient_id] >= recipient_cap:
+            continue
+        if families[family_id] >= family_cap:
+            continue
+        if niche is not None and niches[niche] >= splice_niche_cap:
+            continue
+        selected.append(member)
+        recipients[recipient_id] += 1
+        families[family_id] += 1
+        if niche is not None:
+            niches[niche] += 1
+    return tuple(selected)
+
+
+def _population_cap_stages(
+    target: int,
+) -> tuple[tuple[int, int, int], ...]:
+    """Relax family breadth before admitting repeat recipient trajectories."""
+    if target < 1:
+        return ()
+    stages: list[tuple[int, int, int]] = []
+
+    def add(stage: tuple[int, int, int]) -> None:
+        if stage not in stages:
+            stages.append(stage)
+
+    # Preserve one current recipient for as long as possible.  Families begin
+    # at two occupants and expand only when the candidate pool cannot fill the
+    # requested population from the other breeding families.
+    for family_cap in range(min(2, target), target + 1):
+        add((1, family_cap, 1))
+    # Only after every family limit has been exhausted may multiple exact-
+    # distinct descendants of a current recipient enter the population.
+    for recipient_cap in range(2, target + 1):
+        add((recipient_cap, target, 1))
+    # Exact replay uniqueness never relaxes.  Duplicate coarse splice niches
+    # are the final fallback for a genuinely sparse candidate pool.
+    add((target, target, target))
+    return tuple(stages)
+
+
+def _diverse_population_slate(
+    ranked: Sequence[_AutoPopulationMember],
+    target: int,
+    *,
+    enforce_diversity: bool = True,
+) -> tuple[_AutoPopulationMember, ...]:
+    """Fill a target by progressively relaxing soft occupancy constraints."""
+    if target < 1:
+        return ()
+    # Primary family is a property of the current ordinary recipient: every
+    # splice inherits it from that recipient.  The hierarchy makes the family
+    # cap a partition of recipient groups and keeps the ranked greedy pass
+    # maximum-cardinality at each stage. Reject corrupted/internal fixtures
+    # rather than silently relaxing diversity around inconsistent ancestry.
+    family_by_recipient: dict[int, int] = {}
+    for member in ranked:
+        recipient_id = member.selection_recipient_member_id
+        family_id = member.selection_primary_family_id
+        previous = family_by_recipient.setdefault(recipient_id, family_id)
+        if previous != family_id:
+            raise RuntimeError(
+                "Auto population recipient belongs to multiple primary families"
+            )
+    stages = (
+        _population_cap_stages(target)
+        if enforce_diversity
+        else ((target, target, target),)
+    )
+    best: tuple[_AutoPopulationMember, ...] = ()
+    for recipient_cap, family_cap, niche_cap in stages:
+        selected = _greedy_population_slate(
+            ranked,
+            target,
+            recipient_cap=recipient_cap,
+            family_cap=family_cap,
+            splice_niche_cap=niche_cap,
+        )
+        if len(selected) > len(best):
+            best = selected
+        if len(selected) == target:
+            return selected
+    return best
+
+
+def _competitive_splice_representatives(
+    ranked: Sequence[_AutoPopulationMember],
+    minimum_target: int,
+    maximum_target: int,
+) -> tuple[_AutoPopulationMember, ...]:
+    """Return strong distinct splice niches which earn population additions.
+
+    The old minimum population supplies a non-circular quality frontier: a
+    splice is competitive only when it is no worse than the last of the best
+    ``minimum_target`` exact-unique ordinary worker results.  When exact replay
+    duplication leaves fewer ordinary results than that, every admitted splice
+    remains eligible.  Admission itself has already required canonical
+    completion and a strict improvement over the splice recipient.
+    """
+    addition_limit = max(0, maximum_target - minimum_target)
+    if addition_limit == 0:
+        return ()
+    ordinary = tuple(member for member in ranked if not member.is_splice)
+    cutoff = (
+        auto_result_outcome_key(ordinary[minimum_target - 1].result)
+        if minimum_target > 0 and len(ordinary) >= minimum_target
+        else None
+    )
+    selected: list[_AutoPopulationMember] = []
+    niches: set[tuple[int, int, int]] = set()
+    for member in ranked:
+        if not member.is_splice:
+            continue
+        if cutoff is not None and auto_result_outcome_key(member.result) > cutoff:
+            continue
+        niche = _population_splice_niche(member)
+        assert niche is not None
+        if niche in niches:
+            continue
+        selected.append(member)
+        niches.add(niche)
+        if len(selected) >= addition_limit:
+            break
+    return tuple(selected)
+
+
+def _select_adaptive_population(
+    members: Sequence[_AutoPopulationMember],
+    worker_count: int,
+) -> _PopulationSelection:
+    """Select an exact-unique, adaptive half-to-full worker population."""
+    minimum_target = _population_survivor_count(worker_count)
+    maximum_target = max(1, worker_count)
+    ranked = _exact_unique_population_members(members)
+    representatives = _competitive_splice_representatives(
+        ranked,
+        minimum_target,
+        maximum_target,
+    )
+    target = min(
+        len(ranked),
+        maximum_target,
+        minimum_target + len(representatives),
+    )
+    survivors = _diverse_population_slate(
+        ranked,
+        target,
+    )
+    selected_niches = {
+        niche
+        for member in survivors
+        if (niche := _population_splice_niche(member)) is not None
+    }
+    occupancy = Counter(
+        member.selection_primary_family_id for member in survivors
+    )
+    return _PopulationSelection(
+        survivors=survivors,
+        minimum_target=minimum_target,
+        maximum_target=maximum_target,
+        target=target,
+        exact_unique_candidates=len(ranked),
+        competitive_splice_niches=len(representatives),
+        selected_splice_niches=len(selected_niches),
+        primary_family_occupancy=tuple(sorted(occupancy.items())),
+    )
 
 
 def _select_population_survivors(
@@ -480,101 +1229,14 @@ def _select_population_survivors(
     *,
     enforce_parent_diversity: bool,
 ) -> tuple[_AutoPopulationMember, ...]:
-    """Select ranked survivors while retaining lineage and splice diversity.
-
-    A splice belongs to both source lineages, rather than being treated as a
-    mutation of its recipient alone.  Before duplicate splice sites are
-    allowed to fill spare capacity, only one child from a parent pair or an
-    exact trajectory interval can survive.  The best ordinary result is also
-    reserved whenever the selection pool contains one, preventing a prolific
-    donor pair from replacing every independent whole-run result.
-    """
-    ranked = sorted(
-        members,
-        key=lambda member: auto_result_outcome_key(member.result),
+    """Select a fixed-size provisional population with hard replay dedup."""
+    ranked = _exact_unique_population_members(members)
+    target = min(max(0, survivor_count), len(ranked))
+    return _diverse_population_slate(
+        ranked,
+        target,
+        enforce_diversity=enforce_parent_diversity,
     )
-    survivor_count = min(max(0, survivor_count), len(ranked))
-    if survivor_count == 0:
-        return ()
-
-    ordinary_elite = next((member for member in ranked if not member.is_splice), None)
-    available_lineages = {
-        lineage
-        for member in ranked
-        for lineage in member.parent_member_ids
-    }
-    min_distinct = (
-        min(3, survivor_count, len(available_lineages))
-        if enforce_parent_diversity
-        else 0
-    )
-    selected: list[_AutoPopulationMember] = []
-    selected_ids: set[int] = set()
-    selected_lineages: set[int] = set()
-
-    def duplicate_splice(member: _AutoPopulationMember) -> bool:
-        if not member.is_splice:
-            return False
-        return any(
-            other.is_splice
-            and (
-                other.splice_parent_pair == member.splice_parent_pair
-                or other.splice_interval == member.splice_interval
-            )
-            for other in selected
-        )
-
-    def reserve_constraints_allow(member: _AutoPopulationMember) -> bool:
-        remaining_after = survivor_count - len(selected) - 1
-        if (
-            ordinary_elite is not None
-            and not any(not other.is_splice for other in selected)
-            and member.is_splice
-            and remaining_after == 0
-        ):
-            return False
-        projected_lineages = selected_lineages | set(member.parent_member_ids)
-        still_needed = max(0, min_distinct - len(projected_lineages))
-        return remaining_after >= still_needed
-
-    # First take the distinct splice opportunities.  A second pass below may
-    # use duplicate pairs/intervals only when the requested population size
-    # would otherwise remain unfilled.
-    for allow_splice_duplicates in (False, True):
-        for member in ranked:
-            if len(selected) >= survivor_count:
-                break
-            if member.member_id in selected_ids:
-                continue
-            if not allow_splice_duplicates and duplicate_splice(member):
-                continue
-            if not reserve_constraints_allow(member):
-                continue
-            selected.append(member)
-            selected_ids.add(member.member_id)
-            selected_lineages.update(member.parent_member_ids)
-        if len(selected) >= survivor_count:
-            break
-
-    # The constraints above deliberately prefer diversity, but pathological
-    # ancestry inputs must never leave a round without its requested parents.
-    if len(selected) != survivor_count:
-        for member in ranked:
-            if len(selected) >= survivor_count:
-                break
-            if member.member_id in selected_ids:
-                continue
-            if (
-                ordinary_elite is not None
-                and not any(not other.is_splice for other in selected)
-                and member.is_splice
-                and len(selected) + 1 == survivor_count
-            ):
-                continue
-            selected.append(member)
-            selected_ids.add(member.member_id)
-            selected_lineages.update(member.parent_member_ids)
-    return tuple(selected)
 
 
 def _offspring_quota_by_parent(
@@ -589,6 +1251,28 @@ def _offspring_quota_by_parent(
         member.member_id: base + (1 if rank < remainder else 0)
         for rank, member in enumerate(survivors)
     }
+
+
+def _offspring_keys_breadth_first(
+    generation: int,
+    survivors: Sequence[_AutoPopulationMember],
+    worker_count: int,
+    *,
+    first_only: bool = False,
+) -> tuple[tuple[int, int, int], ...]:
+    """Return quota-backed child keys with every first child before seconds."""
+    quotas = _offspring_quota_by_parent(survivors, worker_count)
+    if not quotas:
+        return ()
+    if sum(quotas.values()) != worker_count:
+        raise RuntimeError("Auto offspring quotas do not fill every worker")
+    maximum_offspring = 1 if first_only else max(quotas.values())
+    return tuple(
+        (generation, parent.member_id, offspring_index)
+        for offspring_index in range(1, maximum_offspring + 1)
+        for parent in survivors
+        if offspring_index <= quotas[parent.member_id]
+    )
 
 
 def _prune_campaign_history(
@@ -680,6 +1364,7 @@ def _result_from_candidate(
         finish_tick=evaluation.finish_tick,
         best=candidate,
         beam=(),
+        sectional_elites=(),
         gold_mask=evaluation.final_gold_mask,
         gold_bonus_ticks=evaluation.gold_bonus_ticks,
         objective_value=objective_value,
@@ -718,6 +1403,41 @@ def _canonical_splice_candidate(
         replay_key=None,
         input_transitions=None,
     )
+
+
+def _canonical_sectional_donor(
+    level: Level,
+    donor: AutoSpliceDonor,
+    objective: str,
+):
+    """Verify donor metadata and return its native-backed evaluation."""
+
+    if donor.finish_tick < 0 or len(donor.frames) != donor.finish_tick:
+        return None
+    try:
+        evaluation = verify_trimmed_replay(
+            level,
+            donor.frames,
+            expected_finish_tick=donor.finish_tick,
+            expected_gold_mask=donor.gold_mask,
+            expected_gold_bonus_ticks=donor.gold_bonus_ticks,
+        )
+    except (RuntimeError, ValueError):
+        return None
+    value = auto_objective_value(evaluation, objective)
+    if value != donor.objective_value:
+        return None
+    proximity = evaluation.pre_finish_exit_distance
+    if proximity is None or not math.isfinite(proximity):
+        proximity = float("inf")
+    if not math.isclose(
+        proximity,
+        donor.pre_finish_exit_distance,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        return None
+    return evaluation
 
 
 def _splice_rejection_bucket(reason: str | None) -> str:
@@ -801,6 +1521,63 @@ def _native_splice_parent(
     return native_member
 
 
+def _native_splice_donor(
+    level: Level,
+    generation: int,
+    source: _SpliceDonorSource,
+    objective: str,
+) -> AutoCandidate:
+    """Reconstruct one donor with a process-local native trajectory once."""
+
+    global _AUTO_WORKER_SPLICE_DONOR_CACHE
+    key = (generation, source.owner_member_id, source.donor_index)
+    cached = _AUTO_WORKER_SPLICE_DONOR_CACHE.get(key)
+    if cached is not None:
+        return cached
+    if _AUTO_WORKER_SPLICE_DONOR_CACHE and any(
+        cached_generation != generation
+        for cached_generation, _owner_id, _donor_index
+        in _AUTO_WORKER_SPLICE_DONOR_CACHE
+    ):
+        _AUTO_WORKER_SPLICE_DONOR_CACHE = {
+            cached_key: value
+            for cached_key, value in _AUTO_WORKER_SPLICE_DONOR_CACHE.items()
+            if cached_key[0] == generation
+        }
+    if not isinstance(level, Level):
+        evaluation = source.trace.source
+        if evaluation is None:
+            raise TypeError("sectional donor fixture has no source evaluation")
+    else:
+        evaluation = evaluate_replay_with_sentinel(level, source.donor.frames)
+    if (
+        evaluation.finish_tick != source.donor.finish_tick
+        or auto_objective_value(evaluation, objective)
+        != source.donor.objective_value
+    ):
+        raise RuntimeError("sectional donor changed during worker reconstruction")
+    working = source.donor.frames + (InputFrame(),)
+    candidate = AutoCandidate(
+        working_frames=working,
+        evaluation=evaluation,
+        origin=(
+            "population-donor"
+            if source.donor_index == 0
+            else "sectional-donor"
+        ),
+        mutations=source.donor.mutations,
+        sentinel_verified=True,
+        replay_key=bytes(
+            int(frame.left)
+            | (int(frame.right) << 1)
+            | (int(frame.jump) << 2)
+            for frame in working
+        ),
+    )
+    _AUTO_WORKER_SPLICE_DONOR_CACHE[key] = candidate
+    return candidate
+
+
 def _run_splice_worker(task: _SpliceWorkerTask) -> _SpliceWorkerResult:
     """Run one pair while retaining a native session for this worker process."""
     global _AUTO_WORKER_NATIVE_SESSION
@@ -834,9 +1611,22 @@ def _run_splice_worker_in_session(
 
     level = context.level
     config = context.config
-    recipient = _native_splice_parent(level, task.run_index, task.recipient)
-    donor = _native_splice_parent(level, task.run_index, task.donor)
-    stats = _SpliceRoundStats(pairs=1)
+    # Planning consumes only the already prepared, process-safe trace indexes.
+    # Delay native replay reconstruction until a real plan reaches repair; the
+    # common no-corridor/no-plan path then performs no extra simulation.
+    recipient = task.recipient
+    if task.donor_source is None:
+        donor_member_id = task.donor.member_id
+        donor_index = 0
+        donor_trace = task.donor_trace
+    else:
+        donor_member_id = task.donor_source.owner_member_id
+        donor_index = task.donor_source.donor_index
+        donor_trace = task.donor_source.trace
+    stats = _SpliceRoundStats(
+        pairs=1,
+        sectional_pairs=int(donor_index > 0),
+    )
     repair_stats = AutoStats()
     outputs: list[_SpliceWorkerCandidate] = []
 
@@ -845,10 +1635,11 @@ def _run_splice_worker_in_session(
             task_id=task.task_id,
             run_index=task.run_index,
             recipient_member_id=recipient.member_id,
-            donor_member_id=donor.member_id,
+            donor_member_id=donor_member_id,
             candidates=tuple(outputs),
             splice_stats=stats,
             auto_stats=repair_stats,
+            donor_index=donor_index,
         )
 
     recipient_frames = recipient.result.frames
@@ -864,10 +1655,11 @@ def _run_splice_worker_in_session(
             task_id=task.task_id,
             run_index=task.run_index,
             recipient_member_id=recipient.member_id,
-            donor_member_id=donor.member_id,
+            donor_member_id=donor_member_id,
             candidates=(),
             splice_stats=stats,
             auto_stats=repair_stats,
+            donor_index=donor_index,
         )
 
     alignment_spec = SpliceAlignmentSpec(
@@ -887,14 +1679,27 @@ def _run_splice_worker_in_session(
 
     plans = find_splice_section_plans(
         task.recipient_trace,
-        task.donor_trace,
+        donor_trace,
         alignment_spec,
         plan_spec,
         anchor_runs_observer=observe_anchor_runs,
     )
     stats.plans += len(plans)
+    if donor_index > 0:
+        stats.sectional_plans += len(plans)
     if not plans:
         stats.reject("no-corridors" if corridor_count == 0 else "no-plans")
+        return finish()
+
+    recipient = _native_splice_parent(level, task.run_index, task.recipient)
+    if task.donor_source is None:
+        donor_candidate = _native_splice_parent(
+            level, task.run_index, task.donor
+        ).result.best
+    else:
+        donor_candidate = _native_splice_donor(
+            level, task.run_index, task.donor_source, config.objective
+        )
 
     max_body_length = len(recipient.result.best.working_frames) - 1
     for plan in plans[:_SECTION_SPLICE_PLANS_PER_PAIR]:
@@ -906,11 +1711,13 @@ def _run_splice_worker_in_session(
                 return finish()
             raise _AutoWorkerCancelled
         stats.attempted += 1
+        if donor_index > 0:
+            stats.sectional_attempted += 1
         stats.predicted_gains.append(plan.predicted_time_gain)
         repair = repair_reference_segment_splice(
             level,
             recipient.result.best,
-            donor.result.best,
+            donor_candidate,
             plan,
             config=config,
             max_body_length=max_body_length,
@@ -963,6 +1770,7 @@ def _run_splice_worker_in_session(
             donor_entry_tick=plan.donor_entry_tick,
             donor_exit_tick=plan.donor_exit_tick,
             predicted_time_gain=plan.predicted_time_gain,
+            donor_index=donor_index,
         )
         outputs.append(proposal)
         checkpoint_queue = _AUTO_WORKER_CHECKPOINT_QUEUE
@@ -972,12 +1780,167 @@ def _run_splice_worker_in_session(
                     task_id=task.task_id,
                     run_index=task.run_index,
                     recipient_member_id=recipient.member_id,
-                    donor_member_id=donor.member_id,
+                    donor_member_id=donor_member_id,
                     proposal=proposal,
+                    donor_index=donor_index,
                 )
             )
 
     return finish()
+
+
+def _run_serial_sectional_splices(
+    level: Level,
+    result: AutoResult,
+    donors: Sequence[AutoSpliceDonor],
+    config: AutoConfig,
+    *,
+    run_index: int,
+    required_gold_mask: int = 0,
+) -> tuple[AutoResult | None, _SpliceRoundStats, AutoStats, bool]:
+    """Give one-worker sectional donors the normal independent pair limits."""
+
+    global _AUTO_WORKER_STOP_EVENT
+    global _AUTO_WORKER_CHECKPOINT_QUEUE
+    global _AUTO_WORKER_CANCEL_TOKENS
+    global _AUTO_WORKER_SPLICE_PARENT_CACHE
+    global _AUTO_WORKER_SPLICE_DONOR_CACHE
+    global _AUTO_WORKER_NATIVE_SESSION
+
+    stats = _SpliceRoundStats()
+    aggregate_repair_stats = AutoStats()
+    if not donors:
+        return None, stats, aggregate_repair_stats, False
+
+    recipient = _AutoPopulationMember(
+        member_id=0,
+        result=replace(result, beam=(), sectional_elites=()),
+        parent_member_ids=(),
+        generation=run_index,
+        mutations=result.best.mutations,
+        recipient_member_id=0,
+        primary_family_id=0,
+    )
+    recipient_trace = prepare_splice_trace(
+        result.best.evaluation, result.frames
+    )
+    accepted_bodies = {result.frames, *(donor.frames for donor in donors)}
+    best_child: AutoResult | None = None
+    interrupted = False
+    session = NativeSearchSession(level) if isinstance(level, Level) else None
+    token = _ACTIVE_NATIVE_SESSION.set((level, session))
+    previous_worker_controls = (
+        _AUTO_WORKER_STOP_EVENT,
+        _AUTO_WORKER_CHECKPOINT_QUEUE,
+        _AUTO_WORKER_CANCEL_TOKENS,
+    )
+    previous_worker_caches = (
+        _AUTO_WORKER_SPLICE_PARENT_CACHE,
+        _AUTO_WORKER_SPLICE_DONOR_CACHE,
+        _AUTO_WORKER_NATIVE_SESSION,
+    )
+    _AUTO_WORKER_STOP_EVENT = None
+    _AUTO_WORKER_CHECKPOINT_QUEUE = None
+    _AUTO_WORKER_CANCEL_TOKENS = None
+    # Serial campaigns share the coordinator process.  Keep worker-native
+    # reconstructions scoped to this campaign so repeated one-worker calls
+    # cannot collide on the compact (generation, member) cache keys.
+    _AUTO_WORKER_SPLICE_PARENT_CACHE = {}
+    _AUTO_WORKER_SPLICE_DONOR_CACHE = {}
+    _AUTO_WORKER_NATIVE_SESSION = None
+    try:
+        for donor_index, donor in enumerate(donors, start=1):
+            evaluation = _canonical_sectional_donor(
+                level, donor, config.objective
+            )
+            if evaluation is None:
+                stats.reject("sectional-donor-verification")
+                continue
+            stats.sectional_donors += 1
+            source = _SpliceDonorSource(
+                owner_member_id=recipient.member_id,
+                donor_index=donor_index,
+                donor=donor,
+                trace=prepare_splice_trace(evaluation, donor.frames),
+            )
+            task = _SpliceWorkerTask(
+                recipient=recipient,
+                donor=recipient,
+                recipient_trace=recipient_trace,
+                donor_trace=source.trace,
+                run_index=run_index,
+                task_id=_SPLICE_TASK_ID_BASE | donor_index,
+                required_gold_mask=required_gold_mask,
+                donor_source=source,
+            )
+            output = _run_splice_worker_in_session(
+                task, _AutoWorkerContext(level, config)
+            )
+            stats.merge(output.splice_stats)
+            aggregate_repair_stats = _sum_stats(
+                aggregate_repair_stats, output.auto_stats
+            )
+            for proposal in output.candidates:
+                candidate = proposal.candidate
+                if candidate.frames in accepted_bodies:
+                    stats.reject("duplicate-replay")
+                    continue
+                child = _result_from_candidate(candidate, result)
+                if (
+                    auto_result_outcome_key(child)
+                    >= auto_result_outcome_key(result)
+                ):
+                    stats.reject("not-better-than-recipient")
+                    continue
+                stats.beat_recipient += 1
+                stats.admitted += 1
+                stats.sectional_admitted += 1
+                actual_gain = result.finish_tick - child.finish_tick
+                diagnostic = (
+                    f"splice round {run_index}: recipient member 0, "
+                    f"donor member 0 sectional #{donor_index}, A "
+                    f"{proposal.recipient_entry_tick}.."
+                    f"{proposal.recipient_exit_tick} <- B "
+                    f"{proposal.donor_entry_tick}..{proposal.donor_exit_tick}, "
+                    f"predicted gain {proposal.predicted_time_gain}, "
+                    f"actual gain {actual_gain}"
+                )
+                candidate = replace(
+                    candidate,
+                    mutations=result.best.mutations + (diagnostic,),
+                )
+                child = replace(
+                    _result_from_candidate(candidate, result),
+                    stats=AutoStats(),
+                    diagnostics=result.diagnostics + (diagnostic,),
+                )
+                accepted_bodies.add(candidate.frames)
+                if (
+                    best_child is None
+                    or auto_result_outcome_key(child)
+                    < auto_result_outcome_key(best_child)
+                ):
+                    best_child = child
+    except KeyboardInterrupt:
+        # A prior donor may already have produced a canonically verified child.
+        # Hand it back to the serial coordinator before honouring the stop.
+        interrupted = True
+    finally:
+        (
+            _AUTO_WORKER_STOP_EVENT,
+            _AUTO_WORKER_CHECKPOINT_QUEUE,
+            _AUTO_WORKER_CANCEL_TOKENS,
+        ) = previous_worker_controls
+        (
+            _AUTO_WORKER_SPLICE_PARENT_CACHE,
+            _AUTO_WORKER_SPLICE_DONOR_CACHE,
+            _AUTO_WORKER_NATIVE_SESSION,
+        ) = previous_worker_caches
+        _ACTIVE_NATIVE_SESSION.reset(token)
+    if best_child is not None:
+        stats.survivors = 1
+        stats.sectional_survivors = 1
+    return best_child, stats, aggregate_repair_stats, interrupted
 
 
 def _compose_campaign_result(
@@ -1011,6 +1974,7 @@ def _compose_campaign_result(
         stats=aggregate_stats,
         diagnostics=diagnostics,
         beam=(),
+        sectional_elites=(),
     )
     return AutoCampaignResult(
         result=result,
@@ -1151,10 +2115,11 @@ def optimise_autonomous_campaign(
     ``source_frames`` remains the campaign reference. ``parent_frames`` adds
     generation-0 founders which are independently canonicalised and verified.
     ``workers=0`` selects up to eight available CPUs. ``runs=0`` repeats
-    indefinitely until Ctrl+C. Each completed round keeps the best half of the
-    population, with one-generation parent diversity from round two onward.
-    Free slots may speculatively start the next generation before all current
-    workers finish.
+    indefinitely until Ctrl+C. Each completed round retains a half-worker
+    minimum, plus one survivor for each competitive distinct splice niche up
+    to one survivor per worker. Exact replay, recipient and breeding-family
+    controls preserve route breadth. Free slots may speculatively start the
+    next generation before all current workers finish.
     """
     if workers < 0:
         raise ValueError("workers must be zero (auto) or a positive integer")
@@ -1258,6 +2223,8 @@ def optimise_autonomous_campaign(
                 if parent_number == 1
                 else (f"starting parent #{parent_number}", *result.best.mutations)
             ),
+            recipient_member_id=member_id,
+            primary_family_id=member_id,
         )
         for member_id, (parent_number, result) in enumerate(
             unique_starting_results
@@ -1383,10 +2350,93 @@ def optimise_autonomous_campaign(
 
             completed_searches += 1
             aggregate_stats = _sum_stats(aggregate_stats, result.stats)
-            if auto_result_outcome_key(result) < auto_result_outcome_key(current):
-                current = result
-                committed_mutations += _annotated_mutations(
-                    _AutoWorkerResult(result, seed, run_index, 1)
+            splice_donors = _select_worker_splice_donors(result, config)
+            worker_output = _AutoWorkerResult(
+                result=replace(result, beam=(), sectional_elites=()),
+                seed=seed,
+                run_index=run_index,
+                worker_index=1,
+                splice_donors=splice_donors,
+            )
+            round_result = result
+            round_mutations = (
+                committed_mutations + _annotated_mutations(worker_output)
+            )
+            try:
+                (
+                    splice_child,
+                    round_stats,
+                    splice_repair_stats,
+                    splice_interrupted,
+                ) = (
+                    _run_serial_sectional_splices(
+                        level,
+                        result,
+                        splice_donors,
+                        config,
+                        run_index=run_index,
+                        required_gold_mask=(
+                            initial.baseline_gold_mask
+                            if config.require_reference_gold
+                            else 0
+                        ),
+                    )
+                )
+            except KeyboardInterrupt:
+                if auto_result_outcome_key(result) < auto_result_outcome_key(
+                    current
+                ):
+                    current = result
+                    committed_mutations = round_mutations
+                if status is not None:
+                    status(
+                        "[auto:interrupt] Ctrl+C received during sectional "
+                        "splice repair; retaining the best verified result"
+                    )
+                return _compose_campaign_result(
+                    initial,
+                    current,
+                    aggregate_stats,
+                    committed_mutations,
+                    worker_count=worker_count,
+                    requested_runs=runs,
+                    completed_runs=completed_runs,
+                    completed_searches=completed_searches,
+                    interrupted=True,
+                )
+            aggregate_stats = _sum_stats(
+                aggregate_stats, splice_repair_stats
+            )
+            if (
+                splice_child is not None
+                and auto_result_outcome_key(splice_child)
+                < auto_result_outcome_key(round_result)
+            ):
+                round_result = splice_child
+                round_mutations += (splice_child.best.mutations[-1],)
+            if auto_result_outcome_key(round_result) < auto_result_outcome_key(
+                current
+            ):
+                current = round_result
+                committed_mutations = round_mutations
+                if splice_child is round_result and best_callback is not None:
+                    best_callback(round_result.best)
+            if splice_interrupted:
+                if status is not None:
+                    status(
+                        "[auto:interrupt] Ctrl+C received during sectional "
+                        "splice repair; retaining the best verified result"
+                    )
+                return _compose_campaign_result(
+                    initial,
+                    current,
+                    aggregate_stats,
+                    committed_mutations,
+                    worker_count=worker_count,
+                    requested_runs=runs,
+                    completed_runs=completed_runs,
+                    completed_searches=completed_searches,
+                    interrupted=True,
                 )
             completed_runs += 1
             if status is not None:
@@ -1394,7 +2444,7 @@ def optimise_autonomous_campaign(
                     f"[auto:parallel] round {run_index} complete: "
                     f"best finish {current.finish_tick}; restarting from winner"
                 )
-            _emit_splice_round_summary(run_index, _SpliceRoundStats(), status)
+            _emit_splice_round_summary(run_index, round_stats, status)
             run_index += 1
 
         return _compose_campaign_result(
@@ -1421,16 +2471,23 @@ def optimise_autonomous_campaign(
     records: dict[int, _AutoTaskRecord] = {}
     records_by_key: dict[tuple[int, int, int], _AutoTaskRecord] = {}
     splice_records: dict[
-        tuple[int, int, int], _SpliceTaskRecord
+        tuple[int, int, int, int], _SpliceTaskRecord
     ] = {}
     prepared_splice_traces: dict[int, PreparedSpliceTrace] = {}
+    splice_task_members: dict[int, _AutoPopulationMember] = {}
+    splice_donor_sources: dict[
+        tuple[int, int], _SpliceDonorSource
+    ] = {}
+    failed_splice_donor_sources: set[tuple[int, int]] = set()
+    donor_verification_failures: dict[int, int] = {}
+    coordinator_native_session: NativeSearchSession | None = None
     members: dict[int, _AutoPopulationMember] = {
         member.member_id: member for member in founders
     }
     next_task_id = 1
     next_splice_task_id = 1
     next_member_id = len(founders)
-    survivor_count = _population_survivor_count(worker_count)
+    minimum_survivor_count = _population_survivor_count(worker_count)
     checkpoint_key = auto_result_outcome_key(current)
     splice_interrupt_checkpoint: tuple[
         tuple[object, ...], AutoResult, tuple[str, ...]
@@ -1478,32 +2535,99 @@ def optimise_autonomous_campaign(
         available.  The dictionary key is independent of future completion
         order and repeated scheduler fills are idempotent.
         """
-        nonlocal next_splice_task_id
+        nonlocal next_splice_task_id, coordinator_native_session
         for member in completed_members:
             if member.member_id not in prepared_splice_traces:
                 prepared_splice_traces[member.member_id] = prepare_splice_trace(
                     member.result.best.evaluation,
                     member.result.frames,
                 )
+            main_key = (member.member_id, 0)
+            if main_key not in splice_donor_sources:
+                proximity = member.result.best.evaluation.pre_finish_exit_distance
+                if proximity is None or not math.isfinite(proximity):
+                    proximity = float("inf")
+                splice_donor_sources[main_key] = _SpliceDonorSource(
+                    owner_member_id=member.member_id,
+                    donor_index=0,
+                    donor=AutoSpliceDonor(
+                        frames=member.result.frames,
+                        finish_tick=member.result.finish_tick,
+                        objective_value=member.result.objective_value,
+                        pre_finish_exit_distance=proximity,
+                        mutations=member.mutations,
+                        gold_mask=member.result.gold_mask,
+                        gold_bonus_ticks=member.result.gold_bonus_ticks,
+                    ),
+                    trace=prepared_splice_traces[member.member_id],
+                )
+            for donor_index, donor in enumerate(member.splice_donors, start=1):
+                source_key = (member.member_id, donor_index)
+                if (
+                    source_key in splice_donor_sources
+                    or source_key in failed_splice_donor_sources
+                ):
+                    continue
+                if isinstance(level, Level) and coordinator_native_session is None:
+                    coordinator_native_session = NativeSearchSession(level)
+                token = _ACTIVE_NATIVE_SESSION.set(
+                    (level, coordinator_native_session)
+                )
+                try:
+                    evaluation = _canonical_sectional_donor(
+                        level, donor, config.objective
+                    )
+                finally:
+                    _ACTIVE_NATIVE_SESSION.reset(token)
+                if evaluation is None:
+                    failed_splice_donor_sources.add(source_key)
+                    donor_verification_failures[generation] = (
+                        donor_verification_failures.get(generation, 0) + 1
+                    )
+                    continue
+                splice_donor_sources[source_key] = _SpliceDonorSource(
+                    owner_member_id=member.member_id,
+                    donor_index=donor_index,
+                    donor=donor,
+                    trace=prepare_splice_trace(evaluation, donor.frames),
+                )
         ordered = tuple(completed_members)
         for recipient in ordered:
-            for donor in ordered:
-                if recipient.member_id == donor.member_id:
-                    continue
-                key = (generation, recipient.member_id, donor.member_id)
-                if key in splice_records:
-                    continue
-                sequence = next_splice_task_id
-                next_splice_task_id += 1
-                splice_records[key] = _SpliceTaskRecord(
-                    # Keep splice cancellation tokens disjoint from the Auto
-                    # seed/task stream without consuming Auto task IDs.
-                    task_id=_SPLICE_TASK_ID_BASE | sequence,
-                    generation=generation,
-                    recipient_member_id=recipient.member_id,
-                    donor_member_id=donor.member_id,
-                    pair_order=sequence,
+            for donor_owner in ordered:
+                donor_sources = sorted(
+                    (
+                        source
+                        for (owner_id, _index), source in splice_donor_sources.items()
+                        if owner_id == donor_owner.member_id
+                    ),
+                    key=lambda source: source.donor_index,
                 )
+                for source in donor_sources:
+                    if (
+                        recipient.member_id == donor_owner.member_id
+                        and source.donor_index == 0
+                    ):
+                        continue
+                    key = (
+                        generation,
+                        recipient.member_id,
+                        donor_owner.member_id,
+                        source.donor_index,
+                    )
+                    if key in splice_records:
+                        continue
+                    sequence = next_splice_task_id
+                    next_splice_task_id += 1
+                    splice_records[key] = _SpliceTaskRecord(
+                        # Keep splice cancellation tokens disjoint from the Auto
+                        # seed/task stream without consuming Auto task IDs.
+                        task_id=_SPLICE_TASK_ID_BASE | sequence,
+                        generation=generation,
+                        recipient_member_id=recipient.member_id,
+                        donor_member_id=donor_owner.member_id,
+                        donor_index=source.donor_index,
+                        pair_order=sequence,
+                    )
 
     def parent_mutations(record: _AutoTaskRecord) -> tuple[str, ...]:
         return members[record.parent_member_id].mutations
@@ -1521,6 +2645,9 @@ def optimise_autonomous_campaign(
             parent_member_ids=(record.parent_member_id,),
             generation=record.generation,
             mutations=parent_mutations(record) + _annotated_mutations(output),
+            recipient_member_id=next_member_id,
+            primary_family_id=record.parent_member_id,
+            splice_donors=output.splice_donors,
         )
         next_member_id += 1
         record.output_member_id = member.member_id
@@ -1559,6 +2686,7 @@ def optimise_autonomous_campaign(
                     update.run_index,
                     update.recipient_member_id,
                     update.donor_member_id,
+                    update.donor_index,
                 )
                 record = splice_records.get(key)
                 if record is None or record.task_id != update.task_id:
@@ -1616,18 +2744,55 @@ def optimise_autonomous_campaign(
         record.cancel_slot = slot
         record.worker_index = slot + 1
         cancel_tokens[slot] = record.task_id
+        recipient = splice_task_members.get(record.recipient_member_id)
+        if recipient is None:
+            member = members[record.recipient_member_id]
+            recipient = replace(
+                member,
+                result=replace(
+                    member.result,
+                    beam=(),
+                    sectional_elites=(),
+                ),
+                splice_donors=(),
+            )
+            splice_task_members[record.recipient_member_id] = recipient
+        donor = recipient
+        if record.donor_index == 0:
+            donor = splice_task_members.get(record.donor_member_id)
+            if donor is None:
+                member = members[record.donor_member_id]
+                donor = replace(
+                    member,
+                    result=replace(
+                        member.result,
+                        beam=(),
+                        sectional_elites=(),
+                    ),
+                    splice_donors=(),
+                )
+                splice_task_members[record.donor_member_id] = donor
         task = _SpliceWorkerTask(
-            recipient=members[record.recipient_member_id],
-            donor=members[record.donor_member_id],
+            recipient=recipient,
+            # Sectional source metadata carries its owner identity and frames;
+            # reuse the already-pickled recipient as the legacy ``donor``
+            # placeholder so a cross-owner sectional job does not also ship
+            # the owner's unrelated winning trajectory.
+            donor=donor,
             recipient_trace=prepared_splice_traces[
                 record.recipient_member_id
             ],
-            donor_trace=prepared_splice_traces[record.donor_member_id],
+            donor_trace=splice_donor_sources[
+                (record.donor_member_id, record.donor_index)
+            ].trace,
             run_index=record.generation,
             task_id=record.task_id,
             required_gold_mask=required_reference_gold_mask,
             worker_index=record.worker_index,
             cancel_slot=slot,
+            donor_source=splice_donor_sources[
+                (record.donor_member_id, record.donor_index)
+            ],
         )
         future = executor.submit(_run_splice_worker, task)
         record.future = future
@@ -1688,7 +2853,9 @@ def optimise_autonomous_campaign(
                 and not record.cancelled
                 and not record.preempted
             ),
-            key=lambda record: record.task_id,
+            # Displace deeper speculative children before breadth-first child
+            # ones, then the newest task at the same breadth.
+            key=lambda record: (record.offspring_index, record.task_id),
             reverse=True,
         )
         for record in speculative[:deficit]:
@@ -1738,6 +2905,11 @@ def optimise_autonomous_campaign(
         nonlocal splice_interrupt_checkpoint
         recipient = members[record.recipient_member_id]
         donor = members[record.donor_member_id]
+        donor_label = (
+            f"{donor.member_id} sectional #{record.donor_index}"
+            if record.donor_index
+            else str(donor.member_id)
+        )
         candidate = proposal.candidate
         child_result = _result_from_candidate(candidate, recipient.result)
         outcome_key = auto_result_outcome_key(child_result)
@@ -1746,7 +2918,7 @@ def optimise_autonomous_campaign(
         actual_gain = recipient.result.finish_tick - child_result.finish_tick
         diagnostic = (
             f"splice round {record.generation}: recipient member "
-            f"{recipient.member_id}, donor member {donor.member_id}, "
+            f"{recipient.member_id}, donor member {donor_label}, "
             f"A {proposal.recipient_entry_tick}.."
             f"{proposal.recipient_exit_tick} <- B "
             f"{proposal.donor_entry_tick}..{proposal.donor_exit_tick}, "
@@ -1769,6 +2941,7 @@ def optimise_autonomous_campaign(
             record.generation,
             record.recipient_member_id,
             record.donor_member_id,
+            record.donor_index,
             proposal.recipient_entry_tick,
             proposal.recipient_exit_tick,
             proposal.donor_entry_tick,
@@ -1843,6 +3016,12 @@ def optimise_autonomous_campaign(
 
         accepted: list[_AutoPopulationMember] = []
         accepted_bodies = {member.result.frames for member in completed_members}
+        accepted_bodies.update(
+            source.donor.frames
+            for source in splice_donor_sources.values()
+            if source.owner_member_id
+            in {member.member_id for member in completed_members}
+        )
         population_order = {
             member.member_id: index
             for index, member in enumerate(completed_members)
@@ -1856,6 +3035,7 @@ def optimise_autonomous_campaign(
             key=lambda record: (
                 population_order[record.recipient_member_id],
                 population_order[record.donor_member_id],
+                record.donor_index,
             ),
         )
         for record in generation_records:
@@ -1865,12 +3045,18 @@ def optimise_autonomous_campaign(
             if (
                 output.recipient_member_id != record.recipient_member_id
                 or output.donor_member_id != record.donor_member_id
+                or output.donor_index != record.donor_index
             ):
                 raise RuntimeError("splice worker returned the wrong parent pair")
             round_stats.merge(output.splice_stats)
             aggregate_stats = _sum_stats(aggregate_stats, output.auto_stats)
             recipient = members[record.recipient_member_id]
             donor = members[record.donor_member_id]
+            donor_label = (
+                f"{donor.member_id} sectional #{record.donor_index}"
+                if record.donor_index
+                else str(donor.member_id)
+            )
             for proposal in output.candidates:
                 candidate = proposal.candidate
                 # This cross-pair gate deliberately precedes outcome counting,
@@ -1889,7 +3075,7 @@ def optimise_autonomous_campaign(
                 actual_gain = recipient.result.finish_tick - child_result.finish_tick
                 diagnostic = (
                     f"splice round {generation}: recipient member "
-                    f"{recipient.member_id}, donor member {donor.member_id}, "
+                    f"{recipient.member_id}, donor member {donor_label}, "
                     f"A {proposal.recipient_entry_tick}.."
                     f"{proposal.recipient_exit_tick} <- B "
                     f"{proposal.donor_entry_tick}..{proposal.donor_exit_tick}, "
@@ -1906,9 +3092,17 @@ def optimise_autonomous_campaign(
                 member = _AutoPopulationMember(
                     member_id=next_member_id,
                     result=child_result,
-                    parent_member_ids=(recipient.member_id, donor.member_id),
+                    parent_member_ids=(
+                        (recipient.member_id,)
+                        if recipient.member_id == donor.member_id
+                        else (recipient.member_id, donor.member_id)
+                    ),
                     generation=generation,
                     mutations=mutations,
+                    recipient_member_id=recipient.member_id,
+                    primary_family_id=(
+                        recipient.selection_primary_family_id
+                    ),
                     splice_parent_pair=tuple(
                         sorted((recipient.member_id, donor.member_id))
                     ),
@@ -1918,11 +3112,14 @@ def optimise_autonomous_campaign(
                         proposal.donor_entry_tick,
                         proposal.donor_exit_tick,
                     ),
+                    splice_donor_index=record.donor_index,
                 )
                 next_member_id += 1
                 members[member.member_id] = member
                 accepted.append(member)
                 round_stats.admitted += 1
+                if record.donor_index > 0:
+                    round_stats.sectional_admitted += 1
                 accepted_bodies.add(candidate.frames)
                 child_key = auto_result_outcome_key(child_result)
                 if child_key < checkpoint_key:
@@ -1933,7 +3130,7 @@ def optimise_autonomous_campaign(
                         status(
                             f"[auto:splice] round {generation}: new global "
                             f"best from members {recipient.member_id}/"
-                            f"{donor.member_id}; finish {child_result.finish_tick}"
+                            f"{donor_label}; finish {child_result.finish_tick}"
                         )
                     if best_callback is not None:
                         best_callback(candidate)
@@ -1951,35 +3148,42 @@ def optimise_autonomous_campaign(
         completed = completed_authoritative_members(task_ids)
         if not completed:
             return None
-        provisional_count = min(survivor_count, len(completed))
+        provisional_count = min(minimum_survivor_count, len(completed))
         provisional = _select_population_survivors(
             completed,
             provisional_count,
-            enforce_parent_diversity=generation > 1,
+            enforce_parent_diversity=True,
         )
-        max_offspring = max(1, math.ceil(worker_count / survivor_count))
-        for offspring_index in range(1, max_offspring + 1):
-            for parent in provisional:
-                key = (generation + 1, parent.member_id, offspring_index)
-                existing = records_by_key.get(key)
-                if existing is None:
-                    return create_record(
-                        generation + 1,
-                        parent.member_id,
-                        offspring_index,
-                        authoritative=False,
-                    )
-                if (
-                    existing.future is None
-                    and existing.output is None
-                    and not existing.cancelled
-                ):
-                    # A ready splice may have cooperatively paused this task.
-                    # Once that Future has unwound, the same deterministic
-                    # task can resume whenever all currently ready splice
-                    # jobs have been submitted.
-                    existing.preempted = False
-                    return existing
+        keys = _offspring_keys_breadth_first(
+            generation + 1,
+            provisional,
+            worker_count,
+            # Do not spend a second search on an early provisional route while
+            # a first child for a possible minimum-population survivor is not
+            # yet known. Once four parents are available for eight workers,
+            # quota-backed second children become eligible breadth-first.
+            first_only=len(provisional) < minimum_survivor_count,
+        )
+        for next_generation, parent_member_id, offspring_index in keys:
+            key = (next_generation, parent_member_id, offspring_index)
+            existing = records_by_key.get(key)
+            if existing is None:
+                return create_record(
+                    next_generation,
+                    parent_member_id,
+                    offspring_index,
+                    authoritative=False,
+                )
+            if (
+                existing.future is None
+                and existing.output is None
+                and not existing.cancelled
+            ):
+                # A ready splice may have cooperatively paused this task. Once
+                # that Future has unwound, the same deterministic task can
+                # resume after every first offspring still ranks ahead of it.
+                existing.preempted = False
+                return existing
         return None
 
     def fill_slots(
@@ -1992,7 +3196,7 @@ def optimise_autonomous_campaign(
         sync_splice_records(generation, completed)
         preempt_speculation_for_ready_splices(generation)
         while free_slots:
-            missing = next(
+            missing = min(
                 (
                     record
                     for record in authoritative_records(task_ids)
@@ -2000,7 +3204,8 @@ def optimise_autonomous_campaign(
                     and record.future is None
                     and not record.cancelled
                 ),
-                None,
+                key=lambda record: (record.offspring_index, record.task_id),
+                default=None,
             )
             if missing is not None:
                 submit_record(missing)
@@ -2017,6 +3222,7 @@ def optimise_autonomous_campaign(
                             item.generation,
                             item.recipient_member_id,
                             item.donor_member_id,
+                            item.donor_index,
                         ),
                     )
                     if record.generation == generation
@@ -2052,33 +3258,46 @@ def optimise_autonomous_campaign(
             ),
         )
 
-        founder_quotas = _offspring_quota_by_parent(
+        founder_keys = _offspring_keys_breadth_first(
+            1,
             ranked_founders,
             worker_count,
         )
         current_task_ids = {
             create_record(
-                1,
-                parent.member_id,
-                offspring,
+                generation,
+                parent_member_id,
+                offspring_index,
                 authoritative=True,
             ).task_id
-            for parent in ranked_founders
-            for offspring in range(1, founder_quotas[parent.member_id] + 1)
+            for generation, parent_member_id, offspring_index in founder_keys
         }
 
         while run_limit is None or run_index <= run_limit:
             suffix = f"/{run_limit}" if run_limit is not None else ""
             if status is not None:
                 if run_index == 1:
+                    active_parent_count = len(
+                        {
+                            records[task_id].parent_member_id
+                            for task_id in current_task_ids
+                        }
+                    )
                     description = (
                         f"starting {worker_count} independent searches from "
-                        f"{len(founders)} unique parent(s), "
+                        f"{active_parent_count} unique parent(s), "
                         f"{config.iterations} iterations each"
                     )
                 else:
+                    active_parent_count = len(
+                        {
+                            records[task_id].parent_member_id
+                            for task_id in current_task_ids
+                        }
+                    )
                     description = (
-                        f"population search from {survivor_count} survivor(s), "
+                        f"population search from {active_parent_count} "
+                        "survivor(s), "
                         f"{config.iterations} iterations each"
                     )
                 status(f"[auto:parallel] round {run_index}{suffix}: {description}")
@@ -2094,8 +3313,20 @@ def optimise_autonomous_campaign(
                 completed_now = completed_authoritative_members(current_task_ids)
                 sync_splice_records(run_index, completed_now)
                 auto_round_complete = len(completed_now) == len(current_task_ids)
+                completed_ids = {
+                    member.member_id for member in completed_now
+                }
                 expected_pair_count = (
-                    len(completed_now) * (len(completed_now) - 1)
+                    sum(
+                        1
+                        for recipient in completed_now
+                        for source in splice_donor_sources.values()
+                        if source.owner_member_id in completed_ids
+                        and not (
+                            source.owner_member_id == recipient.member_id
+                            and source.donor_index == 0
+                        )
+                    )
                     if auto_round_complete
                     else -1
                 )
@@ -2135,20 +3366,37 @@ def optimise_autonomous_campaign(
             drain_checkpoints()
             completed_members = completed_authoritative_members(current_task_ids)
             round_stats = _SpliceRoundStats()
+            completed_member_ids_before_splice = {
+                member.member_id for member in completed_members
+            }
+            round_stats.sectional_donors = sum(
+                source.is_sectional
+                and source.owner_member_id in completed_member_ids_before_splice
+                for source in splice_donor_sources.values()
+            )
+            round_stats.reject(
+                "sectional-donor-verification",
+                donor_verification_failures.pop(run_index, 0),
+            )
             completed_members += commit_splice_outputs(
                 completed_members, run_index, round_stats
             )
-            survivors = _select_population_survivors(
+            population_selection = _select_adaptive_population(
                 completed_members,
-                survivor_count,
-                enforce_parent_diversity=run_index > 1,
+                worker_count,
             )
+            survivors = population_selection.survivors
             survivor_ids = {member.member_id for member in survivors}
             splice_members = tuple(
                 member for member in completed_members if member.is_splice
             )
             round_stats.survivors = sum(
                 member.member_id in survivor_ids for member in splice_members
+            )
+            round_stats.sectional_survivors = sum(
+                member.member_id in survivor_ids
+                and member.splice_donor_index > 0
+                for member in splice_members
             )
             round_stats.reject(
                 "population-selection",
@@ -2158,38 +3406,44 @@ def optimise_autonomous_campaign(
                 ),
             )
             completed_runs += 1
-            if status is not None:
-                lineages = len(
-                    {
-                        lineage
-                        for member in survivors
-                        for lineage in member.parent_member_ids
-                    }
-                )
-                status(
-                    f"[auto:parallel] round {run_index} complete: selected "
-                    f"{len(survivors)}/{len(completed_members)} survivors from "
-                    f"{lineages} immediate parent lineage(s); global best finish "
-                    f"{current.finish_tick}"
-                )
+            _emit_population_round_summary(
+                run_index,
+                population_selection,
+                candidate_count=len(completed_members),
+                global_best_finish_tick=current.finish_tick,
+                status=status,
+            )
             _emit_splice_round_summary(run_index, round_stats, status)
             for key in tuple(splice_records):
                 if key[0] == run_index:
                     del splice_records[key]
             for member in completed_members:
                 prepared_splice_traces.pop(member.member_id, None)
+            completed_member_ids = {
+                member.member_id for member in completed_members
+            }
+            for member_id in completed_member_ids:
+                splice_task_members.pop(member_id, None)
+            for source_key in tuple(splice_donor_sources):
+                if source_key[0] in completed_member_ids:
+                    del splice_donor_sources[source_key]
+            failed_splice_donor_sources.difference_update(
+                source_key
+                for source_key in tuple(failed_splice_donor_sources)
+                if source_key[0] in completed_member_ids
+            )
 
             if run_limit is not None and run_index >= run_limit:
                 break
 
-            quotas = _offspring_quota_by_parent(survivors, worker_count)
-            desired_keys = {
-                (run_index + 1, parent.member_id, offspring_index)
-                for parent in survivors
-                for offspring_index in range(1, quotas[parent.member_id] + 1)
-            }
+            desired_order = _offspring_keys_breadth_first(
+                run_index + 1,
+                survivors,
+                worker_count,
+            )
+            desired_keys = set(desired_order)
             next_task_ids: set[int] = set()
-            for key in sorted(desired_keys):
+            for key in desired_order:
                 generation, parent_member_id, offspring_index = key
                 record = records_by_key.get(key)
                 if record is None:
@@ -2350,6 +3604,7 @@ def optimise_autonomous_campaign(
 
 __all__ = [
     "AutoCampaignResult",
+    "AutoSpliceDonor",
     "auto_candidate_outcome_key",
     "auto_result_outcome_key",
     "automatic_auto_worker_count",

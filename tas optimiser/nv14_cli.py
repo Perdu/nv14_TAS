@@ -23,6 +23,7 @@ from nv14_auto import (
     AutoCandidate,
     AutoConfig,
     AutoProgress,
+    evaluate_replay_with_sentinel,
     optimise_autonomous,
     pre_finish_exit_edge_distance,
     verify_trimmed_replay,
@@ -42,11 +43,11 @@ from nv14_local import (
     successful_jump_frames,
 )
 from nv14_ltm import (
-    LEVEL_ID_RE,
     LtmError,
     LtmMovie,
     discover_levels_file,
     find_level_record,
+    infer_level_id_from_ltm_filename,
     validate_level_id,
 )
 from nv14_objectives import (
@@ -127,6 +128,7 @@ class _LoadedSource:
     level_id: str | None = None
     level_record: str | None = None
     levels_file_path: Path | None = None
+    promote_ltm_neutral_tail: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -620,6 +622,7 @@ def _load_source(
     levels_file_path: Path | None,
     explicit_level_id: str | None,
     ltm_postroll: int | None,
+    probe_ltm_neutral_tail: bool = False,
 ) -> _LoadedSource:
     """Load either the established combined text format or a libTAS movie."""
     if input_path.suffix.lower() != ".ltm":
@@ -656,8 +659,10 @@ def _load_source(
         level_id = explicit_level_id
     elif movie.embedded_level_id is not None:
         level_id = movie.embedded_level_id
-    elif LEVEL_ID_RE.fullmatch(input_path.stem):
-        level_id = input_path.stem
+    elif (
+        inferred_level_id := infer_level_id_from_ltm_filename(input_path)
+    ) is not None:
+        level_id = inferred_level_id
     else:
         raise LtmError(
             f"cannot infer an N level id from LTM filename {input_path.name!r}; "
@@ -689,7 +694,41 @@ def _load_source(
         level_id=level_id,
         level_record=level_record,
         levels_file_path=resolved_levels_path,
+        promote_ltm_neutral_tail=(
+            probe_ltm_neutral_tail
+            and movie.inferred_neutral_tail_frames > 0
+        ),
     )
+
+
+def _probe_auto_ltm_completion_tail(
+    level: Level,
+    movie: LtmMovie,
+) -> tuple[InputFrame, ...]:
+    """Let Auto test the bounded N-neutral tail inferred from a raw LTM.
+
+    When the tail reaches the exit, return the canonical body ending just
+    before its neutral completion sentinel.  Cropping here keeps replay retime
+    and range handling based on the real route rather than recorder padding.
+    If the full probe still does not complete, retain it so Auto reports the
+    usual source-route failure after simulating every available movie row.
+    """
+    probe_frames = movie.auto_completion_probe_frames()
+    evaluation = evaluate_replay_with_sentinel(level, probe_frames)
+    if not evaluation.valid or evaluation.finish_tick is None:
+        return probe_frames
+    canonical = probe_frames[: evaluation.finish_tick]
+    try:
+        verify_trimmed_replay(
+            level,
+            canonical,
+            expected_finish_tick=evaluation.finish_tick,
+            expected_gold_mask=evaluation.final_gold_mask,
+            expected_gold_bonus_ticks=evaluation.gold_bonus_ticks,
+        )
+    except ValueError:
+        return probe_frames
+    return canonical
 
 
 def _write_result(
@@ -712,6 +751,9 @@ def _write_result(
                 frames,
                 level_id=source.level_id,
                 level_record=source.level_record,
+                promote_inferred_neutral_tail=(
+                    source.promote_ltm_neutral_tail
+                ),
             )
     except (LtmError, OSError) as exc:
         raise SystemExit(f"could not write output {output_path}: {exc}") from exc
@@ -1441,8 +1483,9 @@ def build_parser() -> argparse.ArgumentParser:
         type=parse_ltm_level_id,
         metavar="NN-N",
         help=(
-            "level identifier for an .ltm whose filename is not exactly such as "
-            "00-0; normally inferred or read from optimiser LTM metadata"
+            "level identifier for an .ltm whose filename does not begin with "
+            "an ID such as 00-0 or 00-0_rta; normally inferred or read from "
+            "optimiser LTM metadata"
         ),
     )
     command.add_argument(
@@ -1452,7 +1495,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "for a raw .ltm, treat exactly N frames at the end of the active "
             "input log as post-roll instead of inferring all trailing N-idle "
-            "frames; use 0 to keep every post-Space frame in the replay"
+            "frames; this boundary remains authoritative in Auto; use 0 to "
+            "keep every post-Space frame in the replay"
         ),
     )
     command.add_argument(
@@ -2122,6 +2166,7 @@ def main() -> None:
             levels_file_path=common_config.levels_file_path,
             explicit_level_id=common_config.level_id,
             ltm_postroll=common_config.ltm_postroll,
+            probe_ltm_neutral_tail=args.mode == "auto",
         )
     except LtmError as exc:
         raise SystemExit(str(exc)) from exc
@@ -2172,6 +2217,9 @@ def main() -> None:
                         common_config.ltm_postroll
                         if parent_path.suffix.lower() == ".ltm"
                         else None
+                    ),
+                    probe_ltm_neutral_tail=(
+                        parent_path.suffix.lower() == ".ltm"
                     ),
                 )
             except LtmError as exc:
@@ -2229,6 +2277,14 @@ def main() -> None:
         )
 
     replay = decode_complex_replay(combined.replay_string)
+    if source.promote_ltm_neutral_tail:
+        assert source.ltm_movie is not None
+        try:
+            replay = ComplexReplay(
+                _probe_auto_ltm_completion_tail(level, source.ltm_movie)
+            )
+        except (RuntimeError, ValueError) as exc:
+            raise SystemExit(str(exc)) from exc
     source_frames = editable_frames(replay.frames)
     retimed_frames = source_frames
     applied_retimes: list[RetimeMutation] = []
@@ -2255,6 +2311,20 @@ def main() -> None:
         start=2,
     ):
         parent_replay = decode_complex_replay(parent_source.combined.replay_string)
+        if parent_source.promote_ltm_neutral_tail:
+            assert parent_source.ltm_movie is not None
+            try:
+                parent_replay = ComplexReplay(
+                    _probe_auto_ltm_completion_tail(
+                        level,
+                        parent_source.ltm_movie,
+                    )
+                )
+            except (RuntimeError, ValueError) as exc:
+                raise SystemExit(
+                    f"could not probe auto parent #{parent_number} "
+                    f"neutral tail: {exc}"
+                ) from exc
         parent_retimed_frames = editable_frames(parent_replay.frames)
         for spec_index, (start_spec, delta) in enumerate(
             common_config.retime,

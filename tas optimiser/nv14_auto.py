@@ -67,6 +67,15 @@ AUTO_REPAIR_SEARCH_ORDERS = (
 )
 GOLD_BONUS_TICKS = 80
 
+# A worker's complete-result beam is intentionally not sent through the
+# process pool.  Keep a somewhat larger in-process prearchive instead, then let
+# the parallel coordinator reduce it to a handful of lightweight sectional
+# splice donors.  Both limits are policy bounds: they keep hot-path work and
+# multiprocessing traffic independent of ``beam_width``.
+_SECTIONAL_ELITE_LIMIT = 4
+_SECTIONAL_PREARCHIVE_LIMIT = 16
+_SECTIONAL_PREARCHIVE_OUTCOME_SLOTS = 4
+
 # Auto owns the route-score definition. Native kernels receive these immutable
 # scalar weights with each target and only evaluate the compiled objective.
 _TRACE_POSITION_WEIGHT = 1.0
@@ -1069,6 +1078,10 @@ class AutoResult:
     baseline_objective_value: int = 0
     objective_value: int = 0
     require_reference_gold: bool = False
+    # Complete candidates retained specifically as possible section donors.
+    # This field remains process-local: ``_run_auto_worker`` converts it to
+    # frame/scalar-only donors before clearing it from the returned result.
+    sectional_elites: tuple[AutoCandidate, ...] = ()
 
     @property
     def improved(self) -> bool:
@@ -6214,6 +6227,126 @@ def _candidate_input_transitions(
     return input_transition_frames(candidate.working_frames[:-1])
 
 
+def _sectional_prearchive_distance(
+    left: AutoCandidate,
+    right: AutoCandidate,
+    *,
+    left_transitions: frozenset[int] | None = None,
+    right_transitions: frozenset[int] | None = None,
+) -> int:
+    """Cheap deterministic novelty distance used by the bounded prearchive."""
+
+    left_match = left.alignment
+    right_match = right.alignment
+    if left_transitions is None:
+        left_transitions = frozenset(
+            tick // 6 for tick in _candidate_input_transitions(left)
+        )
+    if right_transitions is None:
+        right_transitions = frozenset(
+            tick // 6 for tick in _candidate_input_transitions(right)
+        )
+    distance = len(left_transitions ^ right_transitions)
+    distance += min(8, abs(len(left_transitions) - len(right_transitions)))
+    if (left_match is None) != (right_match is None):
+        distance += 8
+    elif left_match is not None and right_match is not None:
+        distance += min(
+            12,
+            abs(left_match.reference_tick - right_match.reference_tick) // 12,
+        )
+        distance += min(8, abs(left_match.offset - right_match.offset))
+        distance += min(8, abs(left_match.score_lead - right_match.score_lead))
+    return distance
+
+
+def _select_sectional_prearchive(
+    candidates: Iterable[AutoCandidate],
+    *,
+    objective: str,
+    limit: int = _SECTIONAL_PREARCHIVE_LIMIT,
+) -> list[AutoCandidate]:
+    """Retain a bounded, completed and route-diverse donor probe pool.
+
+    Selection is intentionally lightweight because this is called for every
+    completed macro candidate.  Exact sectional merit is determined only once,
+    at worker finalisation, against the final winner.
+    """
+
+    if limit < 1:
+        return []
+    unique: dict[bytes, AutoCandidate] = {}
+    for candidate in candidates:
+        if not candidate.output_valid or candidate.finish_tick is None:
+            continue
+        key = _candidate_replay_key(candidate)
+        incumbent = unique.get(key)
+        if incumbent is None or auto_candidate_outcome_key(
+            candidate, objective
+        ) < auto_candidate_outcome_key(incumbent, objective):
+            unique[key] = candidate
+    ordered = sorted(
+        unique.values(),
+        key=lambda candidate: (
+            auto_candidate_outcome_key(candidate, objective),
+            _candidate_replay_key(candidate),
+        ),
+    )
+    if len(ordered) <= limit:
+        return ordered
+
+    outcome_slots = min(
+        limit,
+        _SECTIONAL_PREARCHIVE_OUTCOME_SLOTS,
+        len(ordered),
+    )
+    selected = list(ordered[:outcome_slots])
+    selected_keys = {_candidate_replay_key(candidate) for candidate in selected}
+    remaining = [
+        candidate
+        for candidate in ordered
+        if _candidate_replay_key(candidate) not in selected_keys
+    ]
+    transition_sets = {
+        id(candidate): frozenset(
+            tick // 6 for tick in _candidate_input_transitions(candidate)
+        )
+        for candidate in (*selected, *remaining)
+    }
+    while len(selected) < limit and remaining:
+        candidate = min(
+            remaining,
+            key=lambda item: (
+                -min(
+                    _sectional_prearchive_distance(
+                        item,
+                        chosen,
+                        left_transitions=transition_sets[id(item)],
+                        right_transitions=transition_sets[id(chosen)],
+                    )
+                    for chosen in selected
+                ),
+                auto_candidate_outcome_key(item, objective),
+                _candidate_replay_key(item),
+            ),
+        )
+        selected.append(candidate)
+        selected_keys.add(_candidate_replay_key(candidate))
+        remaining.remove(candidate)
+
+    # Defensive fill for pathological distance fixtures; ordinary selection
+    # consumes every unique candidate through the loop above.
+    for candidate in ordered:
+        if len(selected) >= limit:
+            break
+        key = _candidate_replay_key(candidate)
+        if key in selected_keys:
+            continue
+        selected.append(candidate)
+        selected_keys.add(key)
+    return selected
+
+
 def _select_diverse_beam(
     candidates: Iterable[AutoCandidate],
     config: AutoConfig,
@@ -6688,6 +6821,7 @@ def _prepare_autonomous_search(
             baseline_objective_value=baseline_objective_value,
             objective_value=baseline_objective_value,
             require_reference_gold=config.require_reference_gold,
+            sectional_elites=(baseline,),
         )
     range_end = (
         workspace_body_length - 1
@@ -6817,6 +6951,7 @@ class _AutonomousSearch:
 
         self.beam: list[AutoCandidate] = [self.baseline]
         self.finalists: list[AutoCandidate] = [self.baseline]
+        self.sectional_elites: list[AutoCandidate] = [self.baseline]
         self.best = self.baseline
         self.reference_working = self.source_working
         self.reference_eval = self.baseline_eval
@@ -6864,6 +6999,16 @@ class _AutonomousSearch:
 
     def _budget_exhausted(self) -> bool:
         return self.counters["macro_evaluations"] >= self.config.iterations
+
+    def _retain_sectional_candidate(self, candidate: AutoCandidate) -> None:
+        """Keep a bounded historical pool for end-of-worker splice profiling."""
+
+        if not candidate.output_valid or candidate.finish_tick is None:
+            return
+        self.sectional_elites = _select_sectional_prearchive(
+            (*self.sectional_elites, candidate),
+            objective=self.config.objective,
+        )
 
     def _mutation_allowed(self, start: int) -> bool:
         return self.config.range_start <= start <= self.range_end
@@ -7129,6 +7274,10 @@ class _AutonomousSearch:
                 f"(finish {self.reference_tick}, "
                 f"gold {self.reference_eval.gold_count})"
             )
+        # This happens independently of beam/finalist admission.  A completed
+        # run which is slower overall may still contain the worker's fastest
+        # individual corner, jump or traversal section.
+        self._retain_sectional_candidate(candidate)
         self.beam = _select_diverse_beam(
             (*self.beam, candidate),
             self.search_config,
@@ -8768,6 +8917,7 @@ class _AutonomousSearch:
             baseline_objective_value=self.baseline_objective_value,
             objective_value=verified_objective_value,
             require_reference_gold=self.config.require_reference_gold,
+            sectional_elites=tuple(self.sectional_elites),
         )
 
     def run(self) -> AutoResult:

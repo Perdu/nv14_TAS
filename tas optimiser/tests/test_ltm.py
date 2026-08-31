@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+import nv14_cli as cli
 import optimize_replay as opt
 from nv14_auto import verify_trimmed_replay
 from nv14_engine import (
@@ -27,6 +28,7 @@ from nv14_ltm import (
     LtmMovie,
     discover_levels_file,
     find_level_record,
+    infer_level_id_from_ltm_filename,
 )
 from nv14_replay import decode_complex_replay, editable_frames
 
@@ -135,6 +137,11 @@ def _running_exit_level_string() -> str:
     return f"{''.join(chars)}|5^60,134!11^140,134,60,134"
 
 
+def _falling_exit_level_string() -> str:
+    chars = "0" * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
+    return f"{chars}|5^60,60!11^60,200,60,200"
+
+
 def _level_record(level_id: str = "00-0") -> str:
     return f"${level_id} LTM test#tests##{_running_exit_level_string()}#"
 
@@ -157,6 +164,7 @@ def test_load_maps_controls_after_first_space_and_trims_only_n_idle_tail(
         (False, True, True, False),
         (False, True, False, False),
     ]
+    assert movie.inferred_neutral_tail_frames == 2
     # K61 and the mouse fields are not N controls, so those frames are still
     # considered neutral when finding the source replay's post-roll.
     assert movie.input_lines[-2:] == (
@@ -194,6 +202,9 @@ def test_explicit_postroll_preserves_intentional_neutral_replay_tail(
         (False, False, False, False),
     )
     assert len(no_postroll.replay_frames) == 6
+    assert inferred.inferred_neutral_tail_frames == 5
+    assert fixed_postroll.inferred_neutral_tail_frames == 0
+    assert no_postroll.inferred_neutral_tail_frames == 0
     assert tuple(map(_frame_bits, no_postroll.replay_frames[-5:])) == (
         (False, False, False, False),
         (False, False, False, False),
@@ -567,6 +578,7 @@ def test_metadata_round_trip_keeps_deliberate_trailing_neutral_replay_frames(
         level_record=_level_record(),
     )
     reloaded = LtmMovie.load(first_output)
+    assert reloaded.inferred_neutral_tail_frames == 0
     assert tuple(map(_held_bits, reloaded.replay_frames)) == tuple(
         map(_held_bits, frames)
     )
@@ -752,6 +764,49 @@ def test_metadata_survives_equivalent_root_input_member_spelling(
     assert movie.embedded_level_record == _level_record()
 
 
+@pytest.mark.parametrize(
+    ("filename", "expected"),
+    (
+        ("00-0.ltm", "00-0"),
+        ("00-0_rta.ltm", "00-0"),
+        ("00-0_hs.ltm", "00-0"),
+        ("12-34-custom-name.LTM", "12-34"),
+        ("12-34 TAS.ltm", "12-34"),
+        ("12-34.hs.ltm", "12-34"),
+        ("prefix_00-0.ltm", None),
+        ("00-0rta.ltm", None),
+        ("0-0_rta.ltm", None),
+        ("00-0_.ltm", None),
+        ("00-0_rta.txt", None),
+    ),
+)
+def test_ltm_filename_level_inference_accepts_delimited_labels(
+    filename: str,
+    expected: str | None,
+) -> None:
+    assert infer_level_id_from_ltm_filename(Path(filename)) == expected
+
+
+def test_load_source_uses_labelled_ltm_filename_level_id(tmp_path: Path) -> None:
+    source = _write_ltm(
+        tmp_path / "00-0_rta.ltm",
+        _basic_inputs(),
+        config=_basic_config(),
+    )
+    levels = tmp_path / LEVEL_DATABASE_NAME
+    levels.write_text(_level_record() + "\n", encoding="utf-8")
+
+    loaded = cli._load_source(
+        source,
+        levels_file_path=levels,
+        explicit_level_id=None,
+        ltm_postroll=None,
+    )
+
+    assert loaded.level_id == "00-0"
+    assert loaded.level_record == _level_record()
+
+
 def test_level_database_lookup_and_discovery_are_exact(tmp_path: Path) -> None:
     record = _level_record("00-0")
     decoy = _level_record("00-00")
@@ -771,6 +826,27 @@ def test_level_database_lookup_and_discovery_are_exact(tmp_path: Path) -> None:
         find_level_record(levels, "00-0")
     with pytest.raises(LtmError, match="was not found"):
         find_level_record(levels, "01-0")
+
+
+def test_level_database_discovery_checks_parent_of_cwd_external(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    working_directory = tmp_path / "working"
+    working_directory.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    levels = external / LEVEL_DATABASE_NAME
+    levels.write_text(_level_record() + "\n", encoding="utf-8")
+    input_path = tmp_path / "movies" / "00-0.ltm"
+    program_root = tmp_path / "program"
+    monkeypatch.chdir(working_directory)
+
+    assert discover_levels_file(
+        input_path,
+        None,
+        program_root=program_root,
+    ) == levels
 
 
 def test_ltm_cli_options_are_supported_directly_and_through_toml(
@@ -899,3 +975,144 @@ def test_auto_iterations_zero_reads_and_writes_ltm_end_to_end(
     verified = verify_trimmed_replay(level, editable_frames(movie.replay_frames))
     assert verified.valid
     assert verified.finish_tick == 34
+
+
+def test_auto_probes_and_promotes_raw_ltm_neutral_completion_tail(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_lines = ["|K20|"]
+    input_lines.extend(["|Kff53|"] * 20)
+    input_lines.extend(f"|Mtail:{index}|" for index in range(50))
+    input_raw = ("\n".join(input_lines) + "\n").encode("utf-8")
+    source = _write_ltm(
+        tmp_path / "00-0_rta.ltm",
+        input_raw,
+        config=_basic_config(frame_count=len(input_lines)),
+    )
+    levels = tmp_path / LEVEL_DATABASE_NAME
+    levels.write_text(_level_record() + "\n", encoding="utf-8")
+    output = tmp_path / "neutral-tail-output.ltm"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "optimize_replay.py",
+            "auto",
+            str(source),
+            "--iterations",
+            "0",
+            "--workers",
+            "1",
+            "--output",
+            str(output),
+        ],
+    )
+
+    opt.main()
+
+    assert _member_bytes(output, "inputs") == input_raw
+    movie = LtmMovie.load(output)
+    assert movie.inferred_neutral_tail_frames == 0
+    assert len(movie.replay_frames) == 54
+    assert movie.input_lines[movie.replay_start + 54] == "|Mtail:34|"
+    metadata = json.loads(_member_bytes(output, METADATA_MEMBER))
+    assert metadata["replay_tick_count"] == 54
+    level = parse_level_string(_running_exit_level_string(), simulate_enemies=True)
+    assert verify_trimmed_replay(
+        level,
+        editable_frames(movie.replay_frames),
+    ).finish_tick == 54
+
+
+def test_auto_accepts_a_fully_inputless_raw_ltm_route(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_lines = ["|K20|"]
+    input_lines.extend(f"|Mtail:{index}|" for index in range(60))
+    input_raw = ("\n".join(input_lines) + "\n").encode("utf-8")
+    source = _write_ltm(
+        tmp_path / "00-0_rta.ltm",
+        input_raw,
+        config=_basic_config(frame_count=len(input_lines)),
+    )
+    raw_movie = LtmMovie.load(source)
+    assert raw_movie.replay_frames == ()
+    assert raw_movie.inferred_neutral_tail_frames == 60
+    level_record = (
+        f"$00-0 inputless LTM test#tests##{_falling_exit_level_string()}#"
+    )
+    levels = tmp_path / LEVEL_DATABASE_NAME
+    levels.write_text(level_record + "\n", encoding="utf-8")
+    output = tmp_path / "inputless-output.ltm"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "optimize_replay.py",
+            "auto",
+            str(source),
+            "--iterations",
+            "0",
+            "--workers",
+            "1",
+            "--output",
+            str(output),
+        ],
+    )
+
+    opt.main()
+
+    assert _member_bytes(output, "inputs") == input_raw
+    movie = LtmMovie.load(output)
+    assert len(movie.replay_frames) == 44
+    assert movie.input_lines[movie.replay_start + 44] == "|Mtail:44|"
+    assert json.loads(_member_bytes(output, METADATA_MEMBER))[
+        "replay_tick_count"
+    ] == 44
+    level = parse_level_string(_falling_exit_level_string(), simulate_enemies=True)
+    assert verify_trimmed_replay(
+        level,
+        editable_frames(movie.replay_frames),
+    ).finish_tick == 44
+
+
+@pytest.mark.parametrize("neutral_rows", (10, 34))
+def test_auto_neutral_tail_probe_is_bounded_by_available_ltm_rows(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    neutral_rows: int,
+) -> None:
+    input_lines = [
+        "|K20|",
+        *(["|Kff53|"] * 20),
+        *(["|"] * neutral_rows),
+    ]
+    source = _write_ltm(
+        tmp_path / "00-0_hs.ltm",
+        ("\n".join(input_lines) + "\n").encode("utf-8"),
+        config=_basic_config(frame_count=len(input_lines)),
+    )
+    levels = tmp_path / LEVEL_DATABASE_NAME
+    levels.write_text(_level_record() + "\n", encoding="utf-8")
+    output = tmp_path / "incomplete.ltm"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "optimize_replay.py",
+            "auto",
+            str(source),
+            "--iterations",
+            "0",
+            "--workers",
+            "1",
+            "--output",
+            str(output),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="no exit completion"):
+        opt.main()
+    assert not output.exists()

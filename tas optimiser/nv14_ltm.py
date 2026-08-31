@@ -32,6 +32,9 @@ KEY_JUMP = "ffe1"  # Shift_L
 N_KEYS = frozenset({KEY_LEFT, KEY_RIGHT, KEY_JUMP})
 
 LEVEL_ID_RE = re.compile(r"^\d{2}-\d+$")
+LTM_LEVEL_FILENAME_RE = re.compile(
+    r"^(?P<level_id>\d{2}-\d+)(?:[_ .-].+)?$"
+)
 LEVEL_DATABASE_NAME = "N v1.4 + NReality levels.txt"
 METADATA_MEMBER = "nv14_optimizer.json"
 METADATA_FORMAT = "nv14-tas-replay-optimizer-ltm"
@@ -263,8 +266,6 @@ def _inferred_tick_count(lines: Sequence[str], start: int) -> int:
     frames = _frames_from_lines(lines[start:])
     while frames and not (frames[-1].left or frames[-1].right or frames[-1].jump):
         frames.pop()
-    if not frames:
-        raise LtmError("no N replay frames remain after the first Space press")
     return len(frames)
 
 
@@ -303,6 +304,7 @@ class LtmMovie:
     trailing_input_whitespace: str
     replay_start: int
     replay_frames: tuple[InputFrame, ...]
+    inferred_neutral_tail_frames: int = 0
     embedded_level_id: str | None = None
     embedded_level_record: str | None = None
     warning: str | None = None
@@ -417,6 +419,7 @@ class LtmMovie:
                 )
 
         available_ticks = len(lines) - replay_start
+        inferred_neutral_tail_frames = 0
         if postroll_frames is not None:
             if (
                 not isinstance(postroll_frames, int)
@@ -434,6 +437,7 @@ class LtmMovie:
             tick_count = int(metadata["replay_tick_count"])
         else:
             tick_count = _inferred_tick_count(lines, replay_start)
+            inferred_neutral_tail_frames = available_ticks - tick_count
         frames = _frames_from_lines(lines[replay_start : replay_start + tick_count])
 
         embedded_level_id: str | None = None
@@ -465,15 +469,43 @@ class LtmMovie:
             trailing_input_whitespace=trailing_input_whitespace,
             replay_start=replay_start,
             replay_frames=tuple(frames),
+            inferred_neutral_tail_frames=inferred_neutral_tail_frames,
             embedded_level_id=embedded_level_id,
             embedded_level_record=embedded_level_record,
             warning=warning,
         )
 
-    def _edited_inputs(self, frames: Sequence[InputFrame]) -> bytes:
+    def auto_completion_probe_frames(self) -> tuple[InputFrame, ...]:
+        """Return the replay plus raw-LTM tail rows Auto may simulate.
+
+        A raw movie has no exact replay boundary.  The normal importer keeps
+        its historical heuristic so Local and jump-pattern do not treat
+        recorder padding as editable input.  Auto can safely probe the bounded
+        N-neutral tail because it canonicalises a completed route before
+        searching.  Explicit ``--ltm-postroll`` and valid optimiser metadata
+        remain authoritative and therefore expose no inferred tail here.
+        """
+        # Keep the final recorded neutral row outside the serialized body so
+        # Auto's one implicit sentinel represents that physical LTM frame.  In
+        # particular, never let the evaluator's sentinel add a frame beyond
+        # the end of the movie.
+        probe_body_tail = max(0, self.inferred_neutral_tail_frames - 1)
+        return self.replay_frames + (InputFrame(),) * probe_body_tail
+
+    def _edited_inputs(
+        self,
+        frames: Sequence[InputFrame],
+        *,
+        promote_inferred_neutral_tail: bool = False,
+    ) -> bytes:
         if not frames:
             raise LtmError("cannot write an LTM movie with an empty N replay")
         source_tick_count = len(self.replay_frames)
+        if promote_inferred_neutral_tail and len(frames) > source_tick_count:
+            source_tick_count += min(
+                len(frames) - source_tick_count,
+                self.inferred_neutral_tail_frames,
+            )
         source_body_end = self.replay_start + source_tick_count
         frame_section_ended_with_newline = bool(
             self.input_endings and self.input_endings[-1]
@@ -551,13 +583,17 @@ class LtmMovie:
         *,
         level_id: str,
         level_record: str,
+        promote_inferred_neutral_tail: bool = False,
     ) -> None:
         """Atomically write a movie rebuilt from this source LTM template."""
         if not LEVEL_ID_RE.fullmatch(level_id):
             raise LtmError(f"invalid LTM level identifier {level_id!r}")
         validate_level_record(level_record, level_id)
         output_path = Path(output_path)
-        input_raw = self._edited_inputs(frames)
+        input_raw = self._edited_inputs(
+            frames,
+            promote_inferred_neutral_tail=promote_inferred_neutral_tail,
+        )
         new_input_lines = _split_input_lines(input_raw.decode("utf-8"))[0]
         metadata = {
             "format": METADATA_FORMAT,
@@ -841,6 +877,15 @@ def validate_level_id(level_id: str) -> None:
         raise LtmError(
             f"invalid level identifier {level_id!r}; expected a value such as '00-0'"
         )
+
+
+def infer_level_id_from_ltm_filename(path: Path) -> str | None:
+    """Infer a leading level id from an exact or labelled LTM filename."""
+    path = Path(path)
+    if path.suffix.lower() != ".ltm":
+        return None
+    match = LTM_LEVEL_FILENAME_RE.fullmatch(path.stem)
+    return None if match is None else match.group("level_id")
 
 
 def validate_level_record(record: str, level_id: str | None = None) -> None:
