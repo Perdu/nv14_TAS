@@ -25,10 +25,13 @@ retime = ["whole:+1"]
 objective = "highscore"
 require_reference_gold = true
 runs = 0
+stagnation_runs = 12
 iterations = 10000
 beam = 64
 beam_repair_revisit_limit = 5
 splice_repair_revisit_limit = 8
+checkpoint = "auto-campaign.json"
+resume = true
 seed = "random"
 deterministic = false
 """,
@@ -56,10 +59,13 @@ deterministic = false
     assert args.auto_objective == "speedrun"
     assert args.auto_require_reference_gold is True
     assert args.auto_runs == 0
+    assert args.auto_stagnation_runs == 12
     assert args.iterations == 7
     assert args.beam == 64
     assert args.auto_beam_repair_revisit_limit == 5
     assert args.auto_splice_repair_revisit_limit == 8
+    assert args.auto_checkpoint == Path("auto-campaign.json")
+    assert args.auto_resume is True
     assert args.seed == "random"
     assert args.auto_deterministic is False
     assert args.retime == [("whole", 1), (120, -1)]

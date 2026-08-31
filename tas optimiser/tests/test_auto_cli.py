@@ -48,6 +48,9 @@ def test_auto_parser_defaults_and_overrides() -> None:
     defaults = parser.parse_args(["auto", "input.txt"])
     assert defaults.iterations == 5000
     assert defaults.auto_runs == 1
+    assert defaults.auto_stagnation_runs == 0
+    assert defaults.auto_checkpoint is None
+    assert defaults.auto_resume is False
     assert defaults.auto_parents == []
     assert defaults.beam == 32
     assert defaults.max_retime == 3
@@ -70,6 +73,11 @@ def test_auto_parser_defaults_and_overrides() -> None:
             "9",
             "--auto-runs",
             "4",
+            "--auto-stagnation-runs",
+            "6",
+            "--auto-checkpoint",
+            "campaign.json",
+            "--auto-resume",
             "--beam",
             "7",
             "--max-retime",
@@ -96,6 +104,9 @@ def test_auto_parser_defaults_and_overrides() -> None:
     )
     assert configured.iterations == 9
     assert configured.auto_runs == 4
+    assert configured.auto_stagnation_runs == 6
+    assert configured.auto_checkpoint == Path("campaign.json")
+    assert configured.auto_resume is True
     assert configured.beam == 7
     assert configured.max_retime == 2
     assert configured.auto_repair_window == 4
@@ -113,6 +124,11 @@ def test_auto_parser_defaults_and_overrides() -> None:
         ["auto", "input.txt", "--seed", "random"]
     )
     assert random_seed.seed == "random"
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["auto", "input.txt", "--auto-stagnation-runs", "-1"]
+        )
 
 
 def test_auto_parser_accepts_repeatable_starting_parents() -> None:

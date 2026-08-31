@@ -21,6 +21,9 @@ def test_subcommand_help_lists_only_relevant_mode_options() -> None:
 
     assert _lists_option(help_text["auto"], "--iterations")
     assert _lists_option(help_text["auto"], "--auto-objective")
+    assert _lists_option(help_text["auto"], "--auto-stagnation-runs")
+    assert _lists_option(help_text["auto"], "--auto-checkpoint")
+    assert _lists_option(help_text["auto"], "--auto-resume")
     assert _lists_option(
         help_text["auto"], "--auto-beam-repair-revisit-limit"
     )
@@ -39,6 +42,8 @@ def test_subcommand_help_lists_only_relevant_mode_options() -> None:
     assert not _lists_option(help_text["local"], "--iterations")
     assert not _lists_option(help_text["local"], "--jumps")
     assert not _lists_option(help_text["local"], "--auto-objective")
+    assert not _lists_option(help_text["local"], "--auto-checkpoint")
+    assert not _lists_option(help_text["local"], "--auto-stagnation-runs")
 
     assert _lists_option(help_text["jump-pattern"], "--target-frame")
     assert _lists_option(help_text["jump-pattern"], "--jumps")
@@ -47,6 +52,10 @@ def test_subcommand_help_lists_only_relevant_mode_options() -> None:
     assert not _lists_option(help_text["jump-pattern"], "--iterations")
     assert not _lists_option(help_text["jump-pattern"], "--window")
     assert not _lists_option(help_text["jump-pattern"], "--seed")
+    assert not _lists_option(help_text["jump-pattern"], "--auto-checkpoint")
+    assert not _lists_option(
+        help_text["jump-pattern"], "--auto-stagnation-runs"
+    )
     assert not _lists_option(help_text["auto"], "--python-resimulate")
 
     for mode_help in help_text.values():

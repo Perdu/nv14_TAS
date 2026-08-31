@@ -29,6 +29,7 @@ from nv14_auto import (
     verify_trimmed_replay,
 )
 from nv14_auto_parallel import optimise_autonomous_campaign
+from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
 from nv14_engine import InputFrame, Level, SimulationState, parse_level_string
 from nv14_jump import (
     ImmutableJumpSpec,
@@ -569,6 +570,23 @@ def _validate_levels_output_paths(
         if path is not None and _paths_alias(levels_file_path, path):
             raise ValueError(
                 f"levels file and {label} must be different files: {path}"
+            )
+
+
+def _validate_auto_checkpoint_path(
+    checkpoint_path: Path,
+    protected_paths: Sequence[tuple[str, Path | None]],
+) -> None:
+    """Keep campaign state separate from every input and ordinary output."""
+    if checkpoint_path.exists() and checkpoint_path.is_dir():
+        raise ValueError(
+            f"Auto checkpoint must be a file, not a directory: {checkpoint_path}"
+        )
+    for label, path in protected_paths:
+        if path is not None and _paths_alias(checkpoint_path, path):
+            raise ValueError(
+                f"Auto checkpoint and {label} must be different files: "
+                f"{checkpoint_path}"
             )
 
 
@@ -1536,6 +1554,36 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     command.add_argument(
+        "--auto-stagnation-runs",
+        modes=auto_modes,
+        type=parse_nonnegative_int,
+        default=0,
+        metavar="N",
+        help=(
+            "stop after N consecutive completed Auto rounds without a new "
+            "global best; 0 disables this limit (default: 0)"
+        ),
+    )
+    command.add_argument(
+        "--auto-checkpoint",
+        modes=auto_modes,
+        type=Path,
+        metavar="FILE",
+        help=(
+            "atomically save the complete committed Auto population and "
+            "campaign state to FILE after every finished round"
+        ),
+    )
+    command.add_argument(
+        "--auto-resume",
+        modes=auto_modes,
+        action="store_true",
+        help=(
+            "resume a compatible existing --auto-checkpoint; if FILE does "
+            "not yet exist, start a new checkpointed campaign"
+        ),
+    )
+    command.add_argument(
         "--auto-parent",
         modes=auto_modes,
         dest="auto_parents",
@@ -2265,6 +2313,35 @@ def main() -> None:
                 output_path,
                 replay_output_path,
             )
+        if args.mode == "auto":
+            if args.auto_resume and args.auto_checkpoint is None:
+                raise ValueError(
+                    "--auto-resume requires --auto-checkpoint FILE"
+                )
+            if args.auto_checkpoint is not None:
+                protected_paths: list[tuple[str, Path | None]] = [
+                    ("input", input_path),
+                    ("output", output_path),
+                    ("replay output", replay_output_path),
+                    ("levels file", source.levels_file_path),
+                ]
+                for parent_number, (parent_path, parent_source) in enumerate(
+                    auto_parent_sources,
+                    start=2,
+                ):
+                    protected_paths.extend(
+                        (
+                            (f"auto parent #{parent_number}", parent_path),
+                            (
+                                f"auto parent #{parent_number} levels file",
+                                parent_source.levels_file_path,
+                            ),
+                        )
+                    )
+                _validate_auto_checkpoint_path(
+                    args.auto_checkpoint,
+                    protected_paths,
+                )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     if args.mode != "auto" and (
@@ -2390,8 +2467,35 @@ def main() -> None:
             position_tolerance = math.sqrt(args.auto_match_tolerance)
             velocity_tolerance = position_tolerance / 2.0
         if args.seed == "random":
-            auto_seed = int.from_bytes(os.urandom(8), "big")
-            print(f"[auto:seed] random seed {auto_seed}", flush=True)
+            resume_seed: int | None = None
+            if (
+                args.auto_resume
+                and args.auto_checkpoint is not None
+                and args.auto_checkpoint.exists()
+            ):
+                try:
+                    checkpoint_payload = read_auto_checkpoint(
+                        args.auto_checkpoint
+                    )
+                except AutoCheckpointError as exc:
+                    raise SystemExit(str(exc)) from exc
+                checkpoint_state = checkpoint_payload.get("state")
+                if not isinstance(checkpoint_state, Mapping) or type(
+                    checkpoint_state.get("base_seed")
+                ) is not int:
+                    raise SystemExit(
+                        "Auto checkpoint does not contain a valid base seed"
+                    )
+                resume_seed = checkpoint_state["base_seed"]
+            if resume_seed is None:
+                auto_seed = int.from_bytes(os.urandom(8), "big")
+                print(f"[auto:seed] random seed {auto_seed}", flush=True)
+            else:
+                auto_seed = resume_seed
+                print(
+                    f"[auto:seed] restored checkpoint seed {auto_seed}",
+                    flush=True,
+                )
         else:
             auto_seed = 0 if args.seed is None else args.seed
         try:
@@ -2566,10 +2670,14 @@ def main() -> None:
                 parent_frames=auto_parent_frames,
                 workers=args.workers,
                 runs=args.auto_runs,
+                stagnation_runs=args.auto_stagnation_runs,
                 progress=show_auto_progress,
                 best_callback=save_auto_best,
                 status=show_auto_status,
                 search=optimise_autonomous,
+                checkpoint_path=args.auto_checkpoint,
+                resume=args.auto_resume,
+                level_identifier=(source.level_id or combined.name or None),
             )
             auto_result = auto_campaign.result
         except (RuntimeError, ValueError) as exc:

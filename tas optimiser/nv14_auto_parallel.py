@@ -16,7 +16,7 @@ import os
 import signal
 import threading
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import (
     FIRST_COMPLETED,
     CancelledError,
@@ -25,6 +25,7 @@ from concurrent.futures import (
     wait,
 )
 from dataclasses import dataclass, field, fields, replace
+from pathlib import Path
 from queue import Empty
 from typing import Any
 
@@ -45,6 +46,15 @@ from nv14_auto import (
     optimise_autonomous,
     repair_reference_segment_splice,
     verify_trimmed_replay,
+)
+from nv14_checkpoint import (
+    OPTIMISER_VERSION,
+    AutoCheckpointError,
+    optimiser_build_hash,
+    read_auto_checkpoint,
+    sha256_bytes,
+    sha256_json,
+    write_auto_checkpoint,
 )
 from nv14_engine import InputFrame, Level
 from nv14_search import NativeSearchSession
@@ -184,6 +194,24 @@ class _AutoPopulationMember:
         if self.parent_member_ids:
             return self.parent_member_ids[0]
         return self.member_id
+
+
+@dataclass(frozen=True, slots=True)
+class _AutoCheckpointResumeState:
+    """Fully re-emulated state from one committed round boundary."""
+
+    survivors: tuple[_AutoPopulationMember, ...]
+    current: AutoResult
+    aggregate_stats: AutoStats
+    committed_mutations: tuple[str, ...]
+    completed_runs: int
+    completed_searches: int
+    next_task_id: int
+    next_splice_task_id: int
+    next_member_id: int
+    consecutive_stagnant_rounds: int
+    last_improvement_round: int
+    stagnation_outcome_key: tuple[int | float, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -2097,6 +2125,654 @@ def _stop_executor(
     return _successful_completed_futures(futures), tuple(buffered)
 
 
+_AUTO_CHECKPOINT_SEED_STRATEGY = (
+    "stable-generation-parent-replay-offspring-v1"
+)
+
+
+def _input_frame_value(frame: InputFrame) -> int:
+    return (
+        int(frame.left)
+        | (int(frame.right) << 1)
+        | (int(frame.jump) << 2)
+        | (int(bool(frame.jump_trigger)) << 3)
+        | (int(frame.jump_trigger is None) << 4)
+    )
+
+
+def _checkpoint_frames(frames: Sequence[InputFrame]) -> list[int]:
+    return [_input_frame_value(frame) for frame in frames]
+
+
+def _frames_from_checkpoint(value: object, *, label: str) -> tuple[InputFrame, ...]:
+    if not isinstance(value, list):
+        raise AutoCheckpointError(f"{label} must contain replay frames")
+    frames: list[InputFrame] = []
+    for index, raw in enumerate(value):
+        if type(raw) is not int or not 0 <= raw <= 0x1F:
+            raise AutoCheckpointError(
+                f"{label} frame {index} is not a checkpoint input value"
+            )
+        frames.append(
+            InputFrame(
+                left=bool(raw & 0x1),
+                right=bool(raw & 0x2),
+                jump=bool(raw & 0x4),
+                jump_trigger=None if raw & 0x10 else bool(raw & 0x8),
+            )
+        )
+    return tuple(frames)
+
+
+def _replay_sha256(frames: Sequence[InputFrame]) -> str:
+    return sha256_bytes(bytes(_input_frame_value(frame) for frame in frames))
+
+
+def _checkpoint_number(value: float) -> int | float | str:
+    if type(value) is int:
+        return value
+    number = float(value)
+    if math.isfinite(number):
+        return number
+    if math.isinf(number):
+        return "+inf" if number > 0 else "-inf"
+    raise AutoCheckpointError("NaN cannot be stored in an Auto checkpoint")
+
+
+def _number_from_checkpoint(value: object, *, label: str) -> int | float:
+    if type(value) is int:
+        return value
+    if type(value) is float and math.isfinite(value):
+        return value
+    if value == "+inf":
+        return float("inf")
+    if value == "-inf":
+        return float("-inf")
+    raise AutoCheckpointError(f"{label} is not a valid checkpoint number")
+
+
+def _outcome_key_checkpoint(key: Sequence[int | float]) -> list[int | float | str]:
+    return [_checkpoint_number(value) for value in key]
+
+
+def _outcome_key_from_checkpoint(
+    value: object, *, label: str
+) -> tuple[int | float, ...]:
+    if not isinstance(value, list) or not value:
+        raise AutoCheckpointError(f"{label} must be a non-empty outcome key")
+    return tuple(
+        _number_from_checkpoint(item, label=f"{label}[{index}]")
+        for index, item in enumerate(value)
+    )
+
+
+def _string_tuple_from_checkpoint(value: object, *, label: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise AutoCheckpointError(f"{label} must be a string array")
+    return tuple(value)
+
+
+def _int_from_checkpoint(
+    mapping: Mapping[str, object],
+    key: str,
+    *,
+    label: str,
+    minimum: int | None = 0,
+) -> int:
+    value = mapping.get(key)
+    if type(value) is not int or (
+        minimum is not None and value < minimum
+    ):
+        minimum_text = (
+            "an integer"
+            if minimum is None
+            else f"an integer of at least {minimum}"
+        )
+        raise AutoCheckpointError(
+            f"{label}.{key} must be {minimum_text}"
+        )
+    return value
+
+
+def _optional_int_from_checkpoint(
+    mapping: Mapping[str, object], key: str, *, label: str
+) -> int | None:
+    value = mapping.get(key)
+    if value is None:
+        return None
+    if type(value) is not int or value < 0:
+        raise AutoCheckpointError(f"{label}.{key} must be null or non-negative")
+    return value
+
+
+def _int_tuple_from_checkpoint(
+    value: object,
+    *,
+    label: str,
+    length: int | None = None,
+) -> tuple[int, ...]:
+    if not isinstance(value, list) or not all(
+        type(item) is int and item >= 0 for item in value
+    ):
+        raise AutoCheckpointError(f"{label} must be a non-negative integer array")
+    if length is not None and len(value) != length:
+        raise AutoCheckpointError(f"{label} must contain exactly {length} values")
+    return tuple(value)
+
+
+def _auto_stats_checkpoint(stats: AutoStats) -> dict[str, int]:
+    return {field_info.name: getattr(stats, field_info.name) for field_info in fields(AutoStats)}
+
+
+def _auto_stats_from_checkpoint(value: object) -> AutoStats:
+    if not isinstance(value, Mapping):
+        raise AutoCheckpointError("checkpoint aggregate_stats must be an object")
+    restored: dict[str, int] = {}
+    for field_info in fields(AutoStats):
+        raw = value.get(field_info.name)
+        if type(raw) is not int or raw < 0:
+            raise AutoCheckpointError(
+                f"checkpoint aggregate_stats.{field_info.name} must be non-negative"
+            )
+        restored[field_info.name] = raw
+    return AutoStats(**restored)
+
+
+def _auto_checkpoint_identity(
+    level: object,
+    source_frames: Sequence[InputFrame],
+    parent_frames: Sequence[Sequence[InputFrame]],
+    config: AutoConfig,
+    *,
+    worker_count: int,
+    requested_runs: int,
+    stagnation_runs: int,
+    level_identifier: str | None,
+) -> dict[str, object]:
+    level_source = getattr(level, "source_level_string", None)
+    if not isinstance(level_source, str) or not level_source:
+        # Direct API test doubles and alternative Level implementations can
+        # still supply a stable identifier. Real parsed levels carry the exact
+        # source string and therefore use the stronger path above.
+        level_source = level_identifier or (
+            f"{type(level).__module__}.{type(level).__qualname__}"
+        )
+    config_values = {
+        field_info.name: getattr(config, field_info.name)
+        for field_info in fields(AutoConfig)
+    }
+    configuration = {
+        "auto_config": config_values,
+        "requested_runs": requested_runs,
+        "seed_strategy": _AUTO_CHECKPOINT_SEED_STRATEGY,
+        "stagnation_runs": stagnation_runs,
+        "workers": worker_count,
+    }
+    return {
+        "optimiser_version": OPTIMISER_VERSION,
+        "optimiser_build_sha256": optimiser_build_hash(),
+        "level_identifier": level_identifier,
+        "level_sha256": sha256_bytes(level_source.encode("utf-8")),
+        "simulate_enemies": bool(getattr(level, "simulate_enemies", False)),
+        "input_replay_sha256": _replay_sha256(source_frames),
+        "parent_replay_sha256": [
+            _replay_sha256(frames) for frames in parent_frames
+        ],
+        "configuration": configuration,
+        "configuration_sha256": sha256_json(configuration),
+    }
+
+
+def _validate_checkpoint_identity(
+    stored: object,
+    expected: Mapping[str, object],
+) -> None:
+    if not isinstance(stored, Mapping):
+        raise AutoCheckpointError("Auto checkpoint identity is missing")
+    labels = {
+        "optimiser_version": "optimiser version",
+        "optimiser_build_sha256": "optimiser build",
+        "level_identifier": "level identifier",
+        "level_sha256": "level data",
+        "simulate_enemies": "enemy-simulation setting",
+        "input_replay_sha256": "input replay",
+        "parent_replay_sha256": "starting parent replays",
+        "configuration_sha256": "Auto configuration",
+    }
+    mismatches = [
+        label
+        for key, label in labels.items()
+        if stored.get(key) != expected.get(key)
+    ]
+    if mismatches:
+        raise AutoCheckpointError(
+            "Auto checkpoint is incompatible with the current invocation: "
+            + ", ".join(mismatches)
+        )
+
+
+def _splice_donor_checkpoint(donor: AutoSpliceDonor) -> dict[str, object]:
+    return {
+        "frames": _checkpoint_frames(donor.frames),
+        "finish_tick": donor.finish_tick,
+        "objective_value": donor.objective_value,
+        "pre_finish_exit_distance": _checkpoint_number(
+            donor.pre_finish_exit_distance
+        ),
+        "mutations": list(donor.mutations),
+        "gold_mask": donor.gold_mask,
+        "gold_bonus_ticks": donor.gold_bonus_ticks,
+    }
+
+
+def _splice_donor_from_checkpoint(value: object, *, label: str) -> AutoSpliceDonor:
+    if not isinstance(value, Mapping):
+        raise AutoCheckpointError(f"{label} must be an object")
+    return AutoSpliceDonor(
+        frames=_frames_from_checkpoint(value.get("frames"), label=f"{label}.frames"),
+        finish_tick=_int_from_checkpoint(
+            value, "finish_tick", label=label
+        ),
+        objective_value=_int_from_checkpoint(
+            value, "objective_value", label=label, minimum=None
+        ),
+        pre_finish_exit_distance=float(
+            _number_from_checkpoint(
+                value.get("pre_finish_exit_distance"),
+                label=f"{label}.pre_finish_exit_distance",
+            )
+        ),
+        mutations=_string_tuple_from_checkpoint(
+            value.get("mutations"), label=f"{label}.mutations"
+        ),
+        gold_mask=_int_from_checkpoint(value, "gold_mask", label=label),
+        gold_bonus_ticks=_int_from_checkpoint(
+            value, "gold_bonus_ticks", label=label
+        ),
+    )
+
+
+def _result_checkpoint(result: AutoResult) -> dict[str, object]:
+    return {
+        "frames": _checkpoint_frames(result.frames),
+        "finish_tick": result.finish_tick,
+        "objective_value": result.objective_value,
+        "gold_mask": result.gold_mask,
+        "gold_bonus_ticks": result.gold_bonus_ticks,
+        "outcome_key": _outcome_key_checkpoint(auto_result_outcome_key(result)),
+        "diagnostics": list(result.diagnostics),
+    }
+
+
+def _rehydrate_checkpoint_result(
+    value: object,
+    *,
+    label: str,
+    level: object,
+    config: AutoConfig,
+    search: SearchFunction,
+) -> AutoResult:
+    if not isinstance(value, Mapping):
+        raise AutoCheckpointError(f"{label} must be an object")
+    frames_value = value.get("frames")
+    frames = _frames_from_checkpoint(frames_value, label=f"{label}.frames")
+    try:
+        result = search(
+            level,
+            frames,
+            replace(config, iterations=0),
+            progress=None,
+            best_callback=None,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise AutoCheckpointError(
+            f"{label} failed canonical re-emulation: {exc}"
+        ) from exc
+
+    expected_finish = _int_from_checkpoint(
+        value, "finish_tick", label=label
+    )
+    expected_objective = _int_from_checkpoint(
+        value, "objective_value", label=label, minimum=None
+    )
+    expected_gold_mask = _int_from_checkpoint(value, "gold_mask", label=label)
+    expected_gold_bonus = _int_from_checkpoint(
+        value, "gold_bonus_ticks", label=label
+    )
+    expected_key = _outcome_key_from_checkpoint(
+        value.get("outcome_key"), label=f"{label}.outcome_key"
+    )
+    observed_key = auto_result_outcome_key(result)
+    if (
+        result.frames != frames
+        or result.finish_tick != expected_finish
+        or result.objective_value != expected_objective
+        or result.gold_mask != expected_gold_mask
+        or result.gold_bonus_ticks != expected_gold_bonus
+        or observed_key != expected_key
+    ):
+        raise AutoCheckpointError(
+            f"{label} no longer reproduces its stored canonical outcome"
+        )
+    diagnostics = _string_tuple_from_checkpoint(
+        value.get("diagnostics"), label=f"{label}.diagnostics"
+    )
+    return replace(
+        result,
+        diagnostics=diagnostics,
+        beam=(),
+        sectional_elites=(),
+    )
+
+
+def _population_member_checkpoint(member: _AutoPopulationMember) -> dict[str, object]:
+    return {
+        "member_id": member.member_id,
+        "result": _result_checkpoint(member.result),
+        "parent_member_ids": list(member.parent_member_ids),
+        "generation": member.generation,
+        "mutations": list(member.mutations),
+        "recipient_member_id": member.recipient_member_id,
+        "primary_family_id": member.primary_family_id,
+        "splice_parent_pair": (
+            None if member.splice_parent_pair is None else list(member.splice_parent_pair)
+        ),
+        "splice_interval": (
+            None if member.splice_interval is None else list(member.splice_interval)
+        ),
+        "splice_donors": [
+            _splice_donor_checkpoint(donor) for donor in member.splice_donors
+        ],
+        "splice_donor_index": member.splice_donor_index,
+    }
+
+
+def _population_member_from_checkpoint(
+    value: object,
+    *,
+    index: int,
+    level: object,
+    config: AutoConfig,
+    search: SearchFunction,
+) -> _AutoPopulationMember:
+    label = f"checkpoint survivor {index}"
+    if not isinstance(value, Mapping):
+        raise AutoCheckpointError(f"{label} must be an object")
+    raw_donors = value.get("splice_donors")
+    if not isinstance(raw_donors, list):
+        raise AutoCheckpointError(f"{label}.splice_donors must be an array")
+    pair_value = value.get("splice_parent_pair")
+    interval_value = value.get("splice_interval")
+    pair = (
+        None
+        if pair_value is None
+        else _int_tuple_from_checkpoint(
+            pair_value, label=f"{label}.splice_parent_pair", length=2
+        )
+    )
+    interval = (
+        None
+        if interval_value is None
+        else _int_tuple_from_checkpoint(
+            interval_value, label=f"{label}.splice_interval", length=4
+        )
+    )
+    return _AutoPopulationMember(
+        member_id=_int_from_checkpoint(value, "member_id", label=label),
+        result=_rehydrate_checkpoint_result(
+            value.get("result"),
+            label=f"{label}.result",
+            level=level,
+            config=config,
+            search=search,
+        ),
+        parent_member_ids=_int_tuple_from_checkpoint(
+            value.get("parent_member_ids"),
+            label=f"{label}.parent_member_ids",
+        ),
+        generation=_int_from_checkpoint(value, "generation", label=label),
+        mutations=_string_tuple_from_checkpoint(
+            value.get("mutations"), label=f"{label}.mutations"
+        ),
+        recipient_member_id=_optional_int_from_checkpoint(
+            value, "recipient_member_id", label=label
+        ),
+        primary_family_id=_optional_int_from_checkpoint(
+            value, "primary_family_id", label=label
+        ),
+        splice_parent_pair=pair,
+        splice_interval=interval,
+        splice_donors=tuple(
+            _splice_donor_from_checkpoint(
+                donor, label=f"{label}.splice_donors[{donor_index}]"
+            )
+            for donor_index, donor in enumerate(raw_donors)
+        ),
+        splice_donor_index=_int_from_checkpoint(
+            value, "splice_donor_index", label=label
+        ),
+    )
+
+
+def _population_selection_checkpoint(
+    selection: _PopulationSelection | None,
+) -> dict[str, object] | None:
+    if selection is None:
+        return None
+    return {
+        "minimum_target": selection.minimum_target,
+        "maximum_target": selection.maximum_target,
+        "target": selection.target,
+        "exact_unique_candidates": selection.exact_unique_candidates,
+        "competitive_splice_niches": selection.competitive_splice_niches,
+        "selected_splice_niches": selection.selected_splice_niches,
+        "primary_family_occupancy": [
+            list(item) for item in selection.primary_family_occupancy
+        ],
+    }
+
+
+def _splice_stats_checkpoint(
+    stats: _SpliceRoundStats | None,
+) -> dict[str, object] | None:
+    if stats is None:
+        return None
+    return {
+        field_info.name: (
+            dict(value)
+            if isinstance(value, dict)
+            else list(value)
+            if isinstance(value, list)
+            else value
+        )
+        for field_info in fields(_SpliceRoundStats)
+        if (value := getattr(stats, field_info.name)) is not None
+    }
+
+
+def _write_auto_campaign_checkpoint(
+    path: Path,
+    identity: Mapping[str, object],
+    *,
+    config: AutoConfig,
+    survivors: Sequence[_AutoPopulationMember],
+    current: AutoResult,
+    aggregate_stats: AutoStats,
+    committed_mutations: Sequence[str],
+    completed_runs: int,
+    completed_searches: int,
+    next_task_id: int,
+    next_splice_task_id: int,
+    next_member_id: int,
+    consecutive_stagnant_rounds: int,
+    last_improvement_round: int,
+    stagnation_outcome_key: Sequence[int | float],
+    population_selection: _PopulationSelection | None,
+    splice_stats: _SpliceRoundStats | None,
+) -> None:
+    payload = {
+        "identity": dict(identity),
+        "state": {
+            "completed_runs": completed_runs,
+            "next_generation": completed_runs + 1,
+            "completed_searches": completed_searches,
+            "global_best": _result_checkpoint(current),
+            "survivors": [
+                _population_member_checkpoint(member) for member in survivors
+            ],
+            "committed_mutations": list(committed_mutations),
+            "aggregate_stats": _auto_stats_checkpoint(aggregate_stats),
+            "base_seed": config.seed,
+            "seed_strategy": _AUTO_CHECKPOINT_SEED_STRATEGY,
+            "next_task_id": next_task_id,
+            "next_splice_task_id": next_splice_task_id,
+            "next_member_id": next_member_id,
+            "consecutive_stagnant_rounds": consecutive_stagnant_rounds,
+            "last_improvement_round": last_improvement_round,
+            "stagnation_outcome_key": _outcome_key_checkpoint(
+                stagnation_outcome_key
+            ),
+            "committed_round_statistics": {
+                "population": _population_selection_checkpoint(
+                    population_selection
+                ),
+                "splice": _splice_stats_checkpoint(splice_stats),
+            },
+        },
+    }
+    write_auto_checkpoint(path, payload)
+
+
+def _load_auto_campaign_checkpoint(
+    path: Path,
+    expected_identity: Mapping[str, object],
+    *,
+    level: object,
+    config: AutoConfig,
+    search: SearchFunction,
+) -> _AutoCheckpointResumeState:
+    payload = read_auto_checkpoint(path)
+    _validate_checkpoint_identity(payload.get("identity"), expected_identity)
+    state = payload.get("state")
+    if not isinstance(state, Mapping):
+        raise AutoCheckpointError("Auto checkpoint state is missing")
+    raw_survivors = state.get("survivors")
+    if not isinstance(raw_survivors, list) or not raw_survivors:
+        raise AutoCheckpointError("Auto checkpoint survivor population is empty")
+    survivors = tuple(
+        _population_member_from_checkpoint(
+            value,
+            index=index,
+            level=level,
+            config=config,
+            search=search,
+        )
+        for index, value in enumerate(raw_survivors)
+    )
+    member_ids = [member.member_id for member in survivors]
+    if len(set(member_ids)) != len(member_ids):
+        raise AutoCheckpointError("Auto checkpoint survivor member IDs are not unique")
+    current = _rehydrate_checkpoint_result(
+        state.get("global_best"),
+        label="checkpoint global_best",
+        level=level,
+        config=config,
+        search=search,
+    )
+    completed_runs = _int_from_checkpoint(
+        state, "completed_runs", label="checkpoint state"
+    )
+    if any(member.generation != completed_runs for member in survivors):
+        raise AutoCheckpointError(
+            "Auto checkpoint survivors are not from the committed generation"
+        )
+    next_generation = _int_from_checkpoint(
+        state, "next_generation", label="checkpoint state", minimum=1
+    )
+    if next_generation != completed_runs + 1:
+        raise AutoCheckpointError(
+            "Auto checkpoint next_generation is not after completed_runs"
+        )
+    base_seed = _int_from_checkpoint(
+        state, "base_seed", label="checkpoint state", minimum=None
+    )
+    if base_seed != config.seed:
+        raise AutoCheckpointError("Auto checkpoint base seed does not match config")
+    if state.get("seed_strategy") != _AUTO_CHECKPOINT_SEED_STRATEGY:
+        raise AutoCheckpointError("Auto checkpoint seed strategy is unsupported")
+    stagnation_key = _outcome_key_from_checkpoint(
+        state.get("stagnation_outcome_key"),
+        label="checkpoint state.stagnation_outcome_key",
+    )
+    if stagnation_key != auto_result_outcome_key(current):
+        raise AutoCheckpointError(
+            "Auto checkpoint stagnation outcome does not match global best"
+        )
+    next_member_id = _int_from_checkpoint(
+        state, "next_member_id", label="checkpoint state"
+    )
+    if next_member_id <= max(member_ids):
+        raise AutoCheckpointError(
+            "Auto checkpoint next_member_id does not follow survivor IDs"
+        )
+    last_improvement_round = _int_from_checkpoint(
+        state, "last_improvement_round", label="checkpoint state"
+    )
+    if last_improvement_round > completed_runs:
+        raise AutoCheckpointError(
+            "Auto checkpoint last improvement follows its committed round"
+        )
+    return _AutoCheckpointResumeState(
+        survivors=survivors,
+        current=current,
+        aggregate_stats=_auto_stats_from_checkpoint(
+            state.get("aggregate_stats")
+        ),
+        committed_mutations=_string_tuple_from_checkpoint(
+            state.get("committed_mutations"),
+            label="checkpoint state.committed_mutations",
+        ),
+        completed_runs=completed_runs,
+        completed_searches=_int_from_checkpoint(
+            state, "completed_searches", label="checkpoint state"
+        ),
+        next_task_id=_int_from_checkpoint(
+            state, "next_task_id", label="checkpoint state", minimum=1
+        ),
+        next_splice_task_id=_int_from_checkpoint(
+            state, "next_splice_task_id", label="checkpoint state", minimum=1
+        ),
+        next_member_id=next_member_id,
+        consecutive_stagnant_rounds=_int_from_checkpoint(
+            state,
+            "consecutive_stagnant_rounds",
+            label="checkpoint state",
+        ),
+        last_improvement_round=last_improvement_round,
+        stagnation_outcome_key=stagnation_key,
+    )
+
+
+def _derive_auto_checkpoint_task_seed(
+    base_seed: int,
+    generation: int,
+    parent_replay_sha256: str,
+    offspring_index: int,
+) -> int:
+    """Derive a schedule-independent seed for recreatable Auto work."""
+    if (
+        generation < 1
+        or len(parent_replay_sha256) != 64
+        or offspring_index < 1
+    ):
+        raise ValueError("invalid stable Auto task identity")
+    material = (
+        f"{_AUTO_CHECKPOINT_SEED_STRATEGY}\0{base_seed & ((1 << 64) - 1)}\0"
+        f"{generation}\0{parent_replay_sha256}\0{offspring_index}\0auto"
+    ).encode("ascii")
+    return int.from_bytes(bytes.fromhex(sha256_bytes(material))[:8], "big")
+
+
 def optimise_autonomous_campaign(
     level: Level,
     source_frames: Sequence[InputFrame],
@@ -2105,31 +2781,63 @@ def optimise_autonomous_campaign(
     parent_frames: Sequence[Sequence[InputFrame]] = (),
     workers: int = 0,
     runs: int = 1,
+    stagnation_runs: int = 0,
     progress: ProgressCallback | None = None,
     best_callback: BestCallback | None = None,
     status: StatusCallback | None = None,
     search: SearchFunction = optimise_autonomous,
+    checkpoint_path: str | os.PathLike[str] | None = None,
+    resume: bool = False,
+    level_identifier: str | None = None,
 ) -> AutoCampaignResult:
     """Run independent Auto searches as an asynchronous survivor population.
 
     ``source_frames`` remains the campaign reference. ``parent_frames`` adds
     generation-0 founders which are independently canonicalised and verified.
     ``workers=0`` selects up to eight available CPUs. ``runs=0`` repeats
-    indefinitely until Ctrl+C. Each completed round retains a half-worker
-    minimum, plus one survivor for each competitive distinct splice niche up
-    to one survivor per worker. Exact replay, recipient and breeding-family
-    controls preserve route breadth. Free slots may speculatively start the
-    next generation before all current workers finish.
+    indefinitely until Ctrl+C. A positive ``stagnation_runs`` stops normally
+    after that many consecutive committed rounds without a new global best.
+    Each completed round retains a half-worker minimum, plus one survivor for
+    each competitive distinct splice niche up to one survivor per worker.
+    Exact replay, recipient and breeding-family controls preserve route breadth.
+    Free slots may speculatively start the next generation before all current
+    workers finish. When ``checkpoint_path`` is supplied, each completely
+    selected round is atomically committed. With ``resume=True``, a compatible
+    existing checkpoint is re-emulated and used as the next-round population;
+    a missing file starts a fresh campaign.
     """
     if workers < 0:
         raise ValueError("workers must be zero (auto) or a positive integer")
     if runs < 0:
         raise ValueError("auto runs must be non-negative")
+    if stagnation_runs < 0:
+        raise ValueError("Auto stagnation runs must be non-negative")
     if runs == 0 and config.iterations == 0:
         raise ValueError("indefinite Auto runs require a positive iteration budget")
     worker_count = automatic_auto_worker_count() if workers == 0 else workers
     if worker_count < 1:
         raise ValueError("Auto requires at least one worker")
+    if resume and checkpoint_path is None:
+        raise ValueError("Auto resume requires a checkpoint path")
+    checkpoint_file = (
+        None if checkpoint_path is None else Path(checkpoint_path)
+    )
+    source_frames = tuple(source_frames)
+    parent_frames = tuple(tuple(frames) for frames in parent_frames)
+    checkpoint_identity = (
+        None
+        if checkpoint_file is None
+        else _auto_checkpoint_identity(
+            level,
+            source_frames,
+            parent_frames,
+            config,
+            worker_count=worker_count,
+            requested_runs=runs,
+            stagnation_runs=stagnation_runs,
+            level_identifier=level_identifier,
+        )
+    )
 
     # Canonicalise and verify every founder once in the coordinator. Every
     # worker then starts from an exact trimmed replay rather than independently
@@ -2251,7 +2959,43 @@ def optimise_autonomous_campaign(
             f"from {supplied_parent_count} supplied; initial best member "
             f"{best_founder.member_id}{duplicate_text}"
         )
-    if (
+    resume_state: _AutoCheckpointResumeState | None = None
+    if resume and checkpoint_file is not None and checkpoint_file.exists():
+        assert checkpoint_identity is not None
+        resume_state = _load_auto_campaign_checkpoint(
+            checkpoint_file,
+            checkpoint_identity,
+            level=level,
+            config=config,
+            search=search,
+        )
+        ranked_founders = tuple(
+            sorted(resume_state.survivors, key=_population_rank_key)
+        )
+        if len(ranked_founders) > worker_count:
+            raise AutoCheckpointError(
+                "Auto checkpoint population exceeds the configured workers"
+            )
+        current = resume_state.current
+        committed_mutations = resume_state.committed_mutations
+        if status is not None:
+            status(
+                f"[auto:resume] restored {checkpoint_file}: committed round "
+                f"{resume_state.completed_runs}, population "
+                f"{len(ranked_founders)}, next round "
+                f"{resume_state.completed_runs + 1}, stagnant rounds "
+                f"{resume_state.consecutive_stagnant_rounds}"
+            )
+        if best_callback is not None:
+            # Recreate the ordinary best output on a replacement spot host as
+            # well as the internal native analyses used by the population.
+            best_callback(current.best)
+    elif resume and checkpoint_file is not None and status is not None:
+        status(
+            f"[auto:resume] no checkpoint at {checkpoint_file}; "
+            "starting a new campaign"
+        )
+    elif (
         best_founder.member_id != 0
         and config.iterations > 0
         and best_callback is not None
@@ -2271,15 +3015,100 @@ def optimise_autonomous_campaign(
             interrupted=False,
         )
 
-    aggregate_stats = AutoStats()
-    completed_runs = 0
-    completed_searches = 0
-    run_index = 1
+    aggregate_stats = (
+        AutoStats() if resume_state is None else resume_state.aggregate_stats
+    )
+    completed_runs = 0 if resume_state is None else resume_state.completed_runs
+    completed_searches = (
+        0 if resume_state is None else resume_state.completed_searches
+    )
+    run_index = completed_runs + 1
     run_limit = runs if runs > 0 else None
+    consecutive_stagnant_rounds = (
+        0
+        if resume_state is None
+        else resume_state.consecutive_stagnant_rounds
+    )
+    last_improvement_round = (
+        0 if resume_state is None else resume_state.last_improvement_round
+    )
+    stagnation_outcome_key = (
+        auto_result_outcome_key(current)
+        if resume_state is None
+        else resume_state.stagnation_outcome_key
+    )
+
+    if run_limit is not None and completed_runs >= run_limit:
+        if status is not None and resume_state is not None:
+            status(
+                f"[auto:resume] checkpoint already contains all "
+                f"{run_limit} requested round(s)"
+            )
+        return _compose_campaign_result(
+            initial,
+            current,
+            aggregate_stats,
+            committed_mutations,
+            worker_count=worker_count,
+            requested_runs=runs,
+            completed_runs=completed_runs,
+            completed_searches=completed_searches,
+            interrupted=False,
+        )
+
+    if (
+        stagnation_runs > 0
+        and consecutive_stagnant_rounds >= stagnation_runs
+    ):
+        if status is not None:
+            status(
+                f"[auto:stagnation] restored campaign has already reached "
+                f"the limit of {stagnation_runs} consecutive round(s) "
+                "without a new global best"
+            )
+        return _compose_campaign_result(
+            initial,
+            current,
+            aggregate_stats,
+            committed_mutations,
+            worker_count=worker_count,
+            requested_runs=runs,
+            completed_runs=completed_runs,
+            completed_searches=completed_searches,
+            interrupted=False,
+        )
+
+    restored_next_task_id = (
+        1 if resume_state is None else resume_state.next_task_id
+    )
+    restored_next_splice_task_id = (
+        1 if resume_state is None else resume_state.next_splice_task_id
+    )
+    restored_next_member_id = (
+        len(founders) if resume_state is None else resume_state.next_member_id
+    )
 
     if worker_count == 1:
+        if len(ranked_founders) != 1:
+            raise AutoCheckpointError(
+                "one-worker Auto checkpoint must contain one survivor"
+            )
+        serial_survivor = ranked_founders[0]
+        serial_next_task_id = restored_next_task_id
+        serial_next_splice_task_id = restored_next_splice_task_id
+        serial_next_member_id = restored_next_member_id
         while run_limit is None or run_index <= run_limit:
-            seed = derive_auto_search_seed(config.seed, run_index, 1, 1)
+            seed = (
+                derive_auto_search_seed(config.seed, run_index, 1, 1)
+                if checkpoint_file is None
+                else _derive_auto_checkpoint_task_seed(
+                    config.seed,
+                    run_index,
+                    _replay_sha256(serial_survivor.result.frames),
+                    1,
+                )
+            )
+            serial_next_task_id += 1
             if status is not None:
                 suffix = f"/{run_limit}" if run_limit is not None else ""
                 status(
@@ -2438,13 +3267,92 @@ def optimise_autonomous_campaign(
                     completed_searches=completed_searches,
                     interrupted=True,
                 )
+            serial_next_splice_task_id += len(splice_donors)
             completed_runs += 1
+            serial_member_id = serial_next_member_id
+            serial_next_member_id += 1
+            serial_is_splice = splice_child is not None and current is splice_child
+            serial_member = _AutoPopulationMember(
+                member_id=serial_member_id,
+                result=replace(current, beam=(), sectional_elites=()),
+                parent_member_ids=(serial_survivor.member_id,),
+                generation=run_index,
+                mutations=committed_mutations,
+                recipient_member_id=(
+                    serial_survivor.member_id
+                    if serial_is_splice
+                    else serial_member_id
+                ),
+                primary_family_id=serial_survivor.member_id,
+                splice_parent_pair=(
+                    (serial_survivor.member_id, serial_survivor.member_id)
+                    if serial_is_splice
+                    else None
+                ),
+                splice_donors=(
+                    worker_output.splice_donors
+                    if current is result
+                    else ()
+                ),
+                splice_donor_index=(1 if serial_is_splice else 0),
+            )
+            population_selection = _select_adaptive_population(
+                (serial_member,), worker_count
+            )
+            serial_survivor = population_selection.survivors[0]
+            current_outcome_key = auto_result_outcome_key(current)
+            if current_outcome_key < stagnation_outcome_key:
+                consecutive_stagnant_rounds = 0
+                last_improvement_round = completed_runs
+            else:
+                consecutive_stagnant_rounds += 1
+            stagnation_outcome_key = current_outcome_key
+            if checkpoint_file is not None:
+                assert checkpoint_identity is not None
+                _write_auto_campaign_checkpoint(
+                    checkpoint_file,
+                    checkpoint_identity,
+                    config=config,
+                    survivors=(serial_survivor,),
+                    current=current,
+                    aggregate_stats=aggregate_stats,
+                    committed_mutations=committed_mutations,
+                    completed_runs=completed_runs,
+                    completed_searches=completed_searches,
+                    next_task_id=serial_next_task_id,
+                    next_splice_task_id=serial_next_splice_task_id,
+                    next_member_id=serial_next_member_id,
+                    consecutive_stagnant_rounds=(
+                        consecutive_stagnant_rounds
+                    ),
+                    last_improvement_round=last_improvement_round,
+                    stagnation_outcome_key=stagnation_outcome_key,
+                    population_selection=population_selection,
+                    splice_stats=round_stats,
+                )
+                if status is not None:
+                    status(
+                        f"[auto:campaign-checkpoint] committed round "
+                        f"{completed_runs} to {checkpoint_file}; population 1, "
+                        f"stagnant rounds {consecutive_stagnant_rounds}"
+                    )
             if status is not None:
                 status(
                     f"[auto:parallel] round {run_index} complete: "
                     f"best finish {current.finish_tick}; restarting from winner"
                 )
             _emit_splice_round_summary(run_index, round_stats, status)
+            if (
+                stagnation_runs > 0
+                and consecutive_stagnant_rounds >= stagnation_runs
+            ):
+                if status is not None:
+                    status(
+                        f"[auto:stagnation] stopping after "
+                        f"{consecutive_stagnant_rounds} consecutive "
+                        "completed round(s) without a new global best"
+                    )
+                break
             run_index += 1
 
         return _compose_campaign_result(
@@ -2482,13 +3390,15 @@ def optimise_autonomous_campaign(
     donor_verification_failures: dict[int, int] = {}
     coordinator_native_session: NativeSearchSession | None = None
     members: dict[int, _AutoPopulationMember] = {
-        member.member_id: member for member in founders
+        member.member_id: member for member in ranked_founders
     }
-    next_task_id = 1
-    next_splice_task_id = 1
-    next_member_id = len(founders)
+    next_task_id = restored_next_task_id
+    next_splice_task_id = restored_next_splice_task_id
+    next_member_id = restored_next_member_id
     minimum_survivor_count = _population_survivor_count(worker_count)
     checkpoint_key = auto_result_outcome_key(current)
+    durable_current = current
+    durable_mutations = committed_mutations
     splice_interrupt_checkpoint: tuple[
         tuple[object, ...], AutoResult, tuple[str, ...]
     ] | None = None
@@ -2517,7 +3427,16 @@ def optimise_autonomous_campaign(
             generation=generation,
             parent_member_id=parent_member_id,
             offspring_index=offspring_index,
-            seed=_derive_auto_task_seed(config.seed, task_id),
+            seed=(
+                _derive_auto_task_seed(config.seed, task_id)
+                if checkpoint_file is None
+                else _derive_auto_checkpoint_task_seed(
+                    config.seed,
+                    generation,
+                    _replay_sha256(members[parent_member_id].result.frames),
+                    offspring_index,
+                )
+            ),
             authoritative=authoritative,
         )
         records[task_id] = record
@@ -3259,7 +4178,7 @@ def optimise_autonomous_campaign(
         )
 
         founder_keys = _offspring_keys_breadth_first(
-            1,
+            run_index,
             ranked_founders,
             worker_count,
         )
@@ -3405,12 +4324,58 @@ def optimise_autonomous_campaign(
                     for member in splice_members
                 ),
             )
+            committed_round_best = min(
+                completed_members,
+                key=_population_rank_key,
+            )
+            if auto_result_outcome_key(
+                committed_round_best.result
+            ) < auto_result_outcome_key(durable_current):
+                durable_current = committed_round_best.result
+                durable_mutations = committed_round_best.mutations
             completed_runs += 1
+            durable_outcome_key = auto_result_outcome_key(durable_current)
+            if durable_outcome_key < stagnation_outcome_key:
+                consecutive_stagnant_rounds = 0
+                last_improvement_round = completed_runs
+            else:
+                consecutive_stagnant_rounds += 1
+            stagnation_outcome_key = durable_outcome_key
+            if checkpoint_file is not None:
+                assert checkpoint_identity is not None
+                _write_auto_campaign_checkpoint(
+                    checkpoint_file,
+                    checkpoint_identity,
+                    config=config,
+                    survivors=survivors,
+                    current=durable_current,
+                    aggregate_stats=aggregate_stats,
+                    committed_mutations=durable_mutations,
+                    completed_runs=completed_runs,
+                    completed_searches=completed_searches,
+                    next_task_id=next_task_id,
+                    next_splice_task_id=next_splice_task_id,
+                    next_member_id=next_member_id,
+                    consecutive_stagnant_rounds=(
+                        consecutive_stagnant_rounds
+                    ),
+                    last_improvement_round=last_improvement_round,
+                    stagnation_outcome_key=stagnation_outcome_key,
+                    population_selection=population_selection,
+                    splice_stats=round_stats,
+                )
+                if status is not None:
+                    status(
+                        f"[auto:campaign-checkpoint] committed round "
+                        f"{completed_runs} to {checkpoint_file}; population "
+                        f"{len(survivors)}, stagnant rounds "
+                        f"{consecutive_stagnant_rounds}"
+                    )
             _emit_population_round_summary(
                 run_index,
                 population_selection,
                 candidate_count=len(completed_members),
-                global_best_finish_tick=current.finish_tick,
+                global_best_finish_tick=durable_current.finish_tick,
                 status=status,
             )
             _emit_splice_round_summary(run_index, round_stats, status)
@@ -3432,6 +4397,18 @@ def optimise_autonomous_campaign(
                 for source_key in tuple(failed_splice_donor_sources)
                 if source_key[0] in completed_member_ids
             )
+
+            if (
+                stagnation_runs > 0
+                and consecutive_stagnant_rounds >= stagnation_runs
+            ):
+                if status is not None:
+                    status(
+                        f"[auto:stagnation] stopping after "
+                        f"{consecutive_stagnant_rounds} consecutive "
+                        "completed round(s) without a new global best"
+                    )
+                break
 
             if run_limit is not None and run_index >= run_limit:
                 break

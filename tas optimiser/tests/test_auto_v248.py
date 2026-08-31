@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from concurrent.futures import Future
 from dataclasses import replace
@@ -511,6 +512,285 @@ def _stepped_wait(futures, timeout=None, return_when=None):
         future.set_exception(exc)
     _SteppedPool.events.append(("complete", task.run_index, task.task_id))
     return {future}, set(futures) - {future}
+
+
+def test_v304_checkpoint_commits_boundary_and_resumes_next_round(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    neutral = InputFrame()
+    markers = (
+        InputFrame(left=True),
+        InputFrame(right=True),
+        InputFrame(jump=True),
+        InputFrame(left=True, jump=True),
+    )
+    base_seed = 77
+    parent_hash = parallel._replay_sha256((neutral,) * 10)
+    seed_markers = {
+        parallel._derive_auto_checkpoint_task_seed(
+            base_seed, 1, parent_hash, offspring_index
+        ): marker
+        for offspring_index, marker in enumerate(markers, start=1)
+    }
+    marker_proximity = {
+        marker: float(index) for index, marker in enumerate(markers, start=1)
+    }
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        source = tuple(frames)
+        marker = source[0]
+        if config.iterations == 0:
+            proximity = (
+                99.0 if marker == neutral else marker_proximity[marker]
+            )
+            return _result(len(source), proximity, marker=marker, seed=config.seed)
+        if marker == neutral:
+            output_marker = seed_markers[config.seed]
+            return _result(
+                10,
+                marker_proximity[output_marker],
+                marker=output_marker,
+                baseline_tick=len(source),
+                seed=config.seed,
+                iterations=config.iterations,
+            )
+        return _result(
+            9,
+            marker_proximity[marker],
+            marker=marker,
+            baseline_tick=len(source),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    def no_splice_plans(*args, **kwargs):
+        observer = kwargs.get("anchor_runs_observer")
+        if observer is not None:
+            observer(())
+        return ()
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
+    monkeypatch.setattr(parallel, "wait", _stepped_wait)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+    monkeypatch.setattr(
+        parallel, "find_splice_section_plans", no_splice_plans
+    )
+    checkpoint_path = tmp_path / "campaign.json"
+    real_write = parallel._write_auto_campaign_checkpoint
+    write_count = 0
+
+    def interrupt_after_first_commit(*args, **kwargs):
+        nonlocal write_count
+        real_write(*args, **kwargs)
+        write_count += 1
+        if write_count == 1:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        parallel,
+        "_write_auto_campaign_checkpoint",
+        interrupt_after_first_commit,
+    )
+    config = AutoConfig(iterations=2, beam_width=2, seed=base_seed)
+    first = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 10,
+        config,
+        workers=4,
+        runs=2,
+        search=fake_search,
+        checkpoint_path=checkpoint_path,
+        level_identifier="checkpoint-test-level",
+    )
+
+    assert first.interrupted is True
+    assert first.completed_runs == 1
+    envelope = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    first_state = envelope["payload"]["state"]
+    assert first_state["completed_runs"] == 1
+    assert first_state["next_generation"] == 2
+    assert len(first_state["survivors"]) == 2
+    assert first_state["seed_strategy"].startswith("stable-generation-")
+    assert first_state["consecutive_stagnant_rounds"] == 0
+
+    monkeypatch.setattr(
+        parallel, "_write_auto_campaign_checkpoint", real_write
+    )
+    messages: list[str] = []
+    resumed = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 10,
+        config,
+        workers=4,
+        runs=2,
+        search=fake_search,
+        checkpoint_path=checkpoint_path,
+        resume=True,
+        level_identifier="checkpoint-test-level",
+        status=messages.append,
+    )
+
+    assert resumed.interrupted is False
+    assert resumed.completed_runs == 2
+    assert resumed.result.finish_tick == 9
+    assert any(
+        message.startswith("[auto:resume] restored") for message in messages
+    )
+    final_envelope = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    assert final_envelope["payload"]["state"]["completed_runs"] == 2
+
+
+def test_v305_serial_stagnation_limit_resets_on_improvement_and_stops() -> None:
+    source = (InputFrame(),) * 10
+    scheduled_ticks = iter((10, 9, 9, 9))
+    completed_search_ticks: list[int] = []
+    messages: list[str] = []
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        body = tuple(frames)
+        if config.iterations == 0:
+            return _result(len(body), 1.0, seed=config.seed)
+        tick = next(scheduled_ticks)
+        completed_search_ticks.append(tick)
+        return _result(
+            tick,
+            1.0,
+            baseline_tick=len(body),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        source,
+        AutoConfig(iterations=1, seed=17),
+        workers=1,
+        runs=0,
+        stagnation_runs=2,
+        search=fake_search,
+        status=messages.append,
+    )
+
+    assert campaign.interrupted is False
+    assert campaign.completed_runs == 4
+    assert campaign.completed_searches == 4
+    assert campaign.result.finish_tick == 9
+    assert completed_search_ticks == [10, 9, 9, 9]
+    assert messages[-1].startswith("[auto:stagnation] stopping after 2")
+
+
+def test_v305_stagnation_checkpoint_is_durable_and_resume_stays_stopped(
+    tmp_path,
+) -> None:
+    source = (InputFrame(),) * 10
+    checkpoint_path = tmp_path / "stagnant-campaign.json"
+    completed_searches = 0
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        nonlocal completed_searches
+        body = tuple(frames)
+        if config.iterations > 0:
+            completed_searches += 1
+        return _result(
+            len(body),
+            1.0,
+            baseline_tick=(len(body) if config.iterations > 0 else None),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    config = AutoConfig(iterations=1, seed=23)
+    first = parallel.optimise_autonomous_campaign(
+        object(),
+        source,
+        config,
+        workers=1,
+        runs=0,
+        stagnation_runs=2,
+        search=fake_search,
+        checkpoint_path=checkpoint_path,
+        level_identifier="stagnation-test-level",
+    )
+
+    assert first.completed_runs == 2
+    assert completed_searches == 2
+    envelope = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    assert envelope["payload"]["identity"]["configuration"][
+        "stagnation_runs"
+    ] == 2
+    assert envelope["payload"]["state"]["consecutive_stagnant_rounds"] == 2
+
+    messages: list[str] = []
+    resumed = parallel.optimise_autonomous_campaign(
+        object(),
+        source,
+        config,
+        workers=1,
+        runs=0,
+        stagnation_runs=2,
+        search=fake_search,
+        checkpoint_path=checkpoint_path,
+        resume=True,
+        level_identifier="stagnation-test-level",
+        status=messages.append,
+    )
+
+    assert resumed.completed_runs == 2
+    assert resumed.completed_searches == 2
+    assert completed_searches == 2
+    assert messages[-1].startswith(
+        "[auto:stagnation] restored campaign has already reached"
+    )
+
+
+def test_v305_parallel_stagnation_limit_stops_after_committed_rounds(
+    monkeypatch,
+) -> None:
+    source = (InputFrame(),) * 10
+    messages: list[str] = []
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        body = tuple(frames)
+        return _result(
+            len(body),
+            1.0,
+            baseline_tick=(len(body) if config.iterations > 0 else None),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    def no_splice_plans(*args, **kwargs):
+        observer = kwargs.get("anchor_runs_observer")
+        if observer is not None:
+            observer(())
+        return ()
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
+    monkeypatch.setattr(parallel, "wait", _stepped_wait)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+    monkeypatch.setattr(
+        parallel, "find_splice_section_plans", no_splice_plans
+    )
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        source,
+        AutoConfig(iterations=1, seed=29),
+        workers=2,
+        runs=0,
+        stagnation_runs=2,
+        search=fake_search,
+        status=messages.append,
+    )
+
+    assert campaign.interrupted is False
+    assert campaign.completed_runs == 2
+    assert campaign.completed_searches >= 4
+    assert any(
+        message.startswith("[auto:stagnation] stopping after 2")
+        for message in messages
+    )
 
 
 class _RunningSteppedPool(_SteppedPool):
