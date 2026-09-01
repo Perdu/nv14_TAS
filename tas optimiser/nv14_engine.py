@@ -5091,10 +5091,29 @@ class Player:
         else:
             collision_i = _floor(self.pos.x / tiles.tw)
             collision_j = _floor(self.pos.y / tiles.th)
+        # Speculative optimiser mutations can acquire enough velocity to skip
+        # completely across the solid outer border in one tick.  Python's
+        # negative indexing would otherwise wrap to the opposite edge, while a
+        # positive overflow raises IndexError and aborts the worker.  Neither
+        # is a usable gameplay trajectory, so classify the finite tile-domain
+        # exit as the same terminal invalid result as an ordinary death.
+        if not (
+            0 <= collision_i < len(tiles.grid)
+            and 0 <= collision_j < len(tiles.grid[collision_i])
+        ):
+            self.dead = True
+            return None
         collision_centre = tiles.grid[collision_i][collision_j]
         pre_tile_x = self.pos.x
         pre_tile_y = self.pos.y
-        tiles.collide_circle(self, edge_overrides, collision_centre)
+        try:
+            tiles.collide_circle(self, edge_overrides, collision_centre)
+        except IndexError:
+            # A centre inside an outermost cell can still require a neighbour
+            # beyond the finite tile array.  This is the same crossed-boundary
+            # terminal case, not an internal optimiser failure.
+            self.dead = True
+            return None
         self.handle_collisions(tiles)
         # Second objects.Moved(this) in TickNormal, before Think()/Jump().
         if self.pos.x == pre_tile_x and self.pos.y == pre_tile_y:

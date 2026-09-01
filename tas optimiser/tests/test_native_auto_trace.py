@@ -390,6 +390,27 @@ def test_native_auto_preserves_completion_and_death_on_the_same_tick() -> None:
     assert native.valid
 
 
+def test_v307_player_tile_domain_exit_is_a_terminal_death() -> None:
+    _require_native_auto()
+    # The oversized launch vector moves the player completely across the solid
+    # outer border during object collision, reproducing the high-velocity
+    # speculative-mutation failure without a test-only state mutation API.
+    level = parse_level_string(f"{EMPTY_MAP}|5^100,100!2^100,100,200,0")
+
+    native = auto.evaluate_replay_with_sentinel(level, ())
+    reference = _python_reference_evaluation(
+        level,
+        (NEUTRAL,),
+        trace_stride=1,
+    )
+
+    assert native == reference
+    assert native.finish_tick is None
+    assert native.dead_tick == native.last_tick == 0
+    assert native.trace[-1].dead
+    assert not native.valid
+
+
 def test_auto_evaluator_contains_no_python_simulation_loop() -> None:
     source = textwrap.dedent(inspect.getsource(auto._evaluate_working))
     tree = ast.parse(source)

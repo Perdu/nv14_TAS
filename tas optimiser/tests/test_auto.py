@@ -577,3 +577,61 @@ def test_invalid_config_and_incomplete_source_are_rejected() -> None:
     no_exit = parse_level_string(f"{_empty_map()}|5^100,100")
     with pytest.raises(ValueError, match="source replay"):
         optimise_autonomous(no_exit, [InputFrame()] * 3, AutoConfig(iterations=0))
+
+
+def test_reference_suffix_splice_skips_candidate_terminal_alignment() -> None:
+    search = auto._AutonomousSearch.__new__(auto._AutonomousSearch)
+    search.config = AutoConfig(range_start=0, range_end=100)
+    search.range_end = 100
+    search.reference_working = (InputFrame(right=True), NEUTRAL_INPUT)
+    search.extra_ticks = False
+    search.workspace_body_length = 1
+    search.counters = {"suffix_splices": 0}
+
+    evaluation = AutoEvaluation(
+        finish_tick=None,
+        dead_tick=None,
+        last_tick=1,
+        trace=(),
+        successful_jumps=(),
+        jump_edges=(),
+        missed_jump_edges=(),
+    )
+    parent = AutoCandidate(
+        working_frames=(InputFrame(left=True), NEUTRAL_INPUT),
+        evaluation=evaluation,
+        origin="test",
+        alignment=AlignmentMatch(1, 0, -1, 0.0, True, True),
+    )
+
+    assert search._try_reference_splice(parent) is False
+    assert search.counters["suffix_splices"] == 0
+
+
+def test_reference_suffix_splice_skips_reference_terminal_alignment() -> None:
+    search = auto._AutonomousSearch.__new__(auto._AutonomousSearch)
+    search.config = AutoConfig(range_start=0, range_end=100)
+    search.range_end = 100
+    search.reference_working = (InputFrame(right=True), NEUTRAL_INPUT)
+    search.extra_ticks = False
+    search.workspace_body_length = 1
+    search.counters = {"suffix_splices": 0}
+
+    evaluation = AutoEvaluation(
+        finish_tick=None,
+        dead_tick=None,
+        last_tick=1,
+        trace=(),
+        successful_jumps=(),
+        jump_edges=(),
+        missed_jump_edges=(),
+    )
+    parent = AutoCandidate(
+        working_frames=(InputFrame(left=True), NEUTRAL_INPUT),
+        evaluation=evaluation,
+        origin="test",
+        alignment=AlignmentMatch(0, 1, 1, 0.0, True, True),
+    )
+
+    assert search._try_reference_splice(parent) is False
+    assert search.counters["suffix_splices"] == 0

@@ -73,6 +73,23 @@ _SECTION_SPLICE_PLANS_PER_PAIR = 2
 _SECTIONAL_PROFILE_MAX_WINDOWS = 24
 _SPLICE_TASK_ID_BASE = 1 << 63
 _POPULATION_SPLICE_NICHE_TICKS = 12
+_AUTO_STAGNATION_MIN_DISTANCE_GAIN_PX = 0.5
+
+# v3.07 changes how future rounds classify player tile-domain exits and small
+# same-objective distance gains, but the complete durable state required to
+# continue is already present in released v3.05/v3.06 checkpoints.  Apply the
+# new rules prospectively from the next round.  Keep this allow-list exact so
+# unrelated or modified prior builds still fail strict identity validation.
+_CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS = {
+    (
+        "3.05",
+        "d0a7ea78c7b24de46bac1ff1c00774de833ef23107a07b743ebffe67d755e43e",
+    ),
+    (
+        "3.06",
+        "f394554d7ca12ac8a9e1d05b443a709a7e9597f7340e511ef3bd1e029d6f3475",
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -975,6 +992,38 @@ def _run_auto_worker(task: _AutoWorkerTask) -> _AutoWorkerResult:
 
 def auto_result_outcome_key(result: AutoResult) -> tuple[int | float, ...]:
     return auto_candidate_outcome_key(result.best, result.objective)
+
+
+def _significant_stagnation_improvement(
+    previous_key: Sequence[int | float],
+    current_key: Sequence[int | float],
+) -> bool:
+    """Return whether one committed round made a counter-resetting gain.
+
+    Auto's durable outcome key is ``(validity, objective, exit_distance)``.
+    Any primary objective improvement remains significant.  At an unchanged
+    objective, the exit-distance tie-break must improve by at least half a
+    pixel relative to the immediately preceding committed checkpoint.  The
+    caller still stores every smaller global-best gain so several sub-threshold
+    steps do not accumulate into one synthetic improvement.
+    """
+    previous_primary = tuple(previous_key[:2])
+    current_primary = tuple(current_key[:2])
+    if current_primary < previous_primary:
+        return True
+    if current_primary != previous_primary:
+        return False
+
+    previous_distance = float(previous_key[2])
+    current_distance = float(current_key[2])
+    if not math.isfinite(previous_distance):
+        return math.isfinite(current_distance)
+    if not math.isfinite(current_distance):
+        return False
+    return (
+        previous_distance - current_distance
+        >= _AUTO_STAGNATION_MIN_DISTANCE_GAIN_PX
+    )
 
 
 def _derive_auto_task_seed(base_seed: int, task_id: int) -> int:
@@ -2329,9 +2378,22 @@ def _validate_checkpoint_identity(
 ) -> None:
     if not isinstance(stored, Mapping):
         raise AutoCheckpointError("Auto checkpoint identity is missing")
+    stored_build = (
+        stored.get("optimiser_version"),
+        stored.get("optimiser_build_sha256"),
+    )
+    expected_build = (
+        expected.get("optimiser_version"),
+        expected.get("optimiser_build_sha256"),
+    )
+    build_compatible = (
+        stored_build == expected_build
+        or (
+            expected.get("optimiser_version") == OPTIMISER_VERSION == "3.07"
+            and stored_build in _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS
+        )
+    )
     labels = {
-        "optimiser_version": "optimiser version",
-        "optimiser_build_sha256": "optimiser build",
         "level_identifier": "level identifier",
         "level_sha256": "level data",
         "simulate_enemies": "enemy-simulation setting",
@@ -2339,7 +2401,7 @@ def _validate_checkpoint_identity(
         "parent_replay_sha256": "starting parent replays",
         "configuration_sha256": "Auto configuration",
     }
-    mismatches = [
+    mismatches = ([] if build_compatible else ["optimiser version/build"]) + [
         label
         for key, label in labels.items()
         if stored.get(key) != expected.get(key)
@@ -2796,7 +2858,8 @@ def optimise_autonomous_campaign(
     generation-0 founders which are independently canonicalised and verified.
     ``workers=0`` selects up to eight available CPUs. ``runs=0`` repeats
     indefinitely until Ctrl+C. A positive ``stagnation_runs`` stops normally
-    after that many consecutive committed rounds without a new global best.
+    after that many consecutive committed rounds without a significant gain
+    under the objective/half-pixel rule.
     Each completed round retains a half-worker minimum, plus one survivor for
     each competitive distinct splice niche up to one survivor per worker.
     Exact replay, recipient and breeding-family controls preserve route breadth.
@@ -3064,7 +3127,7 @@ def optimise_autonomous_campaign(
             status(
                 f"[auto:stagnation] restored campaign has already reached "
                 f"the limit of {stagnation_runs} consecutive round(s) "
-                "without a new global best"
+                "without a significant global-best gain"
             )
         return _compose_campaign_result(
             initial,
@@ -3301,7 +3364,9 @@ def optimise_autonomous_campaign(
             )
             serial_survivor = population_selection.survivors[0]
             current_outcome_key = auto_result_outcome_key(current)
-            if current_outcome_key < stagnation_outcome_key:
+            if _significant_stagnation_improvement(
+                stagnation_outcome_key, current_outcome_key
+            ):
                 consecutive_stagnant_rounds = 0
                 last_improvement_round = completed_runs
             else:
@@ -3350,7 +3415,7 @@ def optimise_autonomous_campaign(
                     status(
                         f"[auto:stagnation] stopping after "
                         f"{consecutive_stagnant_rounds} consecutive "
-                        "completed round(s) without a new global best"
+                        "completed round(s) without a significant global-best gain"
                     )
                 break
             run_index += 1
@@ -4335,7 +4400,9 @@ def optimise_autonomous_campaign(
                 durable_mutations = committed_round_best.mutations
             completed_runs += 1
             durable_outcome_key = auto_result_outcome_key(durable_current)
-            if durable_outcome_key < stagnation_outcome_key:
+            if _significant_stagnation_improvement(
+                stagnation_outcome_key, durable_outcome_key
+            ):
                 consecutive_stagnant_rounds = 0
                 last_improvement_round = completed_runs
             else:
@@ -4406,7 +4473,7 @@ def optimise_autonomous_campaign(
                     status(
                         f"[auto:stagnation] stopping after "
                         f"{consecutive_stagnant_rounds} consecutive "
-                        "completed round(s) without a new global best"
+                        "completed round(s) without a significant global-best gain"
                     )
                 break
 

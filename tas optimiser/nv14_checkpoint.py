@@ -16,7 +16,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-OPTIMISER_VERSION = "3.05"
+OPTIMISER_VERSION = "3.07"
 AUTO_CHECKPOINT_KIND = "nv14-auto-campaign"
 AUTO_CHECKPOINT_FORMAT_VERSION = 1
 

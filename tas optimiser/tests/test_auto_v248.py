@@ -680,6 +680,55 @@ def test_v305_serial_stagnation_limit_resets_on_improvement_and_stops() -> None:
     assert messages[-1].startswith("[auto:stagnation] stopping after 2")
 
 
+def test_v307_stagnation_significance_uses_half_pixel_threshold() -> None:
+    significant = parallel._significant_stagnation_improvement
+
+    assert significant((0, 100, 10.0), (0, 99, 100.0))
+    assert not significant((0, 100, 10.0), (0, 100, 9.51))
+    assert significant((0, 100, 10.0), (0, 100, 9.5))
+    assert not significant((0, 100, 10.0), (0, 100, 10.0))
+    assert not significant((0, 100, 10.0), (0, 100, 10.5))
+    assert significant(
+        (0, 100, float("inf")),
+        (0, 100, 10.0),
+    )
+    assert not significant(
+        (0, 100, float("inf")),
+        (0, 100, float("inf")),
+    )
+
+
+def test_v307_serial_stagnation_compares_each_committed_checkpoint() -> None:
+    source = (InputFrame(),) * 10
+    scheduled_proximities = iter((9.7, 9.4))
+
+    def fake_search(level, frames, config, *, progress=None, best_callback=None):
+        body = tuple(frames)
+        proximity = (
+            10.0 if config.iterations == 0 else next(scheduled_proximities)
+        )
+        return _result(
+            len(body),
+            proximity,
+            baseline_tick=(len(body) if config.iterations > 0 else None),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        source,
+        AutoConfig(iterations=1, seed=19),
+        workers=1,
+        runs=0,
+        stagnation_runs=2,
+        search=fake_search,
+    )
+
+    assert campaign.completed_runs == 2
+    assert campaign.result.best.evaluation.pre_finish_exit_distance == 9.4
+
+
 def test_v305_stagnation_checkpoint_is_durable_and_resume_stays_stopped(
     tmp_path,
 ) -> None:
@@ -749,6 +798,10 @@ def test_v305_parallel_stagnation_limit_stops_after_committed_rounds(
 ) -> None:
     source = (InputFrame(),) * 10
     messages: list[str] = []
+    significance_checks: list[
+        tuple[tuple[int | float, ...], tuple[int | float, ...]]
+    ] = []
+    real_significant = parallel._significant_stagnation_improvement
 
     def fake_search(level, frames, config, *, progress=None, best_callback=None):
         body = tuple(frames)
@@ -766,11 +819,20 @@ def test_v305_parallel_stagnation_limit_stops_after_committed_rounds(
             observer(())
         return ()
 
+    def observed_significance(previous, current):
+        significance_checks.append((tuple(previous), tuple(current)))
+        return real_significant(previous, current)
+
     monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
     monkeypatch.setattr(parallel, "wait", _stepped_wait)
     monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
     monkeypatch.setattr(
         parallel, "find_splice_section_plans", no_splice_plans
+    )
+    monkeypatch.setattr(
+        parallel,
+        "_significant_stagnation_improvement",
+        observed_significance,
     )
 
     campaign = parallel.optimise_autonomous_campaign(
@@ -787,6 +849,7 @@ def test_v305_parallel_stagnation_limit_stops_after_committed_rounds(
     assert campaign.interrupted is False
     assert campaign.completed_runs == 2
     assert campaign.completed_searches >= 4
+    assert len(significance_checks) == 2
     assert any(
         message.startswith("[auto:stagnation] stopping after 2")
         for message in messages

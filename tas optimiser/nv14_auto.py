@@ -8382,7 +8382,17 @@ class _AutonomousSearch:
 
     def _try_reference_splice(self, parent: AutoCandidate) -> bool:
         assert parent.alignment is not None
-        if not self._mutation_allowed(parent.alignment.candidate_tick + 1):
+        candidate_next = parent.alignment.candidate_tick + 1
+        reference_next = parent.alignment.reference_tick + 1
+        # Alignment search is allowed to compare terminal sentinel states, but
+        # a suffix splice needs an editable frame after both matched states.
+        # Treat a terminal alignment as an unavailable mutation rather than
+        # allowing the strict splice helper to abort the whole Auto worker.
+        if candidate_next > len(parent.working_frames) - 1:
+            return False
+        if reference_next > len(self.reference_working) - 1:
+            return False
+        if not self._mutation_allowed(candidate_next):
             return False
         changed = apply_reference_suffix_splice(
             parent.working_frames,

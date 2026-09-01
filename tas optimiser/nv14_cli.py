@@ -1560,8 +1560,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         metavar="N",
         help=(
-            "stop after N consecutive completed Auto rounds without a new "
-            "global best; 0 disables this limit (default: 0)"
+            "stop after N consecutive completed Auto rounds without an "
+            "objective gain or at least 0.5 px of exit-distance gain since "
+            "the prior round; 0 disables this limit (default: 0)"
         ),
     )
     command.add_argument(

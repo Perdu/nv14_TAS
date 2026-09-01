@@ -13,3 +13,4 @@ tas optimiser/.pytest_cache/
 tas optimiser/build/
 tas optimiser/wip/
 *.pyd
+*.so

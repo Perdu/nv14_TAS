@@ -2343,7 +2343,14 @@ static nv14_status nv14_state_begin_player_step_internal(nv14_state *state)
     player->pos.y += player->d * (current_y - old_y_before) + player->g;
     if (!nv14_python_floor_index(player->pos.x, NV14_TILE_W, &player->cell_i) ||
         !nv14_python_floor_index(player->pos.y, NV14_TILE_H, &player->cell_j)) {
-        return NV14_STATUS_OUT_OF_BOUNDS;
+        /* A malformed internal index is still an error everywhere else, but
+         * a replay mutation may legitimately fling the player beyond the
+         * finite tile domain (or to a non-finite coordinate).  This branch is
+         * terminal gameplay state, not a corrupt search/evaluator buffer.
+         * Mark it as an ordinary death so every native caller can discard the
+         * candidate without aborting the complete worker. */
+        player->dead = 1;
+        return NV14_STATUS_OK;
     }
     player->old_v.x = player->pos.x - player->oldpos.x;
     player->old_v.y = player->pos.y - player->oldpos.y;
@@ -3901,6 +3908,8 @@ static nv14_status nv14_finish_player_step_internal(
         int collision_i;
         int collision_j;
         status = nv14_collide_circle_tiles(state);
+        if (status == NV14_STATUS_OUT_OF_BOUNDS)
+            goto player_out_of_bounds;
         if (status != NV14_STATUS_OK) {
             nv14_fill_step_result(
                 state, frame_before, jumps_before, jump_callable, status, result_out
@@ -3908,6 +3917,8 @@ static nv14_status nv14_finish_player_step_internal(
             return status;
         }
         status = nv14_player_handle_collisions(&state->player, state->level);
+        if (status == NV14_STATUS_OUT_OF_BOUNDS)
+            goto player_out_of_bounds;
         if (status != NV14_STATUS_OK) {
             nv14_fill_step_result(
                 state, frame_before, jumps_before, jump_callable, status, result_out
@@ -3917,7 +3928,7 @@ static nv14_status nv14_finish_player_step_internal(
         if (state->player.pos.x == pre_tile_x && state->player.pos.y == pre_tile_y) {
             if (!nv14_python_floor_index(pre_tile_x, NV14_TILE_W, &collision_i) ||
                 !nv14_python_floor_index(pre_tile_y, NV14_TILE_H, &collision_j)) {
-                return NV14_STATUS_OUT_OF_BOUNDS;
+                goto player_out_of_bounds;
             }
             state->player.cell_i = collision_i;
             state->player.cell_j = collision_j;
@@ -3925,7 +3936,7 @@ static nv14_status nv14_finish_player_step_internal(
                        state->player.pos.x, NV14_TILE_W, &state->player.cell_i) ||
                    !nv14_python_floor_index(
                        state->player.pos.y, NV14_TILE_H, &state->player.cell_j)) {
-            return NV14_STATUS_OUT_OF_BOUNDS;
+            goto player_out_of_bounds;
         }
         jump_callable = (uint8_t)nv14_player_jump_callable(&state->player);
         if (have_alternate) {
@@ -3955,6 +3966,17 @@ static nv14_status nv14_finish_player_step_internal(
     } else if (have_alternate) {
         alternate_player = state->player;
     }
+    goto player_tick_finished;
+
+player_out_of_bounds:
+    /* Tile-domain exits are an expected terminal result of speculative replay
+     * mutations.  Keep OUT_OF_BOUNDS fatal for object schedulers, grids,
+     * masks and result capacities by translating it only at these player/tile
+     * collision sites. */
+    state->player.dead = 1;
+    if (have_alternate) alternate_player = state->player;
+
+player_tick_finished:
     for (module_index = 0;
          module_index < state->level->object_module_count;
          ++module_index) {
