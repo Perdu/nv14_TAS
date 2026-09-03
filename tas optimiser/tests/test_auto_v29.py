@@ -140,6 +140,138 @@ def test_beam_jump_insertion_groups_safe_native_opportunities_by_window() -> Non
     assert changed[-1] == NEUTRAL_INPUT
 
 
+def test_beam_jump_retrigger_groups_callable_held_targets_and_honours_range() -> None:
+    body = tuple(
+        InputFrame(jump=tick <= 5 or tick >= 7)
+        for tick in range(10)
+    )
+
+    windows = auto._held_jump_retrigger_opportunity_windows(
+        body,
+        ((0, 9),),
+        range_start=0,
+        range_end=9,
+    )
+
+    # Natural pulse starts at 0 and 7 already have a released predecessor (or
+    # no predecessor).  Every later held target can acquire a fresh derived
+    # edge by releasing only its immediately preceding frame.
+    assert windows == ((1, 2, 3, 4, 5), (8, 9))
+    assert not auto._held_jump_retrigger_opportunity_windows(
+        body,
+        ((5, 5),),
+        range_start=5,
+        range_end=5,
+    )
+    assert auto._held_jump_retrigger_opportunity_windows(
+        body,
+        ((5, 5),),
+        range_start=4,
+        range_end=5,
+    ) == ((5,),)
+
+
+def test_beam_jump_retrigger_splits_one_frame_without_replacing_hold() -> None:
+    body = tuple(
+        InputFrame(right=tick == 2, jump=True, jump_trigger=False)
+        for tick in range(6)
+    )
+
+    changed = auto._mutate_held_jump_retrigger_known(body, 2)
+
+    assert auto._jump_pulses(changed[:-1]) == ((0, 0), (2, 5))
+    assert not changed[1].jump
+    assert changed[2] == InputFrame(right=True, jump=True)
+    assert changed[3:6] == body[3:6]
+    assert changed[-1] == NEUTRAL_INPUT
+
+
+def test_targeted_jump_selection_samples_retrigger_windows_before_frames() -> None:
+    class SequenceRng:
+        def __init__(self) -> None:
+            self.bounds: list[int] = []
+            self.values = iter((1, 1))
+
+        def randrange(self, upper: int) -> int:
+            self.bounds.append(upper)
+            return next(self.values)
+
+    rng = SequenceRng()
+    selected = auto._choose_targeted_jump_opportunity(
+        rng,
+        (((40, 31),),),
+        ((184, 185), (263,)),
+    )
+
+    assert selected == ("retrigger", 185, 0)
+    assert rng.bounds == [3, 2]
+
+
+def test_beam_targeted_retrigger_is_reachable_in_an_all_held_range(
+    monkeypatch,
+) -> None:
+    class Analysis:
+        def jump_opportunity_windows(self):
+            return ((1, 4),)
+
+    class ActionRng:
+        def random(self) -> float:
+            return 0.20
+
+        def randrange(self, _upper: int) -> int:
+            raise AssertionError("all-held retrigger must not fake a release draw")
+
+    class JumpRng:
+        def randrange(self, _upper: int) -> int:
+            return 0
+
+        def random(self) -> float:
+            return 1.0
+
+    monkeypatch.setattr(
+        auto,
+        "_derive_beam_jump_insertion_rng",
+        lambda _seed, _attempt: JumpRng(),
+    )
+    body = tuple(InputFrame(jump=True) for _ in range(5))
+    evaluation = auto.AutoEvaluation(
+        finish_tick=None,
+        dead_tick=None,
+        last_tick=4,
+        trace=auto._NativeTraceView(Analysis()),
+        successful_jumps=(),
+        jump_edges=(0,),
+        missed_jump_edges=(0,),
+    )
+    parent = auto.AutoCandidate(
+        working_frames=body + (NEUTRAL_INPUT,),
+        evaluation=evaluation,
+        origin="fixture",
+    )
+    search = object.__new__(auto._AutonomousSearch)
+    search.config = AutoConfig(iterations=1, seed=7)
+    search.range_end = 4
+    search.rng = ActionRng()
+    search.beam_jump_insertion_attempts = 0
+    search.counters = {"jump_mutations": 0}
+    considered: list[tuple[tuple[InputFrame, ...], str]] = []
+
+    def consider(working, **kwargs):
+        considered.append((tuple(working), kwargs["description"]))
+        return None
+
+    search._consider = consider
+
+    assert search._try_beam_jump_mutation(parent)
+    assert len(considered) == 1
+    changed, description = considered[0]
+    assert not changed[0].jump and changed[1].jump
+    assert changed[2:5] == body[2:5]
+    assert description == "jump pulse retrigger 1 via release 0"
+    assert search.beam_jump_insertion_attempts == 1
+    assert search.counters["jump_mutations"] == 1
+
+
 def test_beam_jump_insertion_selects_window_before_frame() -> None:
     class SequenceRng:
         def __init__(self) -> None:

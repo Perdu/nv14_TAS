@@ -4266,6 +4266,59 @@ def _jump_insertion_opportunity_windows(
     return tuple(windows)
 
 
+def _held_jump_retrigger_opportunity_windows(
+    body: Sequence[InputFrame],
+    callable_windows: Iterable[tuple[int, int]],
+    *,
+    range_start: int,
+    range_end: int,
+) -> tuple[tuple[int, ...], ...]:
+    """Return held targets which can gain a fresh edge via one release.
+
+    Native callable windows describe the post-collision player state and are
+    intentionally independent of input-edge history.  That exposes wall and
+    ground jump opportunities even when the source replay is still holding
+    jump.  For two consecutive held frames, clearing the first frame turns the
+    second into a derived rising edge without replacing the remaining hold.
+
+    Both the released separator and the retained trigger frame must lie in the
+    editable range.  Targets are grouped into consecutive windows so a long
+    grounded hold does not receive one random-selection entry per frame.
+    """
+    if len(body) < 2:
+        return ()
+    lower = max(1, range_start + 1)
+    upper = min(range_end, len(body) - 1)
+    if lower > upper:
+        return ()
+
+    previous_tick: int | None = None
+    current: list[int] = []
+    windows: list[tuple[int, ...]] = []
+    for raw_start, raw_end in callable_windows:
+        start = max(lower, int(raw_start))
+        end = min(upper, int(raw_end))
+        if start > end:
+            continue
+        for tick in range(start, end + 1):
+            if not body[tick].jump or not body[tick - 1].jump:
+                continue
+            # An explicit trigger is already an edge regardless of held-input
+            # history, so it is not the blind spot this operator repairs.
+            if body[tick].jump_trigger is True:
+                continue
+            if previous_tick is None or tick != previous_tick + 1:
+                if current:
+                    windows.append(tuple(current))
+                current = [tick]
+            else:
+                current.append(tick)
+            previous_tick = tick
+    if current:
+        windows.append(tuple(current))
+    return tuple(windows)
+
+
 def _choose_jump_insertion_hold_length(
     rng: random.Random,
     maximum_hold: int,
@@ -4396,11 +4449,56 @@ def _choose_jump_insertion_opportunity(
     return window[rng.randrange(len(window))]
 
 
+def _choose_targeted_jump_opportunity(
+    rng: random.Random,
+    insertion_windows: Sequence[Sequence[tuple[int, int]]],
+    retrigger_windows: Sequence[Sequence[int]],
+) -> tuple[str, int, int]:
+    """Choose an insertion/retrigger window first, then one frame within it.
+
+    The third result is the maximum insertion hold, or zero for a held-input
+    retrigger.  Keeping physical windows as the first sampling unit prevents a
+    long grounded opportunity from drowning out a brief wall contact.
+    """
+    tagged_windows = tuple(
+        ("insert", window) for window in insertion_windows if window
+    ) + tuple(("retrigger", window) for window in retrigger_windows if window)
+    if not tagged_windows:
+        raise ValueError("no targeted jump opportunity windows")
+    kind, window = tagged_windows[rng.randrange(len(tagged_windows))]
+    selected = window[rng.randrange(len(window))]
+    if kind == "insert":
+        start, maximum_hold = selected
+        return kind, int(start), int(maximum_hold)
+    return kind, int(selected), 0
+
+
+def _mutate_held_jump_retrigger_known(
+    body: Sequence[InputFrame],
+    target: int,
+) -> tuple[InputFrame, ...]:
+    """Split a held pulse so *target* becomes a fresh derived jump edge."""
+    if target <= 0 or target >= len(body):
+        raise ValueError(
+            "held-jump retrigger lies outside the editable replay body"
+        )
+    if not body[target - 1].jump or not body[target].jump:
+        raise ValueError("held-jump retrigger requires two consecutive held frames")
+    if body[target].jump_trigger is True:
+        raise ValueError("held-jump retrigger target already has an explicit edge")
+    result = list(body)
+    result[target - 1] = _jump_only_frame(result[target - 1], False)
+    # Normalise an explicit false trigger, if present, so the retained held
+    # input derives its new edge from the one-frame release.
+    result[target] = _jump_only_frame(result[target], True)
+    return tuple(result) + (NEUTRAL_INPUT,)
+
+
 def _jump_insertion_trigger_frame(
     frame: InputFrame,
     direction: str,
 ) -> InputFrame:
-    """Set the optional insertion's horizontal input on its rising edge."""
+    """Set a targeted jump edge's optional horizontal input."""
     if direction == "existing":
         return InputFrame(frame.left, frame.right, True, None)
     horizontal = {
@@ -8455,6 +8553,30 @@ class _AutonomousSearch:
                     not body[tick].jump
                     for tick in range(self.config.range_start, upper + 1)
                 )
+                analysis = _native_trace_analysis(parent.evaluation)
+                opportunity_query = (
+                    None
+                    if analysis is None
+                    else getattr(analysis, "jump_opportunity_windows", None)
+                )
+                if not callable(opportunity_query):
+                    raise RuntimeError(
+                        "the installed native replay-analysis kernel does not "
+                        "expose jump opportunities; run 'python build_native.py'"
+                    )
+                callable_windows = tuple(opportunity_query())
+                opportunity_windows = _jump_insertion_opportunity_windows(
+                    body,
+                    callable_windows,
+                    range_start=self.config.range_start,
+                    range_end=upper,
+                )
+                retrigger_windows = _held_jump_retrigger_opportunity_windows(
+                    body,
+                    callable_windows,
+                    range_start=self.config.range_start,
+                    range_end=upper,
+                )
                 if released_count:
                     self.rng.randrange(released_count)
                     self.rng.random()
@@ -8464,55 +8586,68 @@ class _AutonomousSearch:
                         self.config.seed,
                         attempt_number,
                     )
+                elif retrigger_windows:
+                    # v3.07 reached this branch only when at least one source
+                    # frame was released.  A fully held pulse can nevertheless
+                    # cross a newly available wall or floor contact, so give
+                    # that new opportunity its own stable insertion substream
+                    # without manufacturing a legacy released-frame draw.
+                    attempt_number = self.beam_jump_insertion_attempts
+                    self.beam_jump_insertion_attempts += 1
+                    jump_rng = _derive_beam_jump_insertion_rng(
+                        self.config.seed,
+                        attempt_number,
+                    )
                 else:
                     jump_rng = None
                 if jump_rng is not None:
-                    analysis = _native_trace_analysis(parent.evaluation)
-                    opportunity_query = (
-                        None
-                        if analysis is None
-                        else getattr(analysis, "jump_opportunity_windows", None)
-                    )
-                    if not callable(opportunity_query):
-                        raise RuntimeError(
-                            "the installed native replay-analysis kernel does not "
-                            "expose jump opportunities; run 'python build_native.py'"
-                        )
-                    opportunity_windows = _jump_insertion_opportunity_windows(
-                        body,
-                        opportunity_query(),
-                        range_start=self.config.range_start,
-                        range_end=upper,
-                    )
-                    if not opportunity_windows:
+                    if not opportunity_windows and not retrigger_windows:
                         # The previous policy would have tried one released
                         # frame; do not replace an unavailable legal insertion
                         # with an unrelated pulse move.
                         return False
                     # Pick the physical opportunity class first so a long
                     # grounded run cannot drown out short wall/corner contacts.
-                    start, maximum_hold = _choose_jump_insertion_opportunity(
-                        jump_rng, opportunity_windows
-                    )
-                    length = _choose_jump_insertion_hold_length(
-                        jump_rng, maximum_hold
-                    )
-                    try:
-                        changed, final_length, collision_outcome = (
-                            _mutate_jump_insertion_known(
-                                body,
-                                start,
-                                length,
-                                jump_rng,
-                            )
+                    edge_kind, start, maximum_hold = (
+                        _choose_targeted_jump_opportunity(
+                            jump_rng,
+                            opportunity_windows,
+                            retrigger_windows,
                         )
-                    except ValueError:
-                        return False
-                    description = f"jump pulse insert {start}+{final_length}"
-                    if collision_outcome is not None:
-                        description += (
-                            f" collision {collision_outcome}"
-                            f" (sampled {length})"
+                    )
+                    if edge_kind == "insert":
+                        length = _choose_jump_insertion_hold_length(
+                            jump_rng, maximum_hold
+                        )
+                        try:
+                            changed, final_length, collision_outcome = (
+                                _mutate_jump_insertion_known(
+                                    body,
+                                    start,
+                                    length,
+                                    jump_rng,
+                                )
+                            )
+                        except ValueError:
+                            return False
+                        description = (
+                            f"jump pulse insert {start}+{final_length}"
+                        )
+                        if collision_outcome is not None:
+                            description += (
+                                f" collision {collision_outcome}"
+                                f" (sampled {length})"
+                            )
+                    else:
+                        try:
+                            changed = _mutate_held_jump_retrigger_known(
+                                body, start
+                            )
+                        except ValueError:
+                            return False
+                        description = (
+                            f"jump pulse retrigger {start} via release "
+                            f"{start - 1}"
                         )
                     if (
                         jump_rng.random()

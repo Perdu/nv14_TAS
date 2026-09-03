@@ -75,11 +75,11 @@ _SPLICE_TASK_ID_BASE = 1 << 63
 _POPULATION_SPLICE_NICHE_TICKS = 12
 _AUTO_STAGNATION_MIN_DISTANCE_GAIN_PX = 0.5
 
-# v3.07 changes how future rounds classify player tile-domain exits and small
-# same-objective distance gains, but the complete durable state required to
-# continue is already present in released v3.05/v3.06 checkpoints.  Apply the
-# new rules prospectively from the next round.  Keep this allow-list exact so
-# unrelated or modified prior builds still fail strict identity validation.
+# v3.08 adds a prospective worker mutation without changing durable campaign
+# state. The complete state required to continue is already present in exact
+# released v3.05-v3.07 checkpoints, including the v3.07 player-boundary and
+# stagnation rules. Keep this allow-list exact so unrelated or modified prior
+# builds still fail strict identity validation.
 _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS = {
     (
         "3.05",
@@ -88,6 +88,10 @@ _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS = {
     (
         "3.06",
         "f394554d7ca12ac8a9e1d05b443a709a7e9597f7340e511ef3bd1e029d6f3475",
+    ),
+    (
+        "3.07",
+        "9ee3cd695e42f53bc157f9edb2970914a276ffc1e640e6a39e5d7817bbf8b79e",
     ),
 }
 
@@ -2389,7 +2393,7 @@ def _validate_checkpoint_identity(
     build_compatible = (
         stored_build == expected_build
         or (
-            expected.get("optimiser_version") == OPTIMISER_VERSION == "3.07"
+            expected.get("optimiser_version") == OPTIMISER_VERSION == "3.08"
             and stored_build in _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS
         )
     )

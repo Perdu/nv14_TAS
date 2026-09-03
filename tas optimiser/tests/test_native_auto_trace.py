@@ -14,6 +14,8 @@ import pytest
 
 import nv14_auto as auto
 from nv14_engine import (
+    APP_NUM_GRIDCOLS,
+    APP_NUM_GRIDROWS,
     InputFrame,
     Level,
     TestDoor as EngineTestDoor,
@@ -236,6 +238,73 @@ def _python_jump_opportunity_windows(
         if state.player.dead or state.level_complete:
             break
     return tuple((start, end) for start, end in windows)
+
+
+def _native_jump_analysis(
+    level: Level,
+    body: Sequence[InputFrame],
+):
+    return NativeSearchSession(level).evaluate_replay(
+        tuple(body) + (NEUTRAL,),
+        trace_stride=1,
+    )
+
+
+def test_targeted_retrigger_uses_unexpected_near_wall_opportunity() -> None:
+    _require_native_auto()
+    tiles = ["0"] * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
+    for row in range(APP_NUM_GRIDROWS):
+        tiles[4 * APP_NUM_GRIDROWS + row] = "1"
+    level = parse_level_string("".join(tiles) + "|5^100,100")
+    body = tuple(InputFrame(right=True, jump=True) for _ in range(20))
+
+    source = _native_jump_analysis(level, body)
+    callable_windows = source.jump_opportunity_windows()
+    retrigger_windows = auto._held_jump_retrigger_opportunity_windows(
+        body,
+        callable_windows,
+        range_start=0,
+        range_end=len(body) - 1,
+    )
+
+    # The player first reaches the wall on tick 14.  The source is still
+    # holding its failed tick-0 press, so no edge exists despite NEAR_WALL.
+    assert source.successful_jumps() == ()
+    assert callable_windows[0][0] == 14
+    assert retrigger_windows[0][0] == 14
+    changed = auto._mutate_held_jump_retrigger_known(body, 14)
+    result = NativeSearchSession(level).evaluate_replay(changed, trace_stride=1)
+    assert not changed[13].jump and changed[14].jump
+    assert result.successful_jumps() == (14,)
+
+
+def test_targeted_retrigger_uses_first_post_landing_opportunity() -> None:
+    _require_native_auto()
+    tiles = ["0"] * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
+    for column in range(APP_NUM_GRIDCOLS):
+        tiles[column * APP_NUM_GRIDROWS + 5] = "1"
+    level = parse_level_string("".join(tiles) + "|5^132,134")
+    body = tuple(InputFrame(jump=True) for _ in range(85))
+
+    source = _native_jump_analysis(level, body)
+    callable_windows = source.jump_opportunity_windows()
+    retrigger_windows = auto._held_jump_retrigger_opportunity_windows(
+        body,
+        callable_windows,
+        range_start=0,
+        range_end=len(body) - 1,
+    )
+
+    # Tick 75 is the landing/state-transition tick and cannot jump. Tick 76 is
+    # the first grounded callable tick, but the original press is still held.
+    assert source.successful_jumps() == (0,)
+    assert not any(start <= 75 <= end for start, end in callable_windows)
+    assert any(start <= 76 <= end for start, end in callable_windows)
+    assert retrigger_windows[0][0] == 76
+    changed = auto._mutate_held_jump_retrigger_known(body, 76)
+    result = NativeSearchSession(level).evaluate_replay(changed, trace_stride=1)
+    assert not changed[75].jump and changed[76].jump
+    assert result.successful_jumps() == (0, 76)
 
 
 def _load_bundled_replay(relative_path: str) -> tuple[Level, tuple[InputFrame, ...]]:

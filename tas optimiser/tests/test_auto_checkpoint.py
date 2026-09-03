@@ -46,7 +46,7 @@ def test_v304_checkpoint_format_rejects_non_checkpoint_json(tmp_path) -> None:
         read_auto_checkpoint(path)
 
 
-def test_v307_checkpoint_identity_accepts_exact_released_v305_build() -> None:
+def test_v308_checkpoint_identity_accepts_exact_released_v305_build() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
     from nv14_checkpoint import OPTIMISER_VERSION, optimiser_build_hash
 
@@ -69,7 +69,7 @@ def test_v307_checkpoint_identity_accepts_exact_released_v305_build() -> None:
     _validate_checkpoint_identity(stored, expected)
 
 
-def test_v307_checkpoint_identity_rejects_other_v305_build() -> None:
+def test_v308_checkpoint_identity_rejects_other_v305_build() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
     from nv14_checkpoint import OPTIMISER_VERSION, optimiser_build_hash
 
@@ -91,7 +91,7 @@ def test_v307_checkpoint_identity_rejects_other_v305_build() -> None:
         _validate_checkpoint_identity(stored, expected)
 
 
-def test_v307_checkpoint_identity_accepts_exact_released_v306_build() -> None:
+def test_v308_checkpoint_identity_accepts_exact_released_v306_build() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
     from nv14_checkpoint import OPTIMISER_VERSION, optimiser_build_hash
 
@@ -114,7 +114,7 @@ def test_v307_checkpoint_identity_accepts_exact_released_v306_build() -> None:
     _validate_checkpoint_identity(stored, expected)
 
 
-def test_v307_checkpoint_identity_rejects_other_v306_build() -> None:
+def test_v308_checkpoint_identity_rejects_other_v306_build() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
     from nv14_checkpoint import OPTIMISER_VERSION, optimiser_build_hash
 
@@ -130,6 +130,51 @@ def test_v307_checkpoint_identity_rejects_other_v306_build() -> None:
     }
     stored = dict(expected)
     stored["optimiser_version"] = "3.06"
+    stored["optimiser_build_sha256"] = "0" * 64
+
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, expected)
+
+
+def test_v308_checkpoint_identity_accepts_exact_released_v307_build() -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+    from nv14_checkpoint import OPTIMISER_VERSION, optimiser_build_hash
+
+    expected = {
+        "optimiser_version": OPTIMISER_VERSION,
+        "optimiser_build_sha256": optimiser_build_hash(),
+        "level_identifier": "00-3",
+        "level_sha256": "level",
+        "simulate_enemies": True,
+        "input_replay_sha256": "input",
+        "parent_replay_sha256": ["parent"],
+        "configuration_sha256": "config",
+    }
+    stored = dict(expected)
+    stored["optimiser_version"] = "3.07"
+    stored["optimiser_build_sha256"] = (
+        "9ee3cd695e42f53bc157f9edb2970914a276ffc1e640e6a39e5d7817bbf8b79e"
+    )
+
+    _validate_checkpoint_identity(stored, expected)
+
+
+def test_v308_checkpoint_identity_rejects_other_v307_build() -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+    from nv14_checkpoint import OPTIMISER_VERSION, optimiser_build_hash
+
+    expected = {
+        "optimiser_version": OPTIMISER_VERSION,
+        "optimiser_build_sha256": optimiser_build_hash(),
+        "level_identifier": "00-3",
+        "level_sha256": "level",
+        "simulate_enemies": True,
+        "input_replay_sha256": "input",
+        "parent_replay_sha256": ["parent"],
+        "configuration_sha256": "config",
+    }
+    stored = dict(expected)
+    stored["optimiser_version"] = "3.07"
     stored["optimiser_build_sha256"] = "0" * 64
 
     with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
