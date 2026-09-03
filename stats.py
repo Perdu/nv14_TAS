@@ -66,9 +66,14 @@ def parse_score(value, score_type="Speedrun"):
 
 def get_total_rta_time_no_loadtimes(rta_data, score_type="Speedrun"):
     total_score = 0
-    for key, value in rta_data.items():
-        if "time" in rta_data[key][score_type]:
-            rta_score = parse_score(rta_data[key][score_type]["time"], score_type)
+    for value in rta_data.values():
+        if not isinstance(value, dict):
+            continue
+        score_data = value.get(score_type)
+        if not isinstance(score_data, dict) or "time" not in score_data:
+            continue
+        rta_score = parse_score(score_data["time"], score_type)
+        if rta_score is not None:
             total_score += rta_score
     return total_score
 
@@ -113,8 +118,13 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True, di
             missing.append(key)
             continue
         
-        diff = rta_score - tas_score  # Positive = RTA is slower
-        perc_diff =  ((rta_score - tas_score)/rta_score) * 100
+        if score_type.lower() == "speedrun":
+            # Lower is better: positive means time saved by the TAS.
+            diff = rta_score - tas_score
+        else:
+            # Higher is better: positive means score gained by the TAS.
+            diff = tas_score - rta_score
+        perc_diff = (diff / rta_score) * 100 if rta_score else 0
         total_tas += tas_score
         total_rta += rta_score
         results.append((key, tas_score, rta_score, diff, perc_diff))
@@ -165,7 +175,10 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True, di
     # Display with bar charts
     unit = "f" if score_type.lower() == "speedrun" else "s"
     if sort:
-        sort_type_text = "time saved over 0th"
+        if score_type.lower() == "speedrun":
+            sort_type_text = "time saved over 0th"
+        else:
+            sort_type_text = "score gained over 0th"
     else:
         sort_type_text = "level"
 
@@ -191,10 +204,9 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True, di
 
     # Display totals
     if results and display_totals:
-        total_diff = total_rta - total_tas
-        
-        total_rta_all_levels = get_total_rta_time_no_loadtimes(rta_data, score_type)
         if score_type == "Speedrun":
+            total_diff = total_rta - total_tas
+            total_rta_all_levels = get_total_rta_time_no_loadtimes(rta_data, score_type)
             total_diff_s = total_diff * 0.025
             formatted_diff = format_seconds(total_diff_s)
             formatted_tas = format_seconds(total_tas * 0.025)
@@ -205,10 +217,11 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True, di
             print(f"Total RTA: {total_rta} {unit} ({formatted_rta}) / {total_rta_all_levels} f ({formatted_rta_all_levels}) ({percentage_rta:.2f} %)")
             print(f"Total Δ   = +{total_diff} {unit} ({formatted_diff})")
         else:
+            total_diff = total_tas - total_rta
             formatted = format_seconds(total_diff)
             print(f"Total TAS: {total_tas:.3f} {unit}")
             print(f"Total RTA: {total_rta:.3f} {unit}")
-            print(f"Total Δ   = +{total_diff:.3f} {unit} ({formatted})")
+            print(f"Total Δ   = {total_diff:+.3f} {unit} ({formatted})")
     
     if missing:
         print(f"\n⚠ Missing RTA entries for: {', '.join(missing)}")
@@ -397,3 +410,6 @@ if __name__ == "__main__":
     display_time_difference("Speedrun", sort=True, use_color=use_color, display_totals=False)
     print()
     display_episode_grid(filename, "Highscore", use_gradient=False, github=github)
+    print()
+    display_time_difference("Highscore", sort=False, use_color=use_color, display_totals=True)
+    display_time_difference("Highscore", sort=True, use_color=use_color, display_totals=False)
