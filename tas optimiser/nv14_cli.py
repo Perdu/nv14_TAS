@@ -1770,6 +1770,31 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     command.add_argument(
+        "--auto-splice-plans-per-pair",
+        modes=auto_modes,
+        type=parse_positive_int,
+        default=2,
+        metavar="N",
+        help=(
+            "maximum ranked sectional splice plans attempted for each "
+            "ordered recipient/donor pair; larger values can expose lower-"
+            "ranked productive splices but increase repair work (default: 2)"
+        ),
+    )
+    command.add_argument(
+        "--auto-auxiliary-beam-seeds",
+        modes=auto_modes,
+        type=parse_nonnegative_int,
+        default=1,
+        metavar="N",
+        help=(
+            "maximum promising rejected splice-repair candidates seeded "
+            "into one next-round child beam per surviving recipient; "
+            "includes normal corridors and junctions; 0 disables "
+            "(default: 1)"
+        ),
+    )
+    command.add_argument(
         "--auto-cheap-pulses",
         modes=auto_modes,
         type=int,
@@ -2522,6 +2547,8 @@ def main() -> None:
                 splice_repair_revisit_limit=(
                     args.auto_splice_repair_revisit_limit
                 ),
+                splice_plans_per_pair=args.auto_splice_plans_per_pair,
+                auxiliary_beam_seeds=args.auto_auxiliary_beam_seeds,
                 range_start=auto_range_start,
                 range_end=auto_range_end,
                 cheap_pulse_limit=args.auto_cheap_pulses,

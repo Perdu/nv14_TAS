@@ -29,6 +29,8 @@ velocity-tolerance = 0.75
 all-input-repair = true
 beam_repair_revisit_limit = 4
 splice_repair_revisit_limit = 100
+splice_plans_per_pair = 2
+auxiliary_beam_seeds = 1
 
 [local]
 

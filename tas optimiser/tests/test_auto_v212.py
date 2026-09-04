@@ -26,6 +26,8 @@ def test_v213_auto_parser_uses_local_step_controls_without_a_bank() -> None:
     assert defaults.auto_campaign_local_steps == 10_000
     assert defaults.auto_beam_repair_revisit_limit == 2
     assert defaults.auto_splice_repair_revisit_limit == 3
+    assert defaults.auto_splice_plans_per_pair == 2
+    assert defaults.auto_auxiliary_beam_seeds == 1
 
     configured = parser.parse_args(
         [
@@ -43,6 +45,10 @@ def test_v213_auto_parser_uses_local_step_controls_without_a_bank() -> None:
             "4",
             "--auto-splice-repair-revisit-limit",
             "7",
+            "--auto-splice-plans-per-pair",
+            "5",
+            "--auto-auxiliary-beam-seeds",
+            "4",
         ]
     )
     assert configured.auto_deterministic is False
@@ -52,6 +58,8 @@ def test_v213_auto_parser_uses_local_step_controls_without_a_bank() -> None:
     assert configured.auto_campaign_local_steps == 123456
     assert configured.auto_beam_repair_revisit_limit == 4
     assert configured.auto_splice_repair_revisit_limit == 7
+    assert configured.auto_splice_plans_per_pair == 5
+    assert configured.auto_auxiliary_beam_seeds == 4
 
 
 @pytest.mark.parametrize(
@@ -100,6 +108,11 @@ def test_v213_local_step_config_accepts_zero_but_rejects_negative() -> None:
         AutoConfig(iterations=0, beam_repair_revisit_limit=0)
     with pytest.raises(ValueError, match="splice_repair_revisit_limit"):
         AutoConfig(iterations=0, splice_repair_revisit_limit=0)
+    with pytest.raises(ValueError, match="splice_plans_per_pair"):
+        AutoConfig(iterations=0, splice_plans_per_pair=0)
+    assert AutoConfig(iterations=0, auxiliary_beam_seeds=0).auxiliary_beam_seeds == 0
+    with pytest.raises(ValueError, match="auxiliary_beam_seeds"):
+        AutoConfig(iterations=0, auxiliary_beam_seeds=-1)
 
 
 def test_v213_cli_forwards_local_repair_controls_to_auto_config(
@@ -117,7 +130,7 @@ def test_v213_cli_forwards_local_repair_controls_to_auto_config(
         f"{encode_complex_replay(source)}#\n",
         encoding="utf-8",
     )
-    observed: list[tuple[bool, int, str, int, int, int, int]] = []
+    observed: list[tuple[bool, int, str, int, int, int, int, int, int]] = []
     real_optimise = opt.optimise_autonomous
 
     def recording_optimise(level, frames, config, *, progress=None, best_callback=None):
@@ -130,6 +143,8 @@ def test_v213_cli_forwards_local_repair_controls_to_auto_config(
                 config.repair_campaign_local_limit,
                 config.beam_repair_revisit_limit,
                 config.splice_repair_revisit_limit,
+                config.splice_plans_per_pair,
+                config.auxiliary_beam_seeds,
             )
         )
         return real_optimise(
@@ -162,6 +177,10 @@ def test_v213_cli_forwards_local_repair_controls_to_auto_config(
             "4",
             "--auto-splice-repair-revisit-limit",
             "7",
+            "--auto-splice-plans-per-pair",
+            "5",
+            "--auto-auxiliary-beam-seeds",
+            "4",
             "--output",
             str(output_path),
         ],
@@ -169,7 +188,7 @@ def test_v213_cli_forwards_local_repair_controls_to_auto_config(
 
     opt.main()
 
-    assert observed == [(False, 777, "fixed", 7, 123456, 4, 7)]
+    assert observed == [(False, 777, "fixed", 7, 123456, 4, 7, 5, 4)]
     assert output_path.exists()
 
 

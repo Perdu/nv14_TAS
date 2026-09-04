@@ -12,6 +12,10 @@ beam = 64
 max_retime = 3
 workers = 8
 runs = 0
+# Maximum ranked sectional splice plans attempted per recipient/donor pair.
+splice_plans_per_pair = 2
+# Carry this many promising rejected repairs into the next child beam.
+auxiliary_beam_seeds = 1
 # Stop after this many rounds without an objective or >=0.5 px distance gain.
 stagnation_runs = 20
 # Uncomment both lines for restart-safe spot/pre-emptible campaigns.

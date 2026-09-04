@@ -59,6 +59,8 @@ def test_auto_parser_defaults_and_overrides() -> None:
     assert defaults.auto_max_alignment == 3
     assert defaults.auto_beam_repair_revisit_limit == 2
     assert defaults.auto_splice_repair_revisit_limit == 3
+    assert defaults.auto_splice_plans_per_pair == 2
+    assert defaults.auto_auxiliary_beam_seeds == 1
     assert not hasattr(defaults, "auto_deep_repairs")
     assert not hasattr(defaults, "auto_repair_refill")
     assert defaults.auto_objective == "speedrun"
@@ -92,6 +94,10 @@ def test_auto_parser_defaults_and_overrides() -> None:
             "6",
             "--auto-splice-repair-revisit-limit",
             "9",
+            "--auto-splice-plans-per-pair",
+            "5",
+            "--auto-auxiliary-beam-seeds",
+            "4",
             "--auto-objective",
             "highscore",
             "--auto-require-reference-gold",
@@ -114,6 +120,8 @@ def test_auto_parser_defaults_and_overrides() -> None:
     assert configured.auto_max_alignment == 5
     assert configured.auto_beam_repair_revisit_limit == 6
     assert configured.auto_splice_repair_revisit_limit == 9
+    assert configured.auto_splice_plans_per_pair == 5
+    assert configured.auto_auxiliary_beam_seeds == 4
     assert configured.auto_objective == "highscore"
     assert configured.auto_require_reference_gold is True
     assert configured.auto_max_extra_ticks == 160
@@ -162,13 +170,27 @@ def test_seed_parser_rejects_non_integer_non_random() -> None:
     (
         "--auto-beam-repair-revisit-limit",
         "--auto-splice-repair-revisit-limit",
+        "--auto-splice-plans-per-pair",
     ),
 )
-def test_auto_repair_revisit_limits_must_be_positive(option: str) -> None:
+def test_positive_auto_limits_must_be_positive(option: str) -> None:
     parser = opt.build_parser()
 
     with pytest.raises(SystemExit):
         parser.parse_args(["auto", "input.txt", option, "0"])
+
+
+def test_auxiliary_beam_seed_limit_is_nonnegative() -> None:
+    parser = opt.build_parser()
+
+    disabled = parser.parse_args(
+        ["auto", "input.txt", "--auto-auxiliary-beam-seeds", "0"]
+    )
+    assert disabled.auto_auxiliary_beam_seeds == 0
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["auto", "input.txt", "--auto-auxiliary-beam-seeds", "-1"]
+        )
 
 
 def test_local_subcommand_still_requires_target_frame(tmp_path, monkeypatch) -> None:

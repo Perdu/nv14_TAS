@@ -8,9 +8,12 @@ from queue import Queue
 from threading import Event, Thread, current_thread
 from types import SimpleNamespace
 
+import pytest
+
 import nv14_auto_parallel as parallel
 from nv14_auto import (
     AUTO_OBJECTIVE_SPEEDRUN,
+    AutoBeamSeed,
     AutoCandidate,
     AutoConfig,
     AutoEvaluation,
@@ -18,6 +21,7 @@ from nv14_auto import (
     AutoResult,
     AutoStats,
     CompactTracePoint,
+    SpliceAuxiliarySeed,
 )
 from nv14_engine import InputFrame
 
@@ -116,6 +120,115 @@ def _member(member_id: int, parent_id: int, rank: int) -> parallel._AutoPopulati
         recipient_member_id=member_id,
         primary_family_id=parent_id,
     )
+
+
+def test_v311_auxiliary_seed_selection_is_deterministic_unique_and_bounded() -> None:
+    recipient = _result(10, 1.0).best.working_frames
+    neutral = InputFrame()
+
+    def candidate(
+        frames: tuple[InputFrame, ...],
+        description: str,
+        priority: int,
+    ) -> SpliceAuxiliarySeed:
+        return SpliceAuxiliarySeed(
+            AutoBeamSeed(frames, description),
+            (priority,),
+        )
+
+    parent = candidate(recipient, "recipient must be excluded", -100)
+    right = candidate((InputFrame(right=True), neutral), "right", 0)
+    duplicate_late = candidate((InputFrame(left=True), neutral), "z duplicate", 1)
+    duplicate_stable = candidate((InputFrame(left=True), neutral), "a duplicate", 1)
+    jump = candidate((InputFrame(jump=True), neutral), "jump", 2)
+    pool = (parent, duplicate_late, jump, right, duplicate_stable)
+    config = AutoConfig(iterations=0, beam_width=3, auxiliary_beam_seeds=2)
+
+    selected = parallel._select_auxiliary_beam_seeds(
+        pool,
+        config,
+        recipient_working_frames=recipient,
+    )
+    reversed_selected = parallel._select_auxiliary_beam_seeds(
+        tuple(reversed(pool)),
+        config,
+        recipient_working_frames=recipient,
+    )
+
+    assert selected == reversed_selected
+    assert [seed.description for seed in selected] == ["right", "a duplicate"]
+    assert len({seed.working_frames for seed in selected}) == len(selected)
+    assert len(
+        parallel._select_auxiliary_beam_seeds(
+            pool,
+            replace(config, beam_width=2, auxiliary_beam_seeds=9),
+            recipient_working_frames=recipient,
+        )
+    ) == 1
+    assert parallel._select_auxiliary_beam_seeds(
+        pool,
+        replace(config, auxiliary_beam_seeds=0),
+        recipient_working_frames=recipient,
+    ) == ()
+
+
+def test_v311_auxiliary_seed_checkpoint_round_trip_and_legacy_default() -> None:
+    member = _member(1, 0, 1)
+    seeds = (
+        AutoBeamSeed(
+            (InputFrame(left=True), InputFrame()),
+            "ordinary corridor frontier",
+            reference_offset=1,
+            candidate_tick=1,
+            reference_tick=2,
+        ),
+        AutoBeamSeed(
+            (InputFrame(right=True), InputFrame()),
+            "junction frontier",
+        ),
+    )
+    member = replace(member, auxiliary_seeds=seeds)
+    payload = parallel._population_member_checkpoint(member)
+
+    def rehydrate(_level, _frames, _config, **_kwargs):
+        return member.result
+
+    restored = parallel._population_member_from_checkpoint(
+        payload,
+        index=0,
+        level=object(),
+        config=AutoConfig(
+            iterations=0,
+            beam_width=3,
+            auxiliary_beam_seeds=2,
+        ),
+        search=rehydrate,
+    )
+    assert restored.auxiliary_seeds == seeds
+
+    legacy_payload = dict(payload)
+    legacy_payload.pop("auxiliary_seeds")
+    legacy = parallel._population_member_from_checkpoint(
+        legacy_payload,
+        index=0,
+        level=object(),
+        config=AutoConfig(iterations=0),
+        search=rehydrate,
+    )
+    assert legacy.auxiliary_seeds == ()
+
+    with pytest.raises(parallel.AutoCheckpointError, match="configured maximum"):
+        parallel._population_member_from_checkpoint(
+            payload,
+            index=0,
+            level=object(),
+            config=AutoConfig(
+                iterations=0,
+                beam_width=2,
+                auxiliary_beam_seeds=1,
+            ),
+            search=rehydrate,
+        )
 
 
 def test_v303_fixed_selection_caps_recipient_and_primary_family() -> None:
@@ -1694,6 +1807,342 @@ def test_v297_splice_worker_returns_and_checkpoints_partial_success_on_cancel(
     assert isinstance(checkpoint, parallel._SpliceWorkerCheckpoint)
     assert checkpoint.task_id == task.task_id
     assert checkpoint.proposal.candidate is candidate
+
+
+def test_v309_splice_worker_honours_configured_plan_limit(monkeypatch) -> None:
+    recipient = parallel._AutoPopulationMember(
+        member_id=1,
+        result=_result(10, 5.0),
+        parent_member_ids=(0,),
+        generation=1,
+        mutations=(),
+    )
+    donor = parallel._AutoPopulationMember(
+        member_id=2,
+        result=_result(10, 6.0, marker=InputFrame(left=True)),
+        parent_member_ids=(0,),
+        generation=1,
+        mutations=(),
+    )
+    plan = SimpleNamespace(
+        recipient_entry_tick=2,
+        recipient_exit_tick=8,
+        donor_entry_tick=3,
+        donor_exit_tick=8,
+        predicted_time_gain=1,
+    )
+    attempted: list[object] = []
+
+    def plans(*args, **kwargs):
+        kwargs["anchor_runs_observer"]((object(),))
+        return (plan,) * 6
+
+    def reject_repair(*args, **kwargs):
+        attempted.append(args[3])
+        return SimpleNamespace(
+            accepted=False,
+            candidate=None,
+            raw_candidate=None,
+            attempts=0,
+            local_simulations=0,
+            rejection_reason="no local repair proposal",
+        )
+
+    monkeypatch.setattr(parallel, "_worker_cancelled", lambda task=None: False)
+    monkeypatch.setattr(parallel, "find_splice_section_plans", plans)
+    monkeypatch.setattr(
+        parallel,
+        "_native_splice_parent",
+        lambda level, run_index, member: SimpleNamespace(
+            result=member.result,
+            member_id=member.member_id,
+        ),
+    )
+    monkeypatch.setattr(
+        parallel,
+        "repair_reference_segment_splice",
+        reject_repair,
+    )
+    task = parallel._SpliceWorkerTask(
+        recipient=recipient,
+        donor=donor,
+        recipient_trace=parallel.prepare_splice_trace(
+            recipient.result.best.evaluation,
+            recipient.result.frames,
+        ),
+        donor_trace=parallel.prepare_splice_trace(
+            donor.result.best.evaluation,
+            donor.result.frames,
+        ),
+        run_index=1,
+        task_id=parallel._SPLICE_TASK_ID_BASE + 1,
+    )
+
+    output = parallel._run_splice_worker_in_session(
+        task,
+        parallel._AutoWorkerContext(
+            object(),
+            AutoConfig(iterations=1, splice_plans_per_pair=4),
+        ),
+    )
+
+    assert len(attempted) == 4
+    assert output.splice_stats.plans == 6
+    assert output.splice_stats.attempted == 4
+
+
+def test_v311_splice_worker_pools_ordinary_and_junction_auxiliary_seeds(
+    monkeypatch,
+) -> None:
+    recipient = parallel._AutoPopulationMember(
+        member_id=1,
+        result=_result(10, 5.0),
+        parent_member_ids=(0,),
+        generation=1,
+        mutations=(),
+    )
+    donor = parallel._AutoPopulationMember(
+        member_id=2,
+        result=_result(10, 6.0, marker=InputFrame(left=True)),
+        parent_member_ids=(0,),
+        generation=1,
+        mutations=(),
+    )
+    ordinary = SimpleNamespace(
+        recipient_entry_tick=1,
+        recipient_exit_tick=5,
+        donor_entry_tick=1,
+        donor_exit_tick=4,
+        predicted_time_gain=1,
+        junction=False,
+    )
+    junction = SimpleNamespace(
+        recipient_entry_tick=-1,
+        recipient_exit_tick=7,
+        donor_entry_tick=-1,
+        donor_exit_tick=5,
+        predicted_time_gain=2,
+        junction=True,
+    )
+    neutral = InputFrame()
+    ordinary_seed = SpliceAuxiliarySeed(
+        AutoBeamSeed(
+            (InputFrame(right=True), neutral),
+            "ordinary promising repair",
+        ),
+        (0,),
+    )
+    junction_seed = SpliceAuxiliarySeed(
+        AutoBeamSeed(
+            (InputFrame(jump=True), neutral),
+            "junction promising repair",
+        ),
+        (1,),
+    )
+
+    def plans(*_args, **kwargs):
+        kwargs["anchor_runs_observer"]((object(),))
+        return ordinary, junction
+
+    def reject_with_seed(_level, _recipient, _donor, plan, **_kwargs):
+        return SimpleNamespace(
+            accepted=False,
+            candidate=None,
+            raw_candidate=None,
+            attempts=1,
+            local_simulations=2,
+            rejection_reason="no local repair proposal",
+            auxiliary_seeds=(
+                ordinary_seed if not plan.junction else junction_seed,
+            ),
+        )
+
+    monkeypatch.setattr(parallel, "_worker_cancelled", lambda task=None: False)
+    monkeypatch.setattr(parallel, "find_splice_section_plans", plans)
+    monkeypatch.setattr(
+        parallel,
+        "select_splice_plans_for_pair",
+        lambda plans, *_args, **_kwargs: plans,
+    )
+    monkeypatch.setattr(
+        parallel,
+        "_native_splice_parent",
+        lambda _level, _generation, member: member,
+    )
+    monkeypatch.setattr(
+        parallel,
+        "repair_reference_segment_splice",
+        reject_with_seed,
+    )
+    task = parallel._SpliceWorkerTask(
+        recipient=recipient,
+        donor=donor,
+        recipient_trace=parallel.prepare_splice_trace(
+            recipient.result.best.evaluation,
+            recipient.result.frames,
+        ),
+        donor_trace=parallel.prepare_splice_trace(
+            donor.result.best.evaluation,
+            donor.result.frames,
+        ),
+        run_index=1,
+        task_id=parallel._SPLICE_TASK_ID_BASE + 1,
+    )
+
+    def run(limit: int):
+        return parallel._run_splice_worker_in_session(
+            task,
+            parallel._AutoWorkerContext(
+                object(),
+                AutoConfig(
+                    iterations=1,
+                    beam_width=3,
+                    splice_plans_per_pair=2,
+                    auxiliary_beam_seeds=limit,
+                ),
+            ),
+        )
+
+    assert [
+        seed.beam_seed.description for seed in run(2).auxiliary_seeds
+    ] == ["ordinary promising repair", "junction promising repair"]
+    assert [
+        seed.beam_seed.description for seed in run(1).auxiliary_seeds
+    ] == ["ordinary promising repair"]
+    assert run(0).auxiliary_seeds == ()
+
+
+def test_v311_campaign_delivers_seed_once_to_first_child_and_preserves_rng(
+    monkeypatch,
+) -> None:
+    neutral = InputFrame()
+    left = InputFrame(left=True)
+    right = InputFrame(right=True)
+    base_seed = 311
+    round_one_markers = {
+        parallel._derive_auto_task_seed(base_seed, 1): left,
+        parallel._derive_auto_task_seed(base_seed, 2): right,
+    }
+    seed = AutoBeamSeed(
+        (InputFrame(left=True, jump=True), neutral),
+        "promising ordinary splice repair",
+    )
+    ranked_seed = SpliceAuxiliarySeed(seed, (0,))
+    task_payloads: list[
+        tuple[int, int, int, int, tuple[AutoBeamSeed, ...]]
+    ] = []
+
+    def fake_search(
+        _level,
+        frames,
+        config,
+        *,
+        progress=None,
+        best_callback=None,
+        auxiliary_seeds=(),
+    ):
+        source = tuple(frames)
+        marker = source[0]
+        if config.iterations == 0:
+            return _result(len(source), 99.0, marker=marker, seed=config.seed)
+        output_marker = round_one_markers.get(config.seed, marker)
+        finish = 10 if marker == neutral else 9
+        return _result(
+            finish,
+            float(config.seed),
+            marker=output_marker,
+            baseline_tick=len(source),
+            seed=config.seed,
+            iterations=config.iterations,
+        )
+
+    real_run_auto_worker = parallel._run_auto_worker
+
+    def recording_worker(task):
+        task_payloads.append(
+            (
+                task.run_index,
+                task.parent_member_id,
+                task.offspring_index,
+                task.seed,
+                task.auxiliary_seeds,
+            )
+        )
+        return real_run_auto_worker(task)
+
+    plan = SimpleNamespace(
+        recipient_entry_tick=1,
+        recipient_exit_tick=6,
+        donor_entry_tick=1,
+        donor_exit_tick=5,
+        predicted_time_gain=1,
+        junction=False,
+    )
+
+    def plans(*_args, **kwargs):
+        kwargs["anchor_runs_observer"]((object(),))
+        return (plan,)
+
+    def rejected_repair(*_args, **_kwargs):
+        return SimpleNamespace(
+            accepted=False,
+            candidate=None,
+            raw_candidate=None,
+            attempts=1,
+            local_simulations=1,
+            rejection_reason="no local repair proposal",
+            auxiliary_seeds=(ranked_seed,),
+        )
+
+    monkeypatch.setattr(parallel, "ProcessPoolExecutor", _SteppedPool)
+    monkeypatch.setattr(parallel, "wait", _stepped_wait)
+    monkeypatch.setattr(parallel, "optimise_autonomous", fake_search)
+    monkeypatch.setattr(parallel, "_run_auto_worker", recording_worker)
+    monkeypatch.setattr(parallel, "find_splice_section_plans", plans)
+    monkeypatch.setattr(
+        parallel,
+        "select_splice_plans_for_pair",
+        lambda found, *_args, **_kwargs: found,
+    )
+    monkeypatch.setattr(
+        parallel,
+        "_native_splice_parent",
+        lambda _level, _generation, member: member,
+    )
+    monkeypatch.setattr(
+        parallel,
+        "repair_reference_segment_splice",
+        rejected_repair,
+    )
+
+    campaign = parallel.optimise_autonomous_campaign(
+        object(),
+        (neutral,) * 10,
+        AutoConfig(
+            iterations=1,
+            beam_width=2,
+            seed=base_seed,
+            splice_plans_per_pair=1,
+            auxiliary_beam_seeds=1,
+        ),
+        workers=2,
+        runs=2,
+        search=fake_search,
+    )
+
+    second_round = [payload for payload in task_payloads if payload[0] == 2]
+    seeded = [payload for payload in second_round if payload[4]]
+    assert campaign.completed_runs == 2
+    assert len(seeded) == 1
+    assert seeded[0][2] == 1
+    assert seeded[0][4] == (seed,)
+    assert all(not payload[4] for payload in second_round if payload[2] == 2)
+    same_child_attempts = [
+        payload
+        for payload in second_round
+        if payload[1:3] == seeded[0][1:3]
+    ]
+    assert {payload[3] for payload in same_child_attempts} == {seeded[0][3]}
 
 
 def test_v297_interrupt_reaps_splice_finishing_during_shutdown_grace(

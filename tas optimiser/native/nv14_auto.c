@@ -398,6 +398,26 @@ static int nv14_replay_trace_contact_equal(
         left->previous_jump_held == right->previous_jump_held;
 }
 
+static int nv14_replay_trace_splice_contact_equal(
+    const nv14_replay_trace_point *left,
+    const nv14_replay_trace_point *right
+)
+{
+    /* wall_x and floor_{x,y} are the most recently observed contact normals.
+     * The simulation does not clear them on every later frame.  They cannot
+     * affect player physics while away from a wall or airborne respectively,
+     * so sectional splice matching compares them only while active. */
+    return left->player_state == right->player_state &&
+        left->in_air == right->in_air &&
+        left->near_wall == right->near_wall &&
+        (!left->near_wall || left->wall_x == right->wall_x) &&
+        (left->in_air || (
+            left->floor_x == right->floor_x &&
+            left->floor_y == right->floor_y
+        )) &&
+        left->previous_jump_held == right->previous_jump_held;
+}
+
 static int nv14_replay_trace_route_matches(
     const nv14_replay_trace_result *candidate,
     size_t candidate_row,
@@ -443,7 +463,8 @@ static double nv14_replay_trace_distance(
     size_t candidate_row,
     const nv14_replay_trace_result *reference,
     size_t reference_row,
-    const nv14_replay_alignment_spec *spec
+    const nv14_replay_alignment_spec *spec,
+    int contact_matches
 )
 {
     const nv14_replay_trace_point *left = &candidate->trace[candidate_row];
@@ -452,7 +473,7 @@ static double nv14_replay_trace_distance(
     double dy = left->y - right->y;
     double dvx = left->vx - right->vx;
     double dvy = left->vy - right->vy;
-    double contact_penalty = nv14_replay_trace_contact_equal(left, right)
+    double contact_penalty = contact_matches
         ? 0.0 : spec->contact_mismatch_penalty;
     double static_penalty = 0.0;
     if (left->in_air != right->in_air)
@@ -737,7 +758,14 @@ int nv14_replay_trace_find_alignment(
         if (zero_found < 0) return -1;
         if (zero_found > 0)
             zero_distance = nv14_replay_trace_distance(
-                candidate, row, reference, zero_row, spec
+                candidate,
+                row,
+                reference,
+                zero_row,
+                spec,
+                nv14_replay_trace_contact_equal(
+                    point, &reference->trace[zero_row]
+                )
             );
 
         if (spec->objective == NV14_REPLAY_ALIGNMENT_SPEEDRUN) {
@@ -815,7 +843,14 @@ int nv14_replay_trace_find_alignment(
                 }
                 if (eligible) {
                     distance = nv14_replay_trace_distance(
-                        candidate, row, reference, reference_row, spec
+                        candidate,
+                        row,
+                        reference,
+                        reference_row,
+                        spec,
+                        nv14_replay_trace_contact_equal(
+                            point, reference_point
+                        )
                     );
                     if (spec->objective == NV14_REPLAY_ALIGNMENT_HIGHSCORE &&
                         offset != 0 && distance + 1e-6 >= zero_distance)
@@ -1065,7 +1100,9 @@ int nv14_replay_trace_find_splice_alignment(
                     isfinite(reference_point->y) &&
                     isfinite(reference_point->vx) &&
                     isfinite(reference_point->vy) &&
-                    nv14_replay_trace_contact_equal(point, reference_point) &&
+                    nv14_replay_trace_splice_contact_equal(
+                        point, reference_point
+                    ) &&
                     nv14_replay_trace_splice_route_equal(
                         candidate,
                         candidate_row,
@@ -1094,7 +1131,10 @@ int nv14_replay_trace_find_splice_alignment(
                         candidate_row,
                         reference,
                         reference_row,
-                        &distance_spec
+                        &distance_spec,
+                        nv14_replay_trace_splice_contact_equal(
+                            point, reference_point
+                        )
                     );
                     if (!nv14_replay_trace_score_lead(
                             offset,

@@ -425,16 +425,19 @@ def test_splice_plan_requires_a_genuine_local_time_gain() -> None:
         )
     )
 
-    runs = auto.find_splice_anchor_runs(
-        recipient,
-        donor,
+    # This test isolates two bounded corridors. Start at trace tick one so the
+    # separate, valid replay-origin splice introduced in v3.09 is out of scope.
+    alignment = replace(
         _plan_alignment_spec(),
+        recipient_start_tick=1,
+        donor_start_tick=1,
     )
+    runs = auto.find_splice_anchor_runs(recipient, donor, alignment)
     assert [run.frame_offset for run in runs] == [-3, -3]
     assert auto.find_splice_section_plans(
         recipient,
         donor,
-        _plan_alignment_spec(),
+        alignment,
         _plan_spec(),
         anchor_runs=runs,
     ) == ()
@@ -588,10 +591,17 @@ def test_highscore_plan_accepts_extra_gold_that_outweighs_time_loss() -> None:
     )
     objective = auto.AUTO_OBJECTIVE_HIGHSCORE
 
+    # Exercise the original bounded-section rule independently of the new
+    # donor-prefix candidate.
+    alignment = replace(
+        _plan_alignment_spec(objective=objective),
+        recipient_start_tick=1,
+        donor_start_tick=1,
+    )
     plans = auto.find_splice_section_plans(
         recipient,
         donor,
-        _plan_alignment_spec(objective=objective),
+        alignment,
         _plan_spec(objective=objective),
     )
 

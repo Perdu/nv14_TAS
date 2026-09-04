@@ -32,12 +32,14 @@ from typing import Any
 import nv14_auto as _auto_policy
 from nv14_auto import (
     _ACTIVE_NATIVE_SESSION,
+    AutoBeamSeed,
     AutoCandidate,
     AutoConfig,
     AutoProgress,
     AutoResult,
     AutoStats,
     SpliceAlignmentSpec,
+    SpliceAuxiliarySeed,
     SplicePlanSpec,
     auto_candidate_outcome_key,
     auto_objective_value,
@@ -45,6 +47,7 @@ from nv14_auto import (
     find_splice_section_plans,
     optimise_autonomous,
     repair_reference_segment_splice,
+    select_splice_plans_for_pair,
     verify_trimmed_replay,
 )
 from nv14_checkpoint import (
@@ -66,20 +69,18 @@ StatusCallback = Callable[[str], None]
 SearchFunction = Callable[..., AutoResult]
 
 # Planning can identify many near-identical corridors in two long traces.  The
-# survivor-level safeguards still see alternatives from different intervals,
-# while this bound keeps a round-end splice pass proportional to population
-# size rather than the number of overlapping anchor windows.
-_SECTION_SPLICE_PLANS_PER_PAIR = 2
+# user-configurable per-pair plan limit keeps a round-end splice pass bounded
+# while allowing deliberately deeper exploration when promising sections are
+# known to exist.
 _SECTIONAL_PROFILE_MAX_WINDOWS = 24
 _SPLICE_TASK_ID_BASE = 1 << 63
 _POPULATION_SPLICE_NICHE_TICKS = 12
 _AUTO_STAGNATION_MIN_DISTANCE_GAIN_PX = 0.5
 
-# v3.08 adds a prospective worker mutation without changing durable campaign
-# state. The complete state required to continue is already present in exact
-# released v3.05-v3.07 checkpoints, including the v3.07 player-boundary and
-# stagnation rules. Keep this allow-list exact so unrelated or modified prior
-# builds still fail strict identity validation.
+# Exact older releases can resume into v3.12 when every newly configurable
+# value retains its historical/default behaviour. Pre-v3.11 releases start
+# without pending auxiliary seeds; v3.11 retains its checkpointed seeds.
+# Keep this allow-list exact so modified prior builds still fail validation.
 _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS = {
     (
         "3.05",
@@ -92,6 +93,22 @@ _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS = {
     (
         "3.07",
         "9ee3cd695e42f53bc157f9edb2970914a276ffc1e640e6a39e5d7817bbf8b79e",
+    ),
+    (
+        "3.08",
+        "0403296b82bdd9c711a35f719608cea5982da23413d2d476f4b2bfcaffdd47e5",
+    ),
+    (
+        "3.09",
+        "759ff49138cbafe636c515d26f033255b11079da4ffe1d5fb5ccb9d7073a8220",
+    ),
+    (
+        "3.10",
+        "48e851b680b4be8c460210fe270d8be51a7f622aa866c59a0112d05456a07879",
+    ),
+    (
+        "3.11",
+        "2ec99abdb9288c9774443f8a104eda2003eb1f4691c8d17075f285b45465c218",
     ),
 }
 
@@ -143,6 +160,7 @@ class _AutoWorkerTask:
     parent_member_id: int = 0
     offspring_index: int = 1
     cancel_slot: int = -1
+    auxiliary_seeds: tuple[AutoBeamSeed, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +206,7 @@ class _AutoPopulationMember:
     splice_interval: tuple[int, int, int, int] | None = None
     splice_donors: tuple[AutoSpliceDonor, ...] = ()
     splice_donor_index: int = 0
+    auxiliary_seeds: tuple[AutoBeamSeed, ...] = ()
 
     @property
     def parent_member_id(self) -> int | None:
@@ -436,6 +455,7 @@ class _AutoTaskRecord:
     output_member_id: int | None = None
     cancelled: bool = False
     preempted: bool = False
+    auxiliary_seeds: tuple[AutoBeamSeed, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -491,6 +511,7 @@ class _SpliceWorkerResult:
     splice_stats: _SpliceRoundStats
     auto_stats: AutoStats
     donor_index: int = 0
+    auxiliary_seeds: tuple[SpliceAuxiliarySeed, ...] = ()
 
 
 @dataclass(slots=True)
@@ -974,12 +995,21 @@ def _run_auto_worker(task: _AutoWorkerTask) -> _AutoWorkerResult:
             )
 
     check_cancelled()
+    search_kwargs: dict[str, object] = {
+        "progress": check_cancelled,
+        "best_callback": checkpoint,
+    }
+    # Preserve compatibility with injected/test search functions that predate
+    # v3.11.  The new keyword is semantically unnecessary when the payload is
+    # empty, and is only supplied to the real entry point when there is work to
+    # seed.
+    if task.auxiliary_seeds:
+        search_kwargs["auxiliary_seeds"] = task.auxiliary_seeds
     result = optimise_autonomous(
         context.level,
         task.frames,
         replace(context.config, seed=task.seed),
-        progress=check_cancelled,
-        best_callback=checkpoint,
+        **search_kwargs,
     )
     splice_donors = _select_worker_splice_donors(result, context.config)
     return _AutoWorkerResult(
@@ -1110,7 +1140,7 @@ def _population_splice_niche(
         return (member.selection_recipient_member_id, -1, -1)
     return (
         member.selection_recipient_member_id,
-        interval[0] // _POPULATION_SPLICE_NICHE_TICKS,
+        max(0, interval[0]) // _POPULATION_SPLICE_NICHE_TICKS,
         interval[1] // _POPULATION_SPLICE_NICHE_TICKS,
     )
 
@@ -1560,6 +1590,36 @@ def _splice_repair_changed(repair: object) -> bool:
     )
 
 
+def _select_auxiliary_beam_seeds(
+    candidates: Sequence[SpliceAuxiliarySeed],
+    config: AutoConfig,
+    *,
+    recipient_working_frames: Sequence[InputFrame],
+) -> tuple[AutoBeamSeed, ...]:
+    """Select unique promising frontiers without favouring splice kind."""
+    limit = min(
+        config.auxiliary_beam_seeds,
+        max(0, config.beam_width - 1),
+    )
+    if limit == 0:
+        return ()
+    recipient_key = _auto_policy._frame_key(recipient_working_frames)
+
+    def stable_rank(candidate: SpliceAuxiliarySeed) -> tuple[object, ...]:
+        return (*candidate.priority, candidate.beam_seed.description)
+
+    unique: dict[bytes, SpliceAuxiliarySeed] = {}
+    for candidate in candidates:
+        key = _auto_policy._frame_key(candidate.beam_seed.working_frames)
+        if key == recipient_key:
+            continue
+        incumbent = unique.get(key)
+        if incumbent is None or stable_rank(candidate) < stable_rank(incumbent):
+            unique[key] = candidate
+    ordered = sorted(unique.values(), key=stable_rank)
+    return tuple(candidate.beam_seed for candidate in ordered[:limit])
+
+
 def _native_splice_parent(
     level: Level,
     generation: int,
@@ -1710,6 +1770,35 @@ def _run_splice_worker_in_session(
     )
     repair_stats = AutoStats()
     outputs: list[_SpliceWorkerCandidate] = []
+    auxiliary_limit = min(
+        config.auxiliary_beam_seeds,
+        max(0, config.beam_width - 1),
+    )
+    auxiliary_archive: dict[bytes, SpliceAuxiliarySeed] = {}
+
+    def retain_auxiliary(seeds: Sequence[SpliceAuxiliarySeed]) -> None:
+        if auxiliary_limit == 0:
+            return
+        for seed in seeds:
+            key = _auto_policy._frame_key(seed.beam_seed.working_frames)
+            incumbent = auxiliary_archive.get(key)
+            if incumbent is None or (
+                seed.priority,
+                seed.beam_seed.description,
+            ) < (
+                incumbent.priority,
+                incumbent.beam_seed.description,
+            ):
+                auxiliary_archive[key] = seed
+        while len(auxiliary_archive) > auxiliary_limit:
+            worst_key = max(
+                auxiliary_archive,
+                key=lambda item: (
+                    auxiliary_archive[item].priority,
+                    auxiliary_archive[item].beam_seed.description,
+                ),
+            )
+            del auxiliary_archive[worst_key]
 
     def finish() -> _SpliceWorkerResult:
         return _SpliceWorkerResult(
@@ -1721,6 +1810,15 @@ def _run_splice_worker_in_session(
             splice_stats=stats,
             auto_stats=repair_stats,
             donor_index=donor_index,
+            auxiliary_seeds=tuple(
+                sorted(
+                    auxiliary_archive.values(),
+                    key=lambda seed: (
+                        seed.priority,
+                        seed.beam_seed.description,
+                    ),
+                )
+            ),
         )
 
     recipient_frames = recipient.result.frames
@@ -1783,12 +1881,17 @@ def _run_splice_worker_in_session(
         )
 
     max_body_length = len(recipient.result.best.working_frames) - 1
-    for plan in plans[:_SECTION_SPLICE_PLANS_PER_PAIR]:
+    selected_plans = select_splice_plans_for_pair(
+        plans,
+        config.splice_plans_per_pair,
+        objective=config.objective,
+    )
+    for plan in selected_plans:
         if _worker_cancelled(task):
             # A previous plan may already have produced a canonical replay.
             # Return that partial successful result instead of converting the
             # entire pair future into cancellation and losing verified work.
-            if outputs:
+            if outputs or auxiliary_archive:
                 return finish()
             raise _AutoWorkerCancelled
         stats.attempted += 1
@@ -1804,6 +1907,7 @@ def _run_splice_worker_in_session(
             max_body_length=max_body_length,
             required_gold_mask=task.required_gold_mask,
         )
+        retain_auxiliary(getattr(repair, "auxiliary_seeds", ()))
         pair_repair_stats = AutoStats(
             local_simulations=repair.local_simulations,
             repair_attempts=repair.attempts,
@@ -1878,6 +1982,7 @@ def _run_serial_sectional_splices(
     *,
     run_index: int,
     required_gold_mask: int = 0,
+    auxiliary_seed_sink: list[AutoBeamSeed] | None = None,
 ) -> tuple[AutoResult | None, _SpliceRoundStats, AutoStats, bool]:
     """Give one-worker sectional donors the normal independent pair limits."""
 
@@ -1907,6 +2012,7 @@ def _run_serial_sectional_splices(
     )
     accepted_bodies = {result.frames, *(donor.frames for donor in donors)}
     best_child: AutoResult | None = None
+    auxiliary_pool: list[SpliceAuxiliarySeed] = []
     interrupted = False
     session = NativeSearchSession(level) if isinstance(level, Level) else None
     token = _ACTIVE_NATIVE_SESSION.set((level, session))
@@ -1961,6 +2067,7 @@ def _run_serial_sectional_splices(
             aggregate_repair_stats = _sum_stats(
                 aggregate_repair_stats, output.auto_stats
             )
+            auxiliary_pool.extend(output.auxiliary_seeds)
             for proposal in output.candidates:
                 candidate = proposal.candidate
                 if candidate.frames in accepted_bodies:
@@ -2021,6 +2128,14 @@ def _run_serial_sectional_splices(
     if best_child is not None:
         stats.survivors = 1
         stats.sectional_survivors = 1
+    if auxiliary_seed_sink is not None:
+        auxiliary_seed_sink.extend(
+            _select_auxiliary_beam_seeds(
+                auxiliary_pool,
+                config,
+                recipient_working_frames=result.best.working_frames,
+            )
+        )
     return best_child, stats, aggregate_repair_stats, interrupted
 
 
@@ -2313,6 +2428,33 @@ def _int_tuple_from_checkpoint(
     return tuple(value)
 
 
+def _splice_interval_from_checkpoint(
+    value: object,
+    *,
+    label: str,
+) -> tuple[int, int, int, int]:
+    """Restore a splice interval, including v3.09's replay-origin entry."""
+    if (
+        not isinstance(value, list)
+        or len(value) != 4
+        or not all(type(item) is int for item in value)
+    ):
+        raise AutoCheckpointError(f"{label} must contain exactly four integers")
+    recipient_entry, recipient_exit, donor_entry, donor_exit = value
+    starts_at_initial_state = recipient_entry == donor_entry == -1
+    if not starts_at_initial_state and (
+        recipient_entry < 0 or donor_entry < 0
+    ):
+        raise AutoCheckpointError(
+            f"{label} entry ticks must both be -1 or both be non-negative"
+        )
+    if recipient_exit < 0 or donor_exit < 0:
+        raise AutoCheckpointError(f"{label} exit ticks must be non-negative")
+    if recipient_exit <= recipient_entry or donor_exit <= donor_entry:
+        raise AutoCheckpointError(f"{label} exits must follow their entries")
+    return recipient_entry, recipient_exit, donor_entry, donor_exit
+
+
 def _auto_stats_checkpoint(stats: AutoStats) -> dict[str, int]:
     return {field_info.name: getattr(stats, field_info.name) for field_info in fields(AutoStats)}
 
@@ -2390,26 +2532,62 @@ def _validate_checkpoint_identity(
         expected.get("optimiser_version"),
         expected.get("optimiser_build_sha256"),
     )
-    build_compatible = (
-        stored_build == expected_build
-        or (
-            expected.get("optimiser_version") == OPTIMISER_VERSION == "3.08"
-            and stored_build in _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS
-        )
+    previous_build_compatible = (
+        expected.get("optimiser_version") == OPTIMISER_VERSION == "3.12"
+        and stored_build in _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS
     )
+    build_compatible = stored_build == expected_build or previous_build_compatible
+
+    configuration_compatible = (
+        stored.get("configuration_sha256")
+        == expected.get("configuration_sha256")
+    )
+    if not configuration_compatible and previous_build_compatible:
+        # v3.08 and earlier used a fixed two plans per pair; v3.10 and earlier
+        # predate auxiliary beam seeds. Inject only absent historical defaults;
+        # v3.11's explicit seed setting must still match the current invocation.
+        stored_configuration = stored.get("configuration")
+        expected_configuration = expected.get("configuration")
+        if (
+            isinstance(stored_configuration, Mapping)
+            and isinstance(expected_configuration, Mapping)
+            and isinstance(stored_configuration.get("auto_config"), Mapping)
+        ):
+            normalised_configuration = dict(stored_configuration)
+            normalised_auto_config = dict(stored_configuration["auto_config"])
+            normalised_auto_config.setdefault("splice_plans_per_pair", 2)
+            normalised_auto_config.setdefault("auxiliary_beam_seeds", 1)
+            normalised_configuration["auto_config"] = normalised_auto_config
+            normalised_expected = dict(expected_configuration)
+            expected_auto_config = normalised_expected.get("auto_config")
+            if isinstance(expected_auto_config, Mapping):
+                normalised_expected_auto_config = dict(expected_auto_config)
+                normalised_expected_auto_config.setdefault(
+                    "splice_plans_per_pair", 2
+                )
+                normalised_expected_auto_config.setdefault(
+                    "auxiliary_beam_seeds", 1
+                )
+                normalised_expected["auto_config"] = (
+                    normalised_expected_auto_config
+                )
+            configuration_compatible = (
+                normalised_configuration == normalised_expected
+            )
     labels = {
         "level_identifier": "level identifier",
         "level_sha256": "level data",
         "simulate_enemies": "enemy-simulation setting",
         "input_replay_sha256": "input replay",
         "parent_replay_sha256": "starting parent replays",
-        "configuration_sha256": "Auto configuration",
     }
     mismatches = ([] if build_compatible else ["optimiser version/build"]) + [
         label
         for key, label in labels.items()
         if stored.get(key) != expected.get(key)
     ]
+    if not configuration_compatible:
+        mismatches.append("Auto configuration")
     if mismatches:
         raise AutoCheckpointError(
             "Auto checkpoint is incompatible with the current invocation: "
@@ -2550,6 +2728,16 @@ def _population_member_checkpoint(member: _AutoPopulationMember) -> dict[str, ob
             _splice_donor_checkpoint(donor) for donor in member.splice_donors
         ],
         "splice_donor_index": member.splice_donor_index,
+        "auxiliary_seeds": [
+            {
+                "working_frames": _checkpoint_frames(seed.working_frames),
+                "description": seed.description,
+                "reference_offset": seed.reference_offset,
+                "candidate_tick": seed.candidate_tick,
+                "reference_tick": seed.reference_tick,
+            }
+            for seed in member.auxiliary_seeds
+        ],
     }
 
 
@@ -2567,6 +2755,75 @@ def _population_member_from_checkpoint(
     raw_donors = value.get("splice_donors")
     if not isinstance(raw_donors, list):
         raise AutoCheckpointError(f"{label}.splice_donors must be an array")
+    raw_auxiliary_seeds = value.get("auxiliary_seeds", [])
+    if not isinstance(raw_auxiliary_seeds, list):
+        raise AutoCheckpointError(
+            f"{label}.auxiliary_seeds must be an array"
+        )
+    auxiliary_limit = min(
+        config.auxiliary_beam_seeds,
+        max(0, config.beam_width - 1),
+    )
+    if len(raw_auxiliary_seeds) > auxiliary_limit:
+        raise AutoCheckpointError(
+            f"{label}.auxiliary_seeds exceeds the configured maximum"
+        )
+    auxiliary_seeds: list[AutoBeamSeed] = []
+    for seed_index, raw_seed in enumerate(raw_auxiliary_seeds):
+        seed_label = f"{label}.auxiliary_seeds[{seed_index}]"
+        if not isinstance(raw_seed, Mapping):
+            raise AutoCheckpointError(f"{seed_label} must be an object")
+        working_frames = _frames_from_checkpoint(
+            raw_seed.get("working_frames"),
+            label=f"{seed_label}.working_frames",
+        )
+        if not working_frames or any(
+            (
+                working_frames[-1].left,
+                working_frames[-1].right,
+                working_frames[-1].jump,
+            )
+        ):
+            raise AutoCheckpointError(
+                f"{seed_label}.working_frames must end in a neutral sentinel"
+            )
+        description = raw_seed.get("description")
+        if not isinstance(description, str):
+            raise AutoCheckpointError(
+                f"{seed_label}.description must be a string"
+            )
+        reference_offset = (
+            _int_from_checkpoint(
+                raw_seed,
+                "reference_offset",
+                label=seed_label,
+            )
+            if "reference_offset" in raw_seed
+            else 0
+        )
+        candidate_tick = _optional_int_from_checkpoint(
+            raw_seed,
+            "candidate_tick",
+            label=seed_label,
+        )
+        reference_tick = _optional_int_from_checkpoint(
+            raw_seed,
+            "reference_tick",
+            label=seed_label,
+        )
+        try:
+            beam_seed = AutoBeamSeed(
+                working_frames=working_frames,
+                description=description,
+                reference_offset=reference_offset,
+                candidate_tick=candidate_tick,
+                reference_tick=reference_tick,
+            )
+        except (TypeError, ValueError) as exc:
+            raise AutoCheckpointError(
+                f"{seed_label} has invalid alignment metadata: {exc}"
+            ) from exc
+        auxiliary_seeds.append(beam_seed)
     pair_value = value.get("splice_parent_pair")
     interval_value = value.get("splice_interval")
     pair = (
@@ -2579,8 +2836,9 @@ def _population_member_from_checkpoint(
     interval = (
         None
         if interval_value is None
-        else _int_tuple_from_checkpoint(
-            interval_value, label=f"{label}.splice_interval", length=4
+        else _splice_interval_from_checkpoint(
+            interval_value,
+            label=f"{label}.splice_interval",
         )
     )
     return _AutoPopulationMember(
@@ -2617,6 +2875,7 @@ def _population_member_from_checkpoint(
         splice_donor_index=_int_from_checkpoint(
             value, "splice_donor_index", label=label
         ),
+        auxiliary_seeds=tuple(auxiliary_seeds),
     )
 
 
@@ -3207,12 +3466,24 @@ def optimise_autonomous_campaign(
                     if progress is not None and update.phase != "baseline":
                         progress(update)
 
+                search_kwargs: dict[str, object] = {
+                    "progress": (
+                        serial_progress if progress is not None else None
+                    ),
+                    "best_callback": serial_checkpoint,
+                }
+                if (
+                    serial_survivor.auxiliary_seeds
+                    and search is optimise_autonomous
+                ):
+                    search_kwargs["auxiliary_seeds"] = (
+                        serial_survivor.auxiliary_seeds
+                    )
                 result = search(
                     level,
                     current.frames,
                     replace(config, seed=seed),
-                    progress=serial_progress if progress is not None else None,
-                    best_callback=serial_checkpoint,
+                    **search_kwargs,
                 )
             except KeyboardInterrupt:
                 interrupted_result = (
@@ -3258,6 +3529,7 @@ def optimise_autonomous_campaign(
             round_mutations = (
                 committed_mutations + _annotated_mutations(worker_output)
             )
+            next_auxiliary_seeds: list[AutoBeamSeed] = []
             try:
                 (
                     splice_child,
@@ -3276,6 +3548,7 @@ def optimise_autonomous_campaign(
                             if config.require_reference_gold
                             else 0
                         ),
+                        auxiliary_seed_sink=next_auxiliary_seeds,
                     )
                 )
             except KeyboardInterrupt:
@@ -3362,6 +3635,11 @@ def optimise_autonomous_campaign(
                     else ()
                 ),
                 splice_donor_index=(1 if serial_is_splice else 0),
+                auxiliary_seeds=(
+                    tuple(next_auxiliary_seeds)
+                    if current.frames == result.frames
+                    else ()
+                ),
             )
             population_selection = _select_adaptive_population(
                 (serial_member,), worker_count
@@ -3481,6 +3759,7 @@ def optimise_autonomous_campaign(
         offspring_index: int,
         *,
         authoritative: bool,
+        seed_override: int | None = None,
     ) -> _AutoTaskRecord:
         nonlocal next_task_id
         key = (generation, parent_member_id, offspring_index)
@@ -3497,16 +3776,27 @@ def optimise_autonomous_campaign(
             parent_member_id=parent_member_id,
             offspring_index=offspring_index,
             seed=(
-                _derive_auto_task_seed(config.seed, task_id)
-                if checkpoint_file is None
-                else _derive_auto_checkpoint_task_seed(
-                    config.seed,
-                    generation,
-                    _replay_sha256(members[parent_member_id].result.frames),
-                    offspring_index,
+                seed_override
+                if seed_override is not None
+                else (
+                    _derive_auto_task_seed(config.seed, task_id)
+                    if checkpoint_file is None
+                    else _derive_auto_checkpoint_task_seed(
+                        config.seed,
+                        generation,
+                        _replay_sha256(
+                            members[parent_member_id].result.frames
+                        ),
+                        offspring_index,
+                    )
                 )
             ),
             authoritative=authoritative,
+            auxiliary_seeds=(
+                members[parent_member_id].auxiliary_seeds
+                if offspring_index == 1
+                else ()
+            ),
         )
         records[task_id] = record
         records_by_key[key] = record
@@ -3648,7 +3938,11 @@ def optimise_autonomous_campaign(
         if key >= checkpoint_key:
             return
         record = records.get(update.task_id)
-        if record is None:
+        if (
+            record is None
+            or record.cancelled
+            or not record.authoritative
+        ):
             return
         checkpoint_key = key
         parent = members[record.parent_member_id]
@@ -3716,6 +4010,7 @@ def optimise_autonomous_campaign(
             parent_member_id=record.parent_member_id,
             offspring_index=record.offspring_index,
             cancel_slot=slot,
+            auxiliary_seeds=record.auxiliary_seeds,
         )
         future = executor.submit(_run_auto_worker, task)
         record.future = future
@@ -3801,6 +4096,48 @@ def optimise_autonomous_campaign(
             record.future = None
             record.cancel_slot = -1
 
+    def refresh_record_auxiliary_seeds(
+        generation: int,
+        parent_member_id: int,
+        offspring_index: int,
+    ) -> _AutoTaskRecord | None:
+        """Replace stale speculative work only when real seeds were found."""
+        key = (generation, parent_member_id, offspring_index)
+        existing = records_by_key.get(key)
+        if existing is None:
+            return None
+        desired = (
+            members[parent_member_id].auxiliary_seeds
+            if offspring_index == 1
+            else ()
+        )
+        if existing.auxiliary_seeds == desired:
+            return existing
+        if existing.authoritative:
+            raise RuntimeError(
+                "authoritative Auto task changed auxiliary seed identity"
+            )
+        existing.authoritative = False
+        replacement_seed = existing.seed
+        if existing.output is not None:
+            # Completed speculative output was retained but never admitted to
+            # the campaign.  It is safe to invalidate without rolling back a
+            # member or global-best callback.
+            existing.cancelled = True
+        else:
+            cancel_record(existing)
+        # Keep the old record reachable by task ID until any running future is
+        # reaped, but detach its generation key so the correctly seeded task
+        # can be created immediately.
+        records_by_key.pop(key, None)
+        return create_record(
+            generation,
+            parent_member_id,
+            offspring_index,
+            authoritative=True,
+            seed_override=replacement_seed,
+        )
+
     def preempt_record(record: _AutoTaskRecord) -> None:
         """Cooperatively pause speculative work without invalidating its key."""
         if (
@@ -3849,15 +4186,17 @@ def optimise_autonomous_campaign(
         for record in speculative[:deficit]:
             preempt_record(record)
 
-    def record_completed_output(
-        record: _AutoTaskRecord,
-        output: _AutoWorkerResult,
-    ) -> None:
-        nonlocal aggregate_stats, completed_searches
+    def commit_completed_output(record: _AutoTaskRecord) -> None:
+        """Admit an authoritative result after its seed identity is final."""
         nonlocal current, committed_mutations, checkpoint_key
-        record.output = output
-        completed_searches += 1
-        aggregate_stats = _sum_stats(aggregate_stats, output.result.stats)
+        output = record.output
+        if (
+            output is None
+            or record.output_member_id is not None
+            or record.cancelled
+            or not record.authoritative
+        ):
+            return
         member = member_from_output(record, output)
         key = auto_result_outcome_key(output.result)
         if key < checkpoint_key:
@@ -3872,6 +4211,20 @@ def optimise_autonomous_campaign(
                 )
             if best_callback is not None:
                 best_callback(output.result.best)
+
+    def record_completed_output(
+        record: _AutoTaskRecord,
+        output: _AutoWorkerResult,
+    ) -> None:
+        nonlocal aggregate_stats, completed_searches
+        record.output = output
+        completed_searches += 1
+        aggregate_stats = _sum_stats(aggregate_stats, output.result.stats)
+        # Speculative tasks may need to be replaced if splice repair discovers
+        # an auxiliary seed for their parent.  Account real work immediately,
+        # but defer member/global-best effects until the generation key becomes
+        # authoritative and its seed payload is final.
+        commit_completed_output(record)
         if status is not None:
             status(
                 f"[auto:parallel] round {record.generation}: worker "
@@ -3977,6 +4330,8 @@ def optimise_autonomous_campaign(
             else:
                 if not isinstance(output, _AutoWorkerResult):
                     raise TypeError("Auto worker returned a splice result")
+                if record.cancelled:
+                    continue
                 record_completed_output(record, output)
 
     def authoritative_records(
@@ -3997,12 +4352,16 @@ def optimise_autonomous_campaign(
         completed_members: Sequence[_AutoPopulationMember],
         generation: int,
         round_stats: _SpliceRoundStats,
-    ) -> tuple[_AutoPopulationMember, ...]:
+    ) -> tuple[
+        tuple[_AutoPopulationMember, ...],
+        dict[int, tuple[AutoBeamSeed, ...]],
+    ]:
         """Admit buffered pair outputs in deterministic pair/plan order."""
         nonlocal aggregate_stats, checkpoint_key, committed_mutations
         nonlocal current, next_member_id
 
         accepted: list[_AutoPopulationMember] = []
+        auxiliary_pools: dict[int, list[SpliceAuxiliarySeed]] = {}
         accepted_bodies = {member.result.frames for member in completed_members}
         accepted_bodies.update(
             source.donor.frames
@@ -4040,6 +4399,9 @@ def optimise_autonomous_campaign(
             aggregate_stats = _sum_stats(aggregate_stats, output.auto_stats)
             recipient = members[record.recipient_member_id]
             donor = members[record.donor_member_id]
+            auxiliary_pools.setdefault(recipient.member_id, []).extend(
+                output.auxiliary_seeds
+            )
             donor_label = (
                 f"{donor.member_id} sectional #{record.donor_index}"
                 if record.donor_index
@@ -4127,7 +4489,16 @@ def optimise_autonomous_campaign(
                 f"[auto:splice] round {generation}: admitted {len(accepted)} "
                 "canonically verified section splice child(ren)"
             )
-        return tuple(accepted)
+        selected_auxiliary = {
+            member.member_id: _select_auxiliary_beam_seeds(
+                auxiliary_pools.get(member.member_id, ()),
+                config,
+                recipient_working_frames=member.result.best.working_frames,
+            )
+            for member in completed_members
+            if auxiliary_pools.get(member.member_id)
+        }
+        return tuple(accepted), selected_auxiliary
 
     def next_speculative_record(
         generation: int,
@@ -4366,14 +4737,29 @@ def optimise_autonomous_campaign(
                 "sectional-donor-verification",
                 donor_verification_failures.pop(run_index, 0),
             )
-            completed_members += commit_splice_outputs(
+            splice_additions, auxiliary_by_recipient = commit_splice_outputs(
                 completed_members, run_index, round_stats
             )
+            completed_members += splice_additions
             population_selection = _select_adaptive_population(
                 completed_members,
                 worker_count,
             )
-            survivors = population_selection.survivors
+            survivors = tuple(
+                replace(
+                    member,
+                    auxiliary_seeds=auxiliary_by_recipient.get(
+                        member.member_id, ()
+                    ),
+                )
+                for member in population_selection.survivors
+            )
+            for survivor in survivors:
+                members[survivor.member_id] = survivor
+            population_selection = replace(
+                population_selection,
+                survivors=survivors,
+            )
             survivor_ids = {member.member_id for member in survivors}
             splice_members = tuple(
                 member for member in completed_members if member.is_splice
@@ -4493,7 +4879,11 @@ def optimise_autonomous_campaign(
             next_task_ids: set[int] = set()
             for key in desired_order:
                 generation, parent_member_id, offspring_index = key
-                record = records_by_key.get(key)
+                record = refresh_record_auxiliary_seeds(
+                    generation,
+                    parent_member_id,
+                    offspring_index,
+                )
                 if record is None:
                     record = create_record(
                         generation,
@@ -4503,6 +4893,7 @@ def optimise_autonomous_campaign(
                     )
                 else:
                     record.authoritative = True
+                    commit_completed_output(record)
                     # A ready splice may have cooperatively paused this exact
                     # provisional child.  Promotion makes it runnable again;
                     # if its old future is still unwinding, reap_done() will

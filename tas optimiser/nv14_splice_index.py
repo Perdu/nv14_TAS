@@ -23,6 +23,32 @@ from dataclasses import dataclass
 SpliceMatchKey = tuple[object, object, object, object, object]
 
 
+def splice_contact_key(point: object) -> tuple[object, ...]:
+    """Return contact state after normalising fields inactive in physics.
+
+    The engine only reads the remembered wall normal while ``near_wall`` is
+    true and the remembered floor normal while the player is grounded.  It
+    deliberately does not clear either normal on every later frame, so
+    comparing the raw values while their contact is inactive can split
+    otherwise compatible trajectories according to an old, irrelevant
+    contact.
+
+    Keep the public/raw ``contact_key`` untouched: this normalisation is only
+    for splice compatibility and its associated distance calculation.
+    """
+
+    contact_key = tuple(getattr(point, "contact_key"))
+    if len(contact_key) < 6:
+        raise TypeError("splice contact_key must contain contact-normal state")
+    normalised = list(contact_key)
+    if not bool(normalised[2]):
+        normalised[3] = 0
+    if bool(normalised[1]):
+        normalised[4] = 0
+        normalised[5] = 0
+    return tuple(normalised)
+
+
 def splice_match_key(point: object) -> SpliceMatchKey:
     """Return the exact contact/route key required at a splice seam.
 
@@ -31,7 +57,7 @@ def splice_match_key(point: object) -> SpliceMatchKey:
     """
 
     return (
-        getattr(point, "contact_key"),
+        splice_contact_key(point),
         getattr(point, "exploded_mine_mask"),
         getattr(point, "open_exit_mask"),
         getattr(point, "opened_locked_door_mask"),
@@ -416,5 +442,6 @@ __all__ = (
     "PreparedSpliceTrace",
     "SpliceMatchKey",
     "prepare_splice_trace",
+    "splice_contact_key",
     "splice_match_key",
 )

@@ -30,6 +30,8 @@ iterations = 10000
 beam = 64
 beam_repair_revisit_limit = 5
 splice_repair_revisit_limit = 8
+auto_splice_plans_per_pair = 6
+auto_auxiliary_beam_seeds = 4
 checkpoint = "auto-campaign.json"
 resume = true
 seed = "random"
@@ -64,6 +66,8 @@ deterministic = false
     assert args.beam == 64
     assert args.auto_beam_repair_revisit_limit == 5
     assert args.auto_splice_repair_revisit_limit == 8
+    assert args.auto_splice_plans_per_pair == 6
+    assert args.auto_auxiliary_beam_seeds == 4
     assert args.auto_checkpoint == Path("auto-campaign.json")
     assert args.auto_resume is True
     assert args.seed == "random"
@@ -199,6 +203,59 @@ def test_config_errors_are_reported_for_unknown_keys_and_invalid_values(tmp_path
         opt.parse_arguments(
             ["auto", "input.txt", "--config", str(invalid_revisit)]
         )
+
+    invalid_plan_limit = _write_config(
+        tmp_path,
+        "[auto]\nauto_splice_plans_per_pair = 0\n",
+    )
+    with pytest.raises(SystemExit, match="invalid value for TOML key"):
+        opt.parse_arguments(
+            ["auto", "input.txt", "--config", str(invalid_plan_limit)]
+        )
+
+    invalid_auxiliary_limit = _write_config(
+        tmp_path,
+        "[auto]\nauxiliary_beam_seeds = -1\n",
+    )
+    with pytest.raises(SystemExit, match="invalid value for TOML key"):
+        opt.parse_arguments(
+            ["auto", "input.txt", "--config", str(invalid_auxiliary_limit)]
+        )
+
+
+def test_auto_toml_accepts_short_splice_plan_limit_name(tmp_path: Path) -> None:
+    config = _write_config(
+        tmp_path,
+        "[auto]\nsplice_plans_per_pair = 7\n",
+    )
+
+    args = opt.parse_arguments(
+        ["auto", "input.txt", "--config", str(config)]
+    )
+
+    assert args.auto_splice_plans_per_pair == 7
+
+
+def test_auto_toml_accepts_short_auxiliary_seed_name_and_zero(
+    tmp_path: Path,
+) -> None:
+    configured = _write_config(
+        tmp_path,
+        "[auto]\nauxiliary_beam_seeds = 3\n",
+    )
+    args = opt.parse_arguments(
+        ["auto", "input.txt", "--config", str(configured)]
+    )
+    assert args.auto_auxiliary_beam_seeds == 3
+
+    disabled = _write_config(
+        tmp_path,
+        "[auto]\nauxiliary_beam_seeds = 0\n",
+    )
+    args = opt.parse_arguments(
+        ["auto", "input.txt", "--config", str(disabled)]
+    )
+    assert args.auto_auxiliary_beam_seeds == 0
 
 
 @pytest.mark.parametrize("mode", ("auto", "local", "jump-pattern"))

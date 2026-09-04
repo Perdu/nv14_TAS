@@ -381,6 +381,312 @@ def test_repair_controller_preserves_seeded_order_and_shared_allowance(
     assert all(seed is evaluation for seed in primary_seed_evaluations)
 
 
+def test_junction_repair_families_share_allowance_without_starvation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, int]] = []
+
+    def record_jump(_level, working, *_args, **kwargs):
+        calls.append(("jump", kwargs["config"].repair_local_limit))
+        proposal = list(working)
+        proposal[0] = auto.InputFrame(right=True)
+        kwargs["score_observer"](5.0)
+        return tuple(proposal), 1, 3
+
+    def record_direction(*_args, **kwargs):
+        calls.append(("direction", kwargs["config"].repair_local_limit))
+        return None, 1, 4
+
+    def record_transition(_level, working, *_args, **kwargs):
+        calls.append(
+            ("strategic-transition", kwargs["config"].repair_local_limit)
+        )
+        proposal = list(working)
+        proposal[0] = auto.InputFrame(left=True)
+        kwargs["score_observer"](10.0)
+        return tuple(proposal), 1, 2
+
+    def record_all(*_args, **kwargs):
+        calls.append(("all-input", kwargs["config"].repair_local_limit))
+        return None, 1, 3
+
+    monkeypatch.setattr(auto, "repair_jump_mutation_lookback", record_jump)
+    monkeypatch.setattr(auto, "repair_direction_window", record_direction)
+    monkeypatch.setattr(
+        auto,
+        "repair_strategic_transition_lookback",
+        record_transition,
+    )
+    monkeypatch.setattr(auto, "repair_all_input_window", record_all)
+    evaluation = _evaluation(4)
+    config = auto.AutoConfig(
+        iterations=1,
+        seed=0,
+        repair_local_limit=12,
+        frame_ahead_repair_multiplier=1,
+    )
+
+    outcome = auto._RepairController(object(), config).attempt(
+        _candidate(evaluation, working=_working(5), sentinel_verified=False),
+        evaluation,
+        failure_tick=4,
+        reference_offset=0,
+        repair_number=1,
+        label="junction repair",
+        strategic=True,
+        strategic_transition_search=True,
+    )
+
+    assert calls == [
+        ("strategic-transition", 3),
+        ("jump", 4),
+        ("direction", 4),
+        ("all-input", 3),
+    ]
+    assert outcome.local_branches == 4
+    assert outcome.local_simulations == 12
+    assert outcome.repair_method == "jump mutation"
+    assert outcome.working_frames is not None
+    assert outcome.working_frames[0] == auto.InputFrame(right=True)
+
+
+@pytest.mark.parametrize(
+    ("override", "observed_limits", "expected_simulations"),
+    ((5, [2, 2, 1], 5), (None, [0, 0, 0], 21)),
+)
+def test_strategic_tier_honours_campaign_override_and_unlimited_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    override: int | None,
+    observed_limits: list[int],
+    expected_simulations: int,
+) -> None:
+    calls: list[int] = []
+
+    def record_family(*_args, **kwargs):
+        limit = kwargs["config"].repair_local_limit
+        calls.append(limit)
+        return None, 1, limit or 7
+
+    monkeypatch.setattr(
+        auto,
+        "repair_strategic_transition_lookback",
+        record_family,
+    )
+    monkeypatch.setattr(auto, "repair_direction_window", record_family)
+    monkeypatch.setattr(auto, "repair_all_input_window", record_family)
+    evaluation = _evaluation(4)
+    outcome = auto._RepairController(
+        object(),
+        auto.AutoConfig(
+            iterations=1,
+            repair_local_limit=0,
+            max_jump_shift=0,
+            max_jump_hold_delta=0,
+        ),
+    ).attempt(
+        _candidate(evaluation, working=_working(5), sentinel_verified=False),
+        evaluation,
+        failure_tick=4,
+        reference_offset=0,
+        repair_number=1,
+        label="junction repair",
+        strategic=True,
+        strategic_transition_search=True,
+        local_limit_override=override,
+    )
+
+    assert calls == observed_limits
+    assert outcome.local_simulations == expected_simulations
+
+
+def test_strategic_transition_keeps_legal_local_retime_and_moved_jump(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    neutral = auto.InputFrame()
+    jumping_right = auto.InputFrame(right=True, jump=True)
+    body = (
+        neutral,
+        neutral,
+        jumping_right,
+        jumping_right,
+        auto.InputFrame(left=True),
+    )
+    working = body + (auto.NEUTRAL_INPUT,)
+    evaluation = _evaluation(5, jump_edges=(2,), missed_jump_edges=(2,))
+    captured = []
+    observed_requirements = {}
+
+    def capture_patches(_level, _seed, patches, **kwargs):
+        captured.extend(patches)
+        observed_requirements.update(kwargs)
+        candidates = tuple(
+            SimpleNamespace(feasible=False) for _patch in patches
+        )
+        return SimpleNamespace(
+            candidates=candidates,
+            budget_exhausted=False,
+            stats=SimpleNamespace(branches=len(patches), simulated_ticks=0),
+        )
+
+    monkeypatch.setattr(auto, "_native_patch_evaluation", capture_patches)
+    proposal, _, _ = auto.repair_strategic_transition_lookback(
+        object(),
+        working,
+        evaluation,
+        seed_evaluation=evaluation,
+        failure_tick=2,
+        reference_offset=0,
+        config=auto.AutoConfig(
+            iterations=1,
+            max_retime=1,
+            repair_window=2,
+            repair_lookback=4,
+            repair_local_limit=20,
+            range_start=0,
+            range_end=4,
+        ),
+    )
+
+    assert proposal is None
+    assert any(
+        len(patch) == 1
+        and patch[0].frame == 2
+        and patch[0].input == neutral
+        for patch in captured
+    )
+    assert 3 in observed_requirements["required_jump_frames"]
+    assert observed_requirements["required_jump_any"]
+    assert observed_requirements["prune_inactive_jump"]
+
+
+def test_route_control_requirements_preserve_caller_masks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    def record_direction(*_args, **kwargs):
+        captured.update(kwargs)
+        return None, 0, 0
+
+    monkeypatch.setattr(
+        auto,
+        "_find_route_control_repair_target",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            candidate_tick=2,
+            required_exit_mask=0b10,
+            required_locked_door_mask=0b100,
+            forbidden_trapdoor_mask=0b1000,
+            label="test control",
+        ),
+    )
+    monkeypatch.setattr(auto, "repair_direction_window", record_direction)
+    evaluation = _evaluation(4)
+    auto._RepairController(
+        object(),
+        auto.AutoConfig(
+            iterations=1,
+            max_jump_shift=0,
+            max_jump_hold_delta=0,
+            all_input_repair=False,
+        ),
+    ).attempt(
+        _candidate(evaluation, working=_working(5), sentinel_verified=False),
+        evaluation,
+        failure_tick=4,
+        reference_offset=0,
+        repair_number=1,
+        label="route repair",
+        required_exit_mask=0b1,
+        required_locked_door_mask=0b10,
+        forbidden_trapdoor_mask=0b100,
+    )
+
+    assert captured["required_exit_mask"] == 0b11
+    assert captured["required_locked_door_mask"] == 0b110
+    assert captured["forbidden_trapdoor_mask"] == 0b1100
+
+
+def test_splice_campaign_clamps_attempt_to_remaining_local_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recipient = _candidate(_evaluation(12, finish_tick=12))
+    donor = _candidate(_evaluation(12, finish_tick=12))
+    evaluation_calls = 0
+    snapshot_calls = 0
+    overrides: list[int | None] = []
+
+    def fake_evaluate_candidate(_level, working, **_kwargs):
+        nonlocal evaluation_calls
+        evaluation_calls += 1
+        evaluation = _evaluation(3 + evaluation_calls, dead_tick=3 + evaluation_calls)
+        return _candidate(
+            evaluation,
+            working=tuple(working),
+            sentinel_verified=False,
+        )
+
+    def fake_snapshot(*_args, **_kwargs):
+        nonlocal snapshot_calls
+        snapshot_calls += 1
+        return auto._SpliceProgressSnapshot(
+            first_failure=1,
+            last_tick=snapshot_calls,
+            exit_alignment_distance=float(100 - snapshot_calls),
+            suffix_lead=None,
+            mapped_misses=(),
+            route_control_target=None,
+            frame_ahead=False,
+        )
+
+    def fake_attempt(self, candidate, reference, **kwargs):
+        override = kwargs["local_limit_override"]
+        overrides.append(override)
+        simulations = min(2, override) if override is not None else 2
+        proposal = list(candidate.working_frames)
+        proposal[len(overrides) - 1] = auto.InputFrame(right=True)
+        return auto._RepairAttemptOutcome(
+            working_frames=tuple(proposal),
+            repair_method="direction",
+            failure_tick=1,
+            label="entry bridge",
+            local_branches=1,
+            local_simulations=simulations,
+            jump_repair_attempts=0,
+            all_input_repairs=0,
+            route_control_repair=False,
+            route_control_target=None,
+            frame_ahead_active=False,
+        )
+
+    monkeypatch.setattr(auto, "_evaluate_splice_candidate", fake_evaluate_candidate)
+    monkeypatch.setattr(auto, "_splice_progress_snapshot", fake_snapshot)
+    monkeypatch.setattr(auto, "_splice_junction_suffix_run", lambda *_a, **_k: 4)
+    monkeypatch.setattr(auto._RepairController, "attempt", fake_attempt)
+    plan = SimpleNamespace(
+        **vars(_plan()),
+        junction=True,
+        junction_validation_run_length=4,
+    )
+    result = auto.repair_reference_segment_splice(
+        object(),
+        recipient,
+        donor,
+        plan,
+        config=auto.AutoConfig(
+            iterations=1,
+            repair_local_limit=0,
+            repair_campaign_local_limit=3,
+        ),
+        max_body_length=20,
+    )
+
+    assert overrides == [3, 1]
+    assert result.local_simulations == 3
+    assert result.rejection_reason == (
+        "splice repair campaign local budget exhausted"
+    )
+
+
 def test_splice_campaign_widens_entry_bridge_then_accepts_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
