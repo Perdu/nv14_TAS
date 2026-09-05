@@ -1,6 +1,19 @@
-Levels already TASed:
+Levels already TASed (optimization level >= 0):
 Highscores: 444
 Speedruns: 444
+
+Levels already TASed (optimization level >= 4):
+Highscores: 393
+Speedruns: 283
+
+Levels already TASed (optimization level >= 5):
+Highscores: 111
+Speedruns: 177
+
+Levels already TASed (optimization level >= 6):
+Highscores: 2
+Speedruns: 8
+
 
 Episode Speedrun Grid (optimization level >= 0):
 
@@ -17,6 +30,7 @@ Episode Speedrun Grid (optimization level >= 0):
 
 Legend:
 🔴0/5 🟠1/5 🟠2/5 🟠3/5 🟡4/5 🟢5/5 → levels with Speedrun
+
 Episode Speedrun Grid (optimization level >= 4):
 
 🟢00 🟠10 🟠20 🟠30 🟠40 🟠50 🟡60 🟠70 🟡80 🔴90
@@ -30,8 +44,6 @@ Episode Speedrun Grid (optimization level >= 4):
 🟡08 🟠18 🟠28 🟡38 🟡48 🟡58 🟢68 🟢78 🟠88 🔴98
 🟢09 🟠19 🟠29 🟡39 🟡49 🟡59 🟢69 🟢79 🔴89 🔴99
 
-Legend:
-🔴0/5 🟠1/5 🟠2/5 🟠3/5 🟡4/5 🟢5/5 → levels with Speedrun
 Episode Speedrun Grid (optimization level >= 5):
 
 🟢00 🟠10 🟠20 🟠30 🟠40 🟠50 🟠60 🟠70 🟠80 🔴90
@@ -45,8 +57,6 @@ Episode Speedrun Grid (optimization level >= 5):
 🟡08 🟠18 🟠28 🟡38 🔴48 🟠58 🟠68 🟠78 🔴88 🔴98
 🟢09 🟠19 🟠29 🟠39 🟠49 🟠59 🟠69 🟠79 🔴89 🔴99
 
-Legend:
-🔴0/5 🟠1/5 🟠2/5 🟠3/5 🟡4/5 🟢5/5 → levels with Speedrun
 Episode Speedrun Grid (optimization level >= 6):
 
 🟢00 🔴10 🔴20 🔴30 🔴40 🔴50 🔴60 🔴70 🔴80 🔴90
@@ -59,9 +69,6 @@ Episode Speedrun Grid (optimization level >= 6):
 🔴07 🔴17 🔴27 🔴37 🔴47 🔴57 🔴67 🔴77 🔴87 🔴97
 🔴08 🔴18 🔴28 🔴38 🔴48 🔴58 🔴68 🔴78 🔴88 🔴98
 🔴09 🔴19 🔴29 🔴39 🔴49 🔴59 🔴69 🔴79 🔴89 🔴99
-
-Legend:
-🔴0/5 🟠1/5 🟠2/5 🟠3/5 🟡4/5 🟢5/5 → levels with Speedrun
 
 Total TAS: 224712 f (1h33m37.800s)
 Total RTA: 242078 f (1h40m51.950s) / 280575 f (1h56m54.375s) (86.28 %)
@@ -980,6 +987,7 @@ Episode Highscore Grid (optimization level >= 0):
 
 Legend:
 🔴0/5 🟠1/5 🟠2/5 🟠3/5 🟡4/5 🟢5/5 → levels with Highscore
+
 Episode Highscore Grid (optimization level >= 4):
 
 🟢00 🟠10 🟡20 🟢30 🟡40 🟢50 🟢60 🟢70 🟡80 🔴90
@@ -993,8 +1001,6 @@ Episode Highscore Grid (optimization level >= 4):
 🟢08 🟢18 🟢28 🟢38 🟢48 🟢58 🟢68 🟢78 🔴88 🔴98
 🟢09 🟢19 🟡29 🟢39 🟢49 🟡59 🟢69 🟢79 🔴89 🔴99
 
-Legend:
-🔴0/5 🟠1/5 🟠2/5 🟠3/5 🟡4/5 🟢5/5 → levels with Highscore
 Episode Highscore Grid (optimization level >= 5):
 
 🟢00 🟠10 🟠20 🟠30 🟠40 🔴50 🟠60 🟠70 🟠80 🔴90
@@ -1008,8 +1014,6 @@ Episode Highscore Grid (optimization level >= 5):
 🔴08 🟠18 🟠28 🟠38 🔴48 🔴58 🔴68 🔴78 🔴88 🔴98
 🟠09 🟠19 🟡29 🟠39 🔴49 🟠59 🟠69 🟠79 🔴89 🔴99
 
-Legend:
-🔴0/5 🟠1/5 🟠2/5 🟠3/5 🟡4/5 🟢5/5 → levels with Highscore
 Episode Highscore Grid (optimization level >= 6):
 
 🟠00 🔴10 🔴20 🔴30 🔴40 🔴50 🔴60 🔴70 🔴80 🔴90
@@ -1022,9 +1026,6 @@ Episode Highscore Grid (optimization level >= 6):
 🔴07 🔴17 🔴27 🔴37 🔴47 🔴57 🔴67 🔴77 🔴87 🔴97
 🔴08 🔴18 🔴28 🔴38 🔴48 🔴58 🔴68 🔴78 🔴88 🔴98
 🔴09 🔴19 🔴29 🔴39 🔴49 🔴59 🔴69 🔴79 🔴89 🔴99
-
-Legend:
-🔴0/5 🟠1/5 🟠2/5 🟠3/5 🟡4/5 🟢5/5 → levels with Highscore
 
 Total TAS: 64441.575 s
 Total RTA: 63938.575 s
