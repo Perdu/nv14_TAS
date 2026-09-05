@@ -336,7 +336,7 @@ def emoji_for_progress(done, total=5, use_gradient=True):
     return gradient[index]
 
 
-def display_episode_grid(filename, score_type="Speedrun", use_gradient=True, github=False):
+def display_episode_grid(filename, score_type="Speedrun", min_opt_level=0, use_gradient=True, github=False):
     """
     Display a grid of episodes (00–99), colored according to how many levels (0–4)
     have the given score_type ("Speedrun" or "Highscore").
@@ -358,10 +358,10 @@ def display_episode_grid(filename, score_type="Speedrun", use_gradient=True, git
         episode, level = key.split('-')
         if episode in episodes and level.isdigit():
             lvl = int(level)
-            if 0 <= lvl < 5 and score_type in value:
+            if 0 <= lvl < 5 and score_type in value and value[score_type]['optimization_level'] >= min_opt_level:
                 episodes[episode][lvl] = True
 
-    print(f"Episode {score_type} Grid:\n")
+    print(f"Episode {score_type} Grid (optimization level >= {min_opt_level}):\n")
     for row in range(10):
         line = []
         for col in range(10):
@@ -404,12 +404,18 @@ if __name__ == "__main__":
     else:
         use_color = True
     print()
-    display_episode_grid(filename, "Speedrun", use_gradient=True, github=github)
+    display_episode_grid(filename, "Speedrun", min_opt_level=0, use_gradient=True, github=github)
+    display_episode_grid(filename, "Speedrun", min_opt_level=4, use_gradient=True, github=github)
+    display_episode_grid(filename, "Speedrun", min_opt_level=5, use_gradient=True, github=github)
+    display_episode_grid(filename, "Speedrun", min_opt_level=6, use_gradient=True, github=github)
     print()
     display_time_difference("Speedrun", sort=False, use_color=use_color, display_totals=True)
     display_time_difference("Speedrun", sort=True, use_color=use_color, display_totals=False)
     print()
-    display_episode_grid(filename, "Highscore", use_gradient=False, github=github)
+    display_episode_grid(filename, "Highscore", min_opt_level=0, use_gradient=True, github=github)
+    display_episode_grid(filename, "Highscore", min_opt_level=4, use_gradient=True, github=github)
+    display_episode_grid(filename, "Highscore", min_opt_level=5, use_gradient=True, github=github)
+    display_episode_grid(filename, "Highscore", min_opt_level=6, use_gradient=True, github=github)
     print()
     display_time_difference("Highscore", sort=False, use_color=use_color, display_totals=True)
     display_time_difference("Highscore", sort=True, use_color=use_color, display_totals=False)
