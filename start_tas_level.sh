@@ -9,6 +9,7 @@ LTM_FILE="n_base_for_levels.ltm"
 AUTHOR_FILE=author.txt
 
 mkdir -p $EXTRACT_FOLDER
+rm $EXTRACT_FOLDER/*
 
 hs_prefix=""
 if [ $# -ge 3 -a "$3" == "hs" ]; then
