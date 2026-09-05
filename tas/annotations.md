@@ -1057,6 +1057,11 @@ rerecords: 229
 
 Branch 9: rcj -> bwj route (probably slower)
 
+# 30-4
+rerecords: 0
+
+
+
 # 31-0
 rerecords: 664
 
@@ -1098,7 +1103,7 @@ rerecords: 546
 
 
 # 32-3
-rerecords: 487
+rerecords: 0
 
 
 
@@ -1222,6 +1227,11 @@ rerecords: 85
 Well, kryX-orange's 0th is maxed
 I can get a slight push down, but it's far from being enough to save a frame
 
+# 37-1
+rerecords: 0
+
+
+
 # 37-2
 rerecords: 55
 
@@ -1270,6 +1280,11 @@ rerecords: 388
 
 
 
+# 39-0
+rerecords: 0
+
+
+
 # 39-1
 rerecords: 237
 
@@ -1302,6 +1317,8 @@ Interesting version:
 $39-4 tower of long mistakes int.#metanet##00000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000111100000000000000000031111031111111111111111111111111111111111111111111111111111111111001001001111111110010010000000021111100100000000000000000000000000000000000000000000000000000000000000000000000000000000000300001001001001001001001000000000000000000000020000000000000000000000000000000000000000000000111110010000000000000001111111100100100000000311111111111111001001001111111111111111111111110211111111111111111111100000000000000000021111000000000000000000011110000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003|5^324,564!8^540,516,2!8^252,540,0!8^540,468,2!8^252,444,0!8^252,396,0!8^540,372,2!8^516,324,2!8^276,300,0!8^276,252,0!8^516,228,2!8^492,180,2!8^300,156,0!11^468,564,396,96!0^456,204!0^444,204!0^432,204!0^360,204!0^348,204!0^336,204!0^348,276!0^336,276!0^324,276!0^444,276!0^456,276!0^468,276!0^468,348!0^456,348!0^444,348!0^348,348!0^336,348!0^324,348!0^312,420!0^324,420!0^336,420!0^312,492!0^324,492!0^336,492!0^480,420!0^468,420!0^456,420!0^456,492!0^468,492!0^480,492#265:4369|35791394|35791394|35791394|107405858|107401318|107374182|107405926|107374182|107374182|107374182|237397606|107374182|89548390|89478485|89478485|89478485|219501909|17913173|36071138|19014178|107304401|107374182|35791462|35791394|35791394|35791394|546|0|0|0|17825792|4369|0|17895697|35791394|35791394|2236962#
 
 # 40-0
+rerecords: 0
+
 
 
 # 40-1
@@ -1317,6 +1334,11 @@ rerecords: 758
 
 
 
+# 40-3
+rerecords: 0
+
+
+
 # 40-4
 rerecords: 293
 
@@ -1329,7 +1351,29 @@ rerecords: 291
 
 
 
+# 41-1
+rerecords: 0
+
+
+
+# 41-2
+rerecords: 0
+
+
+
+# 41-3
+rerecords: 0
+
+
+
+# 41-4
+rerecords: 0
+
+
+
 # 42-0
+rerecords: 0
+
 
 
 # 42-1
@@ -1347,11 +1391,36 @@ rerecords: 833
 
 
 
+# 42-4
+rerecords: 0
+
+
+
+# 43-0
+rerecords: 0
+
+
+
 # 43-1
 rerecords: 553
 
 A very clean one, with a corner jump on the way up (which is slower)
 431:139810|17895680|17895697|97587473|89478485|17896789|17895697|89548397|89478485|18175317|22876433|17895697|17895697|17895697|35791393|35791394|35791394|35791394|35791394|35791394|35790848|35791394|35791394|35791394|35791394|107880994|35808870|35791394|107374306|107374182|107374182|35791394|89478494|22369621|17895697|17895697|17895697|17895697|17895697|235999505|89548390|89478485|89478485|18175317|17895697|107374289|89478485|89478485|17896789|17895697|219222289|90596966|89478485|89478485|17895697|17895697|17895697|17895697|17895697|17898769|17895697|4369
+
+# 43-2
+rerecords: 0
+
+
+
+# 43-3
+rerecords: 0
+
+
+
+# 43-4
+rerecords: 0
+
+
 
 # 44-0
 rerecords: 154
@@ -1362,8 +1431,53 @@ I wonder if a bwj could work and reach the switch directly
 Branch 9: jumping earlier in the beginning (gives less height)
 Branch 8: jumping for one more frame to the switch to avoid sliding before the drone: a few subpixels slower
 
+# 44-1
+rerecords: 0
+
+
+
+# 44-2
+rerecords: 0
+
+
+
+# 44-3
+rerecords: 0
+
+
+
+# 44-4
+rerecords: 0
+
+
+
 # 45-0
 rerecords: 322
+
+
+
+# 45-1
+rerecords: 0
+
+
+
+# 45-2
+rerecords: 0
+
+
+
+# 45-3
+rerecords: 0
+
+
+
+# 45-4
+rerecords: 0
+
+
+
+# 46-0
+rerecords: 0
 
 
 
@@ -1383,6 +1497,11 @@ rerecords: 297
 
 F8 Max Wait + High Speed = worse
 
+# 46-4
+rerecords: 0
+
+
+
 # 47-0
 rerecords: 187
 
@@ -1390,13 +1509,53 @@ Branch 9: optimized rta route (3f slower)
 
 Can't get a triple to work on the first slope, I always get a stumble for the 3rd jump
 
+# 47-1
+rerecords: 0
+
+
+
 # 47-2
 rerecords: 138
 
 
 
+# 47-3
+rerecords: 0
+
+
+
+# 47-4
+rerecords: 0
+
+
+
+# 48-0
+rerecords: 0
+
+
+
+# 48-1
+rerecords: 0
+
+
+
+# 48-2
+rerecords: 0
+
+
+
 # 48-3
 rerecords: 141
+
+
+
+# 48-4
+rerecords: 0
+
+
+
+# 49-0
+rerecords: 0
 
 
 
@@ -1410,6 +1569,11 @@ rerecords: 967
 
 Branch 7: attempt at going left over the floorguard
 Branch 9: attempt at getting th bwj 2f earlier
+
+# 49-3
+rerecords: 0
+
+
 
 # 49-4
 rerecords: 1922
@@ -1510,7 +1674,19 @@ rerecords: 276
 
 
 
+# 52-2
+rerecords: 0
+
+
+
 # 52-3
+rerecords: 0
+
+
+
+# 52-4
+rerecords: 0
+
 
 
 # 53-0
@@ -1518,13 +1694,38 @@ rerecords: 14
 
 Optimal
 
+# 53-1
+rerecords: 0
+
+
+
 # 53-2
 rerecords: 40
 
 Doing frame-perfect jumps in the doorswitch pipe kills us lmao
 
+# 53-3
+rerecords: 0
+
+
+
+# 53-4
+rerecords: 0
+
+
+
 # 54-0
 rerecords: 283
+
+
+
+# 54-1
+rerecords: 0
+
+
+
+# 54-2
+rerecords: 0
 
 
 
@@ -1543,8 +1744,43 @@ rerecords: 1403
 
 
 
+# 55-1
+rerecords: 0
+
+
+
 # 55-2
 rerecords: 165
+
+
+
+# 55-3
+rerecords: 0
+
+
+
+# 55-4
+rerecords: 0
+
+
+
+# 56-0
+rerecords: 0
+
+
+
+# 56-1
+rerecords: 0
+
+
+
+# 56-2
+rerecords: 0
+
+
+
+# 56-3
+rerecords: 0
 
 
 
@@ -1575,13 +1811,43 @@ rerecords: 111
 
 F9: Going high over middle. Unable to get past mine and drone.
 
+# 57-2
+rerecords: 0
+
+
+
+# 57-3
+rerecords: 0
+
+
+
+# 57-4
+rerecords: 0
+
+
+
 # 58-0
 rerecords: 1257
 
 
 
+# 58-1
+rerecords: 0
+
+
+
 # 58-2
 rerecords: 538
+
+
+
+# 58-3
+rerecords: 0
+
+
+
+# 58-4
+rerecords: 0
 
 
 
@@ -1591,6 +1857,16 @@ rerecords: 180
 This level is maxed out already... Or not???
 
 Branch 8: 1st walljump optim, but slower afterwards (1.55)
+
+# 59-1
+rerecords: 0
+
+
+
+# 59-2
+rerecords: 215
+
+
 
 # 59-3
 rerecords: 620
@@ -1612,9 +1888,28 @@ rerecords: 43
 Delaying the last jump to get more push by the downwards slope saves 1 frame
 
 # 60-1
+rerecords: 0
+
 
 
 # 60-2
+rerecords: 0
+
+
+
+# 60-3
+rerecords: 0
+
+
+
+# 60-4
+rerecords: 0
+
+
+
+# 61-0
+rerecords: 0
+
 
 
 # 61-1
@@ -1625,6 +1920,11 @@ Jumping 2f later is slower, however long we jump.
 
 I tried jumping short and longer but this is the optimal strategy.
 
+# 61-2
+rerecords: 0
+
+
+
 # 61-3
 rerecords: 494
 
@@ -1634,6 +1934,23 @@ Branch 8: attempt at going right
 Branch 7: rta route, faster beginning but slower slope jumps
 
 # 61-4
+rerecords: 0
+
+
+
+# 62-0
+rerecords: 0
+
+
+
+# 62-1
+rerecords: 0
+
+
+
+# 62-2
+rerecords: 0
+
 
 
 # 62-3
@@ -1641,7 +1958,24 @@ rerecords: 197
 
 Doing bwj after the rcj doesn't get high enough
 
+# 62-4
+rerecords: 0
+
+
+
+# 63-0
+rerecords: 0
+
+
+
 # 63-1
+rerecords: 0
+
+
+
+# 63-2
+rerecords: 0
+
 
 
 # 63-3
@@ -1650,6 +1984,8 @@ rerecords: 133
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
 
 # 63-4
+rerecords: 0
+
 
 
 # 64-0
@@ -1690,9 +2026,18 @@ rerecords: 639
 running back across the bottom and cj to door is slower
 
 # 65-1
+rerecords: 0
+
+
+
+# 65-2
+rerecords: 0
+
 
 
 # 65-3
+rerecords: 0
+
 
 
 # 65-4
@@ -1707,6 +2052,16 @@ rerecords: 213
 
 # 66-1
 rerecords: 414
+
+
+
+# 66-2
+rerecords: 0
+
+
+
+# 66-3
+rerecords: 0
 
 
 
@@ -1725,6 +2080,11 @@ rerecords: 41
 
 Different strategy from 0th, gets closer to the door but doesn't save 1f.
 
+# 67-2
+rerecords: 0
+
+
+
 # 67-3
 rerecords: 87
 
@@ -1734,8 +2094,23 @@ It's possible to jump on the upper bb side but it's useless
 
 There are many different possibilities to test. For instance, we can hold right longer on the bb. This one seems optimal.
 
+# 67-4
+rerecords: 0
+
+
+
 # 68-0
 rerecords: 324
+
+
+
+# 68-1
+rerecords: 0
+
+
+
+# 68-2
+rerecords: 0
 
 
 
@@ -1744,12 +2119,37 @@ rerecords: 571
 
 I have to get a poorly angled rcj to get avoid detection by drone 3. There may still be room for improvement here by getting a direct landing that avoids that detection.
 
+# 68-4
+rerecords: 0
+
+
+
+# 69-0
+rerecords: 0
+
+
+
+# 69-1
+rerecords: 0
+
+
+
 # 69-2
 rerecords: 809
 
 There's a branch in which we avoid the cj on the way up to the middle section, which is slightly faster, to go to the left, but we get a worse angle
 
 Branch 9: alt route jumping lower on the way back to the middle section, the walljumping on the left. The way to the left is faster, but walljumps lose time.
+
+# 69-3
+rerecords: 0
+
+
+
+# 69-4
+rerecords: 0
+
+
 
 # 70-0
 rerecords: 599
@@ -1803,6 +2203,16 @@ Can't find a path that gets a good corner jump around 210 without slowing a lot
 Can't get a corner jump around 160
 Can't get above the mine around 430 directly after the first land. Manage to do it once after a jump (don't remember which) but it was slower and now I can't reproduce it
 
+# 71-2
+rerecords: 0
+
+
+
+# 71-3
+rerecords: 0
+
+
+
 # 71-4
 rerecords: 524
 
@@ -1813,6 +2223,26 @@ rerecords: 173
 
 
 
+# 72-1
+rerecords: 0
+
+
+
+# 72-2
+rerecords: 0
+
+
+
+# 72-3
+rerecords: 0
+
+
+
+# 72-4
+rerecords: 0
+
+
+
 # 73-0
 rerecords: 91
 
@@ -1820,6 +2250,16 @@ Don't think there's any hope of saving a frame here
 
 # 73-1
 rerecords: 215
+
+
+
+# 73-2
+rerecords: 0
+
+
+
+# 73-3
+rerecords: 0
 
 
 
@@ -1860,13 +2300,53 @@ rerecords: 140
 
 
 
+# 75-1
+rerecords: 0
+
+
+
+# 75-2
+rerecords: 0
+
+
+
+# 75-3
+rerecords: 0
+
+
+
+# 75-4
+rerecords: 0
+
+
+
 # 76-0
 rerecords: 971
 
 Branch 9: ledge grab in the end
 
+# 76-1
+rerecords: 0
+
+
+
 # 76-2
 rerecords: 198
+
+
+
+# 76-3
+rerecords: 0
+
+
+
+# 76-4
+rerecords: 0
+
+
+
+# 77-0
+rerecords: 0
 
 
 
@@ -1875,6 +2355,19 @@ rerecords: 197
 
 
 
+# 77-2
+rerecords: 0
+
+
+
+# 77-3
+rerecords: 119
+
+Branch 2: bb bwj on first bb
+Branch 3: bb bwj on second bb
+Branch 4: bb bwj on third bb
+Branch 6: thwump bwj
+
 # 77-4
 rerecords: 177
 
@@ -1882,6 +2375,21 @@ rerecords: 177
 
 # 78-0
 rerecords: 281
+
+
+
+# 78-1
+rerecords: 0
+
+
+
+# 78-2
+rerecords: 0
+
+
+
+# 78-3
+rerecords: 0
 
 
 
@@ -1897,7 +2405,29 @@ Not faster:
 Did not work:
 - use the small portion of the slope next to the mines to land on the previous-to-last row. It's possible on the second row (but slower), but somehow I can't get it to work on the other one, because the drone restrict possible trajectories
 
+# 79-0
+rerecords: 0
+
+
+
+# 79-1
+rerecords: 0
+
+
+
+# 79-2
+rerecords: 0
+
+
+
+# 79-3
+rerecords: 0
+
+
+
 # 79-4
+rerecords: 0
+
 
 
 # 80-0
@@ -1906,9 +2436,28 @@ rerecords: 0
 
 
 # 80-1
+rerecords: 0
+
+
+
+# 80-2
+rerecords: 0
+
 
 
 # 80-3
+rerecords: 0
+
+
+
+# 80-4
+rerecords: 0
+
+
+
+# 81-0
+rerecords: 0
+
 
 
 # 81-1
@@ -1921,7 +2470,14 @@ rerecords: 0
 
 
 
-# 82-0
+# 81-3
+rerecords: 0
+
+
+
+# 81-4
+rerecords: 0
+
 
 
 # 83-0
@@ -1934,25 +2490,14 @@ rerecords: 386
 
 
 
-# 84-0
-
-
 # 84-2
 rerecords: 152
-
-
-
-# 85-0
-rerecords: 186
 
 
 
 # 85-2
 rerecords: 516
 
-
-
-# 85-3
 
 
 # 86-2
@@ -1995,9 +2540,6 @@ rerecords: 1220
 
 
 
-# 89-0
-
-
 # 89-1
 rerecords: 345
 
@@ -2024,11 +2566,6 @@ We're 0.18 pixels away from saving 1f. We can't make the third pipe jump earlier
 I can't land a proper cj on the way to the switch that's actually faster
 
 # 91-2
-rerecords: 0
-
-
-
-# 92-1
 rerecords: 0
 
 
@@ -2084,13 +2621,4 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# 99-2
-
-
-# 99-4
-
-
-# 99-9
-
-
-# Total rerecords: 241529
+# Total rerecords: 241190
