@@ -358,7 +358,7 @@ def display_episode_grid(filename, score_type="Speedrun", min_opt_level=0, use_g
         episode, level = key.split('-')
         if episode in episodes and level.isdigit():
             lvl = int(level)
-            if 0 <= lvl < 5 and score_type in value and value[score_type]['optimization_level'] >= min_opt_level:
+            if 0 <= lvl < 5 and score_type in value and float(value[score_type]['optimization_level']) >= float(min_opt_level):
                 episodes[episode][lvl] = True
 
     print(f"Episode {score_type} Grid (optimization level >= {min_opt_level}):\n")
