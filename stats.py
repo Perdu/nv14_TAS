@@ -336,7 +336,7 @@ def emoji_for_progress(done, total=5, use_gradient=True):
     return gradient[index]
 
 
-def display_episode_grid(filename, score_type="Speedrun", min_opt_level=0, use_gradient=True, github=False):
+def display_episode_grid(filename, score_type="Speedrun", min_opt_level=0, use_gradient=True, github=False, display_legend=False):
     """
     Display a grid of episodes (00–99), colored according to how many levels (0–4)
     have the given score_type ("Speedrun" or "Highscore").
@@ -379,15 +379,16 @@ def display_episode_grid(filename, score_type="Speedrun", min_opt_level=0, use_g
             line.append(display)
         print(" ".join(line))
 
-    print("\nLegend:")
-    for i in range(6):
-        if github:
-            emoji = emoji_for_progress(i, total=5, use_gradient=use_gradient)
-            print(f"{emoji}{i}/5", end=" ")
-        else:
-            color = color_for_progress(i, total=5, use_gradient=use_gradient)
-            print(f"{color}{i}/5{RESET}", end=" ")
-    print(f"→ levels with {score_type}")
+    if display_legend:
+        print("\nLegend:")
+        for i in range(6):
+            if github:
+                emoji = emoji_for_progress(i, total=5, use_gradient=use_gradient)
+                print(f"{emoji}{i}/5", end=" ")
+            else:
+                color = color_for_progress(i, total=5, use_gradient=use_gradient)
+                print(f"{color}{i}/5{RESET}", end=" ")
+        print(f"→ levels with {score_type}")
 
 
 if __name__ == "__main__":
@@ -404,18 +405,18 @@ if __name__ == "__main__":
     else:
         use_color = True
     print()
-    display_episode_grid(filename, "Speedrun", min_opt_level=0, use_gradient=True, github=github)
-    display_episode_grid(filename, "Speedrun", min_opt_level=4, use_gradient=True, github=github)
-    display_episode_grid(filename, "Speedrun", min_opt_level=5, use_gradient=True, github=github)
-    display_episode_grid(filename, "Speedrun", min_opt_level=6, use_gradient=True, github=github)
+    display_episode_grid(filename, "Speedrun", min_opt_level=0, use_gradient=True, github=github, display_legend=True)
+    display_episode_grid(filename, "Speedrun", min_opt_level=4, use_gradient=True, github=github, display_legend=False)
+    display_episode_grid(filename, "Speedrun", min_opt_level=5, use_gradient=True, github=github, display_legend=False)
+    display_episode_grid(filename, "Speedrun", min_opt_level=6, use_gradient=True, github=github, display_legend=False)
     print()
     display_time_difference("Speedrun", sort=False, use_color=use_color, display_totals=True)
     display_time_difference("Speedrun", sort=True, use_color=use_color, display_totals=False)
     print()
-    display_episode_grid(filename, "Highscore", min_opt_level=0, use_gradient=True, github=github)
-    display_episode_grid(filename, "Highscore", min_opt_level=4, use_gradient=True, github=github)
-    display_episode_grid(filename, "Highscore", min_opt_level=5, use_gradient=True, github=github)
-    display_episode_grid(filename, "Highscore", min_opt_level=6, use_gradient=True, github=github)
+    display_episode_grid(filename, "Highscore", min_opt_level=0, use_gradient=True, github=github, display_legend=True)
+    display_episode_grid(filename, "Highscore", min_opt_level=4, use_gradient=True, github=github, display_legend=False)
+    display_episode_grid(filename, "Highscore", min_opt_level=5, use_gradient=True, github=github, display_legend=False)
+    display_episode_grid(filename, "Highscore", min_opt_level=6, use_gradient=True, github=github, display_legend=False)
     print()
     display_time_difference("Highscore", sort=False, use_color=use_color, display_totals=True)
     display_time_difference("Highscore", sort=True, use_color=use_color, display_totals=False)
