@@ -414,7 +414,6 @@ def save_demo(
             "time": score,
             'diff_with_0th': diff_str_total,
             "authors": new_authors,
-            "type": "tas",
             "optimization_level": new_optimization_level,
             "demo": LiteralScalarString(demo)
         }
@@ -437,7 +436,6 @@ def save_demo(
             'time': score,
             'diff_with_0th': diff_str_total,
             'authors': authors,
-            'type': 'tas',
             'optimization_level': new_optimization_level,
             'demo': LiteralScalarString(demo),
         }
