@@ -51,7 +51,7 @@ def _represent_fixed_three(representer, value):
     )
 
 def usage(ret_code):
-    print(f"Usage: python {sys.argv[0]} [-h|-s|--save|-g|--highscore] [-a|--authors AUTHORS] [-o|--optimization-level LEVEL] LEVEL")
+    print(f"Usage: python {sys.argv[0]} [-h|-s|--save|-g|--highscore|--hs] [-a|--authors AUTHORS] [-o|--optimization-level LEVEL] LEVEL")
     print("-h: print this help")
     print("-s|--save: save extracted demo data to tas/level_data.yml")
     print("-g|--highscore: save as highscore instead of speedrun")
@@ -609,7 +609,7 @@ def main(argv=None):
         opts, args = getopt.getopt(
             argv,
             'a:ghso:',
-            ["save", "highscore", 'author=', 'authors=', 'optimization-level='],
+            ["save", "highscore", 'hs', 'author=', 'authors=', 'optimization-level='],
         )
     except getopt.GetoptError as err:
         print("Error: ", str(err))
@@ -619,9 +619,9 @@ def main(argv=None):
             usage(0)
         elif o == '-s' or o == '--save':
             save = True
-        elif o == '-g' or o =='--highscore':
+        elif o == '-g' or o == '--highscore' or o =='--hs':
             score_type = "Highscore"
-        elif o == '-a' or o =='--author' or o == '--authors':
+        elif o == '-a' or o == '--author' or o == '--authors':
             authors = arg
         elif o == '-o' or o == '--optimization-level':
             try:
