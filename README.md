@@ -321,5 +321,6 @@ See [doc/technical_info.md](doc/technical_info.md)
 Jumping gives slightly more speed than running. As I was not aware that this kind of subpixel optimization was possible in this game (and because it takes a lot of time to optimize), this is not done for a lot of level. I indicate this in the [level demo data](tas/level_data.yml) file, with `optimization_level`:
 - <=3: manual TAS
 - 4: TAS by the auto optimizer, starting from the RTA run
+- 4.5: TAS fed to an LLM to find innovations
 - 5: manual TAS optimized by the optimizer
 - 6: manually run optimizer (cross-splice etc.)
