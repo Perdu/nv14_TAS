@@ -55,13 +55,7 @@ And more.
 - [Trackmania's bruteforce](https://donadigo.com/tminterface/what-is-bf)
 
 ## Todo
-- [Document all techniques](techniques/README.md)
-- Patch the game to display all techniques in real time
-- display infos script: use arrows around the player similar to NReality
-- Extract ninja state https://discord.com/channels/197765375503368192/199460839252688896/1465895994767183942
-- Use AI-generated bruteforcer an all levels
-- speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
-- TAS the remaining 168 levels ;)
+The todo list has been moved somewhere private for now.
 
 ## Install
 
@@ -302,6 +296,8 @@ ffdec -export script decompiled_source/ volume/n_v14_patched.swf
 Troubleshooting: see [troubleshoot.md](doc/troubleshoot.md)
 
 No sound: this is normal and you don't need it. See [sound/README.md](sound/README.md) if you really want it.
+
+In the Lua script, speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
 
 ### Texture problem
 Reported [here](https://github.com/ruffle-rs/ruffle/issues/21776)
