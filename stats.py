@@ -12,7 +12,7 @@ RESET = "\033[0m"
 TAS_FILE = "tas/level_data.yml"
 RTA_FILE = "tas/level_data_rta.yml"
 
-def count_highscores_and_speedruns(filename):
+def count_highscores_and_speedruns(filename, min_opt_level=0):
     with open(filename, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
 
@@ -21,9 +21,9 @@ def count_highscores_and_speedruns(filename):
 
     # Loop through all top-level entries (like '00-0', '00-1', etc.)
     for key, value in data.items():
-        if 'Highscore' in value:
+        if 'Highscore' in value and float(value["Highscore"]["optimization_level"]) >= float(min_opt_level):
             highscores += 1
-        if 'Speedrun' in value:
+        if 'Speedrun' in value and float(value["Speedrun"]["optimization_level"]) >= float(min_opt_level):
             speedruns += 1
 
 #    print("Speedruns done:")
@@ -35,7 +35,10 @@ def count_highscores_and_speedruns(filename):
 #        if 'Highscore' in value:
 #            print(key)
 
-    return highscores, speedruns
+    print(f"Levels already TASed (optimization level >= {min_opt_level}):")
+    print(f"Highscores: {highscores}")
+    print(f"Speedruns: {speedruns}")
+    print()
 
 def parse_score(value, score_type="Speedrun"):
     """
@@ -393,10 +396,10 @@ def display_episode_grid(filename, score_type="Speedrun", min_opt_level=0, use_g
 
 if __name__ == "__main__":
     filename = "tas/level_data.yml"
-    highscores, speedruns = count_highscores_and_speedruns(filename)
-    print("Levels already TASed:")
-    print(f"Highscores: {highscores}")
-    print(f"Speedruns: {speedruns}")
+    count_highscores_and_speedruns(filename, min_opt_level=0)
+    count_highscores_and_speedruns(filename, min_opt_level=4)
+    count_highscores_and_speedruns(filename, min_opt_level=5)
+    count_highscores_and_speedruns(filename, min_opt_level=6)
     github = False
     if len(sys.argv) > 1 and sys.argv[1] == "github":
         github = True
