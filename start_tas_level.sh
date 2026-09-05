@@ -10,14 +10,19 @@ AUTHOR_FILE=author.txt
 
 mkdir -p $EXTRACT_FOLDER
 
-if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1".ltm ]; then
+hs_prefix=""
+if [ $# -ge 3 -a "$3" == "hs" ]; then
+    hs_prefix="_hs"
+fi
+
+if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1"${hs_prefix}.ltm ]; then
     if [ "$2" != "demo" ]; then
-        echo "$1.ltm already exists, not creating"
+        echo "$1$hs_prefix.ltm already exists, not creating"
         exit
     else
         # An ltm file already exists, let's use it instead
         echo "Updating existing ltm file with demo data"
-        tar xzf volume/n_levels/"$1".ltm -C extract/
+        tar xzf volume/n_levels/"$1${hs_prefix}".ltm -C extract/
     fi
 else
     tar xzf $LTM_FILE -C $EXTRACT_FOLDER
@@ -30,7 +35,7 @@ if [ -f $AUTHOR_FILE ]; then
     sed -i "s/authors=.*/authors=$author/" $EXTRACT_FOLDER/config.ini
 fi
 
-tar czf $DOCKER_VOLUME_PATH/n_levels/"$1".ltm -C $EXTRACT_FOLDER .
+tar czf $DOCKER_VOLUME_PATH/n_levels/"$1"${hs_prefix}.ltm -C $EXTRACT_FOLDER .
 
 # Commented out as we already created all of them
 # if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1"_rta.ltm ]; then
