@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Extract demo data from the sol file
+# Extract demo data from the sol file or an explicitly supplied replay
 # Usage: python sol_to_demo.py
+# Interactive replay: python sol_to_demo.py -r --hs -s 56-2
 # Disable "Prevent writing to disk" in libTAS to obtain TASed sol file
 
 # Credits: SolReader class is taken from NHigh by jg9000 (+ modified)
@@ -51,12 +52,17 @@ def _represent_fixed_three(representer, value):
     )
 
 def usage(ret_code):
-    print(f"Usage: python {sys.argv[0]} [-h|-s|--save|-g|--highscore|--hs] [-a|--authors AUTHORS] [-o|--optimization-level LEVEL] LEVEL")
-    print("-h: print this help")
+    print(f"Usage: python {sys.argv[0]} [-r] [--hs|-g|--highscore] [-s|--save] [-a|--authors AUTHORS] [-o|--optimization-level LEVEL] LEVEL")
+    print("-h|--help: print this help")
     print("-s|--save: save extracted demo data to tas/level_data.yml")
-    print("-g|--highscore: save as highscore instead of speedrun")
-    print("-a|--authors AUTHORS: change authors")
+    print("--hs|-g|--highscore: save as highscore instead of speedrun")
+    print("-a|--authors AUTHORS: change authors in SOL mode")
     print("-o|--optimization-level LEVEL: change optimization level")
+    print("-r|--r|--replay: prompt for Demo and Authors on stdin instead of reading the SOL")
+    print("Paste the demo on one line; press Enter at Authors to preserve saved authors.")
+    print("Replay inputs accept a full level+replay or raw FRAME_COUNT:PACKED_INPUTS.")
+    print("Put options before LEVEL. In SOL mode, authors default to the LTM authors.")
+    print("Replay highscore mode requires the emulator in 'tas optimiser/'.")
     sys.exit(ret_code)
 
 
@@ -200,6 +206,33 @@ def get_demo_frame_count(demo):
     return number_of_frames
 
 
+def read_replay_input(replay_data, episode, level):
+    """Validate pasted replay data without consulting the SOL."""
+    text = replay_data.strip().lstrip('\ufeff').strip()
+    demo = get_replay_string(text)
+    if re.fullmatch(r'[0-9]+:[0-9]+(?:\|[0-9]+)*\|?', demo) is None:
+        raise NHighError('Replay has invalid frame or packed-input data')
+    get_demo_frame_count(demo)
+    if any(int(word) > 0xffffffff for word in demo.split(':', 1)[1].split('|') if word):
+        raise NHighError('Replay packed input words must fit in 32 bits')
+
+    if text.startswith('$'):
+        fields = text.rstrip('#').split('#')
+        if (
+            len(fields) != 5
+            or '|' not in fields[3]
+            or len(fields[3].split('|', 1)[0]) != 31 * 23
+        ):
+            raise NHighError('Replay has an invalid embedded level record')
+        # Optimiser exports may omit the title; LEVEL remains the save key.
+        level_data = '#'.join(fields[:-1]) + '#'
+    elif '#' in text.rstrip('#'):
+        raise NHighError('Replay has an invalid combined level/replay format')
+    else:
+        level_data = get_level_data(episode, level)
+    return demo, f'{level_data}{demo}#'
+
+
 def parse_decimal_score(value, description):
     try:
         result = Decimal(str(value).strip())
@@ -254,7 +287,7 @@ def emulate_highscore_ticks(demo):
     """Calculate the absolute highscore with the optimiser's emulator."""
     if not OPTIMIZER_DIR.is_dir():
         raise NHighError(
-            'The SOL does not contain a usable highscore and the optimiser '
+            'Highscore calculation requires the optimiser emulator, but its '
             f'directory was not found: {OPTIMIZER_DIR}'
         )
 
@@ -331,6 +364,7 @@ def save_demo(
     authors='zapkt',
     optimization_level=None,
     highscore_ticks=None,
+    preserve_default_authors=True,
 ):
     yaml = YAML()
     yaml.preserve_quotes = True  # keep existing quoting
@@ -381,7 +415,7 @@ def save_demo(
         existing_record = data[level_id][score_type]
         # Recreating a dict to ensure we insert optimization_level at the right place
         # (because order depends on insert in dict)
-        if authors == "zapkt":
+        if authors is None or (preserve_default_authors and authors == "zapkt"):
             # Don't override authors list if default
             new_authors = existing_record.get("authors", authors)
         else:
@@ -417,8 +451,10 @@ def save_demo(
             "optimization_level": new_optimization_level,
             "demo": LiteralScalarString(demo)
         }
-        # Retain secondary demos and any other archive metadata not managed by
-        # this script.  Rebuilding the standard keys must not delete them.
+        if authors is None and 'authors' not in existing_record:
+            del new_dict['authors']
+        # Retain secondary demos, any existing type, and other archive metadata
+        # not managed by this script.  Do not add or overwrite a type value.
         for key, value in existing_record.items():
             if key not in new_dict:
                 new_dict[key] = value
@@ -439,6 +475,8 @@ def save_demo(
             'optimization_level': new_optimization_level,
             'demo': LiteralScalarString(demo),
         }
+        if authors is None:
+            del new_record['authors']
         if score_type == 'Highscore' and hasattr(level_data, 'insert'):
             level_data.insert(0, score_type, new_record)
         else:
@@ -605,24 +643,28 @@ def main(argv=None):
     score_type = "Speedrun"
     optimization_level = DEFAULT_OPTIMIZATION_LEVEL
     authors = None
+    interactive_replay = False
     try:
         opts, args = getopt.getopt(
             argv,
-            'a:ghso:',
-            ["save", "highscore", 'hs', 'author=', 'authors=', 'optimization-level='],
+            'a:ghso:r',
+            ["save", "highscore", 'hs', 'author=', 'authors=', 'optimization-level=',
+             'help', 'r', 'replay'],
         )
     except getopt.GetoptError as err:
         print("Error: ", str(err))
         return 1
     for o, arg in opts:
-        if o == '-h':
+        if o in ('-h', '--help'):
             usage(0)
         elif o == '-s' or o == '--save':
             save = True
-        elif o == '-g' or o == '--highscore' or o =='--hs':
+        elif o in ('--hs', '-g', '--highscore'):
             score_type = "Highscore"
         elif o == '-a' or o == '--author' or o == '--authors':
             authors = arg
+        elif o in ('-r', '--r', '--replay'):
+            interactive_replay = True
         elif o == '-o' or o == '--optimization-level':
             try:
                 optimization_level = int(arg)
@@ -633,33 +675,49 @@ def main(argv=None):
         usage(1)
     try:
         episode, level, level_id = parse_level_id(args[0])
-        if authors is None:
-            authors = get_authors_from_ltm_file(level_id, score_type)
-        sol_data = readSolFile()
-        try:
-            sol_level = sol_data['persBest'][int(episode)]['lev'][int(level)]
-            demo = sol_level['demo']
-        except (KeyError, IndexError, TypeError) as exc:
-            raise NHighError(f'The SOL has no replay for {level_id}') from exc
-        if not isinstance(demo, str) or not demo:
-            raise NHighError(f'The SOL replay for {level_id} is empty')
+        if interactive_replay:
+            if authors is not None:
+                raise NHighError('With -r, enter authors at the prompt instead of using --authors')
+            try:
+                replay_data = input('Demo: ')
+                authors = input('Authors (enter to leave unchanged): ').strip() or None
+            except EOFError as exc:
+                raise NHighError('Input ended before both prompts were answered') from exc
+            demo, demo_full = read_replay_input(replay_data, episode, level)
+        else:
+            if authors is None:
+                authors = get_authors_from_ltm_file(level_id, score_type)
+            sol_data = readSolFile()
+            try:
+                sol_level = sol_data['persBest'][int(episode)]['lev'][int(level)]
+                demo = sol_level['demo']
+            except (KeyError, IndexError, TypeError) as exc:
+                raise NHighError(f'The SOL has no replay for {level_id}') from exc
+            if not isinstance(demo, str) or not demo:
+                raise NHighError(f'The SOL replay for {level_id} is empty')
 
-        level_data = get_level_data(episode, level)
-        demo_full = f"{level_data}{demo}#"
+            level_data = get_level_data(episode, level)
+            demo_full = f"{level_data}{demo}#"
         highscore_ticks = None
         if score_type == 'Highscore':
-            highscore_ticks, score_source = calculate_highscore_ticks(
-                demo_full,
-                sol_level.get('score'),
-            )
+            if interactive_replay:
+                print('Calculating replay highscore with the optimiser emulator...')
+                highscore_ticks = emulate_highscore_ticks(demo_full)
+                score_source = 'optimiser emulation'
+            else:
+                highscore_ticks, score_source = calculate_highscore_ticks(
+                    demo_full,
+                    sol_level.get('score'),
+                )
             print(
                 f'Highscore: {Decimal(highscore_ticks) / TICKS_PER_SECOND:.3f} '
                 f'({score_source})'
             )
 
-        print(demo)
-        print()
-        print(demo_full)
+        if not interactive_replay:
+            print(demo)
+            print()
+            print(demo_full)
         print_to_tmp(demo_full, episode, level)
         if save:
             save_demo(
@@ -670,6 +728,7 @@ def main(argv=None):
                 authors=authors,
                 optimization_level=optimization_level,
                 highscore_ticks=highscore_ticks,
+                preserve_default_authors=not interactive_replay,
             )
     except NHighError as exc:
         print(f'Error: {exc}', file=sys.stderr)
