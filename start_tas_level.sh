@@ -36,7 +36,7 @@ if [ -f $AUTHOR_FILE ]; then
     sed -i "s/authors=.*/authors=$author/" $EXTRACT_FOLDER/config.ini
 fi
 
-tar czf $DOCKER_VOLUME_PATH/n_levels/"$1"${hs_prefix}.ltm -C $EXTRACT_FOLDER .
+tar czf $DOCKER_VOLUME_PATH/n_levels/"$1"${hs_prefix}.ltm -C $EXTRACT_FOLDER . --transform='s|^\./||'
 
 # Commented out as we already created all of them
 # if [ -e $DOCKER_VOLUME_PATH/n_levels/"$1"_rta.ltm ]; then
