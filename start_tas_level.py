@@ -38,6 +38,7 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False,
     res = ""
     markers = {}
     nb_markers = 0
+    authors = ""
     lua_infos = ""
     initial_wait_frames = 7
     # Insert all input frames
