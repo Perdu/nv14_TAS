@@ -8,6 +8,8 @@ import configparser
 
 from converter import convert_demo_to_libtas
 
+from lib import save_demo
+
 
 def usage():
     print(f"Usage: {sys.argv[0]} LEVEL]")
@@ -140,6 +142,18 @@ if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[2] == 'demo':
         demo_str = input("Enter demo: ")
         authors = input("New authors? (leave empty to keep as-is): ")
+        if hs_run:
+            score_type = "Highscore"
+        else:
+            score_type = "Speedrun"
+        # Save to level_data.yml directly
+        save_demo(
+            demo_str,
+            episode,
+            level,
+            score_type=score_type,
+            authors=authors,
+        )
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     with open("extract/inputs", "w") as f:
         print(libtas_input, file=f)
