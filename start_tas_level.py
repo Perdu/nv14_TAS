@@ -35,12 +35,11 @@ def start_level(episode, level):
     return inputs
 
 
-def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False, add_hs_run=False, add_sr_run=False, demo_str=None):
+def build_libtas_input(tas_data, episode, level, score_type="Speedrun", add_rta_run=False, add_hs_run=False, add_sr_run=False, demo_str=None):
     nb_frames = 0
     res = ""
     markers = {}
     nb_markers = 0
-    authors = ""
     lua_infos = ""
     initial_wait_frames = 7
     # Insert all input frames
@@ -61,8 +60,6 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False,
     # Now extract meaningful information from the rta run
     with open("tas/level_data_rta.yml", "r", encoding="utf-8") as f:
         rta_data = yaml.safe_load(f)
-    with open("tas/level_data.yml", "r", encoding="utf-8") as f:
-        tas_data = yaml.safe_load(f)
     level_name = f"{episode}-{level}"
     rta_time = rta_data[level_name][score_type]['time']
     demo = rta_data[level_name][score_type]['demo']
@@ -78,7 +75,6 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False,
             print("Error: no known highscore TAS for this level")
         else:
             demo_hs = tas_data[level_name]["Highscore"]['demo']
-            authors = tas_data[level_name]["Highscore"]["authors"]
             libtas_input_hs, nb_frames_demo_hs = convert_demo_to_libtas(demo_hs)
             res += libtas_input_hs
             nb_frames += nb_frames_demo_hs
@@ -87,7 +83,6 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False,
             print("Error: no known speedrun TAS for this level")
         else:
             demo_sr = tas_data[level_name]["Speedrun"]['demo']
-            authors = tas_data[level_name]["Speedrun"]["authors"]
             libtas_input_sr, nb_frames_demo_sr = convert_demo_to_libtas(demo_sr)
             res += libtas_input_sr
             nb_frames += nb_frames_demo_sr
@@ -116,7 +111,7 @@ def build_libtas_input(episode, level, score_type="Speedrun", add_rta_run=False,
     markers[f"{nb_markers}\\frame"] = init_frames + nb_frames_demo_rta + 2
     markers[f"{nb_markers}\\text"] = f"RTA score ({rta_time})"
     markers["size"] = nb_markers
-    return res, nb_frames, markers, authors
+    return res, nb_frames, markers
 
 
 if __name__ == "__main__":
@@ -138,9 +133,17 @@ if __name__ == "__main__":
         elif sys.argv[2] == 'sr':
             # to convert demo strings from the optimiser into ltm files
             sr_run = True
-    libtas_input, nb_frames, markers, authors = build_libtas_input(episode, level, "Speedrun", rta_run, hs_run, sr_run, demo_str)
+    score_type = "Speedrun"
+    if len(sys.argv) > 3 and sys.argv[3] == 'hs':
+        score_type = "Highscore"
+    with open("tas/level_data.yml", "r", encoding="utf-8") as f:
+        tas_data = yaml.safe_load(f)
+        level_name = f"{episode}-{level}"
+        authors = tas_data[level_name][score_type]["authors"]
+    libtas_input, nb_frames, markers = build_libtas_input(tas_data, episode, level, score_type, rta_run, hs_run, sr_run, demo_str)
     if len(sys.argv) > 2 and sys.argv[2] == 'demo':
         demo_str = input("Enter demo: ")
+        print(f"Current authors: {authors}")
         authors = input("New authors? (leave empty to keep as-is): ")
         if authors.strip() == '':
             preserve_default_authors = True
