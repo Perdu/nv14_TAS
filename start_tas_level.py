@@ -142,6 +142,10 @@ if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[2] == 'demo':
         demo_str = input("Enter demo: ")
         authors = input("New authors? (leave empty to keep as-is): ")
+        if authors.strip() == '':
+            preserve_default_authors = True
+        else:
+            preserve_default_authors = False
         if hs_run:
             score_type = "Highscore"
         else:
@@ -153,6 +157,7 @@ if __name__ == "__main__":
             level,
             score_type=score_type,
             authors=authors,
+            preserve_default_authors=preserve_default_authors
         )
     config = configparser.ConfigParser(strict=False, delimiters=('='), interpolation=None)
     with open("extract/inputs", "w") as f:
