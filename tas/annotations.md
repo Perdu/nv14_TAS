@@ -2484,8 +2484,48 @@ rerecords: 0
 
 
 
+# 82-0
+rerecords: 0
+
+
+
+# 82-1
+rerecords: 0
+
+
+
+# 82-2
+rerecords: 0
+
+
+
+# 82-3
+rerecords: 0
+
+
+
+# 82-4
+rerecords: 0
+
+
+
 # 83-0
 rerecords: 305
+
+
+
+# 83-1
+rerecords: 0
+
+
+
+# 83-2
+rerecords: 0
+
+
+
+# 83-3
+rerecords: 0
 
 
 
@@ -2494,13 +2534,63 @@ rerecords: 386
 
 
 
+# 84-0
+rerecords: 0
+
+
+
+# 84-1
+rerecords: 0
+
+
+
 # 84-2
 rerecords: 152
 
 
 
+# 84-3
+rerecords: 0
+
+
+
+# 84-4
+rerecords: 0
+
+
+
+# 85-0
+rerecords: 0
+
+
+
+# 85-1
+rerecords: 0
+
+
+
 # 85-2
 rerecords: 516
+
+
+
+# 85-3
+rerecords: 0
+
+
+
+# 85-4
+rerecords: 0
+
+
+
+# 86-0
+rerecords: 0
+
+
+
+# 86-1
+rerecords: 0
 
 
 
@@ -2513,6 +2603,36 @@ rerecords: 150
 rerecords: 146
 
 Slower than RTA. Annoying.
+
+# 86-4
+rerecords: 0
+
+
+
+# 87-0
+rerecords: 0
+
+
+
+# 87-1
+rerecords: 0
+
+
+
+# 87-2
+rerecords: 0
+
+
+
+# 87-3
+rerecords: 0
+
+
+
+# 87-4
+rerecords: 0
+
+
 
 # 88-0
 rerecords: 85
@@ -2544,11 +2664,31 @@ rerecords: 1523
 
 
 
+# 89-0
+rerecords: 0
+
+
+
 # 89-1
 rerecords: 345
 
 F9: Basic PJ on higher 1 tile
 F8: PJ on Higher 1 tile + BWJ (1 frame slower)
+
+# 89-2
+rerecords: 0
+
+
+
+# 89-3
+rerecords: 0
+
+
+
+# 89-4
+rerecords: 0
+
+
 
 # 90-0
 rerecords: 802
@@ -2556,6 +2696,26 @@ rerecords: 802
 I tried many different strategies for this one. The optimal one seems to be to maximize the number of corner jumps, as long as they don't require pressing opposite directions *too much*. This is why we avoid some of them, and notably the last one, which is too slow.
 
 I tried jumping directly on the first bb on the left by it was slower due to having to press opposite direction
+
+# 90-1
+rerecords: 0
+
+
+
+# 90-2
+rerecords: 0
+
+
+
+# 90-3
+rerecords: 0
+
+
+
+# 90-4
+rerecords: 0
+
+
 
 # 91-0
 rerecords: 394
@@ -2574,8 +2734,53 @@ rerecords: 0
 
 
 
+# 91-3
+rerecords: 0
+
+
+
+# 91-4
+rerecords: 0
+
+
+
+# 92-0
+rerecords: 0
+
+
+
+# 92-1
+rerecords: 0
+
+
+
 # 92-2
 rerecords: 161
+
+
+
+# 92-3
+rerecords: 0
+
+
+
+# 92-4
+rerecords: 0
+
+
+
+# 93-0
+rerecords: 0
+
+
+
+# 93-1
+rerecords: 0
+
+
+
+# 93-2
+rerecords: 0
 
 
 
@@ -2588,6 +2793,11 @@ Branch 6: optimized RTA route
 
 Current route and RTA route give almost exact same result. The last jump is what changes everything, and is pretty hard to optimize.
 
+# 93-4
+rerecords: 0
+
+
+
 # 94-0
 rerecords: 279
 
@@ -2599,8 +2809,63 @@ rerecords: 154
 F5: Hold jump longer to get higher up thwump
 F6: Min hold, max thwump speed. 
 
+# 94-2
+rerecords: 0
+
+
+
+# 94-3
+rerecords: 0
+
+
+
+# 94-4
+rerecords: 0
+
+
+
+# 95-0
+rerecords: 0
+
+
+
+# 95-1
+rerecords: 0
+
+
+
 # 95-2
 rerecords: 283
+
+
+
+# 95-3
+rerecords: 0
+
+
+
+# 95-4
+rerecords: 0
+
+
+
+# 96-0
+rerecords: 0
+
+
+
+# 96-1
+rerecords: 0
+
+
+
+# 96-2
+rerecords: 0
+
+
+
+# 96-3
+rerecords: 0
 
 
 
@@ -2609,8 +2874,33 @@ rerecords: 906
 
 
 
+# 97-0
+rerecords: 0
+
+
+
+# 97-1
+rerecords: 0
+
+
+
+# 97-2
+rerecords: 0
+
+
+
 # 97-3
 rerecords: 315
+
+
+
+# 97-4
+rerecords: 0
+
+
+
+# 98-0
+rerecords: 0
 
 
 
@@ -2619,16 +2909,45 @@ rerecords: 291
 
 F2: WJ start; Unable to find skip or ck which works
 
+# 98-2
+rerecords: 0
+
+
+
+# 98-3
+rerecords: 0
+
+
+
+# 98-4
+rerecords: 0
+
+
+
 # 99-0
 rerecords: 468
 
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# 99-5
+# 99-1
+rerecords: 0
 
 
-# 99-9
+
+# 99-2
+rerecords: 0
+
+
+
+# 99-3
+rerecords: 0
+
+
+
+# 99-4
+rerecords: 0
+
 
 
 # Total rerecords: 241616
