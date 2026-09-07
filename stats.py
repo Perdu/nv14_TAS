@@ -101,7 +101,7 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True, di
     for key, value in levels_data.items():
         if score_type not in value:
             continue
-        tas_score = parse_score(value[score_type], score_type)
+        tas_score = parse_score(value[score_type]["time"], score_type)
         if tas_score is None:
             continue
         
