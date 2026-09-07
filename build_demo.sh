@@ -40,5 +40,6 @@ if [ "$RECORD" -eq 1 ]; then
     else
         IMAGE="libtas_n_recording"
     fi
-    docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v $SCRIPT_DIR/volume:/home/ $IMAGE
+
+    docker run --rm -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --net=host -v $SCRIPT_DIR/volume:/home/ -v $SCRIPT_DIR/patch_config_recording.txt:/home/patch_config.txt:ro $IMAGE
 fi
