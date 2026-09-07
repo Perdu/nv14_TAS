@@ -2361,12 +2361,16 @@ rerecords: 0
 
 
 # 77-3
-rerecords: 119
+rerecords: 242
 
 Branch 2: bb bwj on first bb
 Branch 3: bb bwj on second bb
 Branch 4: bb bwj on third bb
+Branch 5: another bb bwj on the first bb
 Branch 6: thwump bwj
+Branch 7: thwump bwj on first lower thwump
+Branch 8: bb bwj on first bb
+Branch 9: better bb bwj on first bb
 
 # 77-4
 rerecords: 177
@@ -2536,7 +2540,7 @@ When falling from the top section jumping was overall slower
 For the third locked door key jumping on the lower slope was slower
 
 # 88-4
-rerecords: 1220
+rerecords: 1523
 
 
 
@@ -2621,4 +2625,10 @@ rerecords: 468
 Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
-# Total rerecords: 241190
+# 99-5
+
+
+# 99-9
+
+
+# Total rerecords: 241616
