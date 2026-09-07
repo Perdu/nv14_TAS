@@ -199,34 +199,6 @@ def read_replay_input(replay_data, episode, level):
     return demo, f'{level_data}{demo}#'
 
 
-def parse_decimal_score(value, description):
-    try:
-        result = Decimal(str(value).strip())
-    except (InvalidOperation, ValueError) as exc:
-        raise NHighError(f'{description} is not a numeric score: {value!r}') from exc
-    if not result.is_finite():
-        raise NHighError(f'{description} is not a finite score: {value!r}')
-    return result
-
-
-def parse_saved_highscore(value, description):
-    """Parse a numeric score while preserving an archive route qualifier."""
-    try:
-        return parse_decimal_score(value, description), None
-    except NHighError as numeric_error:
-        text = str(value).strip()
-        match = re.fullmatch(
-            r'(?P<prefix>.+?,\s*)(?P<score>[+-]?(?:\d+(?:\.\d*)?|\.\d+))',
-            text,
-        )
-        if match is None:
-            raise numeric_error
-        return (
-            parse_decimal_score(match.group('score'), description),
-            match.group('prefix'),
-        )
-
-
 def highscore_ticks_from_sol(raw_score, number_of_frames):
     """Return a trustworthy integral SOL score, or None for placeholders."""
     if isinstance(raw_score, bool) or raw_score is None:
