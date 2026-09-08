@@ -300,7 +300,7 @@ No sound: this is normal and you don't need it. See [sound/README.md](sound/READ
 In the Lua script, speed extraction still doesn't work for some grounded levels: 01-0, 02-0, 03-1, 37-0, 63-1, 80-2, 81-0, 82-0, 87-0, 88-1
 
 ### Texture problem
-Reported [here](https://github.com/ruffle-rs/ruffle/issues/21776)
+Reported [here](https://github.com/ruffle-rs/ruffle/issues/21776). PR [here](https://github.com/ruffle-rs/ruffle/pull/24604).
 
 Ruffle does not properly display all textures.
 
