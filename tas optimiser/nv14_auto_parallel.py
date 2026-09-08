@@ -77,11 +77,15 @@ _SPLICE_TASK_ID_BASE = 1 << 63
 _POPULATION_SPLICE_NICHE_TICKS = 12
 _AUTO_STAGNATION_MIN_DISTANCE_GAIN_PX = 0.5
 
-# Exact older releases can resume into v3.12 when every newly configurable
+# Exact older releases can resume into v3.21 when every newly configurable
 # value retains its historical/default behaviour. Pre-v3.11 releases start
 # without pending auxiliary seeds; v3.11 retains its checkpointed seeds.
 # Keep this allow-list exact so modified prior builds still fail validation.
 _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS = {
+    (
+        "3.15",
+        "7fefdab32516b6ebbdc06f24ddd0f39249ea7a020e1c40b83b94e51d0c977afb",
+    ),
     (
         "3.05",
         "d0a7ea78c7b24de46bac1ff1c00774de833ef23107a07b743ebffe67d755e43e",
@@ -109,6 +113,18 @@ _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS = {
     (
         "3.11",
         "2ec99abdb9288c9774443f8a104eda2003eb1f4691c8d17075f285b45465c218",
+    ),
+    (
+        "3.12",
+        "e4c5c7f5cb35c7db295ce0f0a41ba44d134818e9729da57d9907130d515dfcf9",
+    ),
+    (
+        "3.13",
+        "225bfb93af3451cfee6fd9601ddd495cb4105b1a21bf025ff0e3f96ff2244371",
+    ),
+    (
+        "3.14",
+        "5481fae4dab85df23652b933c162c8277338fc1896f3a426a7b7b3beea32f0f7",
     ),
 }
 
@@ -2533,7 +2549,7 @@ def _validate_checkpoint_identity(
         expected.get("optimiser_build_sha256"),
     )
     previous_build_compatible = (
-        expected.get("optimiser_version") == OPTIMISER_VERSION == "3.12"
+        expected.get("optimiser_version") == OPTIMISER_VERSION == "3.21"
         and stored_build in _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS
     )
     build_compatible = stored_build == expected_build or previous_build_compatible

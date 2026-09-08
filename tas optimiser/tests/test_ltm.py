@@ -21,9 +21,7 @@ from nv14_engine import (
 )
 from nv14_ltm import (
     LEVEL_DATABASE_NAME,
-    METADATA_FORMAT,
     METADATA_MEMBER,
-    METADATA_VERSION,
     LtmError,
     LtmMovie,
     discover_levels_file,
@@ -279,23 +277,9 @@ def test_noop_write_preserves_inputs_and_every_original_non_metadata_member(
     assert output_members["inputs"] == inputs
     for name, raw in source_members.items():
         assert output_members[name] == raw
-    assert set(output_members) == set(source_members) | {METADATA_MEMBER}
-
-    metadata = json.loads(output_members[METADATA_MEMBER])
-    assert metadata == {
-        "format": METADATA_FORMAT,
-        "inputs_member": "inputs",
-        "inputs_sha256": hashlib.sha256(inputs).hexdigest(),
-        "level_id": "00-0",
-        "level_record": _level_record(),
-        "replay_start_frame": 2,
-        "replay_tick_count": 3,
-        "version": METADATA_VERSION,
-    }
+    assert set(output_members) == set(source_members)
     reloaded = LtmMovie.load(output)
     assert reloaded.warning is None
-    assert reloaded.embedded_level_id == "00-0"
-    assert reloaded.embedded_level_record == _level_record()
     assert tuple(map(_frame_bits, reloaded.replay_frames)) == tuple(
         map(_frame_bits, movie.replay_frames)
     )
@@ -554,7 +538,7 @@ def test_shortening_refuses_to_discard_non_n_input_data(tmp_path: Path) -> None:
         )
 
 
-def test_metadata_round_trip_keeps_deliberate_trailing_neutral_replay_frames(
+def test_explicit_postroll_round_trip_keeps_deliberate_trailing_neutral_replay_frames(
     tmp_path: Path,
 ) -> None:
     source = _write_ltm(
@@ -577,14 +561,12 @@ def test_metadata_round_trip_keeps_deliberate_trailing_neutral_replay_frames(
         level_id="00-0",
         level_record=_level_record(),
     )
-    reloaded = LtmMovie.load(first_output)
+    reloaded = LtmMovie.load(first_output, postroll_frames=2)
     assert reloaded.inferred_neutral_tail_frames == 0
     assert tuple(map(_held_bits, reloaded.replay_frames)) == tuple(
         map(_held_bits, frames)
     )
-    assert json.loads(_member_bytes(first_output, METADATA_MEMBER))[
-        "replay_tick_count"
-    ] == 4
+    assert METADATA_MEMBER not in {m.name for m, _ in _regular_members(first_output)}
 
     reloaded.write(
         second_output,
@@ -596,7 +578,7 @@ def test_metadata_round_trip_keeps_deliberate_trailing_neutral_replay_frames(
         first_output, "inputs"
     )
     assert tuple(
-        map(_held_bits, LtmMovie.load(second_output).replay_frames)
+        map(_held_bits, LtmMovie.load(second_output, postroll_frames=2).replay_frames)
     ) == tuple(map(_held_bits, frames))
 
 
@@ -670,8 +652,8 @@ def test_stale_metadata_is_ignored_and_trailing_idle_is_inferred(
     inputs = b"|K20|\n|Kff51|\n|\n|\n"
     stale_metadata = json.dumps(
         {
-            "format": METADATA_FORMAT,
-            "version": METADATA_VERSION,
+            "format": "nv14-tas-replay-optimizer-ltm",
+            "version": 1,
             "inputs_member": "inputs",
             "inputs_sha256": "0" * 64,
             "replay_start_frame": 1,
@@ -690,10 +672,7 @@ def test_stale_metadata_is_ignored_and_trailing_idle_is_inferred(
     movie = LtmMovie.load(path)
 
     assert len(movie.replay_frames) == 1
-    assert movie.warning is not None
-    assert "stale" in movie.warning
-    assert movie.embedded_level_id == "00-0"
-    assert movie.embedded_level_record == _level_record()
+    assert movie.warning is None
 
 
 @pytest.mark.parametrize(
@@ -724,15 +703,15 @@ def test_load_rejects_malformed_per_frame_timing_fields(
     ("actual_member", "metadata_member"),
     (("inputs", "./inputs"), ("./inputs", "inputs")),
 )
-def test_metadata_survives_equivalent_root_input_member_spelling(
+def test_valid_metadata_is_ignored_with_equivalent_root_input_member_spelling(
     tmp_path: Path,
     actual_member: str,
     metadata_member: str,
 ) -> None:
     inputs = b"|K20|\n|Kff51|\n|\n|Mpost:0|\n"
     metadata = {
-        "format": METADATA_FORMAT,
-        "version": METADATA_VERSION,
+        "format": "nv14-tas-replay-optimizer-ltm",
+        "version": 1,
         "inputs_member": metadata_member,
         "inputs_sha256": hashlib.sha256(inputs).hexdigest(),
         "replay_start_frame": 1,
@@ -753,15 +732,8 @@ def test_metadata_survives_equivalent_root_input_member_spelling(
 
     assert movie.input_member_name == actual_member
     assert movie.warning is None
-    assert len(movie.replay_frames) == 2
-    assert _frame_bits(movie.replay_frames[-1]) == (
-        False,
-        False,
-        False,
-        False,
-    )
-    assert movie.embedded_level_id == "00-0"
-    assert movie.embedded_level_record == _level_record()
+    assert len(movie.replay_frames) == 1
+    assert movie.inferred_neutral_tail_frames == 2
 
 
 @pytest.mark.parametrize(
@@ -953,8 +925,6 @@ def test_auto_iterations_zero_reads_and_writes_ltm_end_to_end(
     assert _member_bytes(output, "inputs7") == b"alternate branch must survive\n"
     movie = LtmMovie.load(output)
     assert movie.warning is None
-    assert movie.embedded_level_id == "00-0"
-    assert movie.embedded_level_record == _level_record()
     assert len(movie.replay_frames) == 34
     assert tuple(
         decode_complex_replay(
@@ -962,13 +932,12 @@ def test_auto_iterations_zero_reads_and_writes_ltm_end_to_end(
         ).frames
     ) == movie.replay_frames
 
-    # The embedded record makes a renamed optimiser output self-contained; it
-    # no longer needs the external database or an inferable filename.
-    levels.unlink()
+    # Renamed output uses the normal external database and explicit level ID.
     monkeypatch.setattr(
         sys,
         "argv",
-        ["optimize_replay.py", "auto", str(output), "--list-objects"],
+        ["optimize_replay.py", "auto", str(output), "--level-id", "00-0",
+         "--levels-file", str(levels), "--list-objects"],
     )
     opt.main()
     level = parse_level_string(_running_exit_level_string(), simulate_enemies=True)
@@ -1012,12 +981,11 @@ def test_auto_probes_and_promotes_raw_ltm_neutral_completion_tail(
     opt.main()
 
     assert _member_bytes(output, "inputs") == input_raw
-    movie = LtmMovie.load(output)
+    movie = LtmMovie.load(output, postroll_frames=16)
     assert movie.inferred_neutral_tail_frames == 0
     assert len(movie.replay_frames) == 54
     assert movie.input_lines[movie.replay_start + 54] == "|Mtail:34|"
-    metadata = json.loads(_member_bytes(output, METADATA_MEMBER))
-    assert metadata["replay_tick_count"] == 54
+    assert METADATA_MEMBER not in {m.name for m, _ in _regular_members(output)}
     level = parse_level_string(_running_exit_level_string(), simulate_enemies=True)
     assert verify_trimmed_replay(
         level,
@@ -1065,12 +1033,10 @@ def test_auto_accepts_a_fully_inputless_raw_ltm_route(
     opt.main()
 
     assert _member_bytes(output, "inputs") == input_raw
-    movie = LtmMovie.load(output)
+    movie = LtmMovie.load(output, postroll_frames=16)
     assert len(movie.replay_frames) == 44
     assert movie.input_lines[movie.replay_start + 44] == "|Mtail:44|"
-    assert json.loads(_member_bytes(output, METADATA_MEMBER))[
-        "replay_tick_count"
-    ] == 44
+    assert METADATA_MEMBER not in {m.name for m, _ in _regular_members(output)}
     level = parse_level_string(_falling_exit_level_string(), simulate_enemies=True)
     assert verify_trimmed_replay(
         level,
@@ -1116,3 +1082,61 @@ def test_auto_neutral_tail_probe_is_bounded_by_available_ltm_rows(
     with pytest.raises(SystemExit, match="no exit completion"):
         opt.main()
     assert not output.exists()
+
+
+@pytest.mark.parametrize("metadata_name", (METADATA_MEMBER, "./" + METADATA_MEMBER))
+def test_write_removes_legacy_optimizer_json_only(tmp_path: Path, metadata_name: str) -> None:
+    source = _write_ltm(
+        tmp_path / "00-0.ltm", _basic_inputs(), config=_basic_config(),
+        extra_members=((metadata_name, b'{"obsolete":true}'),
+                       ("other.json", b'{"keep":true}'),
+                       ("nested/nv14_optimizer.json", b'{"keep_nested":true}')),
+    )
+    output = tmp_path / "00-0_clean.ltm"
+    movie = LtmMovie.load(source)
+    movie.write(output, movie.replay_frames, level_id="00-0", level_record=_level_record())
+    members = {m.name: raw for m, raw in _regular_members(output)}
+    assert metadata_name not in members
+    assert METADATA_MEMBER not in members
+    assert members["other.json"] == b'{"keep":true}'
+    assert members["nested/nv14_optimizer.json"] == b'{"keep_nested":true}'
+    assert members["inputs"] == _basic_inputs()
+    assert members["config.ini"] == _basic_config()
+    assert LtmMovie.load(output).warning is None
+
+
+@pytest.mark.parametrize("explicit_level_id", (None, "00-0"))
+def test_load_source_ignores_embedded_level_data(tmp_path: Path, explicit_level_id: str | None) -> None:
+    inputs = _basic_inputs()
+    metadata = json.dumps({
+        "format": "nv14-tas-replay-optimizer-ltm", "version": 1,
+        "inputs_member": "inputs", "inputs_sha256": hashlib.sha256(inputs).hexdigest(),
+        "replay_start_frame": 2, "replay_tick_count": 4,
+        "level_id": "99-4", "level_record": _level_record().replace("00-0", "99-4"),
+    }).encode()
+    source = _write_ltm(tmp_path / "00-0.ltm", inputs, config=_basic_config(),
+                        extra_members=((METADATA_MEMBER, metadata),))
+    levels = tmp_path / LEVEL_DATABASE_NAME
+    levels.write_text(_level_record() + "\n", encoding="utf-8")
+    loaded = cli._load_source(source, levels_file_path=None,
+                              explicit_level_id=explicit_level_id, ltm_postroll=None)
+    assert loaded.level_id == "00-0"
+    assert loaded.level_record == _level_record()
+    assert loaded.levels_file_path == levels
+    assert len(loaded.ltm_movie.replay_frames) == 3
+    levels.unlink()
+    with pytest.raises(LtmError):
+        cli._load_source(source, levels_file_path=levels,
+                         explicit_level_id=explicit_level_id, ltm_postroll=None)
+
+
+@pytest.mark.parametrize("raw", (b"not JSON", b"\xff", b"{}"))
+def test_load_ignores_malformed_and_duplicate_legacy_json(tmp_path: Path, raw: bytes) -> None:
+    source = _write_ltm(tmp_path / "00-0.ltm", _basic_inputs(), config=_basic_config(),
+                        extra_members=((METADATA_MEMBER, raw), ("./" + METADATA_MEMBER, raw)))
+    movie = LtmMovie.load(source)
+    assert movie.warning is None
+    assert len(movie.replay_frames) == 3
+    output = tmp_path / "00-0_clean.ltm"
+    movie.write(output, movie.replay_frames, level_id="00-0", level_record=_level_record())
+    assert {m.name for m, _ in _regular_members(output)} == {"inputs", "config.ini"}

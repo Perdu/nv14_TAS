@@ -282,7 +282,7 @@ def test_wrong_mode_toml_options_are_rejected(
 ) -> None:
     config = _write_config(tmp_path, f"[{table}]\n{setting}\n")
 
-    with pytest.raises(SystemExit, match="unknown TOML option"):
+    with pytest.raises(SystemExit, match="unknown TOML option|require --search population"):
         opt.parse_arguments([mode, "input.txt", "--config", str(config)])
 
 

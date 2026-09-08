@@ -407,3 +407,61 @@ def test_v312_checkpoint_rejects_v311_identity_mismatches(mismatch: str) -> None
     message = "optimiser version/build" if mismatch == "build" else "Auto configuration"
     with pytest.raises(AutoCheckpointError, match=message):
         _validate_checkpoint_identity(stored, current)
+
+
+@pytest.mark.parametrize("auxiliary_limit", [0, 1, 3])
+def test_v313_checkpoint_accepts_exact_v312(auxiliary_limit: int) -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(5, auxiliary_beam_seeds=auxiliary_limit)
+    stored = dict(current)
+    stored["optimiser_version"] = "3.12"
+    stored["optimiser_build_sha256"] = (
+        "e4c5c7f5cb35c7db295ce0f0a41ba44d134818e9729da57d9907130d515dfcf9"
+    )
+    _validate_checkpoint_identity(stored, current)
+
+
+def test_v313_checkpoint_rejects_modified_v312() -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(2)
+    stored = dict(current)
+    stored["optimiser_version"] = "3.12"
+    stored["optimiser_build_sha256"] = "0" * 64
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, current)
+
+
+@pytest.mark.parametrize("version,build", [
+    ("3.13", "225bfb93af3451cfee6fd9601ddd495cb4105b1a21bf025ff0e3f96ff2244371"),
+    ("3.14", "5481fae4dab85df23652b933c162c8277338fc1896f3a426a7b7b3beea32f0f7"),
+    ("3.15", "7fefdab32516b6ebbdc06f24ddd0f39249ea7a020e1c40b83b94e51d0c977afb"),
+])
+@pytest.mark.parametrize("auxiliary_limit", [0, 1, 3])
+def test_checkpoint_accepts_exact_v313_and_v314(auxiliary_limit: int, version: str, build: str) -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(5, auxiliary_beam_seeds=auxiliary_limit)
+    stored = dict(current)
+    stored["optimiser_version"] = version
+    stored["optimiser_build_sha256"] = build
+    _validate_checkpoint_identity(stored, current)
+
+
+@pytest.mark.parametrize("version,build", [
+    ("3.13", "225bfb93af3451cfee6fd9601ddd495cb4105b1a21bf025ff0e3f96ff2244371"),
+    ("3.14", "5481fae4dab85df23652b933c162c8277338fc1896f3a426a7b7b3beea32f0f7"),
+    ("3.15", "7fefdab32516b6ebbdc06f24ddd0f39249ea7a020e1c40b83b94e51d0c977afb"),
+])
+@pytest.mark.parametrize("mismatch", ["build", "configuration"])
+def test_checkpoint_rejects_v313_and_v314_mismatches(mismatch: str, version: str, build: str) -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(2)
+    stored = _current_identity_with_splice_limit(5 if mismatch == "configuration" else 2)
+    stored["optimiser_version"] = version
+    stored["optimiser_build_sha256"] = "0" * 64 if mismatch == "build" else build
+    message = "optimiser version/build" if mismatch == "build" else "Auto configuration"
+    with pytest.raises(AutoCheckpointError, match=message):
+        _validate_checkpoint_identity(stored, current)

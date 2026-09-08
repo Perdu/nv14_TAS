@@ -30,6 +30,7 @@ from nv14_auto import (
 )
 from nv14_auto_parallel import optimise_autonomous_campaign
 from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
+from nv14_endpoint import SECONDARY_OBJECTIVES
 from nv14_engine import InputFrame, Level, SimulationState, parse_level_string
 from nv14_jump import (
     ImmutableJumpSpec,
@@ -143,6 +144,21 @@ class LocalConfig:
     setup after the source replay has been loaded.
     """
 
+    search: str = "windows"
+    vx_window: AxisWindow | None = None
+    vy_window: AxisWindow | None = None
+    target_region: tuple[float, float, float, float] | None = None
+    arrival_start: int | None = None
+    top_results: int = 1
+    iterations: int = 10000
+    beam: int = 32
+    rounds: int = 1
+    stagnation_rounds: int = 20
+    repair_steps: int = 64
+    repair_lookback: int = 32
+    mutation_span: int = 32
+    checkpoint_path: Path | None = None
+    resume: bool = False
     target_frame: int | None = None
     frame_range: str | tuple[str, ...] | None = None
     objective: str = "max-x"
@@ -169,9 +185,46 @@ class LocalConfig:
     avoid_interaction: tuple[str, ...] = ()
     workers: int = 0
     python_resimulate: bool = False
+    secondary_objective: str | None = None
 
     def __post_init__(self) -> None:
+        if self.search not in ("windows", "population"):
+            raise ValueError("local search must be windows or population")
+        if self.search == "windows" and (
+            self.objective == "earliest-arrival" or self.vx_window is not None
+            or self.vy_window is not None or self.target_region is not None
+            or self.arrival_start is not None or self.top_results != 1
+            or self.checkpoint_path is not None or self.resume
+            or self.secondary_objective is not None
+        ):
+            raise ValueError("endpoint extensions require --search population")
+        if self.search == "population":
+            if self.secondary_objective is not None:
+                if self.secondary_objective not in SECONDARY_OBJECTIVES:
+                    raise ValueError("secondary-objective must be one of: " + ", ".join(SECONDARY_OBJECTIVES))
+                if self.objective != "earliest-arrival":
+                    raise ValueError("--secondary-objective requires --objective earliest-arrival")
+            for name in ("iterations", "beam", "top_results", "mutation_span"):
+                if getattr(self, name) < 1:
+                    raise ValueError(f"{name.replace('_', '-')} must be at least 1")
+            for name in ("rounds", "stagnation_rounds", "repair_steps", "repair_lookback"):
+                if getattr(self, name) < 0:
+                    raise ValueError(f"{name.replace('_', '-')} must be non-negative")
+            if self.top_results > self.beam:
+                raise ValueError("top-results must not exceed beam")
+            if self.arrival_start is not None and self.arrival_start < 0:
+                raise ValueError("arrival-start must be non-negative")
+            if self.resume and self.checkpoint_path is None:
+                raise ValueError("--resume requires --checkpoint FILE")
+            if self.objective == "earliest-arrival":
+                if self.target_region is None:
+                    raise ValueError("--objective earliest-arrival requires --target-region")
+                if self.arrival_start is not None and self.target_frame is not None and self.arrival_start > self.target_frame:
+                    raise ValueError("--arrival-start must not exceed --target-frame")
+            elif self.target_region is not None or self.arrival_start is not None:
+                raise ValueError("--target-region/--arrival-start require --objective earliest-arrival")
         if self.objective not in (
+            "earliest-arrival",
             "max-x",
             "min-x",
             "max-y",
@@ -180,7 +233,7 @@ class LocalConfig:
         ):
             raise ValueError(
                 "local objective must be one of: max-x, min-x, max-y, "
-                "min-y, min-distance"
+                "min-y, min-distance, earliest-arrival (population only)"
             )
         if self.target_object is not None or self.target_point is not None:
             if self.objective != "min-distance":
@@ -255,9 +308,25 @@ class LocalConfig:
     @classmethod
     def from_namespace(cls, args: argparse.Namespace) -> "LocalConfig":
         return cls(
+            search=args.search,
+            vx_window=args.vx_window,
+            vy_window=args.vy_window,
+            target_region=args.target_region,
+            arrival_start=args.arrival_start,
+            top_results=args.top_results,
+            iterations=args.iterations,
+            beam=args.beam,
+            rounds=args.rounds,
+            stagnation_rounds=args.stagnation_rounds,
+            repair_steps=args.repair_steps,
+            repair_lookback=args.repair_lookback,
+            mutation_span=args.mutation_span,
+            checkpoint_path=args.checkpoint,
+            resume=args.resume,
             target_frame=args.target_frame,
             frame_range=args.frame_range,
             objective=args.objective,
+            secondary_objective=args.secondary_objective,
             target_object=args.target_object,
             target_point=args.target_point,
             x_window=args.x_window,
@@ -666,17 +735,7 @@ def _load_source(
     movie = LtmMovie.load(input_path, postroll_frames=ltm_postroll)
     if explicit_level_id is not None:
         validate_level_id(explicit_level_id)
-        if (
-            movie.embedded_level_id is not None
-            and movie.embedded_level_id != explicit_level_id
-        ):
-            raise LtmError(
-                f"--level-id {explicit_level_id!r} conflicts with the embedded "
-                f"LTM level id {movie.embedded_level_id!r}"
-            )
         level_id = explicit_level_id
-    elif movie.embedded_level_id is not None:
-        level_id = movie.embedded_level_id
     elif (
         inferred_level_id := infer_level_id_from_ltm_filename(input_path)
     ) is not None:
@@ -687,17 +746,13 @@ def _load_source(
             "pass --level-id (for example --level-id 00-0)"
         )
 
-    if levels_file_path is None and movie.embedded_level_record is not None:
-        level_record = movie.embedded_level_record
-        resolved_levels_path = None
-    else:
-        levels_path = discover_levels_file(
-            input_path,
-            levels_file_path,
-            program_root=Path(__file__).resolve().parent,
-        )
-        level_record = find_level_record(levels_path, level_id)
-        resolved_levels_path = levels_path
+    levels_path = discover_levels_file(
+        input_path,
+        levels_file_path,
+        program_root=Path(__file__).resolve().parent,
+    )
+    level_record = find_level_record(levels_path, level_id)
+    resolved_levels_path = levels_path
 
     replay_string = encode_complex_replay(movie.replay_frames)
     try:
@@ -949,6 +1004,18 @@ def parse_axis_window(text: str) -> AxisWindow:
     return AxisWindow(minimum, maximum)
 
 
+def parse_target_region(text: str) -> tuple[float, float, float, float]:
+    """Parse a finite inclusive rectangle as XMIN:XMAX,YMIN:YMAX."""
+    axes = text.split(",")
+    if len(axes) != 2 or any(":" not in axis for axis in axes):
+        raise ValueError("target-region must be XMIN:XMAX,YMIN:YMAX")
+    x_axis, y_axis = (parse_axis_window(axis) for axis in axes)
+    values = (x_axis.minimum, x_axis.maximum, y_axis.minimum, y_axis.maximum)
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("target-region must have four finite bounds")
+    return values
+
+
 def parse_jump_count_range(text: str) -> tuple[int, int]:
     """Parse ``N`` or inclusive ``MIN:MAX`` successful-jump counts."""
     if ":" not in text:
@@ -1164,6 +1231,10 @@ def _format_config_value_for_type(
     if not isinstance(value, (list, tuple)):
         return value
 
+    if action_type is parse_target_region:
+        if len(value) != 4:
+            raise ValueError("target-region arrays must contain XMIN, XMAX, YMIN, YMAX")
+        return f"{value[0]}:{value[1]},{value[2]}:{value[3]}"
     if action_type is parse_target_point:
         if len(value) != 2:
             raise ValueError("target-point arrays must contain exactly two values")
@@ -1347,43 +1418,86 @@ def _load_config_defaults(
     return defaults
 
 
+_LOCAL_WINDOWS_OPTIONS = frozenset({
+    "window", "window_shape", "window_span", "windows_per_pass", "local_inputs",
+    "jump_start_mutation", "jump_length_mutation", "immutable_jumps", "physics_prune",
+    "passes", "window_order", "restarts", "minimum_improvement",
+})
+_LOCAL_POPULATION_OPTIONS = frozenset({
+    "iterations", "beam", "rounds", "stagnation_rounds", "repair_steps",
+    "repair_lookback", "mutation_span", "checkpoint", "resume", "top_results",
+    "vx_window", "vy_window", "target_region", "arrival_start",
+    "secondary_objective",
+})
+
+
+def _validate_local_strategy(args: argparse.Namespace, explicit: set[str]) -> None:
+    if args.mode != "local":
+        return
+    incompatible = (
+        _LOCAL_WINDOWS_OPTIONS if args.search == "population"
+        else _LOCAL_POPULATION_OPTIONS
+    ) & explicit
+    if incompatible:
+        options = ", ".join("--" + name.replace("_", "-") for name in sorted(incompatible))
+        needed = "windows" if args.search == "population" else "population"
+        raise SystemExit(f"{options} require --search {needed}")
+    if args.objective == "earliest-arrival" and args.search != "population":
+        raise SystemExit("--objective earliest-arrival requires --search population")
+
+
 class _ConfigArgumentParser(argparse.ArgumentParser):
     """ArgumentParser that applies TOML defaults before parsing the CLI."""
 
-    def parse_args(
-        self,
-        args: Sequence[str] | None = None,
-        namespace: argparse.Namespace | None = None,
-    ) -> argparse.Namespace:
+    def parse_args(self, args=None, namespace=None) -> argparse.Namespace:
         actual_args = list(sys.argv[1:] if args is None else args)
         config_path = _find_config_path(actual_args)
         command_parsers = getattr(self, "_command_parsers", {})
         mode = actual_args[0] if actual_args else None
-        if config_path is None or mode not in command_parsers:
-            return super().parse_args(actual_args, namespace)
-
-        try:
-            defaults = _load_config_defaults(
-                config_path, command_parsers[mode], mode
+        command_parser = command_parsers.get(mode)
+        defaults = {}
+        if config_path is not None and command_parser is not None:
+            try:
+                defaults = _load_config_defaults(config_path, command_parser, mode)
+            except ValueError as exc:
+                raise SystemExit(str(exc)) from exc
+        explicit = set(defaults)
+        if command_parser is not None:
+            option_destinations = {
+                option: action.dest for action in command_parser._actions
+                for option in action.option_strings
+            }
+            explicit.update(
+                option_destinations[token.split("=", 1)[0]]
+                for token in actual_args
+                if token.split("=", 1)[0] in option_destinations
             )
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
-
-        command_parser = command_parsers[mode]
-        saved_action_defaults = [
-            (action, action.default)
-            for action in command_parser._actions
-            if action.dest in defaults
-        ]
-        saved_parser_defaults = dict(command_parser._defaults)
-        command_parser.set_defaults(**defaults)
+        saved_action_defaults = (
+            [(action, action.default) for action in command_parser._actions
+             if action.dest in defaults] if command_parser is not None else []
+        )
+        saved_parser_defaults = dict(command_parser._defaults) if command_parser is not None else {}
+        if command_parser is not None:
+            command_parser.set_defaults(**defaults)
         try:
-            return super().parse_args(actual_args, namespace)
+            result = super().parse_args(actual_args, namespace)
         finally:
-            command_parser._defaults.clear()
-            command_parser._defaults.update(saved_parser_defaults)
-            for action, default in saved_action_defaults:
-                action.default = default
+            if command_parser is not None:
+                command_parser._defaults.clear()
+                command_parser._defaults.update(saved_parser_defaults)
+                for action, default in saved_action_defaults:
+                    action.default = default
+        if command_parser is not None:
+            for token in actual_args:
+                option = token.split("=", 1)[0]
+                if option.startswith("--") and option not in option_destinations:
+                    matches = {destination for name, destination in option_destinations.items()
+                               if name.startswith(option)}
+                    if len(matches) == 1:
+                        explicit.update(matches)
+        _validate_local_strategy(result, explicit)
+        result._explicit_options = frozenset(explicit)
+        return result
 
 
 def parse_arguments(
@@ -1433,10 +1547,10 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         "local": subparsers.add_parser(
             "local",
-            help="sliding-window local search",
+            help="bounded window or population endpoint search",
             description=(
-                "Run sliding-window local search using all-input or "
-                "direction-only mutations."
+                "Optimise a bounded replay segment with sliding windows or an "
+                "evolving population; level completion is not required."
             ),
         ),
         "jump-pattern": subparsers.add_parser(
@@ -1492,8 +1606,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--levels-file",
         type=Path,
         help=(
-            "N level database used to resolve a raw .ltm input; optimiser-written "
-            "LTMs embed the selected level record"
+            "N level database used to resolve the level data for an .ltm input"
         ),
     )
     command.add_argument(
@@ -1502,8 +1615,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="NN-N",
         help=(
             "level identifier for an .ltm whose filename does not begin with "
-            "an ID such as 00-0 or 00-0_rta; normally inferred or read from "
-            "optimiser LTM metadata"
+            "an ID such as 00-0 or 00-0_rta; normally inferred from the filename"
         ),
     )
     command.add_argument(
@@ -1882,10 +1994,46 @@ def build_parser() -> argparse.ArgumentParser:
     )
     command.add_argument(
         "--objective",
-        modes=fixed_frame_modes,
+        modes=jump_pattern_modes,
         choices=("max-x", "min-x", "max-y", "min-y", "min-distance"),
         default="max-x",
     )
+    command.add_argument(
+        "--objective", modes=local_modes,
+        choices=("max-x", "min-x", "max-y", "min-y", "min-distance", "earliest-arrival"),
+        default="max-x",
+    )
+    command.add_argument(
+        "--search", modes=local_modes, choices=("windows", "population"),
+        default="windows", help="local search strategy (default: windows)",
+    )
+    for option, default, help_text in (
+        ("iterations", 10000, "proposal budget per worker per population round"),
+        ("beam", 32, "maximum retained population candidates"),
+        ("rounds", 1, "population rounds; 0 continues until stagnation or Ctrl+C"),
+        ("stagnation-rounds", 20, "stop after this many rounds without primary or configured secondary objective gain; 0 disables"),
+        ("repair-steps", 64, "goal-aware repair proposals per selected failed candidate; 0 disables"),
+        ("repair-lookback", 32, "maximum repair lookback, clipped to editable ranges"),
+        ("mutation-span", 32, "maximum pulse or bounded section length"),
+        ("top-results", 1, "number of diverse feasible output replays, best first"),
+    ):
+        command.add_argument("--" + option, modes=local_modes, type=int, default=default,
+                             metavar="N", help=f"population only: {help_text} (default: {default})")
+    command.add_argument("--checkpoint", modes=local_modes, type=Path, metavar="FILE",
+                         help="population only: save campaign state at completed round boundaries")
+    command.add_argument("--resume", modes=local_modes, action="store_true",
+                         help="population only: resume --checkpoint after validating seed, level and goal")
+    command.add_argument("--vx-window", modes=local_modes, type=parse_axis_window,
+                         metavar="MIN:MAX", help="population only: inclusive horizontal velocity bounds")
+    command.add_argument("--vy-window", modes=local_modes, type=parse_axis_window,
+                         metavar="MIN:MAX", help="population only: inclusive vertical velocity bounds")
+    command.add_argument("--target-region", modes=local_modes, type=parse_target_region,
+                         metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival population goal: inclusive target rectangle")
+    command.add_argument("--arrival-start", modes=local_modes, type=parse_nonnegative_int,
+                         metavar="FRAME", help="first eligible arrival frame (default: first editable frame)")
+    command.add_argument("--secondary-objective", modes=local_modes,
+                         choices=SECONDARY_OBJECTIVES, default=None,
+                         help="earliest-arrival population only: maximise or minimise this value at tied arrival frames, before minimising changed inputs (default: none)")
     command.add_argument(
         "--target-object",
         modes=fixed_frame_modes,
@@ -2076,9 +2224,9 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "reproducible random seed for auto mode, local sparse/mixed sampling, "
             "random/mixed window order, direction-only jump mutation, and Auto's "
-            "randomized local repair traversal; auto also accepts 'random' to "
+            "randomized local repair traversal; auto and local population accept 'random' to "
             "choose and print a fresh 64-bit seed once per run, otherwise auto "
-            "defaults to 0; local mode generates and prints one when needed"
+            "defaults to 0; window search generates and prints one when needed"
         ),
     )
     command.add_argument(
@@ -2210,7 +2358,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "enable supported enemy simulation (currently floorguards, zap, laser and "
             "chaingun drones, homing launchers and gauss turrets); enabled by "
-            "default in auto and disabled by default in local and jump-pattern"
+            "default in auto and local population; disabled in local windows and jump-pattern"
         ),
     )
     enemy_group.add_argument(
@@ -2221,6 +2369,189 @@ def build_parser() -> argparse.ArgumentParser:
         help="disable supported enemy simulation (overrides the auto-mode default)",
     )
     return parser
+
+
+def _ranked_output_path(path: Path, rank: int) -> Path:
+    return path if rank == 1 else path.with_name(f"{path.stem}.rank{rank:02d}{path.suffix}")
+
+
+def _population_output_paths(
+    config: LocalConfig,
+    *,
+    input_path: Path,
+    output_path: Path,
+    replay_output_path: Path | None,
+    levels_file_path: Path | None = None,
+    config_path: Path | None = None,
+) -> tuple[tuple[Path, Path | None], ...]:
+    """Check every possible ranked destination before any checkpoint is saved."""
+    destinations = tuple(
+        (_ranked_output_path(output_path, rank),
+         _ranked_output_path(replay_output_path, rank) if replay_output_path is not None else None)
+        for rank in range(1, config.top_results + 1)
+    )
+    protected = [("input", input_path), ("levels file", levels_file_path),
+                 ("TOML configuration", config_path)]
+    outputs = []
+    for rank, (main_path, packed_path) in enumerate(destinations, 1):
+        outputs.append((f"rank {rank} output", main_path))
+        if packed_path is not None:
+            outputs.append((f"rank {rank} replay output", packed_path))
+    if config.checkpoint_path is not None:
+        outputs.append(("population checkpoint", config.checkpoint_path))
+    for index, (label, path) in enumerate(outputs):
+        if path.exists() and path.is_dir():
+            raise ValueError(f"{label} must be a file: {path}")
+        for other_label, other_path in protected + outputs[:index]:
+            if other_path is not None and _paths_alias(path, other_path):
+                raise ValueError(f"{label} and {other_label} must be different files: {path}")
+    return destinations
+
+
+def _run_local_population(
+    source: _LoadedSource,
+    level: Level,
+    frames: Sequence[InputFrame],
+    config: LocalConfig,
+    *,
+    input_path: Path,
+    output_path: Path,
+    replay_output_path: Path | None,
+    config_path: Path | None = None,
+) -> None:
+    """Dispatch bounded population search independently of Local's window loop."""
+    from nv14_endpoint import EndpointGoal, verify_endpoint
+    from nv14_population import PopulationConfig, optimise_local_population
+    from nv14_replay import simulate_through_frame
+
+    target_frame = config.target_frame
+    if target_frame is None or not 0 <= target_frame < len(frames):
+        raise SystemExit(f"target frame must be between 0 and {len(frames) - 1}")
+    try:
+        ranges = parse_frame_ranges(config.frame_range or f"0:{target_frame}", target_frame=target_frame)
+        destinations = _population_output_paths(
+            config, input_path=input_path, output_path=output_path,
+            replay_output_path=replay_output_path, levels_file_path=source.levels_file_path,
+            config_path=config_path,
+        )
+        target = None
+        if config.objective == "min-distance":
+            if (config.target_object is None) == (config.target_point is None):
+                raise ValueError("--objective min-distance requires exactly one of --target-object or --target-point")
+            target = (resolve_target_object(level, config.target_object)
+                      if config.target_object is not None else target_from_point(config.target_point))
+        required = tuple(resolve_interaction_requirement(level, selector) for selector in config.require_interaction)
+        if config.require_reference_interactions:
+            reference_state = simulate_through_frame(level, frames, target_frame)
+            required = merge_interaction_requirements(
+                required, reference_interaction_requirements(level, reference_state),
+            )
+        avoided = merge_interaction_avoidances(tuple(
+            resolve_interaction_avoidance(level, selector) for selector in config.avoid_interaction
+        ))
+        goal = EndpointGoal(
+            target_frame=target_frame, objective=config.objective, target=target,
+            x_window=config.x_window, y_window=config.y_window,
+            vx_window=config.vx_window, vy_window=config.vy_window,
+            target_region=config.target_region,
+            arrival_start=(config.arrival_start if config.arrival_start is not None else ranges[0][0])
+            if config.objective == "earliest-arrival" else 0,
+            required_interactions=required, avoided_interactions=avoided,
+            secondary_objective=config.secondary_objective,
+        )
+        search_config = PopulationConfig(
+            iterations=config.iterations, beam=config.beam, rounds=config.rounds,
+            stagnation_rounds=config.stagnation_rounds, workers=config.workers,
+            seed=config.seed, top_results=config.top_results,
+            repair_steps=config.repair_steps, repair_lookback=config.repair_lookback,
+            mutation_span=config.mutation_span, checkpoint_path=config.checkpoint_path,
+            resume=config.resume,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+    original = tuple(frames)
+    mutable = {frame for start, end in ranges for frame in range(start, end + 1)}
+    checkpoint_written = False
+
+    def verified_candidate(candidate):
+        replay_string = encode_complex_replay(candidate.frames)
+        packed = decode_complex_replay(replay_string).frames
+        if len(packed) != len(original):
+            raise ValueError("population output changed the replay length")
+        for index, (before, after) in enumerate(zip(original, packed)):
+            if index not in mutable and (before.left, before.right, before.jump) != (after.left, after.right, after.jump):
+                raise ValueError(f"population output changed held input outside --range at frame {index}")
+        evaluation = verify_endpoint(
+            level, packed, goal, expected=candidate.evaluation,
+            python_resimulate=config.python_resimulate,
+        )
+        if not evaluation.feasible:
+            raise ValueError("population output does not satisfy the endpoint goal")
+        return replay_string, packed, evaluation
+
+    def secondary_summary(evaluation) -> str:
+        if config.secondary_objective is None or not evaluation.feasible:
+            return ""
+        return f"; secondary {config.secondary_objective}={evaluation.secondary_value:.15g}"
+
+    def save_best(candidate) -> bool:
+        nonlocal checkpoint_written
+        replay_string, _packed, evaluation = verified_candidate(candidate)
+        _write_result(source, output_path, replay_output_path, replay_string)
+        checkpoint_written = True
+        print(f"[local:best] frame {evaluation.frame}; score {evaluation.score:.15g}; "
+              f"position ({evaluation.x:.12g}, {evaluation.y:.12g}); "
+              f"velocity ({evaluation.vx:.12g}, {evaluation.vy:.12g})"
+              f"{secondary_summary(evaluation)}", flush=True)
+        return True
+
+    try:
+        result = optimise_local_population(
+            level, frames, goal=goal, frame_ranges=ranges, config=search_config,
+            best_callback=save_best, progress=lambda message: print(message, flush=True),
+        )
+        if not result.candidates:
+            raise ValueError("no feasible endpoint candidate was found")
+        # Verify every ranked replay before publishing the final result set.
+        verified = [(candidate, *verified_candidate(candidate)) for candidate in result.candidates[:config.top_results]]
+    except (RuntimeError, ValueError) as exc:
+        status = ("the most recent verified best replay remains on disk" if checkpoint_written
+                  else "no output was written")
+        raise SystemExit(f"{exc}; {status}") from exc
+
+    print()
+    baseline = result.baseline
+    print(f"baseline frame {baseline.frame}: score={baseline.score:.15g}; "
+          f"position=({baseline.x:.15g}, {baseline.y:.15g}); "
+          f"velocity=({baseline.vx:.15g}, {baseline.vy:.15g}); feasible={baseline.feasible}"
+          f"{secondary_summary(baseline)}")
+    print(f"local population: objective={config.objective}; rounds={result.rounds}; "
+          f"evaluations={result.evaluations}; feasible outputs={len(verified)}/{config.top_results}")
+    if config.objective == "earliest-arrival":
+        print(f"arrival region: {config.target_region}; eligible frames {goal.arrival_start}:{target_frame}; "
+              "position, velocity and interaction constraints apply at the arrival frame")
+        if config.secondary_objective is not None:
+            print(f"arrival tie-break: {config.secondary_objective}, then fewer changed frames, then encoded inputs")
+    else:
+        print(f"endpoint verification through frame {target_frame}; later replay inputs retained")
+    if required:
+        print("required interactions satisfied: " + format_interaction_requirements(required))
+    if avoided:
+        print("forbidden interactions avoided: " + format_interaction_avoidances(avoided))
+    for rank, ((_candidate, replay_string, packed, evaluation), (main_path, packed_path)) in enumerate(zip(verified, destinations), 1):
+        _write_result(source, main_path, packed_path, replay_string)
+        changed = changed_frame_indices(original, packed)
+        print(f"  {rank}. frame={evaluation.frame}; score={evaluation.score:.15g}; "
+              f"position=({evaluation.x:.15g}, {evaluation.y:.15g}); "
+              f"velocity=({evaluation.vx:.15g}, {evaluation.vy:.15g}); changed frames={len(changed)}"
+              f"{secondary_summary(evaluation)}")
+        print(f"wrote {main_path}")
+        if packed_path is not None:
+            print(f"wrote {packed_path}")
+    if getattr(result, "interrupted", False):
+        print("population search interrupted; saved the best verified results")
+        raise SystemExit(130)
 
 
 def main() -> None:
@@ -2248,7 +2579,7 @@ def main() -> None:
     if source.ltm_movie is not None and source.ltm_movie.warning is not None:
         print(f"warning: {source.ltm_movie.warning}", file=sys.stderr)
     simulate_enemies = (
-        args.mode == "auto"
+        (args.mode == "auto" or (local_config is not None and local_config.search == "population"))
         if common_config.simulate_enemies is None
         else common_config.simulate_enemies
     )
@@ -2874,6 +3205,15 @@ def main() -> None:
                 "result produced before shutdown"
             )
             raise SystemExit(130)
+        return
+
+    if local_config is not None and local_config.search == "population":
+        _run_local_population(
+            source, level, replay.frames, local_config,
+            input_path=input_path, output_path=output_path,
+            replay_output_path=replay_output_path,
+            config_path=common_config.config_path,
+        )
         return
 
     mode_config = local_config if args.mode == "local" else jump_pattern_config

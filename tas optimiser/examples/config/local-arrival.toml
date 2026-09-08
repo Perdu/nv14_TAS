@@ -1,0 +1,21 @@
+# The centre must enter this region by the target-frame deadline.
+[local]
+search = "population"
+range = "200:500"
+target_frame = 500
+objective = "earliest-arrival"
+# Optional arrival-frame tie-break: max-x, min-x, max-y, min-y,
+# max-vx, min-vx, max-vy or min-vy (velocities are signed).
+# Omit this line to prefer fewer changed frames when arrival times tie.
+secondary_objective = "max-vx"
+target_region = "700:740,90:130"
+arrival_start = 200
+vx_window = "1:"
+top_results = 5
+iterations = 10000
+beam = 32
+workers = 8
+rounds = 0
+stagnation_rounds = 20
+seed = 12345
+checkpoint = "local_arrival_checkpoint.json"

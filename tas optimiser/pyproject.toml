@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nv14-tas-starter"
-version = "3.12"
+version = "3.21"
 requires-python = ">=3.11"
 
 [tool.setuptools]
@@ -16,6 +16,8 @@ py-modules = [
     "nv14_objectives",
     "nv14_jump",
     "nv14_local",
+    "nv14_endpoint",
+    "nv14_population",
     "nv14_auto",
     "nv14_auto_parallel",
     "nv14_checkpoint",

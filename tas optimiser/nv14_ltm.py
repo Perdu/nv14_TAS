@@ -8,9 +8,7 @@ immediately after the first Space press.
 from __future__ import annotations
 
 import copy
-import hashlib
 import io
-import json
 import os
 import re
 import tarfile
@@ -36,9 +34,8 @@ LTM_LEVEL_FILENAME_RE = re.compile(
     r"^(?P<level_id>\d{2}-\d+)(?:[_ .-].+)?$"
 )
 LEVEL_DATABASE_NAME = "N v1.4 + NReality levels.txt"
+# Legacy member name used only to strip it from newly written movies.
 METADATA_MEMBER = "nv14_optimizer.json"
-METADATA_FORMAT = "nv14-tas-replay-optimizer-ltm"
-METADATA_VERSION = 1
 MAX_LTM_INTEGER = (1 << 63) - 1
 
 
@@ -269,27 +266,6 @@ def _inferred_tick_count(lines: Sequence[str], start: int) -> int:
     return len(frames)
 
 
-def _parse_metadata(raw: bytes) -> tuple[dict[str, object] | None, str | None]:
-    try:
-        decoded = raw.decode("utf-8")
-        value = json.loads(decoded)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        return None, f"ignored invalid {METADATA_MEMBER}: {exc}"
-    if not isinstance(value, dict):
-        return None, f"ignored invalid {METADATA_MEMBER}: root is not an object"
-    if (
-        value.get("format") != METADATA_FORMAT
-        or type(value.get("version")) is not int
-        or value.get("version") != METADATA_VERSION
-    ):
-        return None, f"ignored unrecognised {METADATA_MEMBER}"
-    return value, None
-
-
-def _append_warning(current: str | None, extra: str) -> str:
-    return f"{current}; {extra}" if current else extra
-
-
 @dataclass(frozen=True, slots=True)
 class LtmMovie:
     """An active libTAS movie input plus its optimiser replay mapping."""
@@ -305,8 +281,6 @@ class LtmMovie:
     replay_start: int
     replay_frames: tuple[InputFrame, ...]
     inferred_neutral_tail_frames: int = 0
-    embedded_level_id: str | None = None
-    embedded_level_record: str | None = None
     warning: str | None = None
 
     @classmethod
@@ -326,14 +300,6 @@ class LtmMovie:
                 )
                 assert config_member is not None
                 config_raw = _read_member(archive, config_member)
-                metadata_member = _one_root_member(
-                    members, METADATA_MEMBER, required=False
-                )
-                metadata_raw = (
-                    _read_member(archive, metadata_member)
-                    if metadata_member is not None
-                    else None
-                )
         except LtmError:
             raise
         except (OSError, tarfile.TarError) as exc:
@@ -376,48 +342,6 @@ class LtmMovie:
                 raise LtmError(f"invalid LTM input frame {index}: {exc}") from exc
         replay_start = _infer_replay_start(lines)
 
-        metadata: dict[str, object] | None = None
-        warning: str | None = None
-        if metadata_raw is not None:
-            metadata, warning = _parse_metadata(metadata_raw)
-
-        metadata_valid = False
-        if metadata is not None:
-            expected_hash = metadata.get("inputs_sha256")
-            expected_member = metadata.get("inputs_member")
-            if (
-                isinstance(expected_hash, str)
-                and expected_hash == hashlib.sha256(input_raw).hexdigest()
-                and isinstance(expected_member, str)
-                and _normalised_root_name(expected_member)
-                == _normalised_root_name(input_member.name)
-            ):
-                metadata_valid = True
-            else:
-                warning = _append_warning(
-                    warning,
-                    f"ignored stale exact replay mapping in {METADATA_MEMBER}",
-                )
-
-        if metadata_valid:
-            stored_start = metadata.get("replay_start_frame")
-            stored_ticks = metadata.get("replay_tick_count")
-            if (
-                not isinstance(stored_start, int)
-                or isinstance(stored_start, bool)
-                or stored_start != replay_start
-                or not isinstance(stored_ticks, int)
-                or isinstance(stored_ticks, bool)
-                or stored_ticks < 1
-                or stored_start + stored_ticks > len(lines)
-            ):
-                metadata_valid = False
-                warning = _append_warning(
-                    warning,
-                    f"ignored inconsistent exact replay mapping in "
-                    f"{METADATA_MEMBER}",
-                )
-
         available_ticks = len(lines) - replay_start
         inferred_neutral_tail_frames = 0
         if postroll_frames is not None:
@@ -433,30 +357,10 @@ class LtmMovie:
                     f"after Space (only {available_ticks} frame(s) are available)"
                 )
             tick_count = available_ticks - postroll_frames
-        elif metadata_valid and metadata is not None:
-            tick_count = int(metadata["replay_tick_count"])
         else:
             tick_count = _inferred_tick_count(lines, replay_start)
             inferred_neutral_tail_frames = available_ticks - tick_count
         frames = _frames_from_lines(lines[replay_start : replay_start + tick_count])
-
-        embedded_level_id: str | None = None
-        embedded_level_record: str | None = None
-        if metadata is not None:
-            candidate_id = metadata.get("level_id")
-            candidate_record = metadata.get("level_record")
-            if isinstance(candidate_id, str) and LEVEL_ID_RE.fullmatch(candidate_id):
-                embedded_level_id = candidate_id
-            if embedded_level_id is not None and isinstance(candidate_record, str):
-                try:
-                    validate_level_record(candidate_record, embedded_level_id)
-                except LtmError:
-                    warning = _append_warning(
-                        warning,
-                        f"ignored invalid level record in {METADATA_MEMBER}",
-                    )
-                else:
-                    embedded_level_record = candidate_record
 
         return cls(
             path=path,
@@ -470,9 +374,6 @@ class LtmMovie:
             replay_start=replay_start,
             replay_frames=tuple(frames),
             inferred_neutral_tail_frames=inferred_neutral_tail_frames,
-            embedded_level_id=embedded_level_id,
-            embedded_level_record=embedded_level_record,
-            warning=warning,
         )
 
     def auto_completion_probe_frames(self) -> tuple[InputFrame, ...]:
@@ -482,8 +383,8 @@ class LtmMovie:
         its historical heuristic so Local and jump-pattern do not treat
         recorder padding as editable input.  Auto can safely probe the bounded
         N-neutral tail because it canonicalises a completed route before
-        searching.  Explicit ``--ltm-postroll`` and valid optimiser metadata
-        remain authoritative and therefore expose no inferred tail here.
+        searching.  Explicit ``--ltm-postroll`` remains authoritative and
+        therefore exposes no inferred tail here.
         """
         # Keep the final recorded neutral row outside the serialized body so
         # Auto's one implicit sentinel represents that physical LTM frame.  In
@@ -595,21 +496,6 @@ class LtmMovie:
             promote_inferred_neutral_tail=promote_inferred_neutral_tail,
         )
         new_input_lines = _split_input_lines(input_raw.decode("utf-8"))[0]
-        metadata = {
-            "format": METADATA_FORMAT,
-            "version": METADATA_VERSION,
-            "inputs_member": self.input_member_name,
-            "inputs_sha256": hashlib.sha256(input_raw).hexdigest(),
-            "replay_start_frame": self.replay_start,
-            "replay_tick_count": len(frames),
-            "level_id": level_id,
-            "level_record": level_record,
-        }
-        metadata_raw = (
-            json.dumps(metadata, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
-            + "\n"
-        ).encode("utf-8")
-
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=f".{output_path.name}.", suffix=".tmp", dir=output_path.parent
         )
@@ -619,10 +505,14 @@ class LtmMovie:
             self._write_archive(
                 temporary_path,
                 input_raw=input_raw,
-                metadata_raw=metadata_raw,
                 new_input_lines=new_input_lines,
             )
-            written = LtmMovie.load(temporary_path)
+            # Validate against the known output boundary without embedding it.
+            # Inference alone would trim intentional neutral replay frames.
+            written = LtmMovie.load(
+                temporary_path,
+                postroll_frames=len(new_input_lines) - self.replay_start - len(frames),
+            )
             expected_held = [
                 (bool(frame.left), bool(frame.right), bool(frame.jump))
                 for frame in frames
@@ -634,8 +524,6 @@ class LtmMovie:
             if (
                 written.replay_start != self.replay_start
                 or actual_held != expected_held
-                or written.embedded_level_id != level_id
-                or written.embedded_level_record != level_record
             ):
                 raise LtmError("internal error: written LTM failed replay validation")
             # Windows implements os.fsync() with _commit(), which requires a
@@ -657,7 +545,6 @@ class LtmMovie:
         temporary_path: Path,
         *,
         input_raw: bytes,
-        metadata_raw: bytes,
         new_input_lines: Sequence[str],
     ) -> None:
         try:
@@ -667,15 +554,11 @@ class LtmMovie:
                 members = source.getmembers()
                 input_member = _one_root_member(members, "inputs", required=True)
                 assert input_member is not None
-                metadata_member = _one_root_member(
-                    members, METADATA_MEMBER, required=False
-                )
                 config_member = _one_root_member(
                     members, "config.ini", required=True
                 )
                 assert config_member is not None
 
-                metadata_written = False
                 with tarfile.open(
                     temporary_path,
                     mode="w:gz",
@@ -683,17 +566,15 @@ class LtmMovie:
                     pax_headers=source.pax_headers,
                 ) as destination:
                     for member in members:
+                        # Do not carry optimiser JSON from older movie templates.
+                        # Other JSON files and editor/branch members are preserved.
+                        if _normalised_root_name(member.name) == METADATA_MEMBER:
+                            continue
                         cloned = copy.copy(member)
                         if member.isfile():
                             replacement: bytes | None = None
                             if member.name == input_member.name:
                                 replacement = input_raw
-                            elif (
-                                metadata_member is not None
-                                and member.name == metadata_member.name
-                            ):
-                                replacement = metadata_raw
-                                metadata_written = True
                             elif member.name == config_member.name:
                                 replacement = _update_config_frame_count(
                                     _read_member(source, member),
@@ -714,16 +595,6 @@ class LtmMovie:
                         else:
                             destination.addfile(cloned)
 
-                    if not metadata_written:
-                        metadata_info = tarfile.TarInfo(METADATA_MEMBER)
-                        metadata_info.size = len(metadata_raw)
-                        metadata_info.mode = input_member.mode
-                        metadata_info.uid = input_member.uid
-                        metadata_info.gid = input_member.gid
-                        metadata_info.uname = input_member.uname
-                        metadata_info.gname = input_member.gname
-                        metadata_info.mtime = input_member.mtime
-                        destination.addfile(metadata_info, io.BytesIO(metadata_raw))
         except LtmError:
             raise
         except (OSError, tarfile.TarError) as exc:

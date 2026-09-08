@@ -229,6 +229,15 @@ cdef extern from *:
 
 
 cdef extern from "nv14_objects_basic.h":
+    nv14_status nv14_objects_basic_door_interactions(
+        const nv14_state *state,
+        uint32_t load_index,
+        int *locked_open_out,
+        int *trap_triggered_out,
+    ) noexcept nogil
+
+
+cdef extern from "nv14_objects_basic.h":
     nv14_status nv14_objects_basic_register() noexcept
 
 
@@ -622,6 +631,43 @@ cdef class NativeState:
             "player": self.player_snapshot(),
             "static_state": self.static_state(),
         }
+
+    def door_control_masks(self):
+        """Return permanent locked-door/trapdoor bits by serialized load id.
+
+        This additive query deliberately leaves the existing snapshot ABI
+        unchanged. Endpoint search uses it to honour Local's exact interaction
+        identities without a second simulation in the Python emulator.
+        """
+        cdef size_t index
+        cdef size_t count = nv14_level_object_count(self._level._handle)
+        cdef nv14_object_descriptor descriptor
+        cdef nv14_status status
+        cdef int locked_open
+        cdef int trap_triggered
+        cdef object locked_mask = 0
+        cdef object trap_mask = 0
+        for index in range(count):
+            status = nv14_level_object_descriptor_at(
+                self._level._handle, index, &descriptor
+            )
+            if status != NV14_STATUS_OK:
+                _raise_status(status, "read native door descriptor")
+            if descriptor.object_type != 9:
+                continue
+            locked_open = 0
+            trap_triggered = 0
+            status = nv14_objects_basic_door_interactions(
+                self._handle, descriptor.load_index,
+                &locked_open, &trap_triggered,
+            )
+            if status != NV14_STATUS_OK:
+                _raise_status(status, "read native permanent door interactions")
+            if locked_open:
+                locked_mask |= (<object>1) << descriptor.load_index
+            if trap_triggered:
+                trap_mask |= (<object>1) << descriptor.load_index
+        return locked_mask, trap_mask
 
     def step(self, *args):
         """Advance once from an input object or 3/4 individual input values."""

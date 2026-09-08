@@ -1,0 +1,16 @@
+# Edit range, target and constraints for the supplied replay.
+[local]
+search = "population"
+range = "200:400"
+target_frame = 400
+objective = "min-distance"
+target_point = [732.0, 108.0]
+vx_window = "1:"
+top_results = 5
+iterations = 10000
+beam = 32
+workers = 8
+rounds = 0
+stagnation_rounds = 20
+seed = 12345
+checkpoint = "local_population_checkpoint.json"
