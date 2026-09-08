@@ -10,6 +10,6 @@ if [ $? -ne 0 ]; then
     sudo apt-get install ./ffdec_25.1.3.deb
 fi
 
-ffdec -importScript volume/n_v14.swf volume/n_v14_patched_tmp.swf decompiled_source/
+ffdec -importScript external/n_v14.swf volume/n_v14_patched_tmp.swf decompiled_source/
 python patch_broken_texture.py volume/n_v14_patched_tmp.swf -o volume/n_v14_patched.swf
 rm volume/n_v14_patched_tmp.swf
