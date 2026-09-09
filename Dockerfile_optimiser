@@ -1,0 +1,11 @@
+FROM libtas_n
+
+# recording tool + git for github action
+  RUN apt-get update && apt-get install -y python3-setuptools python3-dev gcc
+
+# n-related commands
+  RUN echo "export LEVEL='41-2' ; python3 optimize_replay.py auto ../n_levels/\${LEVEL}_rta.ltm --config 'examples/config.toml' --output ../n_levels/\${LEVEL}_optimised.ltm --replay-output wip/\${LEVEL}.txt --simulate-enemies --auto-stagnation-runs 3 --workers 15" >> /root/.bash_history
+
+# run
+  WORKDIR /home
+  CMD bash
