@@ -25,6 +25,9 @@ space_frame = -100
 pos_found = false
 ramsearch_done = false
 pre_reload_skipped = false
+shift_pressed = false
+left_pressed = false
+right_pressed = false
 
 
 function onPaint()
@@ -81,6 +84,10 @@ function onInput()
        end
     end
 
+    shift_pressed = (input.getKey(KEY_SHIFT) ~= 0) and 1 or 0
+    left_pressed  = (input.getKey(KEY_LEFT)  ~= 0) and 1 or 0
+    right_pressed = (input.getKey(KEY_RIGHT) ~= 0) and 1 or 0
+
 end
 
 -- Perform runtime actions (must be done in onFrame)
@@ -107,10 +114,6 @@ function onFrame()
             local y = memory.readd(y_num)
             local x_num = y_num - 56
             local x = memory.readd(x_num)
-            -- read keys
-            local shift = (input.getKey(KEY_SHIFT) ~= 0) and 1 or 0
-            local left  = (input.getKey(KEY_LEFT)  ~= 0) and 1 or 0
-            local right = (input.getKey(KEY_RIGHT) ~= 0) and 1 or 0
             -- speed
             if memspeed_y ~= "" then
                local y_num_speed = tonumber(memspeed_y, 16)
@@ -122,8 +125,8 @@ function onFrame()
                vx = 0.0
                vy = 0.0
             end
-            print(string.format("%d,%f,%f,%d,%d,%d,%f,%f", f, x, y, shift, left, right, vx, vy))
-            ghostFile:write(string.format("%d,%f,%f,%d,%d,%d,%f,%f\n", f - space_frame, x, y, shift, left, right, vx, vy))
+            print(string.format("%d,%f,%f,%d,%d,%d,%f,%f", f, x, y, shift_pressed, left_pressed, right_pressed, vx, vy))
+            ghostFile:write(string.format("%d,%f,%f,%d,%d,%d,%f,%f\n", f - space_frame, x, y, shift_pressed, left_pressed, right_pressed, vx, vy))
          end
       end
    end
