@@ -1685,7 +1685,7 @@ rerecords: 0
 
 
 # 52-4
-rerecords: 0
+rerecords: 119
 
 
 
@@ -1842,9 +1842,9 @@ rerecords: 538
 
 
 # 58-3
-rerecords: 0
+rerecords: 660
 
-
+Branch 9: attempt at beating the drone in the end (with slower start)
 
 # 58-4
 rerecords: 0
@@ -2440,7 +2440,7 @@ rerecords: 0
 
 
 # 80-1
-rerecords: 0
+rerecords: 17
 
 
 
@@ -2950,4 +2950,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 241616
+# Total rerecords: 242412
