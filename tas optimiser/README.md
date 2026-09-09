@@ -67,6 +67,7 @@ python3 optimize_replay.py jump-pattern 'examples/bbjump.txt' --config 'examples
 ## Requirements and setup
 
 - Python **3.11 or newer**.
+- On Debian, the following packages are required to build the optimiser: python3-setuptools, python3-dev and gcc.
 - No third-party Python packages are required to run the optimiser.
 - Auto, Local and jump-pattern require the bundled native extension to be
   built with a C11 compiler and Python development headers. Fixed-replay tools
