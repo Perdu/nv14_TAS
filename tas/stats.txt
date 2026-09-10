@@ -8,7 +8,7 @@ Speedruns: 363
 
 Levels already TASed (optimization level >= 5):
 Highscores: 145
-Speedruns: 203
+Speedruns: 204
 
 Levels already TASed (optimization level >= 6):
 Highscores: 2
@@ -70,9 +70,9 @@ Episode Speedrun Grid (optimization level >= 6):
 🔴08 🔴18 🔴28 🔴38 🔴48 🔴58 🔴68 🔴78 🟠88 🔴98
 🔴09 🔴19 🔴29 🔴39 🔴49 🔴59 🔴69 🔴79 🔴89 🔴99
 
-Total TAS: 260866 f (1h48m41.650s)
+Total TAS: 260765 f (1h48m39.125s)
 Total RTA: 280575 f (1h56m54.375s) / 280575 f (1h56m54.375s) (100.00 %)
-Total Δ   = +19709 f (8m12.725s)
+Total Δ   = +19810 f (8m15.250s)
 
 ────────────────────────────────────────────────────────────
 
@@ -491,7 +491,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 82-0: TAS= 222 f  RTA= 223 f    -1 f (0.025) (- 0.45%) 
 82-1: TAS= 403 f  RTA= 417 f   -14 f (0.350) (- 3.36%) █
 82-2: TAS= 473 f  RTA= 474 f    -1 f (0.025) (- 0.21%) 
-82-3: TAS= 969 f  RTA=1052 f   -83 f (2.075) (- 7.89%) █████
+82-3: TAS= 868 f  RTA=1052 f  -184 f (4.600) (-17.49%) █████████████
 82-4: TAS=1380 f  RTA=1456 f   -76 f (1.900) (- 5.22%) █████
 83-0: TAS= 266 f  RTA= 271 f    -5 f (0.125) (- 1.85%) 
 83-1: TAS=1016 f  RTA=1072 f   -56 f (1.400) (- 5.22%) ████
@@ -599,6 +599,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 32-2: TAS= 613 f  RTA= 821 f  -208 f (5.200) (-25.33%) ███████████████
 89-4: TAS= 867 f  RTA=1062 f  -195 f (4.875) (-18.36%) ██████████████
 59-4: TAS= 790 f  RTA= 980 f  -190 f (4.750) (-19.39%) █████████████
+82-3: TAS= 868 f  RTA=1052 f  -184 f (4.600) (-17.49%) █████████████
 95-2: TAS= 248 f  RTA= 412 f  -164 f (4.100) (-39.81%) ███████████
 07-2: TAS= 684 f  RTA= 844 f  -160 f (4.000) (-18.96%) ███████████
 74-4: TAS= 860 f  RTA=1018 f  -158 f (3.950) (-15.52%) ███████████
@@ -638,7 +639,6 @@ Time differences (Speedrun) — RTA vs TAS (sorted by time saved over 0th):
 86-0: TAS=1177 f  RTA=1264 f   -87 f (2.175) (- 6.88%) ██████
 99-3: TAS= 827 f  RTA= 914 f   -87 f (2.175) (- 9.52%) ██████
 40-1: TAS=1109 f  RTA=1192 f   -83 f (2.075) (- 6.96%) █████
-82-3: TAS= 969 f  RTA=1052 f   -83 f (2.075) (- 7.89%) █████
 06-2: TAS= 776 f  RTA= 858 f   -82 f (2.050) (- 9.56%) █████
 17-2: TAS=1558 f  RTA=1637 f   -79 f (1.975) (- 4.83%) █████
 28-1: TAS= 219 f  RTA= 298 f   -79 f (1.975) (-26.51%) █████

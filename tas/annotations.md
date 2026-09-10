@@ -2500,9 +2500,12 @@ rerecords: 0
 
 
 # 82-3
-rerecords: 0
+rerecords: 847
 
-
+Branch 9: attempt at clipping to the door with a rcj combo
+Branch 8: attmpt at clip with a cj
+Branch 7: unoptimized with a rcj
+Branch 6: earlier run with no double bb bwj, better optimised after that
 
 # 82-4
 rerecords: 0
@@ -2950,4 +2953,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 242412
+# Total rerecords: 243259
