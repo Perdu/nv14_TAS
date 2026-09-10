@@ -7,7 +7,7 @@ RUN groupadd -g 1000 user && \
     useradd -m -u 1000 -g 1000 -s /bin/bash user
 
 # n-related commands
-  RUN echo "export LEVEL='00-0' ; python3 optimize_replay.py auto ../n_levels/\${LEVEL}_rta.ltm --config 'examples/config.toml' --output ../n_levels/\${LEVEL}_optimised.ltm --replay-output wip/\${LEVEL}.txt --simulate-enemies --auto-stagnation-runs 3 --workers 15" >> /home/user/.bash_history && \
+  RUN echo "export LEVEL='00-0' ; python3 optimize_replay.py local ../n_levels/\${LEVEL}_rta.ltm --config 'levels/\${LEVEL}.txt' --output ../n_levels/\${LEVEL}_optimised.ltm --replay-output wip/\${LEVEL}.txt --simulate-enemies --workers 15\nexport LEVEL='00-0' ; python3 optimize_replay.py auto ../n_levels/\${LEVEL}.ltm --config 'examples/config.toml' --output ../n_levels/\${LEVEL}_optimised.ltm --replay-output wip/\${LEVEL}.txt --simulate-enemies --auto-stagnation-runs 3 --workers 15\nexport LEVEL='00-0' ; python3 optimize_replay.py auto ../n_levels/\${LEVEL}_rta.ltm --config 'examples/config.toml' --output ../n_levels/\${LEVEL}_optimised.ltm --replay-output wip/\${LEVEL}.txt --simulate-enemies --auto-stagnation-runs 3 --workers 15" >> /home/user/.bash_history && \
       chown 1000:1000 /home/user/.bash_history
 
 # run
