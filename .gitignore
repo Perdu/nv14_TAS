@@ -2,6 +2,7 @@ volume/*
 !volume/n_levels/
 !volume/n_levels/*.ltm
 volume/n_levels/*_rta.ltm
+volume/n_levels/*_optimised*.ltm
 !volume/ghosts/
 !volume/ghosts/*.csv
 extract/
@@ -12,5 +13,7 @@ tas optimiser/__pycache__/
 tas optimiser/.pytest_cache/
 tas optimiser/build/
 tas optimiser/wip/
+tas optimiser/local_arrival_checkpoint.json
+tas optimiser/levels/
 *.pyd
 *.so
