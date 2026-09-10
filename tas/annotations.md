@@ -2500,7 +2500,7 @@ rerecords: 0
 
 
 # 82-3
-rerecords: 847
+rerecords: 1307
 
 Branch 9: attempt at clipping to the door with a rcj combo
 Branch 8: attmpt at clip with a cj
@@ -2953,4 +2953,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 243259
+# Total rerecords: 243719
