@@ -17,6 +17,7 @@ if [ $# -ge 3 -a "$3" == "hs" ]; then
 fi
 
 mkdir -p $EXTRACT_FOLDER
+rm $EXTRACT_FOLDER/*
 
 tar xzf volume/n_levels/"$1"${hs_prefix}.ltm -C extract/
 sed -i "s/authors=.*/authors=$2/" extract/config.ini
