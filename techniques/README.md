@@ -288,6 +288,8 @@ As a result, it is occasionnaly possible to delay drone detection by interacting
 
 @TAS-only
 
+With extremely precise positioning, it's possible to jump off the side of a locked door.
+
 ![Locked door walljump](gifs/locked_door_wj_customlevel.gif)
 
 ```
@@ -355,20 +357,10 @@ In case that ever becomes relevant: we can pause-unpause in only 2 frames with t
 
 Note that pressing Space and p on the same frame will do nothing (probably because [pause is immediately escaped](../external/n_v14_codedump.as#L23632), or because pressing p somehow removes other inputs).
 
-
-## Other info
-
-(such as directional keys
-being blocked after a certain speed)
-
-
-
-
-## Locked door walljump
-With extremely precise positioning, it's possible to jump off the side of a locked door.
-
-
 # Other info
+
+@todo
+
 When the player's horizontal speed exceeds 14 (? @todo), directional key presses are not registered anymore, making it impossible to navigate the player at high speed.
 
 # Demo validation
