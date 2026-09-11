@@ -20,5 +20,5 @@ mkdir -p $EXTRACT_FOLDER
 rm $EXTRACT_FOLDER/*
 
 tar xzf volume/n_levels/"$1"${hs_prefix}.ltm -C extract/
-sed -i "s/authors=.*/authors=$2/" extract/config.ini
+sed -i "s/authors=.*/authors=\"$2\"/" extract/config.ini
 tar czf $DOCKER_VOLUME_PATH/n_levels/"$1"${hs_prefix}.ltm -C $EXTRACT_FOLDER . --transform='s|^\./||'
