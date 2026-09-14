@@ -7,11 +7,11 @@ Highscores: 483
 Speedruns: 363
 
 Levels already TASed (optimization level >= 5):
-Highscores: 145
+Highscores: 146
 Speedruns: 205
 
 Levels already TASed (optimization level >= 6):
-Highscores: 2
+Highscores: 3
 Speedruns: 11
 
 
@@ -1131,7 +1131,7 @@ Episode Highscore Grid (optimization level >= 6):
 🟠00 🔴10 🔴20 🔴30 🔴40 🔴50 🔴60 🔴70 🔴80 🔴90
 🔴01 🔴11 🔴21 🔴31 🔴41 🔴51 🔴61 🔴71 🔴81 🔴91
 🔴02 🔴12 🔴22 🔴32 🔴42 🔴52 🔴62 🔴72 🔴82 🔴92
-🔴03 🔴13 🔴23 🔴33 🔴43 🔴53 🔴63 🔴73 🔴83 🔴93
+🔴03 🔴13 🔴23 🔴33 🔴43 🔴53 🔴63 🟠73 🔴83 🔴93
 🔴04 🔴14 🔴24 🔴34 🔴44 🔴54 🔴64 🔴74 🔴84 🔴94
 🔴05 🔴15 🔴25 🔴35 🔴45 🔴55 🔴65 🔴75 🔴85 🔴95
 🔴06 🟠16 🔴26 🔴36 🔴46 🔴56 🔴66 🔴76 🔴86 🔴96
@@ -1139,9 +1139,9 @@ Episode Highscore Grid (optimization level >= 6):
 🔴08 🔴18 🔴28 🔴38 🔴48 🔴58 🔴68 🔴78 🔴88 🔴98
 🔴09 🔴19 🔴29 🔴39 🔴49 🔴59 🔴69 🔴79 🔴89 🔴99
 
-Total TAS: 72727.900 s
+Total TAS: 72730.600 s
 Total RTA: 72150.650 s
-Total Δ   = +577.250 s (9m37.250s)
+Total Δ   = +579.950 s (9m39.950s)
 
 ────────────────────────────────────────────────────────────
 
@@ -1511,7 +1511,7 @@ Time differences (Highscore) — RTA vs TAS (sorted by level):
 72-2: TAS=125.100 s  RTA=123.150 s   +1.950 s ███████
 72-3: TAS=166.775 s  RTA=166.025 s   +0.750 s ██
 72-4: TAS=114.700 s  RTA=111.250 s   +3.450 s ████████████
-73-0: TAS=337.525 s  RTA=335.850 s   +1.675 s ██████
+73-0: TAS=340.225 s  RTA=335.850 s   +4.375 s ███████████████
 73-1: TAS=174.500 s  RTA=173.425 s   +1.075 s ███
 73-2: TAS=149.875 s  RTA=149.525 s   +0.350 s █
 73-3: TAS=113.000 s  RTA=110.675 s   +2.325 s ████████
@@ -1672,6 +1672,7 @@ Time differences (Highscore) — RTA vs TAS (sorted by score gained over 0th):
 19-4: TAS=192.750 s  RTA=188.200 s   +4.550 s ████████████████
 02-1: TAS=169.275 s  RTA=164.775 s   +4.500 s ████████████████
 38-4: TAS=151.400 s  RTA=147.025 s   +4.375 s ███████████████
+73-0: TAS=340.225 s  RTA=335.850 s   +4.375 s ███████████████
 84-1: TAS=186.975 s  RTA=182.825 s   +4.150 s ███████████████
 95-4: TAS=147.975 s  RTA=143.825 s   +4.150 s ███████████████
 31-4: TAS=207.600 s  RTA=203.600 s   +4.000 s ██████████████
@@ -1748,7 +1749,6 @@ Time differences (Highscore) — RTA vs TAS (sorted by score gained over 0th):
 33-3: TAS=179.950 s  RTA=178.250 s   +1.700 s ██████
 00-3: TAS=121.700 s  RTA=120.025 s   +1.675 s ██████
 86-3: TAS=105.675 s  RTA=104.000 s   +1.675 s ██████
-73-0: TAS=337.525 s  RTA=335.850 s   +1.675 s ██████
 35-3: TAS=128.900 s  RTA=127.250 s   +1.650 s █████
 50-1: TAS=185.475 s  RTA=183.825 s   +1.650 s █████
 56-3: TAS=141.125 s  RTA=139.475 s   +1.650 s █████
