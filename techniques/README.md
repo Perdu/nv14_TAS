@@ -2,6 +2,8 @@
 
 Todo: detail all techniques, ideally with gifs, similar to what can be found [here](https://tasvideos.org/GameResources/NES/Rockman). Gifs were produced using method described [here](notes.md).
 
+This is a document targeted at humans. The LLM-oriented version is [here](techniques_llm.md).
+
 Links:
 - [Thread on air speed](https://forum.droni.es/viewtopic.php?f=20&t=10336&sid=569eab4beeecd814135f67b0fa574a3a)
 - [Stumbles](https://discord.com/channels/197765375503368192/199460839252688896/1431062811903266957)
