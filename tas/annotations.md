@@ -1847,9 +1847,16 @@ rerecords: 660
 Branch 9: attempt at beating the drone in the end (with slower start)
 
 # 58-4
-rerecords: 0
+rerecords: 1723
 
-
+Branch 9: way up with a thwump push
+Branch 8: left path: no lp, single bb bwj
+Branch 7: best direct jump left with cj
+Branch 6: 
+Branch 5: optimised ascent bottlenecked by thwumps (former best TAS)
+Branch 4: attempt at thwump push up
+Branch 3: bwj to the way up
+Branch 2: 
 
 # 59-0
 rerecords: 180
@@ -2135,7 +2142,7 @@ rerecords: 0
 
 
 # 69-2
-rerecords: 809
+rerecords: 812
 
 There's a branch in which we avoid the cj on the way up to the middle section, which is slightly faster, to go to the left, but we get a worse angle
 
@@ -2959,4 +2966,4 @@ rerecords: 0
 # 99-9
 
 
-# Total rerecords: 244053
+# Total rerecords: 245779
