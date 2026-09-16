@@ -284,6 +284,12 @@ As a result, it is occasionnaly possible to delay drone detection by interacting
 
 (todo: gif with the beginning of 19-1)
 
+## Angled walljumps on downwards corners
+
+Found by the TAS optimiser, precise jumps on a corner facing down can lead to an horizontal boost giving the walljump an unusual and potentially useful angle.
+
+Example: 13-3 SR
+
 ## Locked door walljump
 
 @TAS-only
