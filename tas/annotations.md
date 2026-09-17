@@ -1817,10 +1817,12 @@ rerecords: 0
 
 
 # 57-3
-rerecords: 578
+rerecords: 1337
 
 Branch 9: trying to avoid floorguard detection by going inbetween the thwumps. Doesn't seem to be possible.
-Branch 8: attempt at going between the 2 thwumps with a push on the top one
+Branch 8: Taking upper switch, then lower switch
+Branch 7: first manual TAS
+Branch 6: best upwards thwump push, unfortunately too good
 
 # 57-4
 rerecords: 0
@@ -2961,10 +2963,4 @@ rerecords: 0
 
 
 
-# 99-5
-
-
-# 99-9
-
-
-# Total rerecords: 246357
+# Total rerecords: 247116
