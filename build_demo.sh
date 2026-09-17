@@ -29,6 +29,7 @@ for arg in "$@"; do
 done
 
 mkdir -p $EXTRACT_FOLDER
+rm -f $EXTRACT_FOLDER/*
 
 tar xzf $BASE_LTM_FILE -C $EXTRACT_FOLDER
 python3 builder.py "${PASSTHROUGH_ARGS[@]}"
