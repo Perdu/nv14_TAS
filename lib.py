@@ -1,4 +1,6 @@
+import math
 import re
+import sys
 from decimal import Decimal
 from pathlib import Path
 
@@ -70,6 +72,50 @@ def get_replay_string(demo):
     if not re.match(r'^\d+:', replay):
         raise NHighError('Could not find a complex replay in the demo data')
     return replay
+
+
+class DistanceToDoorError(RuntimeError):
+    pass
+
+
+def emulate_distance_to_door(demo):
+    """Signed circle-edge gap after the last input, without a neutral tick."""
+    optimizer_dir = SCRIPT_DIR / 'tas optimiser'
+    if not optimizer_dir.is_dir():
+        raise DistanceToDoorError(f'Optimiser directory not found: {optimizer_dir}')
+    optimizer_path = str(optimizer_dir)
+    if optimizer_path in sys.path:
+        sys.path.remove(optimizer_path)
+    sys.path.insert(0, optimizer_path)
+    for module_name in ('nv14_engine', 'nv14_replay'):
+        loaded_path = getattr(sys.modules.get(module_name), '__file__', None)
+        if loaded_path is not None and Path(loaded_path).resolve().parent != optimizer_dir.resolve():
+            raise DistanceToDoorError(f'Conflicting {module_name} module: {loaded_path}')
+    try:
+        from nv14_engine import StaticColliderKind, parse_level_string
+        from nv14_replay import decode_complex_replay, parse_combined_level_replay
+
+        combined = parse_combined_level_replay(demo)
+        parsed_level = parse_level_string(combined.level_string, simulate_enemies=True)
+        frames = decode_complex_replay(combined.replay_string).frames
+        if not frames:
+            raise ValueError('Replay has no final input frame')
+        doors = [entry for entry in parsed_level.static_world.by_ref.values()
+                 if entry.kind == StaticColliderKind.EXIT_DOOR]
+        if not doors:
+            raise ValueError('Level has no exit circle')
+        state = parsed_level.initial_state()
+        for frame in frames:
+            # Preserve the recorded jump-trigger bits and apply every input.
+            state.step(frame, parsed_level.tiles)
+        player = state.player
+        gaps = [math.hypot(player.pos.x - door.x, player.pos.y - door.y)
+                - player.r - door.r for door in doors]
+        if not all(math.isfinite(gap) for gap in gaps):
+            raise ValueError('Non-finite final position/distance')
+        return min(gaps)
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise DistanceToDoorError(f'Could not calculate distance_to_door: {exc}') from exc
 
 
 def save_demo(
@@ -165,6 +211,7 @@ def save_demo(
             'diff_with_0th': diff_str_total,
             "authors": new_authors,
             "optimization_level": new_optimization_level,
+            "distance_to_door": emulate_distance_to_door(demo),
             "demo": LiteralScalarString(demo)
         }
         if authors is None and 'authors' not in existing_record:
@@ -189,6 +236,7 @@ def save_demo(
             'diff_with_0th': diff_str_total,
             'authors': authors,
             'optimization_level': new_optimization_level,
+            'distance_to_door': emulate_distance_to_door(demo),
             'demo': LiteralScalarString(demo),
         }
         if authors is None:

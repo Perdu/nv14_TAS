@@ -21,7 +21,7 @@ from itertools import chain
 from pathlib import Path
 from tempfile import gettempdir
 
-from lib import save_demo, get_demo_frame_count, get_replay_string
+from lib import save_demo, get_demo_frame_count, get_replay_string, DistanceToDoorError
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -51,6 +51,7 @@ def usage(ret_code):
     print("Replay inputs accept a full level+replay or raw FRAME_COUNT:PACKED_INPUTS.")
     print("Put options before LEVEL. In SOL mode, authors default to the LTM authors.")
     print("Replay highscore mode requires the emulator in 'tas optimiser/'.")
+    print("Saving any replay requires that emulator to calculate distance_to_door.")
     sys.exit(ret_code)
 
 
@@ -472,7 +473,7 @@ def main(argv=None):
                 highscore_ticks=highscore_ticks,
                 preserve_default_authors=not interactive_replay,
             )
-    except NHighError as exc:
+    except (NHighError, DistanceToDoorError) as exc:
         print(f'Error: {exc}', file=sys.stderr)
         return 1
     return 0
