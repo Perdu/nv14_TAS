@@ -1,0 +1,24 @@
+# The centre must enter this region by the target-frame deadline.
+[local]
+simulate-enemies = true
+search = "population"
+range = "0:240"
+# target_frame = 515
+target_frame = 240
+objective = "earliest-arrival"
+# Optional arrival-frame tie-break: max-x, min-x, max-y, min-y,
+# max-vx, min-vx, max-vy or min-vy (velocities are signed).
+# Omit this line to prefer fewer changed frames when arrival times tie.
+secondary_objective = "max-vy"
+# target_region = "440:470,10:60"
+target_region = "670:720,200:250"
+# require-interaction = ["testdoor:0", "switch"]
+# arrival_start = 200
+vx_window = "1:"
+top_results = 5
+iterations = 10000
+beam = 32
+workers = 8
+rounds = 0
+stagnation_rounds = 20
+seed = 12345
