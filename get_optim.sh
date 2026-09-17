@@ -10,4 +10,4 @@ EXTRACT_FOLDER="extract"
 OPTIM_FILE="tas optimiser/wip/optim.ltm"
 
 tar xzf "$OPTIM_FILE" -C $EXTRACT_FOLDER
-tail -n +41 $EXTRACT_FOLDER/inputs | xclip -selection clipboard
+sed '0,/^|K20|$/d' "$EXTRACT_FOLDER/inputs" | xclip -selection clipboard
