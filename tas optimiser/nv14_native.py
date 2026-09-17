@@ -103,6 +103,10 @@ def simulate_batch(
     simulate_enemies: bool = False,
     stop_on_dead: bool = True,
     stop_on_complete: bool = False,
+    track_visuals: bool = False,
+    visual_timeline_frames: int = 3,
+    visual_auto_draw: bool = True,
+    celebration_variant: int = 0,
 ) -> dict[str, object]:
     """Run a supported replay prefix in C and return one compact result dict.
 
@@ -113,6 +117,9 @@ def simulate_batch(
     result shape differs from ``nv14_engine.simulate``. Unsupported level
     features raise ``NotImplementedError`` so the caller can choose its own
     fallback and result adapter.
+
+    ``track_visuals=True`` adds a ``visual`` field to the final state snapshot.
+    Visual timing/terminal semantics are documented in docs/NATIVE_VISUAL_STATE.md.
     """
     native = require_native()
     return native.simulate_batch(
@@ -121,4 +128,8 @@ def simulate_batch(
         simulate_enemies=simulate_enemies,
         stop_on_dead=stop_on_dead,
         stop_on_complete=stop_on_complete,
+        track_visuals=track_visuals,
+        visual_timeline_frames=visual_timeline_frames,
+        visual_auto_draw=visual_auto_draw,
+        celebration_variant=celebration_variant,
     )

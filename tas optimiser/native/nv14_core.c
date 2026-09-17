@@ -1713,6 +1713,22 @@ nv14_status nv14_state_copy_into(
         );
         return NV14_STATUS_INVALID_ARGUMENT;
     }
+    if (source->visual != NULL) {
+        if (destination->visual == NULL) {
+            destination->visual = (nv14_visual_tracker *)malloc(
+                sizeof(*destination->visual)
+            );
+            if (destination->visual == NULL) {
+                nv14_set_error(error_out, NV14_STATUS_OUT_OF_MEMORY, 0,
+                    "cannot allocate cloned visual tracker");
+                return NV14_STATUS_OUT_OF_MEMORY;
+            }
+        }
+        *destination->visual = *source->visual;
+    } else if (destination->visual != NULL) {
+        free(destination->visual);
+        destination->visual = NULL;
+    }
     destination->player = source->player;
     destination->frame = source->frame;
     destination->level_complete = source->level_complete;
@@ -1807,6 +1823,7 @@ void nv14_state_destroy(nv14_state *state)
         }
     }
     free(state->mutable_block);
+    free(state->visual);
     nv14_level_release(state->level);
     free(state);
 }
@@ -1866,22 +1883,29 @@ static void nv14_player_report_object(
     nv14_player_record_normal(player, nx, ny);
 }
 
-static void nv14_player_fall(nv14_player_snapshot *player)
+static void nv14_player_fall(
+    nv14_player_snapshot *player, nv14_visual_tracker *visual
+)
 {
     if (player->state == NV14_PLAYER_JUMPING) player->g = player->norm_grav;
     player->state = NV14_PLAYER_FALLING;
+    if (visual != NULL) nv14_visual_state_changed(visual, player);
 }
 
-static void nv14_player_launch(nv14_player_snapshot *player, double x, double y)
+static void nv14_player_launch(
+    nv14_player_snapshot *player, double x, double y, nv14_visual_tracker *visual
+)
 {
     player->oldpos.x = player->pos.x;
     player->oldpos.y = player->pos.y;
     player->pos.x += x;
     player->pos.y += y;
-    nv14_player_fall(player);
+    nv14_player_fall(player, visual);
 }
 
-static void nv14_player_jump(nv14_player_snapshot *player, double x, double y)
+static void nv14_player_jump(
+    nv14_player_snapshot *player, double x, double y, nv14_visual_tracker *visual
+)
 {
     double vx;
     double vy;
@@ -1896,6 +1920,7 @@ static void nv14_player_jump(nv14_player_snapshot *player, double x, double y)
     player->pos.x += x * player->jump_amt;
     player->pos.y += y * (player->jump_amt + player->jump_y_bias);
     player->jump_timer = 0;
+    if (visual != NULL) nv14_visual_state_changed(visual, player);
 }
 
 static void nv14_player_celebrate(nv14_player_snapshot *player)
@@ -2032,7 +2057,8 @@ static void nv14_player_think(
     nv14_player_snapshot *player,
     int horizontal,
     int jump_held,
-    int jump_trigger
+    int jump_trigger,
+    nv14_visual_tracker *visual
 )
 {
     double vx = player->pos.x - player->oldpos.x;
@@ -2042,26 +2068,31 @@ static void nv14_player_think(
         if (player->in_air) {
             if (!player->celeb_was_in_air) {
                 player->d = player->norm_drag;
+                if (visual != NULL) nv14_visual_celebrate_air(visual);
                 player->celeb_was_in_air = 1;
             }
         } else {
-            if (player->celeb_was_in_air) player->d = player->win_drag;
+            if (player->celeb_was_in_air) {
+                player->d = player->win_drag;
+                if (visual != NULL) nv14_visual_celebrate_ground(visual);
+            }
             player->celeb_was_in_air = 0;
         }
         return;
     }
     if (player->in_air) {
         double candidate = vx + (double)horizontal * player->air_accel;
+        if (visual != NULL) nv14_visual_relax_rotation(visual);
         if (fabs(candidate) < player->maxspeed_air) vx = candidate;
         player->oldpos.x = player->pos.x - vx;
         if (state < NV14_PLAYER_JUMPING) {
-            nv14_player_fall(player);
+            nv14_player_fall(player, visual);
             return;
         }
         if (state == NV14_PLAYER_JUMPING) {
             ++player->jump_timer;
             if (!jump_held || player->jump_timer > player->max_jump_time)
-                nv14_player_fall(player);
+                nv14_player_fall(player, visual);
             return;
         }
         if (player->near_wall) {
@@ -2079,13 +2110,14 @@ static void nv14_player_think(
                 nv14_player_jump(
                     player,
                     player->wall_n.x * jump_x,
-                    player->wall_n.y - jump_y_bias
+                    player->wall_n.y - jump_y_bias,
+                    visual
                 );
                 return;
             }
             if (state == NV14_PLAYER_WALLSLIDING) {
                 if ((double)horizontal * player->wall_n.x > 0.0) {
-                    nv14_player_fall(player);
+                    nv14_player_fall(player, visual);
                     return;
                 }
                 {
@@ -2097,10 +2129,11 @@ static void nv14_player_think(
             }
             if (vy > 0.0 && (double)horizontal * player->wall_n.x < 0.0) {
                 player->state = NV14_PLAYER_WALLSLIDING;
+                if (visual != NULL) nv14_visual_state_changed(visual, player);
                 return;
             }
         } else if (state == NV14_PLAYER_WALLSLIDING) {
-            nv14_player_fall(player);
+            nv14_player_fall(player, visual);
             return;
         }
         return;
@@ -2113,13 +2146,14 @@ static void nv14_player_think(
             if (state == NV14_PLAYER_JUMPING) player->g = player->norm_grav;
             player->state = vx * (double)horizontal > 0.0
                 ? NV14_PLAYER_RUNNING : NV14_PLAYER_SKIDDING;
+            if (visual != NULL) nv14_visual_state_changed(visual, player);
             return;
         }
         if (jump_trigger) {
             if ((double)horizontal * player->floor_n.x < 0.0)
-                nv14_player_jump(player, 0.0, -0.7);
+                nv14_player_jump(player, 0.0, -0.7, visual);
             else
-                nv14_player_jump(player, player->floor_n.x, player->floor_n.y);
+                nv14_player_jump(player, player->floor_n.x, player->floor_n.y, visual);
             return;
         }
         if (state == NV14_PLAYER_RUNNING) {
@@ -2130,6 +2164,7 @@ static void nv14_player_think(
             double direction_test = vx * tangent_abs;
             if ((double)horizontal * direction_test <= 0.0) {
                 player->state = NV14_PLAYER_SKIDDING;
+                if (visual != NULL) nv14_visual_state_changed(visual, player);
                 return;
             }
             if ((double)horizontal * nx < 0.0) {
@@ -2149,6 +2184,7 @@ static void nv14_player_think(
                 player->oldpos.x = player->pos.x - vx;
                 player->oldpos.y = player->pos.y - vy;
             }
+            if (visual != NULL) nv14_visual_advance_run(visual, vx, vy, nx, ny);
             return;
         }
         if (state == NV14_PLAYER_SKIDDING) {
@@ -2158,10 +2194,12 @@ static void nv14_player_think(
             double direction_test = vx * tangent_abs;
             if (direction_test * (double)horizontal > 0.0) {
                 player->state = NV14_PLAYER_RUNNING;
+                if (visual != NULL) nv14_visual_state_changed(visual, player);
                 return;
             }
             if (tangent_abs < 0.1) {
                 player->state = NV14_PLAYER_STANDING;
+                if (visual != NULL) nv14_visual_state_changed(visual, player);
                 return;
             }
             vx *= player->skid_friction;
@@ -2170,6 +2208,7 @@ static void nv14_player_think(
         }
         if (horizontal != 0) {
             player->state = NV14_PLAYER_RUNNING;
+            if (visual != NULL) nv14_visual_state_changed(visual, player);
             return;
         }
         {
@@ -2178,6 +2217,7 @@ static void nv14_player_think(
             double tangent_abs = fabs(vx * -ny + vy * nx);
             if (tangent_abs >= 0.1) {
                 player->state = NV14_PLAYER_SKIDDING;
+                if (visual != NULL) nv14_visual_state_changed(visual, player);
                 return;
             }
             vx *= player->stand_friction;
@@ -2290,7 +2330,8 @@ static nv14_status nv14_test_native_object(
                 nv14_player_launch(
                     player,
                     obj->a * (NV14_TILE_SCALE * 0.4285714285714286),
-                    obj->b * (NV14_TILE_SCALE * 0.4285714285714286) * y_factor
+                    obj->b * (NV14_TILE_SCALE * 0.4285714285714286) * y_factor,
+                    state->visual
                 );
             }
         }
@@ -2321,6 +2362,7 @@ static nv14_status nv14_state_begin_player_step_internal(nv14_state *state)
     double current_y;
     if (state == NULL) return NV14_STATUS_INVALID_ARGUMENT;
     if (state->phase != 0) return NV14_STATUS_PHASE_ERROR;
+    if (state->visual != NULL) nv14_visual_begin_tick(state->visual);
     if (!state->level_complete) {
         status = nv14_run_native_object_updates(state);
         if (status != NV14_STATUS_OK) return status;
@@ -3953,7 +3995,8 @@ static nv14_status nv14_finish_player_step_internal(
                 &alternate_player,
                 alternate_horizontal,
                 alternate_input->jump != 0,
-                alternate_jump_trigger
+                alternate_jump_trigger,
+                NULL
             );
             alternate_player.previous_jump_held = alternate_input->jump != 0;
         }
@@ -3961,7 +4004,9 @@ static nv14_status nv14_finish_player_step_internal(
             ? (input.jump != 0 && !state->player.previous_jump_held)
             : input.jump_trigger != 0;
         horizontal = (input.right != 0) - (input.left != 0);
-        nv14_player_think(&state->player, horizontal, input.jump != 0, jump_trigger);
+        nv14_player_think(
+            &state->player, horizontal, input.jump != 0, jump_trigger, state->visual
+        );
         state->player.previous_jump_held = input.jump != 0;
     } else if (have_alternate) {
         alternate_player = state->player;
@@ -4004,6 +4049,7 @@ player_tick_finished:
             return NV14_STATUS_HOOK_ERROR;
         }
     }
+    if (state->visual != NULL) nv14_visual_finish_tick(state->visual, state);
     ++state->frame;
     state->phase = 0;
     nv14_fill_step_result(
@@ -4144,7 +4190,8 @@ nv14_status nv14_state_step(
 int nv14_internal_state_can_step_alternate(const nv14_state *state)
 {
     size_t module_index;
-    if (state == NULL || state->phase != 0 || state->level_complete) return 0;
+    if (state == NULL || state->phase != 0 || state->level_complete ||
+        state->visual != NULL) return 0;
     for (module_index = 0;
          module_index < state->level->object_module_count;
          ++module_index) {
@@ -4266,7 +4313,8 @@ nv14_status nv14_state_set_player(
     const nv14_player_snapshot *player
 )
 {
-    if (state == NULL || player == NULL) return NV14_STATUS_INVALID_ARGUMENT;
+    if (state == NULL || player == NULL || state->visual != NULL)
+        return NV14_STATUS_INVALID_ARGUMENT;
     state->player = *player;
     return NV14_STATUS_OK;
 }
@@ -4703,12 +4751,12 @@ void nv14_internal_player_report_object(
 
 void nv14_internal_player_launch(nv14_player_snapshot *player, double x, double y)
 {
-    nv14_player_launch(player, x, y);
+    nv14_player_launch(player, x, y, NULL);
 }
 
 void nv14_internal_player_fall(nv14_player_snapshot *player)
 {
-    nv14_player_fall(player);
+    nv14_player_fall(player, NULL);
 }
 
 void nv14_internal_player_celebrate(nv14_player_snapshot *player)

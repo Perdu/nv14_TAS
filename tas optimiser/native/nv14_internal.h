@@ -7,6 +7,7 @@
  */
 
 #include "nv14_core.h"
+#include "nv14_visual_internal.h"
 
 #define NV14_TILE_SCALE 12.0
 #define NV14_TILE_W 24.0
@@ -227,6 +228,8 @@ struct nv14_level {
 
 struct nv14_state {
     nv14_level *level;
+    /* Null for ordinary optimisation; allocated only by enable_visuals(). */
+    nv14_visual_tracker *visual;
     nv14_player_snapshot player;
     uint64_t frame;
     uint8_t level_complete;

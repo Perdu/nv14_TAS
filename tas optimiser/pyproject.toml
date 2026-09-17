@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nv14-tas-starter"
-version = "3.21"
+version = "4.01"
 requires-python = ">=3.11"
 
 [tool.setuptools]
@@ -25,6 +25,7 @@ py-modules = [
     "nv14_cli",
     "nv14_replay",
     "nv14_ltm",
+    "nv14_dump",
     "optimize_replay",
 ]
 

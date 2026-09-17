@@ -1,0 +1,8 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "nv14-tas-starter"
+version = "4.01"
+source = { editable = "." }

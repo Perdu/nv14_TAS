@@ -434,6 +434,8 @@ def test_v313_checkpoint_rejects_modified_v312() -> None:
 
 
 @pytest.mark.parametrize("version,build", [
+    ("3.21", "4e14f7fe91d5f9e98c77fe9ed20c3f405b5850b0cc1cd322f074b8a8e5e3f4c0"),
+    ("4.00", "8eb8ebac48658d944e3bb704dc1737cac379f6ef7fcf43c47907b8f4884bb0b1"),
     ("3.13", "225bfb93af3451cfee6fd9601ddd495cb4105b1a21bf025ff0e3f96ff2244371"),
     ("3.14", "5481fae4dab85df23652b933c162c8277338fc1896f3a426a7b7b3beea32f0f7"),
     ("3.15", "7fefdab32516b6ebbdc06f24ddd0f39249ea7a020e1c40b83b94e51d0c977afb"),
@@ -450,6 +452,8 @@ def test_checkpoint_accepts_exact_v313_and_v314(auxiliary_limit: int, version: s
 
 
 @pytest.mark.parametrize("version,build", [
+    ("3.21", "4e14f7fe91d5f9e98c77fe9ed20c3f405b5850b0cc1cd322f074b8a8e5e3f4c0"),
+    ("4.00", "8eb8ebac48658d944e3bb704dc1737cac379f6ef7fcf43c47907b8f4884bb0b1"),
     ("3.13", "225bfb93af3451cfee6fd9601ddd495cb4105b1a21bf025ff0e3f96ff2244371"),
     ("3.14", "5481fae4dab85df23652b933c162c8277338fc1896f3a426a7b7b3beea32f0f7"),
     ("3.15", "7fefdab32516b6ebbdc06f24ddd0f39249ea7a020e1c40b83b94e51d0c977afb"),

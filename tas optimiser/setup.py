@@ -1,8 +1,8 @@
 """Build metadata for the unified n v1.4 native extension.
 
 The optimiser remains importable directly from the extracted source tree when
-the extension cannot be built, although Auto, Local and jump-pattern search
-require it. ``build_native.py`` is the supported command for an in-place native
+the extension cannot be built, although Auto, Local, jump-pattern and player
+dump require it. ``build_native.py`` is the supported command for an in-place native
 build; keeping the extension optional here lets packaging tools install the
 Python orchestration and portable reference emulator on machines without a C
 compiler.
@@ -105,6 +105,8 @@ class StrictFloatingPointBuildExt(build_ext):
 
 native_core_sources = [
     "native/nv14_core.c",
+    "native/nv14_visual.c",
+    "native/nv14_dump.c",
     "native/nv14_rays.c",
     "native/nv14_objects_basic.c",
     "native/nv14_objects_guard.c",
@@ -115,6 +117,9 @@ native_core_sources = [
 
 native_core_depends = [
     "native/nv14_core.h",
+    "native/nv14_visual.h",
+    "native/nv14_dump.h",
+    "native/nv14_visual_internal.h",
     "native/nv14_internal.h",
     "native/nv14_rays.h",
     "native/nv14_objects_basic.h",

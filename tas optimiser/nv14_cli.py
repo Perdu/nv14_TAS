@@ -973,7 +973,7 @@ def _interrupt_message(arguments: Sequence[str] | None = None) -> str:
     """Return a mode-accurate top-level Ctrl+C shutdown message."""
     argv = sys.argv[1:] if arguments is None else arguments
     mode = next(
-        (argument for argument in argv if argument in {"auto", "local", "jump-pattern"}),
+        (argument for argument in argv if argument in {"auto", "local", "jump-pattern", "dump-player"}),
         None,
     )
     prefix = f"[{mode}:interrupt]" if mode is not None else "[interrupt]"
@@ -1120,7 +1120,7 @@ def parse_immutable_jumps(text: str) -> tuple[ImmutableJumpSpec, ...]:
 
 
 _CONFIG_TABLE_NAMES = frozenset(
-    {"common", "auto", "local", "jump-pattern", "jump_pattern"}
+    {"common", "auto", "local", "jump-pattern", "jump_pattern", "dump-player", "dump_player"}
 )
 _CONFIG_APPEND_DESTS = frozenset(
     {"retime", "auto_parents", "require_interaction", "avoid_interaction"}
@@ -1152,8 +1152,8 @@ def _find_config_path(argv: Sequence[str]) -> Path | None:
 def _config_mode_section(
     data: Mapping[str, object], mode: str
 ) -> Mapping[str, object]:
-    """Return the selected mode table, accepting jump_pattern as an alias."""
-    section_name = "jump_pattern" if mode == "jump-pattern" else mode
+    """Return the selected mode table, accepting underscore spelling aliases."""
+    section_name = mode.replace("-", "_")
     section = data.get(mode)
     alias_section = data.get(section_name)
     if section is not None and not isinstance(section, Mapping):
@@ -1281,6 +1281,15 @@ def _coerce_config_value(
             )
         return ranges
 
+    if isinstance(action, argparse.BooleanOptionalAction):
+        if not isinstance(value, bool):
+            raise ValueError(f"TOML key {key!r} must be a boolean")
+        negative_options = {
+            _normalise_config_key(option)
+            for option in action.option_strings if option.startswith("--no-")
+        }
+        return not value if _normalise_config_key(key) in negative_options else value
+
     if isinstance(action, (argparse._StoreTrueAction, argparse._StoreFalseAction)):
         if not isinstance(value, bool):
             raise ValueError(f"TOML key {key!r} must be a boolean")
@@ -1371,7 +1380,7 @@ def _load_config_defaults(
         if isinstance(section, Mapping) and section_name not in _CONFIG_TABLE_NAMES:
             raise ValueError(
                 f"unknown TOML section [{section_name}] in {config_path}; "
-                "use [common], [auto], [local], or [jump-pattern]"
+                "use [common], [auto], [local], [jump-pattern], or [dump-player]"
             )
         if section_name in _CONFIG_TABLE_NAMES and not isinstance(section, Mapping):
             raise ValueError(
@@ -1506,6 +1515,8 @@ def parse_arguments(
     """Parse CLI arguments, applying TOML defaults before explicit CLI values."""
     actual_argv = list(sys.argv[1:] if argv is None else argv)
     namespace = build_parser().parse_args(actual_argv)
+    if namespace.mode == "dump-player":
+        return namespace
     if namespace.mode != "local" and namespace.frame_range is not None:
         try:
             range_count = len(_frame_range_texts(namespace.frame_range))
@@ -1528,16 +1539,16 @@ def parse_arguments(
 def build_parser() -> argparse.ArgumentParser:
     parser = _ConfigArgumentParser(
         description=(
-            "Optimise an n v1.4 complex replay. Choose the auto, local, or "
-            "jump-pattern subcommand."
+            "Optimise an n v1.4 replay or dump its player state to CSV. Choose "
+            "auto, local, jump-pattern, or dump-player."
         )
     )
     subparsers = parser.add_subparsers(
         dest="mode",
         required=True,
-        metavar="{auto,local,jump-pattern}",
+        metavar="{auto,local,jump-pattern,dump-player}",
         title="subcommands",
-        description="select one optimisation strategy",
+        description="select an optimisation strategy or player dump",
     )
     command_parsers = {
         "auto": subparsers.add_parser(
@@ -2368,6 +2379,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="disable supported enemy simulation (overrides the auto-mode default)",
     )
+    from nv14_dump import add_player_dump_arguments
+
+    dump_parser = subparsers.add_parser(
+        "dump-player", help="dump native player/visual state to CSV",
+        description="Write one post-tick player/visual CSV row through completion, death, or input end.",
+    )
+    add_player_dump_arguments(dump_parser)
+    command_parsers["dump-player"] = dump_parser
     return parser
 
 
@@ -2556,6 +2575,10 @@ def _run_local_population(
 
 def main() -> None:
     args = parse_arguments()
+    if args.mode == "dump-player":
+        from nv14_dump import run_player_dump
+
+        return run_player_dump(args)
     mode_configs = getattr(args, "_mode_configs", None)
     if mode_configs is None:
         mode_configs = build_mode_configs(args)

@@ -440,6 +440,104 @@ cdef object _mask_as_int(const nv14_state *state, nv14_mask_kind kind):
         PyMem_Free(words)
 
 
+cdef extern from "nv14_visual.h":
+    cdef unsigned int NV14_VISUAL_ABI_VERSION
+
+    ctypedef struct nv14_visual_snapshot:
+        double x
+        double y
+        double rotation_deg
+        double run_remainder
+        int32_t facing
+        int32_t animation
+        int32_t current_frame
+        int32_t previous_frame
+        int32_t run_frame
+        int32_t render_mode
+        uint8_t playing
+        uint8_t visible
+        uint8_t terminal
+
+    nv14_status nv14_state_enable_visuals(
+        nv14_state *state, uint32_t timeline_frames, int auto_draw,
+        int celebration_variant,
+    ) noexcept nogil
+    nv14_status nv14_state_disable_visuals(nv14_state *state) noexcept nogil
+    int nv14_state_visuals_enabled(const nv14_state *state) noexcept nogil
+    nv14_status nv14_state_get_visual(
+        const nv14_state *state, nv14_visual_snapshot *snapshot_out,
+    ) noexcept nogil
+    nv14_status nv14_state_advance_visual_timeline(
+        nv14_state *state, uint32_t frames,
+    ) noexcept nogil
+    nv14_status nv14_state_draw_visual(nv14_state *state) noexcept nogil
+    const char *nv14_visual_animation_name(int animation) noexcept nogil
+    const char *nv14_visual_render_name(int render_mode) noexcept nogil
+
+
+cdef uint32_t _visual_frame_count(object value) except *:
+    value = _operator.index(value)
+    if value < 0 or value > 4294967295:
+        raise ValueError("visual timeline frame count must fit uint32")
+    return <uint32_t>value
+
+
+cdef extern from "nv14_dump.h":
+    cdef unsigned int NV14_PLAYER_DUMP_ABI_VERSION
+
+    ctypedef struct nv14_player_dump_row:
+        nv14_input input
+        nv14_step_result step
+        nv14_player_snapshot player
+        nv14_visual_snapshot visual
+        uint64_t gold_bonus_ticks
+
+    nv14_status nv14_player_dump_capture(
+        nv14_state *state, const nv14_input *inputs, size_t input_count,
+        nv14_player_dump_row *rows, size_t capacity, size_t *written_out,
+    ) noexcept nogil
+
+
+# Column order is shared with the CSV writer; no per-frame dictionaries needed.
+PLAYER_DUMP_COLUMNS = (
+    "frame", "elapsed_ticks", "input_left", "input_right", "jump_held",
+    "jump_trigger", "x", "y", "vx", "vy", "old_x", "old_y",
+    "player_state", "player_state_name", "in_air", "near_wall",
+    "floor_nx", "floor_ny", "wall_nx", "wall_ny", "jump_timer", "jumped",
+    "jump_callable", "jump_events", "dead", "complete", "gold_collected",
+    "gold_bonus_ticks", "facing", "rotation_deg", "animation",
+    "animation_frame", "animation_playing", "previous_animation_frame",
+    "run_animation_frame", "run_animation_remainder", "render_mode",
+    "sprite_x", "sprite_y", "sprite_visible", "visual_terminal",
+)
+_PLAYER_DUMP_STATE_NAMES = (
+    "STANDING", "RUNNING", "SKIDDING", "JUMPING", "FALLING", "WALLSLIDING",
+    "RAGDOLL", "CELEBRATING",
+)
+
+
+cdef tuple _player_dump_tuple(const nv14_player_dump_row *row):
+    cdef const nv14_player_snapshot *p = &row.player
+    cdef const nv14_visual_snapshot *v = &row.visual
+    return (
+        row.step.frame_before, row.step.frame_after,
+        row.input.left, row.input.right, row.input.jump, row.input.jump_trigger,
+        p.pos.x, p.pos.y, p.pos.x - p.oldpos.x, p.pos.y - p.oldpos.y,
+        p.oldpos.x, p.oldpos.y, p.state,
+        _PLAYER_DUMP_STATE_NAMES[p.state] if 0 <= p.state <= 7 else "UNKNOWN",
+        p.in_air, p.near_wall, p.floor_n.x, p.floor_n.y, p.wall_n.x, p.wall_n.y,
+        p.jump_timer, row.step.jumped, row.step.jump_callable, p.jump_events,
+        row.step.dead, row.step.level_complete, row.gold_bonus_ticks // 80,
+        row.gold_bonus_ticks, v.facing, v.rotation_deg,
+        nv14_visual_animation_name(v.animation).decode("ascii"),
+        v.current_frame if v.current_frame else None, v.playing,
+        v.previous_frame if v.previous_frame else None,
+        v.run_frame if v.run_frame else None, v.run_remainder,
+        nv14_visual_render_name(v.render_mode).decode("ascii"),
+        v.x, v.y, v.visible, v.terminal,
+    )
+
+
 cdef class NativeLevel:
     """Owned immutable handle to a level fully supported by the C core."""
 
@@ -523,17 +621,36 @@ cdef class NativeLevel:
             )
         return tuple(result)
 
-    def initial_state(self):
+    def initial_state(
+        self, *, track_visuals=False, visual_timeline_frames=3,
+        visual_auto_draw=True, celebration_variant=0,
+    ):
         cdef nv14_error error
         cdef nv14_state *state_handle
         memset(&error, 0, sizeof(nv14_error))
         state_handle = nv14_state_create(self._handle, &error)
         if state_handle == NULL:
             _raise_create_error(&error, "create native simulation state")
-        return NativeState._from_handle(self, state_handle)
+        state = NativeState._from_handle(self, state_handle)
+        if track_visuals:
+            state.enable_visuals(
+                timeline_frames=visual_timeline_frames,
+                auto_draw=visual_auto_draw,
+                celebration_variant=celebration_variant,
+            )
+        return state
 
-    def simulate(self, frames, *, stop_on_dead=True, stop_on_complete=False):
-        state = self.initial_state()
+    def simulate(
+        self, frames, *, stop_on_dead=True, stop_on_complete=False,
+        track_visuals=False, visual_timeline_frames=3, visual_auto_draw=True,
+        celebration_variant=0,
+    ):
+        state = self.initial_state(
+            track_visuals=track_visuals,
+            visual_timeline_frames=visual_timeline_frames,
+            visual_auto_draw=visual_auto_draw,
+            celebration_variant=celebration_variant,
+        )
         return state.step_many(
             frames,
             stop_on_dead=stop_on_dead,
@@ -605,6 +722,76 @@ cdef class NativeState:
             _raise_status(status, "read native player state")
         return _player_dict(&player)
 
+    @property
+    def visuals_enabled(self):
+        return bool(nv14_state_visuals_enabled(self._handle))
+
+    def enable_visuals(self, *, timeline_frames=3, auto_draw=True, celebration_variant=0):
+        """Opt in before the first tick; animation never affects gameplay."""
+        cdef uint32_t native_frames = _visual_frame_count(timeline_frames)
+        cdef int variant
+        cdef nv14_status status
+        celebration_variant = _operator.index(celebration_variant)
+        if celebration_variant < 0 or celebration_variant > 9:
+            raise ValueError("celebration_variant must be 0 (unresolved) or 1..9")
+        variant = celebration_variant
+        status = nv14_state_enable_visuals(
+            self._handle, native_frames, bool(auto_draw), variant,
+        )
+        if status == NV14_STATUS_INVALID_ARGUMENT:
+            raise ValueError("visual tracking must be enabled once on a fresh, unstepped state")
+        if status != NV14_STATUS_OK:
+            _raise_status(status, "enable native visual tracking")
+
+    def disable_visuals(self):
+        cdef nv14_status status = nv14_state_disable_visuals(self._handle)
+        if status != NV14_STATUS_OK:
+            _raise_status(status, "disable native visual tracking")
+
+    def visual_snapshot(self):
+        """Return animation metadata, or None when tracking is disabled.
+
+        SWF frame numbers are 1-based. A None frame marks an unresolved
+        random celebration or a ragdoll whose limbs are not simulated.
+        """
+        cdef nv14_visual_snapshot visual
+        cdef nv14_status status
+        if not nv14_state_visuals_enabled(self._handle):
+            return None
+        status = nv14_state_get_visual(self._handle, &visual)
+        if status != NV14_STATUS_OK:
+            _raise_status(status, "read native visual state")
+        return {
+            "x": visual.x,
+            "y": visual.y,
+            "facing": visual.facing,
+            "rotation_deg": visual.rotation_deg,
+            "animation": nv14_visual_animation_name(visual.animation).decode("ascii"),
+            "frame": visual.current_frame if visual.current_frame else None,
+            "previous_frame": visual.previous_frame if visual.previous_frame else None,
+            "playing": bool(visual.playing),
+            "run_frame": visual.run_frame if visual.run_frame else None,
+            "run_remainder": visual.run_remainder,
+            "render_mode": nv14_visual_render_name(visual.render_mode).decode("ascii"),
+            "visible": bool(visual.visible),
+            "terminal": bool(visual.terminal),
+        }
+
+    def advance_visual_timeline(self, frames=1):
+        """Advance only the MovieClip clock, for a supplied render schedule."""
+        cdef uint32_t count = _visual_frame_count(frames)
+        cdef nv14_status status = nv14_state_advance_visual_timeline(self._handle, count)
+        if status != NV14_STATUS_OK:
+            _raise_status(status, "advance native visual timeline")
+        return self.visual_snapshot()
+
+    def draw_visual(self):
+        """Apply Draw_Normal/Render without a physics tick or timeline advance."""
+        cdef nv14_status status = nv14_state_draw_visual(self._handle)
+        if status != NV14_STATUS_OK:
+            _raise_status(status, "draw native visual state")
+        return self.visual_snapshot()
+
     def static_state(self):
         return {
             "collected_gold_mask": _mask_as_int(
@@ -625,12 +812,15 @@ cdef class NativeState:
         }
 
     def snapshot(self):
-        return {
+        result = {
             "backend": "native-core",
             "frame": nv14_state_frame(self._handle),
             "player": self.player_snapshot(),
             "static_state": self.static_state(),
         }
+        if nv14_state_visuals_enabled(self._handle):
+            result["visual"] = self.visual_snapshot()
+        return result
 
     def door_control_masks(self):
         """Return permanent locked-door/trapdoor bits by serialized load id.
@@ -740,6 +930,44 @@ cdef class NativeState:
             if inputs != NULL:
                 PyMem_Free(inputs)
 
+    def capture_player_frames(self, frames):
+        """Capture a bounded chunk in C; return tuples in PLAYER_DUMP_COLUMNS order.
+
+        Tracking must already be enabled. Includes the first terminal frame;
+        later inputs are not executed. Calls can be repeated on the same state
+        to stream a long replay without losing jump/animation history.
+        """
+        cdef tuple materialized = tuple(frames)
+        cdef size_t count = len(materialized)
+        cdef size_t index
+        cdef size_t written = 0
+        cdef nv14_input *inputs = NULL
+        cdef nv14_player_dump_row *rows = NULL
+        cdef nv14_status status
+        if not nv14_state_visuals_enabled(self._handle):
+            raise ValueError("player capture requires track_visuals=True")
+        if count == 0:
+            return []
+        if count > (<size_t>-1) // sizeof(nv14_player_dump_row):
+            raise OverflowError("native player capture chunk is too large")
+        try:
+            inputs = <nv14_input *>PyMem_Malloc(count * sizeof(nv14_input))
+            rows = <nv14_player_dump_row *>PyMem_Malloc(count * sizeof(nv14_player_dump_row))
+            if inputs == NULL or rows == NULL:
+                raise MemoryError("unable to allocate native player capture chunk")
+            for index in range(count):
+                _fill_input(materialized[index], &inputs[index])
+            with nogil:
+                status = nv14_player_dump_capture(
+                    self._handle, inputs, count, rows, count, &written,
+                )
+            if status != NV14_STATUS_OK:
+                _raise_status(status, "capture native player frames")
+            return [_player_dump_tuple(&rows[index]) for index in range(written)]
+        finally:
+            PyMem_Free(inputs)
+            PyMem_Free(rows)
+
     def state_key(self, *, precision=None):
         """Return an exact key scoped to this state's immutable level."""
         cdef int native_precision
@@ -837,6 +1065,10 @@ def simulate_batch(
     bint simulate_enemies=False,
     bint stop_on_dead=True,
     bint stop_on_complete=False,
+    bint track_visuals=False,
+    visual_timeline_frames=3,
+    bint visual_auto_draw=True,
+    celebration_variant=0,
 ):
     """Parse and simulate one eligible fixed-input batch entirely in C."""
     level = parse_level_string(
@@ -847,6 +1079,10 @@ def simulate_batch(
         frames,
         stop_on_dead=stop_on_dead,
         stop_on_complete=stop_on_complete,
+        track_visuals=track_visuals,
+        visual_timeline_frames=visual_timeline_frames,
+        visual_auto_draw=visual_auto_draw,
+        celebration_variant=celebration_variant,
     )
 
 
@@ -854,6 +1090,9 @@ def backend_info():
     return {
         "wrapper_api": 1,
         "core_abi": NV14_CORE_ABI_VERSION,
+        "visual_abi": NV14_VISUAL_ABI_VERSION,
+        "player_dump_abi": NV14_PLAYER_DUMP_ABI_VERSION,
+        "optional_visual_tracker": True,
         "implementation": "cython-unified-native",
         "strict_fp": bool(nv14_wrapper_strict_fp()),
         "complete_step_capability": NV14_CAP_COMPLETE_STEP,

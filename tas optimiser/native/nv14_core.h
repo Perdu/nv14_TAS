@@ -220,8 +220,10 @@ size_t nv14_level_exit_count(const nv14_level *level);
 /* Mutable state lifecycle.  States retain their level. */
 nv14_state *nv14_state_create(const nv14_level *level, nv14_error *error_out);
 nv14_state *nv14_state_clone(const nv14_state *state, nv14_error *error_out);
-/* Overwrite an already allocated state with an exact same-level copy.  This
- * allocation-free form is intended for native search-state pools. */
+/* Overwrite an already allocated state with an exact same-level copy. This
+ * remains allocation-free for ordinary native search-state pools. Copying an
+ * explicitly enabled visual tracker into an untracked state allocates its
+ * optional sidecar once; subsequent tracked copies reuse that allocation. */
 nv14_status nv14_state_copy_into(
     nv14_state *destination,
     const nv14_state *source,
@@ -300,10 +302,11 @@ nv14_status nv14_state_clear_edge_override(
     int side
 );
 
-/* Exact phase-zero state serialization, scoped to one immutable level.  It
+/* Exact phase-zero GAMEPLAY state serialization, scoped to one immutable level. It
    includes the gameplay frame counter; callers must not compare keys from
    different levels.  The format is private but deterministic for an ABI
-   version.  precision < 0 means exact binary64. */
+   version. precision < 0 means exact binary64. Optional visual observation
+   data is excluded; equal gameplay keys do not imply equal animation poses. */
 size_t nv14_state_key_size(const nv14_state *state, int precision);
 nv14_status nv14_state_write_key(
     const nv14_state *state,
