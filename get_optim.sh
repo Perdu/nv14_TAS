@@ -9,5 +9,5 @@ EXTRACT_FOLDER="extract"
 #OPTIM_FILE="tas optimiser/wip/optim.ltm"
 OPTIM_FILE="volume/n_levels/57-3_optimised.ltm"
 
-tar xzf $OPTIM_FILE -C $EXTRACT_FOLDER
+tar xzf "$OPTIM_FILE" -C $EXTRACT_FOLDER
 tail -n +41 $EXTRACT_FOLDER/inputs | xclip -selection clipboard
