@@ -22,8 +22,8 @@ Videos produced with this tool:
 - [Lua script to display overlay information](display_infos.lua.template) (demo information, real-time inputs)
 - [Other Lua scripts to help TASing](volume/lua)
 - [Python script to get demo data from .sol file](sol_to_demo.py)
-- [A bruteforcer tool](tas\ optimiser/) to optimise the TAS automatically or per slice, including [a rewrite of the game engine in C](tas\ optimiser/native/) and [a tool to run multiple successive splice searches on a level](tas\ optimiser/multi_splicer.sh)
-- [Splice informations](tas\ optimiser/levels/) for levels that were optimised with the TAS optimiser using splicing
+- [A bruteforcer tool](tas%20optimiser/) to optimise the TAS automatically or per slice, including [a rewrite of the game engine in C](tas%20optimiser/native/) and [a tool to run multiple successive splice searches on a level](tas%20optimiser/multi_splicer.sh)
+- [Splice informations](tas%20optimiser/levels/) for levels that were optimised with the TAS optimiser using splicing
 - [Notes for each TASed level](tas/annotations.md)
 - [A dockerfile to build the TASing environment](Dockerfile)
 - [Other tools and informations from external sources](external/)
