@@ -1,4 +1,4 @@
-# Player CSV dump (v4.02)
+# Player CSV dump (v4.03)
 
 `dump-player` runs a supplied replay through the native C engine and writes
 player physics and visual state to a CSV file. It accepts combined level/demo
@@ -6,11 +6,12 @@ text, packed-only demo text with a level database, and libTAS `.ltm` movies.
 The `dump_player_data_csv()` API added in v4.02 accepts level and replay data
 already in memory. Both interfaces share the same native capture and CSV
 writer. They do not run an optimisation search.
+v4.03 adds ordered CSV field selection to both Python export APIs.
 
 ## Build and use
 
-A working v4.01 extension can be reused with the same platform and Python
-version; v4.02 changes no native sources or ABIs. For a fresh installation or
+A working v4.01 or v4.02 extension can be reused with the same platform and Python
+version; v4.03 changes no native sources or ABIs. For a fresh installation or
 an older extension, build from this release:
 
 ```sh
@@ -99,7 +100,8 @@ endings. Boolean values are `0`/`1`. Floating-point values retain Python's
 round-trip representation of native doubles; they are not rounded for display.
 Unknown/inapplicable animation frame fields are empty rather than zero.
 
-The following table gives all 43 columns, in output order:
+The following table gives all 43 available columns, in their default output
+order. The Python APIs accept `fields` to select a subset or change that order.
 
 | Columns | Meaning |
 | --- | --- |
@@ -128,6 +130,46 @@ On death, use `dead` and the visual fields to identify the terminal state.
 The native engine can retain a pre-death `player_state` while the visual
 tracker reports `animation=RAGDOLL`. The numeric state is exported as recorded;
 it is not rewritten to agree with an inferred animation label.
+
+## Selecting CSV fields (v4.03)
+
+Both Python export APIs accept `fields`, an optional ordered sequence of column
+names. The sequence determines the header and the values included in every row:
+
+```python
+from nv14_dump import dump_player_data_csv, dump_player_csv
+
+fields = ["frame", "x", "y", "vx", "vy", "facing", "animation_frame"]
+result = dump_player_data_csv(
+    level_data=level_string,
+    replay_data=replay_string,
+    output_path="player.csv",
+    simulate_enemies=True,
+    fields=fields,
+)
+
+# The same parameter is available when loading a demo or LTM file.
+result = dump_player_csv("replay.txt", "selected.csv", fields=fields)
+```
+
+- Omit the parameter or pass `fields=None` to write all 43 columns in their
+  original order. Passing all column names explicitly also works.
+- A nonempty list or tuple is accepted. Names must exactly match the schema
+  above, including case. Unknown names, duplicates and empty selections raise
+  `ValueError`; a bare string, unordered collection or non-string name raises
+  `TypeError`. Validation happens before native level creation or CSV writing.
+- Any available field can be selected, including `ltm_frame` and `input_kind`.
+  For example, `fields=["input_kind", "frame", "x"]` writes those three columns
+  in that order. A single field produces a valid single-column CSV.
+- Field selection affects output only. Row counts, terminal stopping,
+  final-neutral handling and `PlayerDumpResult` use the complete captured
+  state even if `frame`, `dead`, `complete` or `input_kind` is omitted.
+- Native capture, visual calculations and native-to-Python tuple conversion
+  still process the full state. Selection reduces CSV formatting and output
+  size; it does not switch off unselected simulation/animation calculations.
+
+Column selection is available through the Python APIs. The `dump-player`
+command uses the default full schema.
 
 ## Options and visual timing
 
@@ -202,9 +244,10 @@ print(result.output_path, result.rows, result.stop_reason)
 | `output_path` | Required CSV destination, as a string, `Path` or other string-valued path-like object. Parent directories are created if needed. |
 
 The optional keyword arguments are `simulate_enemies=True`,
-`final_neutral=True`, `visual_timeline_frames=3`, `celebration_variant=0` and
-`chunk_size=4096` (1..65536). They have the same meanings as for the file
-exporter. Captured rows use the same 43-column schema, with `input_kind=demo`
+`final_neutral=True`, `visual_timeline_frames=3`, `celebration_variant=0`,
+`chunk_size=4096` (1..65536) and `fields=None`. They have the same meanings as
+for the file exporter. The default output uses the full 43-column schema;
+`fields` selects and orders columns. The source values are `input_kind=demo`
 and an empty `ltm_frame`. The appended neutral row, if reached, is labelled
 `final_neutral`. Set `final_neutral=False` when supplying an input sequence
 that already contains the required final neutral tick. Use the file interface
@@ -283,7 +326,8 @@ for source in sorted(Path("replays").glob("*.txt")):
 ```
 
 `dump_player_csv` exposes the CLI settings as keyword arguments plus
-`chunk_size` (default 4096; 1..65536). It returns a `PlayerDumpResult` with the
+`chunk_size` (default 4096; 1..65536) and `fields` (default `None`, all columns).
+It returns a `PlayerDumpResult` with the
 destination, row count, declared/selected source-frame count, stop reason,
 final-neutral-written flag and terminal flags. `load_player_dump_source`
 exposes the input loader without running a simulation.

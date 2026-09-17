@@ -100,6 +100,7 @@ def dump_player_csv(
     ltm_postroll: int | None = None, final_neutral: bool = True,
     simulate_enemies: bool = True, visual_timeline_frames: int = 3,
     celebration_variant: int = 0, chunk_size: int = 4096,
+    fields: Sequence[str] | None = None,
 ) -> PlayerDumpResult:
     """Write one post-tick CSV row through the first death/completion or input end.
 
@@ -108,6 +109,7 @@ def dump_player_csv(
     the destination only after success, including when interrupted mid-chunk.
     Demo text gets one labelled neutral sentinel unless final_neutral=False.
     LTM never gets a synthetic tick beyond its selected recorded input range.
+    fields selects CSV columns in the supplied order; None writes all columns.
     """
     input_path = Path(input_path)
     output_path = _validate_dump_output(
@@ -133,6 +135,7 @@ def dump_player_csv(
         final_neutral=final_neutral, simulate_enemies=simulate_enemies,
         visual_timeline_frames=visual_timeline_frames,
         celebration_variant=celebration_variant, chunk_size=chunk_size,
+        fields=fields,
     )
 
 
@@ -143,6 +146,7 @@ def dump_player_data_csv(
     final_neutral: bool = True, simulate_enemies: bool = True,
     visual_timeline_frames: int = 3, celebration_variant: int = 0,
     chunk_size: int = 4096,
+    fields: Sequence[str] | None = None,
 ) -> PlayerDumpResult:
     """Export supplied level/replay data without input files or database lookup.
 
@@ -158,6 +162,10 @@ def dump_player_data_csv(
     Input rows are labelled 'demo' and ltm_frame is blank. A labelled final
     neutral tick is enabled by default; set final_neutral=False when the
     supplied frames already include the required neutral input.
+
+    fields is an optional nonempty sequence of unique CSV field names, in
+    output order. None writes the full schema. Selection affects CSV output
+    only; native capture still collects the full state and all visual fields.
 
     Returns PlayerDumpResult. Invalid data, unsupported native levels and I/O
     failures raise exceptions; no CSV replacement occurs unless export
@@ -187,6 +195,7 @@ def dump_player_data_csv(
         final_neutral=final_neutral, simulate_enemies=simulate_enemies,
         visual_timeline_frames=visual_timeline_frames,
         celebration_variant=celebration_variant, chunk_size=chunk_size,
+        fields=fields,
     )
 
 
@@ -204,11 +213,16 @@ def _dump_player_frames_csv(
     input_kind: str, ltm_start: int | None,
     final_neutral: bool, simulate_enemies: bool, visual_timeline_frames: int,
     celebration_variant: int, chunk_size: int,
+    fields: Sequence[str] | None,
 ) -> PlayerDumpResult:
     """Shared native capture/writer for already loaded replay inputs."""
     native = require_native()
     if not native.backend_info().get("player_dump_abi"):
         raise RuntimeError("player dump requires a v4.01-or-newer extension; run python build_native.py")
+    columns = native.PLAYER_DUMP_COLUMNS
+    csv_columns, field_indices = _resolve_dump_fields(
+        fields, (*columns, "ltm_frame", "input_kind"),
+    )
     if isinstance(level_data, str):
         level = native.parse_level_string(level_data, simulate_enemies=simulate_enemies)
     elif isinstance(level_data, native.NativeLevel):
@@ -221,7 +235,6 @@ def _dump_player_frames_csv(
         track_visuals=True, visual_timeline_frames=visual_timeline_frames,
         celebration_variant=celebration_variant,
     )
-    columns = native.PLAYER_DUMP_COLUMNS
     complete_index = columns.index("complete")
     dead_index = columns.index("dead")
     frame_index = columns.index("frame")
@@ -240,7 +253,7 @@ def _dump_player_frames_csv(
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
             writer = csv.writer(stream, lineterminator="\n")
-            writer.writerow((*columns, "ltm_frame", "input_kind"))
+            writer.writerow(csv_columns)
             for offset in range(0, input_count, chunk_size):
                 end = min(offset + chunk_size, input_count)
                 chunk = list(frames[offset:min(end, source_count)])
@@ -252,7 +265,11 @@ def _dump_player_frames_csv(
                     is_sentinel = sentinel and frame == source_count
                     kind = "final_neutral" if is_sentinel else input_kind
                     movie_frame = "" if ltm_start is None else ltm_start + frame
-                    writer.writerow((*row, movie_frame, kind))
+                    full_row = (*row, movie_frame, kind)
+                    writer.writerow(
+                        full_row if field_indices is None else
+                        tuple(full_row[index] for index in field_indices)
+                    )
                     rows_written += 1
                     final_neutral_written |= is_sentinel
                 if captured:
@@ -274,6 +291,31 @@ def _dump_player_frames_csv(
         "complete" if complete else "dead" if dead else "end_of_input",
         final_neutral_written, dead, complete,
     )
+
+
+def _resolve_dump_fields(
+    fields: Sequence[str] | None, columns: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[int, ...] | None]:
+    """Validate once before creating output; freeze order and resolve indices."""
+    if fields is None:
+        return columns, None
+    if not isinstance(fields, Sequence) or isinstance(fields, (str, bytes, bytearray, memoryview)):
+        raise TypeError("fields must be a sequence of CSV field names, or None")
+    selected = tuple(fields)
+    if not selected:
+        raise ValueError("fields must contain at least one CSV field name")
+    seen: set[str] = set()
+    for field in selected:
+        if not isinstance(field, str):
+            raise TypeError("fields must contain only string field names")
+        if field not in columns:
+            raise ValueError(
+                f"unknown CSV field {field!r}; valid fields: {', '.join(columns)}"
+            )
+        if field in seen:
+            raise ValueError(f"duplicate CSV field {field!r}")
+        seen.add(field)
+    return selected, tuple(columns.index(field) for field in selected)
 
 
 def add_player_dump_arguments(parser: argparse.ArgumentParser) -> None:
