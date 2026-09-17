@@ -1850,10 +1850,10 @@ rerecords: 660
 Branch 9: attempt at beating the drone in the end (with slower start)
 
 # 58-4
-rerecords: 1723
+rerecords: 1880
 
 Branch 9: way up with a thwump push
-Branch 8: left path: no lp, single bb bwj
+Branch 8: 
 Branch 7: best direct jump left with cj
 Branch 6: 
 Branch 5: optimised ascent bottlenecked by thwumps (former best TAS)
@@ -2510,7 +2510,7 @@ rerecords: 0
 
 
 # 82-3
-rerecords: 1307
+rerecords: 1313
 
 Branch 9: attempt at clipping to the door with a rcj combo
 Branch 8: attmpt at clip with a cj
@@ -2963,4 +2963,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 247116
+# Total rerecords: 247279
