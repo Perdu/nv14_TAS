@@ -1817,7 +1817,7 @@ rerecords: 0
 
 
 # 57-3
-rerecords: 577
+rerecords: 578
 
 Branch 9: trying to avoid floorguard detection by going inbetween the thwumps. Doesn't seem to be possible.
 Branch 8: attempt at going between the 2 thwumps with a push on the top one
@@ -2961,4 +2961,10 @@ rerecords: 0
 
 
 
-# Total rerecords: 246356
+# 99-5
+
+
+# 99-9
+
+
+# Total rerecords: 246357
