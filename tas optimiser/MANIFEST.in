@@ -1,0 +1,37 @@
+include build_native.py
+include README.md
+include pyproject.toml
+include uv.lock
+recursive-include docs *.md
+recursive-include examples *.txt *.toml
+recursive-include tests *.py *.txt *.csv
+recursive-include tools *.py
+include native/_nv14_native.c
+include native/_nv14_native.pyx
+include native/nv14_auto.c
+include native/nv14_auto.h
+include native/nv14_patch.c
+include native/nv14_patch.h
+include native/nv14_search.c
+include native/nv14_search.h
+include native/nv14_core.c
+include native/nv14_core.h
+include native/nv14_visual.c
+include native/nv14_visual.h
+include native/nv14_dump.c
+include native/nv14_dump.h
+include native/nv14_visual_internal.h
+include native/nv14_internal.h
+include native/nv14_rays.c
+include native/nv14_rays.h
+include native/nv14_objects_basic.c
+include native/nv14_objects_basic.h
+include native/nv14_objects_guard.c
+include native/nv14_objects_guard.h
+include native/nv14_objects_ranged.c
+include native/nv14_objects_ranged.h
+include native/nv14_drones_internal.h
+include native/nv14_objects_drones.c
+include native/nv14_objects_drones.h
+include native/nv14_drone_weapons.c
+include native/nv14_drone_weapons.h

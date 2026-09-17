@@ -1,4 +1,4 @@
-"""Native player capture and atomic CSV output for demo text and libTAS movies."""
+"""Native player capture and atomic CSV output from replay data or files."""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +9,7 @@ import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from nv14_engine import InputFrame
 from nv14_ltm import (
@@ -17,7 +18,10 @@ from nv14_ltm import (
     _replace_with_windows_retries,
 )
 from nv14_native import require_native
-from nv14_replay import decode_complex_replay, parse_combined_level_replay
+from nv14_replay import ComplexReplay, decode_complex_replay, parse_combined_level_replay
+
+if TYPE_CHECKING:
+    from _nv14_native import NativeLevel
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,29 +109,114 @@ def dump_player_csv(
     Demo text gets one labelled neutral sentinel unless final_neutral=False.
     LTM never gets a synthetic tick beyond its selected recorded input range.
     """
-    if isinstance(chunk_size, bool) or not isinstance(chunk_size, int) or not 1 <= chunk_size <= 65536:
-        raise ValueError("chunk_size must be an integer from 1 to 65536")
     input_path = Path(input_path)
-    output_path = Path(output_path) if output_path is not None else input_path.with_name(
-        input_path.stem + ".player.csv"
+    output_path = _validate_dump_output(
+        output_path if output_path is not None else input_path.with_name(
+            input_path.stem + ".player.csv"
+        ),
+        chunk_size,
     )
     # Reuse the optimiser's alias check, including hard links and symlinks.
     from nv14_cli import _paths_alias
 
     if _paths_alias(input_path, output_path):
         raise ValueError("input and CSV output must be different files")
-    if output_path.suffix.lower() != ".csv":
-        raise ValueError("player dump output must have a .csv extension")
     source = load_player_dump_source(
         input_path, levels_file=levels_file, level_id=level_id, ltm_postroll=ltm_postroll,
     )
     if source.levels_file is not None and _paths_alias(source.levels_file, output_path):
         raise ValueError("levels file and CSV output must be different files")
 
+    return _dump_player_frames_csv(
+        source.level_string, source.frames, output_path,
+        input_kind=source.input_kind, ltm_start=source.ltm_start,
+        final_neutral=final_neutral, simulate_enemies=simulate_enemies,
+        visual_timeline_frames=visual_timeline_frames,
+        celebration_variant=celebration_variant, chunk_size=chunk_size,
+    )
+
+
+def dump_player_data_csv(
+    level_data: str | NativeLevel,
+    replay_data: str | ComplexReplay | Sequence[InputFrame],
+    output_path: str | os.PathLike[str], *,
+    final_neutral: bool = True, simulate_enemies: bool = True,
+    visual_timeline_frames: int = 3, celebration_variant: int = 0,
+    chunk_size: int = 4096,
+) -> PlayerDumpResult:
+    """Export supplied level/replay data without input files or database lookup.
+
+    level_data is the raw tile/object string or a reusable NativeLevel. A
+    NativeLevel must have been parsed with the requested simulate_enemies
+    setting. Every call creates its own fresh tracked state.
+
+    replay_data is a '<ticks>:<packed words>' string, a ComplexReplay, or a
+    sequence of InputFrame records. Stored triggers are preserved; None
+    triggers are derived by the native engine. Inputs are not modified.
+
+    CSV schema, terminal handling and visual defaults match dump_player_csv.
+    Input rows are labelled 'demo' and ltm_frame is blank. A labelled final
+    neutral tick is enabled by default; set final_neutral=False when the
+    supplied frames already include the required neutral input.
+
+    Returns PlayerDumpResult. Invalid data, unsupported native levels and I/O
+    failures raise exceptions; no CSV replacement occurs unless export
+    succeeds. Capture buffers are bounded by chunk_size; decoded replay data
+    is held in memory. Callers can loop over jobs without temporary demos.
+    """
+    output_path = _validate_dump_output(output_path, chunk_size)
+    if isinstance(replay_data, str):
+        text = replay_data.strip().removeprefix("\ufeff").strip()
+        # The shared decoder permits negative tick counts; reject them at
+        # this entry point, as the existing file loader already does.
+        if not re.match(r"^\d+:", text):
+            raise ValueError("replay_data must use '<ticks>:<packed words>' format")
+        frames = decode_complex_replay(text).frames
+    else:
+        frames = replay_data.frames if isinstance(replay_data, ComplexReplay) else replay_data
+        if not isinstance(frames, Sequence) or isinstance(frames, (str, bytes, bytearray, memoryview)):
+            raise TypeError(
+                "replay_data must be a packed replay string, ComplexReplay, "
+                "or a sequence of InputFrame records"
+            )
+        if any(not isinstance(frame, InputFrame) for frame in frames):
+            raise TypeError("decoded replay_data must contain only InputFrame records")
+
+    return _dump_player_frames_csv(
+        level_data, frames, output_path, input_kind="demo", ltm_start=None,
+        final_neutral=final_neutral, simulate_enemies=simulate_enemies,
+        visual_timeline_frames=visual_timeline_frames,
+        celebration_variant=celebration_variant, chunk_size=chunk_size,
+    )
+
+
+def _validate_dump_output(output_path: str | os.PathLike[str], chunk_size: int) -> Path:
+    if isinstance(chunk_size, bool) or not isinstance(chunk_size, int) or not 1 <= chunk_size <= 65536:
+        raise ValueError("chunk_size must be an integer from 1 to 65536")
+    path = Path(output_path)
+    if path.suffix.lower() != ".csv":
+        raise ValueError("player dump output must have a .csv extension")
+    return path
+
+
+def _dump_player_frames_csv(
+    level_data: str | NativeLevel, frames: Sequence[InputFrame], output_path: Path, *,
+    input_kind: str, ltm_start: int | None,
+    final_neutral: bool, simulate_enemies: bool, visual_timeline_frames: int,
+    celebration_variant: int, chunk_size: int,
+) -> PlayerDumpResult:
+    """Shared native capture/writer for already loaded replay inputs."""
     native = require_native()
     if not native.backend_info().get("player_dump_abi"):
-        raise RuntimeError("player dump requires the v4.01 extension; run python build_native.py")
-    level = native.parse_level_string(source.level_string, simulate_enemies=simulate_enemies)
+        raise RuntimeError("player dump requires a v4.01-or-newer extension; run python build_native.py")
+    if isinstance(level_data, str):
+        level = native.parse_level_string(level_data, simulate_enemies=simulate_enemies)
+    elif isinstance(level_data, native.NativeLevel):
+        level = level_data
+        if level.simulate_enemies != bool(simulate_enemies):
+            raise ValueError("simulate_enemies must match the supplied NativeLevel")
+    else:
+        raise TypeError("level_data must be a raw level string or a NativeLevel")
     state = level.initial_state(
         track_visuals=True, visual_timeline_frames=visual_timeline_frames,
         celebration_variant=celebration_variant,
@@ -136,8 +225,8 @@ def dump_player_csv(
     complete_index = columns.index("complete")
     dead_index = columns.index("dead")
     frame_index = columns.index("frame")
-    source_count = len(source.frames)
-    sentinel = source.input_kind == "demo" and final_neutral
+    source_count = len(frames)
+    sentinel = input_kind == "demo" and final_neutral
     input_count = source_count + int(sentinel)
     rows_written = 0
     final_neutral_written = False
@@ -154,15 +243,15 @@ def dump_player_csv(
             writer.writerow((*columns, "ltm_frame", "input_kind"))
             for offset in range(0, input_count, chunk_size):
                 end = min(offset + chunk_size, input_count)
-                chunk = list(source.frames[offset:min(end, source_count)])
+                chunk = list(frames[offset:min(end, source_count)])
                 if sentinel and end > source_count:
                     chunk.append(InputFrame())
                 captured = state.capture_player_frames(chunk)
                 for row in captured:
                     frame = row[frame_index]
                     is_sentinel = sentinel and frame == source_count
-                    kind = "final_neutral" if is_sentinel else source.input_kind
-                    movie_frame = "" if source.ltm_start is None else source.ltm_start + frame
+                    kind = "final_neutral" if is_sentinel else input_kind
+                    movie_frame = "" if ltm_start is None else ltm_start + frame
                     writer.writerow((*row, movie_frame, kind))
                     rows_written += 1
                     final_neutral_written |= is_sentinel
