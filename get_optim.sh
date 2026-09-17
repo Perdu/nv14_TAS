@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Get result of latest optimisation run and add it to clipboard
+# Get result of latest optimisation run and add it to clipboard so it
+# can be copied directly into libTAS
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "$SCRIPT_DIR"
