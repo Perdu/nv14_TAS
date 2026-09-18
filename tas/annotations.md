@@ -1931,7 +1931,7 @@ Jumping 2f later is slower, however long we jump.
 I tried jumping short and longer but this is the optimal strategy.
 
 # 61-2
-rerecords: 0
+rerecords: 90
 
 
 
@@ -2969,4 +2969,4 @@ rerecords: 0
 # 99-9
 
 
-# Total rerecords: 247273
+# Total rerecords: 247363
