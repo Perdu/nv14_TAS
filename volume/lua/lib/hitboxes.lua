@@ -24,7 +24,7 @@ function draw_hitboxes()
          drawList(data.gold, HITBOX_GOLD, 255, 255, 0)
       end
       -- drawList(data.launchpads, 6, 255, 0, 255) -- magenta launchpads
-      drawList(data.switches, HITBOX_SWITCH, 0, 255, 255, display_switches_numbers)    -- cyan switches
+      drawList(data.switches, HITBOX_SWITCH, 20, 20, 80, display_switches_numbers)
 end
 
 function display_distance_to_doors(x, y, doors)
