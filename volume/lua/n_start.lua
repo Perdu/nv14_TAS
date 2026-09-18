@@ -28,6 +28,7 @@ splice_files_path = "/home/splices/"
 splice_region_size = 20
 splice_prev_range_prior_frames = 10
 display_switches_numbers = true
+clean_splices_region_markers = true
 
 ---- Constants
 SAVE_SLOT = 1             -- Save slot number (1–10)
@@ -61,6 +62,7 @@ save_best_position = false
 bestPath = {}
 drones_candidates = {}
 prev_splice = 0
+splice_regions = {}
 
 ---- Callbacks
 
@@ -205,6 +207,20 @@ function onPaint()
     end
 
    display_drones_number()
+
+   for _, region in ipairs(splice_regions) do
+      gui.rectangle(
+         region.x - region.size,
+         region.y - region.size,
+         region.size * 2,
+         region.size * 2,
+         1,
+         rgb(255, 0, 0)
+      )
+   end
+   if clean_splices_region_markers then
+      splice_regions = {}
+   end
 end
 
 
@@ -291,15 +307,16 @@ function onInput()
        local filename = level_path .. "/" .. tostring(f) .. ".txt"
        local file = io.open(filename, "r")
 
+       x, y = get_player_position()
+       local x_int = math.floor(x + 0.5)
+       local y_int = math.floor(y + 0.5)
+       local target_prev = prev_splice - splice_prev_range_prior_frames
+       if target_prev < 0 then
+          target_prev = 0
+       end
+
        if file == nil then
           file = io.open(filename, "w")
-          x, y = get_player_position()
-          x_int = math.floor(x + 0.5)
-          y_int = math.floor(y + 0.5)
-          target_prev = prev_splice - splice_prev_range_prior_frames
-          if target_prev < 0 then
-             target_prev = 0
-          end
           file:write(string.format([[
 [local]
 search = "population"
@@ -320,8 +337,12 @@ x_int - splice_region_size, x_int + splice_region_size, y_int - splice_region_si
        if f > prev_splice then
           prev_splice = f
        end
+       table.insert(splice_regions, {
+                       x = x_int,
+                       y = y_int,
+                       size = splice_region_size
+       })
     end
-
 end
 
 
