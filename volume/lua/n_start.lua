@@ -24,6 +24,9 @@ MAX_DIST_RAYCAST_DISPLAY = 30
 display_arrows = false
 -- set the number of the drone you want removed (it will go through walls)
 remove_drone = 0
+splice_files_path = "/home/splices/"
+splice_region_size = 20
+splice_prev_range_prior_frames = 10
 
 ---- Constants
 SAVE_SLOT = 1             -- Save slot number (1–10)
@@ -56,6 +59,7 @@ knownFrames = {}   -- sorted list of frames already stored
 save_best_position = false
 bestPath = {}
 drones_candidates = {}
+prev_splice = 0
 
 ---- Callbacks
 
@@ -275,6 +279,33 @@ function onInput()
           input.setKey(KEY_SHIFT, shift_pressed)
           original_input_modified = false
           runtime.loadState(SAVE_SLOT)
+       end
+    end
+
+    if input.getKey(KEY_s) ~= 0 then
+       local f = movie.currentFrame()
+       local level_path = splice_files_path .. "/" .. level
+       os.execute('mkdir -p "' .. level_path .. '"')
+
+       local filename = level_path .. "/" .. tostring(f) .. ".txt"
+       local file = io.open(filename, "r")
+
+       if file == nil then
+          file = io.open(filename, "w")
+          x, y = get_player_position()
+          x_int = math.floor(x + 0.5)
+          y_int = math.floor(y + 0.5)
+          target_prev = prev_splice - splice_prev_range_prior_frames
+          if target_prev < 0 then
+             target_prev = 0
+          end
+          file:write(string.format("target frame = %d\nrange = \"%d:%d\"\ntarget_region = \"%d:%d,%d:%d\"", f, target_prev, f, x_int - splice_region_size, x_int + splice_region_size, y_int - splice_region_size, y_int + splice_region_size))
+       end
+
+       file:close()
+
+       if f > prev_splice then
+          prev_splice = f
        end
     end
 
