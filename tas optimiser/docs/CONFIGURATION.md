@@ -15,9 +15,9 @@ Repeatable command-line options append as described below.
 
 ## Tables and key names
 
-The supported tables are `[common]`, `[auto]`, `[local]` and
-`[jump-pattern]`. `[jump_pattern]` is an alternative spelling for the last one,
-but the two spellings cannot both appear. Non-selected known mode tables may
+The supported tables are `[common]`, `[auto]`, `[local]`, `[jump-pattern]`,
+`[dump-player]` and `[encode-video]`. Underscores may replace hyphens in those
+table names, but the two spellings cannot both appear. Non-selected known mode tables may
 coexist in one file and are ignored until their mode is selected.
 
 Keys may use argparse destinations (`auto_objective`) or long-option spelling
@@ -36,6 +36,21 @@ than silently ignored. For example, `iterations` requires `search = "population"
 under `[local]`, and `seed` is invalid under `[jump-pattern]`.
 
 ## Common paths and LTM options
+
+Video comparison settings belong in `[encode-video]`, for example:
+
+```toml
+[encode-video]
+secondary_replays = ["other.txt", "third.txt"]
+replay_alignment = "exit" # "start" is the default
+secondary_colors = ["#3568a8", "#689ec9"] # optional; one per secondary
+```
+
+`--secondary-replay` and `--secondary-color` append to their configured lists.
+Explicit `--replay-alignment` overrides the scalar default. Paths use the
+current working directory, as with other configured paths. See
+[video encoding](VIDEO_ENCODING.md#comparing-multiple-replays-v408) for primary
+world ownership, mixed input formats, timing and validation.
 
 `input`, `mode` and `config` are reserved for the command line. The main output,
 optional packed replay output and v2.70 LTM source options may be configured:

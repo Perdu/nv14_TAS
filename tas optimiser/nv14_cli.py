@@ -973,7 +973,7 @@ def _interrupt_message(arguments: Sequence[str] | None = None) -> str:
     """Return a mode-accurate top-level Ctrl+C shutdown message."""
     argv = sys.argv[1:] if arguments is None else arguments
     mode = next(
-        (argument for argument in argv if argument in {"auto", "local", "jump-pattern", "dump-player"}),
+        (argument for argument in argv if argument in {"auto", "local", "jump-pattern", "dump-player", "encode-video"}),
         None,
     )
     prefix = f"[{mode}:interrupt]" if mode is not None else "[interrupt]"
@@ -1120,10 +1120,11 @@ def parse_immutable_jumps(text: str) -> tuple[ImmutableJumpSpec, ...]:
 
 
 _CONFIG_TABLE_NAMES = frozenset(
-    {"common", "auto", "local", "jump-pattern", "jump_pattern", "dump-player", "dump_player"}
+    {"common", "auto", "local", "jump-pattern", "jump_pattern", "dump-player", "dump_player", "encode-video", "encode_video"}
 )
 _CONFIG_APPEND_DESTS = frozenset(
-    {"retime", "auto_parents", "require_interaction", "avoid_interaction"}
+    {"retime", "auto_parents", "require_interaction", "avoid_interaction",
+     "secondary_replays", "secondary_colors", "secondary_labels"}
 )
 _CONFIG_RESERVED_DESTS = frozenset({"config", "input", "mode"})
 
@@ -1380,7 +1381,7 @@ def _load_config_defaults(
         if isinstance(section, Mapping) and section_name not in _CONFIG_TABLE_NAMES:
             raise ValueError(
                 f"unknown TOML section [{section_name}] in {config_path}; "
-                "use [common], [auto], [local], [jump-pattern], or [dump-player]"
+                "use [common], [auto], [local], [jump-pattern], [dump-player], or [encode-video]"
             )
         if section_name in _CONFIG_TABLE_NAMES and not isinstance(section, Mapping):
             raise ValueError(
@@ -1515,7 +1516,7 @@ def parse_arguments(
     """Parse CLI arguments, applying TOML defaults before explicit CLI values."""
     actual_argv = list(sys.argv[1:] if argv is None else argv)
     namespace = build_parser().parse_args(actual_argv)
-    if namespace.mode == "dump-player":
+    if namespace.mode in {"dump-player", "encode-video"}:
         return namespace
     if namespace.mode != "local" and namespace.frame_range is not None:
         try:
@@ -1539,16 +1540,16 @@ def parse_arguments(
 def build_parser() -> argparse.ArgumentParser:
     parser = _ConfigArgumentParser(
         description=(
-            "Optimise an n v1.4 replay or dump its player state to CSV. Choose "
-            "auto, local, jump-pattern, or dump-player."
+            "Optimise an n v1.4 replay, dump player state, or encode video. Choose "
+            "auto, local, jump-pattern, dump-player, or encode-video."
         )
     )
     subparsers = parser.add_subparsers(
         dest="mode",
         required=True,
-        metavar="{auto,local,jump-pattern,dump-player}",
+        metavar="{auto,local,jump-pattern,dump-player,encode-video}",
         title="subcommands",
-        description="select an optimisation strategy or player dump",
+        description="select an optimisation strategy, player dump, or video export",
     )
     command_parsers = {
         "auto": subparsers.add_parser(
@@ -2387,6 +2388,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_player_dump_arguments(dump_parser)
     command_parsers["dump-player"] = dump_parser
+    from nv14_video import add_video_arguments
+
+    video_parser = subparsers.add_parser(
+        "encode-video", help="render a native replay to a silent MP4 (optional Pillow + FFmpeg)",
+        description="Render the level, animated ninja and live native objects through completion, death, or input end.",
+    )
+    add_video_arguments(video_parser)
+    command_parsers["encode-video"] = video_parser
     return parser
 
 
@@ -2579,6 +2588,10 @@ def main() -> None:
         from nv14_dump import run_player_dump
 
         return run_player_dump(args)
+    if args.mode == "encode-video":
+        from nv14_video import run_video_encode
+
+        return run_video_encode(args)
     mode_configs = getattr(args, "_mode_configs", None)
     if mode_configs is None:
         mode_configs = build_mode_configs(args)

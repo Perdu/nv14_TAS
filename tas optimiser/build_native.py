@@ -1,4 +1,4 @@
-"""Build and validate the unified native engine/search module in place."""
+"""Build and validate the native engine/search and rendering modules in place."""
 from __future__ import annotations
 
 import argparse
@@ -26,13 +26,14 @@ def _backend_probe() -> dict[str, object]:
         sys.executable,
         "-c",
         (
-            "import json, nv14_native, nv14_search; "
+            "import json, nv14_native, nv14_search, nv14_vector; "
             "engine = nv14_native.backend_info(); "
             "search = nv14_search.backend_info(); "
             "unified = engine.get('module_file') == search.get('module_file'); "
             "print(json.dumps({'available': bool(engine.get('available') and "
             "search.get('available') and unified), 'unified_module': unified, "
-            "'engine': engine, 'search': search}, "
+            "'engine': engine, 'search': search, "
+            "'renderer': {'available': nv14_vector.native_backend_available()}}, "
             "sort_keys=True))"
         ),
     ]
@@ -61,7 +62,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.check:
-        candidates = _extension_candidates("_nv14_native")
+        candidates = tuple(path for name in ("_nv14_native", "_nv14_render_native")
+                           for path in _extension_candidates(name))
         before = {
             path: path.stat().st_mtime_ns for path in candidates if path.is_file()
         }
@@ -84,22 +86,16 @@ def main() -> None:
         after = {
             path: path.stat().st_mtime_ns for path in candidates if path.is_file()
         }
-        built = any(path.is_file() for path in candidates)
-        if not built:
-            raise SystemExit(
-                "native build did not produce the required _nv14_native extension"
-            )
-        if not args.no_force:
-            stale = all(
-                path in before and before[path] == after[path]
-                for path in candidates
-                if path in after
-            )
-            if stale:
+        for name in ("_nv14_native", "_nv14_render_native"):
+            module_candidates = _extension_candidates(name)
+            if not any(path.is_file() for path in module_candidates):
                 raise SystemExit(
-                    "native build did not refresh required extension: "
-                    "_nv14_native"
+                    f"native build did not produce the required {name} extension"
                 )
+            if not args.no_force and all(
+                    path in before and before[path] == after[path]
+                    for path in module_candidates if path in after):
+                raise SystemExit(f"native build did not refresh required extension: {name}")
 
     info = _backend_probe()
     print(json.dumps(info, indent=2, sort_keys=True))

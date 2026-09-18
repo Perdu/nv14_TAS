@@ -229,6 +229,14 @@ cdef extern from *:
 
 
 cdef extern from "nv14_objects_basic.h":
+    ctypedef struct nv14_basic_scene_snapshot:
+        int64_t door_timer
+
+    nv14_status nv14_objects_basic_scene_at(
+        const nv14_state *state, size_t object_index,
+        nv14_basic_scene_snapshot *out,
+    ) noexcept nogil
+
     nv14_status nv14_objects_basic_door_interactions(
         const nv14_state *state,
         uint32_t load_index,
@@ -497,6 +505,12 @@ cdef extern from "nv14_dump.h":
         nv14_player_dump_row *rows, size_t capacity, size_t *written_out,
     ) noexcept nogil
 
+    nv14_status nv14_player_dump_capture_gold(
+        nv14_state *state, const nv14_input *inputs, size_t input_count,
+        nv14_player_dump_row *rows, size_t capacity, size_t *written_out,
+        uint64_t *gold_ticks, size_t gold_capacity, uint64_t *gold_before,
+    ) noexcept nogil
+
 
 # Column order is shared with the CSV writer; no per-frame dictionaries needed.
 PLAYER_DUMP_COLUMNS = (
@@ -536,6 +550,108 @@ cdef tuple _player_dump_tuple(const nv14_player_dump_row *row):
         nv14_visual_render_name(v.render_mode).decode("ascii"),
         v.x, v.y, v.visible, v.terminal,
     )
+
+
+cdef void _visual_store_u32(unsigned char *target, uint32_t value) noexcept nogil:
+    cdef int index
+    for index in range(4):
+        target[index] = <unsigned char>(value >> (index * 8))
+
+
+cdef void _visual_store_double(unsigned char *target, double value) noexcept nogil:
+    cdef uint64_t bits
+    cdef int index
+    memcpy(&bits, &value, sizeof(double))
+    for index in range(8):
+        target[index] = <unsigned char>(bits >> (index * 8))
+
+
+cdef void _visual_pack_row(unsigned char *target, const nv14_player_dump_row *row) noexcept nogil:
+    # Stable little-endian 64-byte record; no native struct padding is exposed.
+    cdef const nv14_visual_snapshot *v = &row.visual
+    _visual_store_double(target, v.x)
+    _visual_store_double(target + 8, v.y)
+    _visual_store_double(target + 16, v.rotation_deg)
+    _visual_store_double(target + 24, v.run_remainder)
+    _visual_store_u32(target + 32, <uint32_t>v.facing)
+    _visual_store_u32(target + 36, <uint32_t>v.animation)
+    _visual_store_u32(target + 40, <uint32_t>v.current_frame)
+    _visual_store_u32(target + 44, <uint32_t>v.previous_frame)
+    _visual_store_u32(target + 48, <uint32_t>v.run_frame)
+    _visual_store_u32(target + 52, <uint32_t>v.render_mode)
+    target[56] = v.playing
+    target[57] = v.visible
+    target[58] = v.terminal
+    target[59] = <unsigned char>row.step.dead
+    target[60] = <unsigned char>row.step.level_complete
+    target[61] = target[62] = target[63] = 0
+
+
+cdef extern from "nv14_scene.h":
+    cdef unsigned int NV14_SCENE_ABI_VERSION
+    ctypedef struct nv14_scene_object:
+        size_t id
+        uint32_t state_index
+        int kind
+        nv14_object_descriptor descriptor
+        nv14_vec2 position
+        nv14_vec2 base_position
+        double radius
+        int active, visible, updating, thinking, grid_active
+        int mode, asleep, moving, is_open, is_locked, is_trap
+        int trigger_active, horizontal, chasing, direction_index, weapon_type
+        int rocket_visible, crosshair_visible, beam_visible, shot_visible
+        nv14_vec2 previous_position, direction, door_position, rocket_position
+        nv14_vec2 goal, view, target, aim, vector, shot_target, beam_end
+        double rocket_rotation_deg, speed, shot_timer, laser_length
+        int64_t fire_delay_timer, weapon_timer, shot_index, maximum_shot_index
+
+    size_t nv14_scene_object_count(const nv14_state *state) noexcept nogil
+    const char *nv14_scene_kind_name(int kind) noexcept nogil
+    nv14_status nv14_scene_object_at(
+        const nv14_state *state, size_t object_index, nv14_scene_object *out,
+    ) noexcept nogil
+
+
+cdef dict _scene_object_dict(const nv14_scene_object *o):
+    cdef uint32_t index
+    return {
+        "id": o.id, "load_index": o.descriptor.load_index,
+        "state_index": o.state_index,
+        "kind": nv14_scene_kind_name(o.kind).decode("ascii"),
+        "type": o.descriptor.object_type,
+        "parameters": [o.descriptor.parameters[index]
+                       for index in range(o.descriptor.parameter_count)],
+        "x": o.position.x, "y": o.position.y,
+        "base_x": o.base_position.x, "base_y": o.base_position.y,
+        "radius": o.radius, "active": bool(o.active), "visible": bool(o.visible),
+        "updating": bool(o.updating), "thinking": bool(o.thinking),
+        "grid_active": bool(o.grid_active), "mode": o.mode,
+        "asleep": bool(o.asleep), "moving": bool(o.moving),
+        "is_open": bool(o.is_open), "is_locked": bool(o.is_locked),
+        "is_trap": bool(o.is_trap), "trigger_active": bool(o.trigger_active),
+        "horizontal": bool(o.horizontal), "chasing": bool(o.chasing),
+        "direction_index": o.direction_index, "weapon_type": o.weapon_type,
+        "old_x": o.previous_position.x, "old_y": o.previous_position.y,
+        "direction": (o.direction.x, o.direction.y),
+        "door_x": o.door_position.x, "door_y": o.door_position.y,
+        "rocket_x": o.rocket_position.x, "rocket_y": o.rocket_position.y,
+        "rocket_direction": (o.direction.x, o.direction.y),
+        "rocket_rotation_deg": o.rocket_rotation_deg,
+        "rocket_visible": bool(o.rocket_visible),
+        "crosshair_visible": bool(o.crosshair_visible),
+        "goal": (o.goal.x, o.goal.y), "view": (o.view.x, o.view.y),
+        "target": (o.target.x, o.target.y), "aim": (o.aim.x, o.aim.y),
+        "vector": (o.vector.x, o.vector.y),
+        "shot_target": (o.shot_target.x, o.shot_target.y),
+        "beam_start": (o.position.x, o.position.y),
+        "beam_end": (o.beam_end.x, o.beam_end.y),
+        "beam_visible": bool(o.beam_visible), "shot_visible": bool(o.shot_visible),
+        "speed": o.speed, "shot_timer": o.shot_timer,
+        "laser_length": o.laser_length, "fire_delay_timer": o.fire_delay_timer,
+        "weapon_timer": o.weapon_timer, "shot_index": o.shot_index,
+        "maximum_shot_index": o.maximum_shot_index,
+    }
 
 
 cdef class NativeLevel:
@@ -859,6 +975,48 @@ cdef class NativeState:
                 trap_mask |= (<object>1) << descriptor.load_index
         return locked_mask, trap_mask
 
+    def scene_snapshot(self, *, include_object_visuals=False):
+        """Copy the current scene for optional rendering, without advancing it.
+
+        ``visual`` is None unless player animation was explicitly enabled.
+        Object ids are stable native indices; load_index identifies the input
+        descriptor (an exit has separate switch/door ids). Enemies omitted by
+        simulate_enemies=False are absent here. This is post-step state, not
+        an event log: gauss flashes, particles and historic cosmetic timelines
+        are not reconstructed. Calling this query never changes state keys.
+        ``include_object_visuals=True`` adds presentation-only query fields,
+        including the existing door timer used to detect interrupted tweens.
+        """
+        cdef size_t index
+        cdef size_t count = nv14_scene_object_count(self._handle)
+        cdef nv14_scene_object native_object
+        cdef nv14_basic_scene_snapshot basic_object
+        cdef nv14_status status
+        if not isinstance(include_object_visuals, bool):
+            raise ValueError("include_object_visuals must be a boolean")
+        objects = []
+        for index in range(count):
+            status = nv14_scene_object_at(self._handle, index, &native_object)
+            if status != NV14_STATUS_OK:
+                _raise_status(status, "read native scene object")
+            obj = _scene_object_dict(&native_object)
+            if include_object_visuals and obj["kind"] == "testdoor":
+                status = nv14_objects_basic_scene_at(
+                    self._handle, index, &basic_object)
+                if status != NV14_STATUS_OK:
+                    _raise_status(status, "read native object visual query")
+                obj["door_timer"] = basic_object.door_timer
+            objects.append(obj)
+        return {
+            "backend": "native-core",
+            "frame": nv14_state_frame(self._handle),
+            "player": self.player_snapshot(),
+            "visual": self.visual_snapshot(),
+            "static_state": self.static_state(),
+            "simulate_enemies": bool(self._level._simulate_enemies),
+            "objects": objects,
+        }
+
     def step(self, *args):
         """Advance once from an input object or 3/4 individual input values."""
         cdef nv14_input input_frame
@@ -967,6 +1125,79 @@ cdef class NativeState:
         finally:
             PyMem_Free(inputs)
             PyMem_Free(rows)
+
+    def capture_gold_visual_frames(self, frames):
+        """Return (pose bytes, [(chunk-local tick, gold index), ...]).
+
+        Events are exact, sorted, 1-based and include terminal-tick pickups.
+        The caller may concatenate chunks without duplicating earlier pickups.
+        """
+        return self.capture_visual_frames(frames, _collect_gold=True)
+
+    def capture_visual_frames(self, frames, *, bint _collect_gold=False):
+        """Capture compact 64-byte little-endian visual records in native code.
+
+        The layout is ``<4d6i5B3x``: x/y/rotation/run remainder, facing/
+        animation/frame/previous frame/run frame/render mode, playing/visible/
+        terminal/dead/complete. Includes the first terminal tick and preserves
+        explicit jump triggers. Tracking must already be enabled.
+        """
+        cdef tuple materialized = tuple(frames)
+        cdef size_t count = len(materialized)
+        cdef size_t index
+        cdef size_t written = 0
+        cdef nv14_input *inputs = NULL
+        cdef nv14_player_dump_row *rows = NULL
+        cdef unsigned char *packed = NULL
+        cdef uint64_t *gold_ticks = NULL
+        cdef uint64_t *gold_before = NULL
+        cdef size_t gold_count = nv14_level_gold_count(self._level._handle)
+        cdef nv14_status status
+        if not nv14_state_visuals_enabled(self._handle):
+            raise ValueError("visual capture requires track_visuals=True")
+        if count == 0:
+            return (b"", []) if _collect_gold else b""
+        if count > (<size_t>-1) // sizeof(nv14_player_dump_row):
+            raise OverflowError("native visual capture chunk is too large")
+        try:
+            inputs = <nv14_input *>PyMem_Malloc(count * sizeof(nv14_input))
+            rows = <nv14_player_dump_row *>PyMem_Malloc(count * sizeof(nv14_player_dump_row))
+            packed = <unsigned char *>PyMem_Malloc(count * 64)
+            if inputs == NULL or rows == NULL or packed == NULL:
+                raise MemoryError("unable to allocate native visual capture chunk")
+            if _collect_gold:
+                gold_ticks = <uint64_t *>PyMem_Malloc((gold_count + 1) * sizeof(uint64_t))
+                gold_before = <uint64_t *>PyMem_Malloc(((gold_count + 63) // 64 + 1) * sizeof(uint64_t))
+                if gold_ticks == NULL or gold_before == NULL:
+                    raise MemoryError("unable to allocate native gold capture chunk")
+            for index in range(count):
+                _fill_input(materialized[index], &inputs[index])
+            with nogil:
+                if _collect_gold:
+                    status = nv14_player_dump_capture_gold(
+                        self._handle, inputs, count, rows, count, &written,
+                        gold_ticks, gold_count, gold_before,
+                    )
+                else:
+                    status = nv14_player_dump_capture(
+                        self._handle, inputs, count, rows, count, &written,
+                    )
+                if status == NV14_STATUS_OK:
+                    for index in range(written):
+                        _visual_pack_row(packed + index * 64, &rows[index])
+            if status != NV14_STATUS_OK:
+                _raise_status(status, "capture native visual frames")
+            if _collect_gold:
+                return (bytes((<char *>packed)[:written * 64]),
+                        sorted((gold_ticks[index], index) for index in range(gold_count)
+                               if gold_ticks[index]))
+            return bytes((<char *>packed)[:written * 64])
+        finally:
+            PyMem_Free(inputs)
+            PyMem_Free(rows)
+            PyMem_Free(packed)
+            PyMem_Free(gold_ticks)
+            PyMem_Free(gold_before)
 
     def state_key(self, *, precision=None):
         """Return an exact key scoped to this state's immutable level."""
@@ -1092,7 +1323,10 @@ def backend_info():
         "core_abi": NV14_CORE_ABI_VERSION,
         "visual_abi": NV14_VISUAL_ABI_VERSION,
         "player_dump_abi": NV14_PLAYER_DUMP_ABI_VERSION,
+        "scene_abi": NV14_SCENE_ABI_VERSION,
+        "object_visual_queries": True,
         "optional_visual_tracker": True,
+        "compact_visual_capture": 1,
         "implementation": "cython-unified-native",
         "strict_fp": bool(nv14_wrapper_strict_fp()),
         "complete_step_capability": NV14_CAP_COMPLETE_STEP,

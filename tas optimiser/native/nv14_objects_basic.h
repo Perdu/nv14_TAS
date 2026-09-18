@@ -17,6 +17,28 @@ extern "C" {
 const nv14_internal_object_module *nv14_objects_basic_module(void);
 nv14_status nv14_objects_basic_register(void);
 
+/* Query-only presentation data. No runtime slots are added for rendering. */
+typedef struct nv14_basic_scene_snapshot {
+    nv14_vec2 position;
+    nv14_vec2 previous_position;
+    nv14_vec2 direction;
+    nv14_vec2 door_position;
+    int mode;
+    int asleep;
+    int moving;
+    int is_open;
+    int is_locked;
+    int is_trap;
+    int trigger_active;
+    int horizontal;
+    int64_t door_timer;
+} nv14_basic_scene_snapshot;
+
+nv14_status nv14_objects_basic_scene_at(
+    const nv14_state *state, size_t object_index,
+    nv14_basic_scene_snapshot *out
+);
+
 /* Read the two permanent TestDoor interaction states by serialized load id.
  * The search kernel uses this narrow accessor instead of depending on the
  * basic module's private runtime-slot layout.  A missing/non-door load id

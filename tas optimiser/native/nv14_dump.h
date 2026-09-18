@@ -33,6 +33,16 @@ nv14_status nv14_player_dump_capture(
     size_t *written_out
 );
 
+/* Additive video-only capture. gold_ticks has gold_capacity entries (at least
+ * the level's gold count); receives 1-based chunk-local pickup ticks, or zero.
+ * gold_before is caller scratch with ceil(gold_count/64) words. No allocations
+ * or callbacks occur. Previously collected bits never become new events. */
+nv14_status nv14_player_dump_capture_gold(
+    nv14_state *state, const nv14_input *inputs, size_t input_count,
+    nv14_player_dump_row *rows, size_t capacity, size_t *written_out,
+    uint64_t *gold_ticks, size_t gold_capacity, uint64_t *gold_before
+);
+
 #ifdef __cplusplus
 }
 #endif

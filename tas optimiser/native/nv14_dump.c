@@ -1,14 +1,17 @@
 #include "nv14_dump.h"
+#include "nv14_internal.h"
 
 #include <string.h>
 
-nv14_status nv14_player_dump_capture(
+static nv14_status capture(
     nv14_state *state,
     const nv14_input *inputs,
     size_t input_count,
     nv14_player_dump_row *rows,
     size_t capacity,
-    size_t *written_out
+    size_t *written_out,
+    uint64_t *gold_ticks,
+    uint64_t *gold_before
 )
 {
     size_t index;
@@ -19,6 +22,13 @@ nv14_status nv14_player_dump_capture(
     if (state == NULL || written_out == NULL || capacity < input_count ||
         (input_count != 0 && (inputs == NULL || rows == NULL)))
         return NV14_STATUS_INVALID_ARGUMENT;
+    if (gold_ticks != NULL) {
+        size_t gold_count = nv14_level_gold_count(state->level);
+        size_t words = (gold_count + 63) / 64;
+        if (words && gold_before == NULL) return NV14_STATUS_INVALID_ARGUMENT;
+        memset(gold_ticks, 0, gold_count * sizeof(*gold_ticks));
+        if (words) memcpy(gold_before, state->collected_gold, words * sizeof(*gold_before));
+    }
     status = nv14_state_get_visual(state, &visual);
     if (status != NV14_STATUS_OK) return status;
     status = nv14_state_get_player(state, &player);
@@ -46,8 +56,42 @@ nv14_status nv14_player_dump_capture(
         status = nv14_state_get_visual(state, &row->visual);
         if (status != NV14_STATUS_OK) return status;
         row->gold_bonus_ticks = nv14_state_gold_bonus_ticks(state);
+        /* Optional video capture only: enumerate changed bits on pickup ticks.
+         * No gameplay hooks, scene snapshots or per-gold work on other ticks. */
+        if (gold_ticks != NULL && row->step.collected_gold) {
+            size_t word, words = (nv14_level_gold_count(state->level) + 63) / 64;
+            for (word = 0; word < words; ++word) {
+                uint64_t current = state->collected_gold[word];
+                uint64_t changed = current & ~gold_before[word];
+                size_t bit = word * 64;
+                for (; changed; changed >>= 1, ++bit)
+                    if (changed & 1) gold_ticks[bit] = (uint64_t)index + 1;
+                gold_before[word] = current;
+            }
+        }
         player = row->player;
         *written_out = index + 1;
     }
     return NV14_STATUS_OK;
+}
+
+nv14_status nv14_player_dump_capture(
+    nv14_state *state, const nv14_input *inputs, size_t input_count,
+    nv14_player_dump_row *rows, size_t capacity, size_t *written_out
+)
+{
+    return capture(state, inputs, input_count, rows, capacity, written_out, NULL, NULL);
+}
+
+nv14_status nv14_player_dump_capture_gold(
+    nv14_state *state, const nv14_input *inputs, size_t input_count,
+    nv14_player_dump_row *rows, size_t capacity, size_t *written_out,
+    uint64_t *gold_ticks, size_t gold_capacity, uint64_t *gold_before
+)
+{
+    if (state == NULL || gold_ticks == NULL ||
+        gold_capacity < nv14_level_gold_count(state->level))
+        return NV14_STATUS_INVALID_ARGUMENT;
+    return capture(state, inputs, input_count, rows, capacity, written_out,
+                   gold_ticks, gold_before);
 }

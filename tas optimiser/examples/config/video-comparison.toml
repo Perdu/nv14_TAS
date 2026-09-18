@@ -1,0 +1,30 @@
+# Replace the paths with replays recorded on the primary's level.
+# python optimize_replay.py encode-video primary.txt --config examples/config/video-comparison.toml
+
+[encode-video]
+output = "comparison.mp4"
+secondary_replays = ["other.txt", "third.txt"]
+replay_alignment = "exit" # "start": simultaneous starts; "exit": simultaneous completion
+# Omit this array for automatic colours: darker blue, then a distinct palette.
+secondary_colors = ["#3568a8", "#689ec9"]
+# v4.13: first pending ghost in replay order owns each duplicate.
+# secondary_gold = "animated" # "off" (default), "static", or "animated"
+# v4.11: optional per-player labels. One entry per secondary; "" hides a label.
+# primary_label = "Optimised"
+# secondary_labels = ["Baseline", "Alternative"]
+# label_size = 8 # game pixels, before video scale; 6..32
+# label_position = "top-left" # v4.12: static legend; default "follow" follows each player
+scale = 2
+fps = 40
+simulate_enemies = true
+particles = true
+object_animations = true
+terminal_hold_seconds = 1.0
+
+# v4.10: optional performance controls; encoder preset is unchanged.
+render_workers = 8 # 0 for automatic; 1 for serial; 2..64 for explicit process count
+render_quality = "fast" # snaps ninja artwork; "exact" preserves all fractional transforms
+# replay_cache_dir = ".nv14-video-cache"
+
+render_memory_mib = 128 # RGB transport budget, excluding artwork and canvases
+profile = false # true reports timings, transferred bytes and cache counters

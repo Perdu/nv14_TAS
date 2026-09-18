@@ -82,6 +82,54 @@ enum nv14_door_i64_slot {
     NV14_DOOR_TRIGGER_ACTIVE = 14
 };
 
+nv14_status nv14_objects_basic_scene_at(
+    const nv14_state *state, size_t object_index,
+    nv14_basic_scene_snapshot *out
+)
+{
+    const nv14_native_object *object;
+    const nv14_object_runtime *runtime;
+    if (state == NULL || out == NULL) return NV14_STATUS_INVALID_ARGUMENT;
+    if (object_index >= state->level->native_object_count)
+        return NV14_STATUS_OUT_OF_BOUNDS;
+    object = &state->level->native_objects[object_index];
+    if (object->kind != NV14_NATIVE_BOUNCE &&
+        object->kind != NV14_NATIVE_THWOMP &&
+        object->kind != NV14_NATIVE_TESTDOOR)
+        return NV14_STATUS_OUT_OF_BOUNDS;
+    runtime = nv14_internal_object_runtime_const(state, object_index);
+    memset(out, 0, sizeof(*out));
+    out->position.x = object->x;
+    out->position.y = object->y;
+    if (object->kind == NV14_NATIVE_BOUNCE) {
+        out->position.x = runtime->f64[NV14_BOUNCE_POS_X];
+        out->position.y = runtime->f64[NV14_BOUNCE_POS_Y];
+        out->previous_position.x = runtime->f64[NV14_BOUNCE_OLD_X];
+        out->previous_position.y = runtime->f64[NV14_BOUNCE_OLD_Y];
+        out->asleep = runtime->i64[NV14_BOUNCE_ASLEEP] != 0;
+    } else if (object->kind == NV14_NATIVE_THWOMP) {
+        out->position.x = runtime->f64[NV14_THWOMP_POS_X];
+        out->position.y = runtime->f64[NV14_THWOMP_POS_Y];
+        out->direction.x = runtime->f64[NV14_THWOMP_DIR_X];
+        out->direction.y = runtime->f64[NV14_THWOMP_DIR_Y];
+        out->mode = (int)runtime->i64[NV14_THWOMP_MODE];
+        out->moving = runtime->i64[NV14_THWOMP_IS_MOVING] != 0;
+    } else {
+        int i = (int)runtime->i64[NV14_DOOR_FRONT_I];
+        int j = (int)runtime->i64[NV14_DOOR_FRONT_J];
+        const nv14_tile *tile = &state->level->tiles[i * NV14_TILE_ROWS + j];
+        out->horizontal = runtime->i64[NV14_DOOR_VERT] == 1;
+        out->door_position.x = tile->x + (out->horizontal ? 0.0 : NV14_TILE_SCALE);
+        out->door_position.y = tile->y + (out->horizontal ? NV14_TILE_SCALE : 0.0);
+        out->is_open = runtime->i64[NV14_DOOR_IS_OPEN] != 0;
+        out->is_locked = runtime->i64[NV14_DOOR_IS_LOCKED] != 0;
+        out->is_trap = runtime->i64[NV14_DOOR_IS_TRAP] != 0;
+        out->trigger_active = runtime->i64[NV14_DOOR_TRIGGER_ACTIVE] != 0;
+        out->door_timer = runtime->i64[NV14_DOOR_TIMER];
+    }
+    return NV14_STATUS_OK;
+}
+
 nv14_status nv14_objects_basic_door_interactions_at(
     const nv14_state *state,
     size_t object_index,

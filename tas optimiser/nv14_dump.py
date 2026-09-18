@@ -18,7 +18,7 @@ from nv14_ltm import (
     _replace_with_windows_retries,
 )
 from nv14_native import require_native
-from nv14_replay import ComplexReplay, decode_complex_replay, parse_combined_level_replay
+from nv14_replay import CombinedLevelReplay, ComplexReplay, decode_complex_replay, parse_combined_level_replay
 
 if TYPE_CHECKING:
     from _nv14_native import NativeLevel
@@ -31,6 +31,8 @@ class PlayerDumpSource:
     input_kind: str
     ltm_start: int | None = None
     levels_file: Path | None = None
+    level_name: str = ""
+    level_author: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +48,7 @@ class PlayerDumpResult:
 
 def _external_level(
     input_path: Path, levels_file: Path | None, level_id: str | None,
-) -> tuple[str, Path]:
+) -> tuple[CombinedLevelReplay, Path]:
     if level_id is None:
         level_id = infer_level_id_from_ltm_filename(input_path.with_suffix(".ltm"))
     if level_id is None:
@@ -58,7 +60,7 @@ def _external_level(
         input_path, levels_file, program_root=Path(__file__).resolve().parent,
     )
     record = find_level_record(path, level_id)
-    level = parse_combined_level_replay(record + "0:#").level_string
+    level = parse_combined_level_replay(record + "0:#")
     return level, path
 
 
@@ -73,14 +75,16 @@ def load_player_dump_source(
             input_path, postroll_frames=0 if ltm_postroll is None else ltm_postroll,
         )
         level, path = _external_level(input_path, levels_file, level_id)
-        return PlayerDumpSource(level, movie.replay_frames, "ltm", movie.replay_start, path)
+        return PlayerDumpSource(level.level_string, movie.replay_frames, "ltm",
+                                movie.replay_start, path, level.name, level.author)
     if ltm_postroll is not None:
         raise ValueError("--ltm-postroll is only valid for an .ltm input")
     text = input_path.read_text(encoding="utf-8-sig").strip()
     if re.match(r"^\d+:", text):
         frames = decode_complex_replay(text).frames
         level, path = _external_level(input_path, levels_file, level_id)
-        return PlayerDumpSource(level, frames, "demo", levels_file=path)
+        return PlayerDumpSource(level.level_string, frames, "demo", levels_file=path,
+                                level_name=level.name, level_author=level.author)
     if levels_file is not None or level_id is not None:
         raise ValueError(
             "--levels-file and --level-id are for LTM or packed-only demos; "
@@ -91,6 +95,8 @@ def load_player_dump_source(
     # not pass through editable_frames() or canonicalise_jump_triggers here.
     return PlayerDumpSource(
         combined.level_string, decode_complex_replay(combined.replay_string).frames, "demo",
+        level_name=combined.name if combined.level_index >= 2 else "",
+        level_author=combined.author if combined.level_index >= 2 else "",
     )
 
 

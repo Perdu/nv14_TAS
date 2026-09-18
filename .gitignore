@@ -14,5 +14,6 @@ tas optimiser/.pytest_cache/
 tas optimiser/build/
 tas optimiser/wip/
 tas optimiser/local_arrival_checkpoint.json
+tas optimiser/leaderboard_ghost_cache/
 *.pyd
 *.so

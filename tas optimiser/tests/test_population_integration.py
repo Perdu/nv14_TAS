@@ -5,6 +5,7 @@ import json
 import re
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -168,9 +169,12 @@ def test_population_ltm_preserves_external_inputs_postroll_and_ranked_replays(tm
     for rank in (1, 2):
         movie_path = output if rank == 1 else tmp_path / "segment.rank02.ltm"
         replay_path = packed if rank == 1 else tmp_path / "segment.replay.rank02.txt"
-        movie = LtmMovie.load(movie_path)
+        # v3.21+ deliberately stores no optimiser metadata in an LTM. Reload
+        # with the same explicit postroll selection used for the invocation.
+        movie = LtmMovie.load(movie_path, postroll_frames=2)
         assert movie.warning is None
-        assert movie.embedded_level_record == record
+        with tarfile.open(movie_path) as archive:
+            assert "nv14_optimizer.json" not in archive.getnames()
         assert len(movie.replay_frames) == len(frames)
         assert _held(movie.replay_frames[:1]) == _held(frames[:1])
         assert _held(movie.replay_frames[9:]) == _held(frames[9:])

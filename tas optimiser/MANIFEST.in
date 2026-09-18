@@ -2,7 +2,7 @@ include build_native.py
 include README.md
 include pyproject.toml
 include uv.lock
-recursive-include docs *.md
+recursive-include docs *.md *.json
 recursive-include examples *.txt *.toml
 recursive-include tests *.py *.txt *.csv
 recursive-include tools *.py
@@ -20,6 +20,10 @@ include native/nv14_visual.c
 include native/nv14_visual.h
 include native/nv14_dump.c
 include native/nv14_dump.h
+include native/nv14_scene.c
+include native/nv14_scene.h
+include native/nv14_render_native.c
+recursive-include nv14_assets *.py *.json *.md *.png *.ttf
 include native/nv14_visual_internal.h
 include native/nv14_internal.h
 include native/nv14_rays.c

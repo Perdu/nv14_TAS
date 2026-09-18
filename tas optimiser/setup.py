@@ -1,4 +1,4 @@
-"""Build metadata for the unified n v1.4 native extension.
+"""Build metadata for the engine and optional rendering native extensions.
 
 The optimiser remains importable directly from the extracted source tree when
 the extension cannot be built, although Auto, Local, jump-pattern and player
@@ -107,6 +107,7 @@ native_core_sources = [
     "native/nv14_core.c",
     "native/nv14_visual.c",
     "native/nv14_dump.c",
+    "native/nv14_scene.c",
     "native/nv14_rays.c",
     "native/nv14_objects_basic.c",
     "native/nv14_objects_guard.c",
@@ -119,6 +120,7 @@ native_core_depends = [
     "native/nv14_core.h",
     "native/nv14_visual.h",
     "native/nv14_dump.h",
+    "native/nv14_scene.h",
     "native/nv14_visual_internal.h",
     "native/nv14_internal.h",
     "native/nv14_rays.h",
@@ -156,8 +158,14 @@ native_extension = Extension(
     optional=True,
 )
 
+render_extension = Extension(
+    "_nv14_render_native",
+    sources=["native/nv14_render_native.c"],
+    optional=True,
+)
+
 
 setup(
-    ext_modules=[native_extension],
+    ext_modules=[native_extension, render_extension],
     cmdclass={"build_ext": StrictFloatingPointBuildExt},
 )

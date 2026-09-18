@@ -284,3 +284,21 @@ nv14_status nv14_objects_guard_register(void)
 {
     return nv14_internal_register_object_module(&nv14_objects_guard_module);
 }
+
+nv14_status nv14_objects_guard_scene_at(
+    const nv14_state *state, size_t object_index,
+    nv14_guard_scene_snapshot *out
+)
+{
+    const nv14_object_runtime *runtime;
+    if (state == NULL || out == NULL) return NV14_STATUS_INVALID_ARGUMENT;
+    if (object_index >= state->level->native_object_count ||
+        state->level->native_objects[object_index].kind != NV14_NATIVE_FLOORGUARD)
+        return NV14_STATUS_OUT_OF_BOUNDS;
+    runtime = nv14_internal_object_runtime_const(state, object_index);
+    out->position.x = runtime->f64[NV14_GUARD_POS_X];
+    out->position.y = runtime->f64[NV14_GUARD_POS_Y];
+    out->direction = (int)runtime->i64[NV14_GUARD_DIRECTION];
+    out->chasing = runtime->i64[NV14_GUARD_CHASING] != 0;
+    return NV14_STATUS_OK;
+}

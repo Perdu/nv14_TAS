@@ -4,11 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nv14-tas-starter"
-version = "4.03"
+version = "4.19"
 requires-python = ">=3.11"
 
+[project.optional-dependencies]
+video = ["Pillow>=10"]
+
 [tool.setuptools]
-packages = ["tools"]
+packages = ["tools", "nv14_assets"]
 py-modules = [
     "nv14_engine",
     "nv14_native",
@@ -26,8 +29,24 @@ py-modules = [
     "nv14_replay",
     "nv14_ltm",
     "nv14_dump",
+    "nv14_video",
+    "nv14_video_progress",
+    "nv14_video_parallel",
+    "nv14_video_tracks",
+    "nv14_video_gold",
+    "nv14_video_cadence",
+    "nv14_video_session",
+    "nv14_render",
+    "nv14_render_commands",
+    "nv14_render_gold",
+    "nv14_vector",
+    "nv14_particles",
+    "nv14_object_visuals",
     "optimize_replay",
 ]
+
+[tool.setuptools.package-data]
+nv14_assets = ["*.json", "*.md", "*.png", "**/*.png", "**/*.json", "**/*.md", "fonts/*.ttf"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

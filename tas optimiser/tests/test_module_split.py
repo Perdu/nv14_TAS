@@ -81,7 +81,7 @@ def test_thin_entrypoint_runs_as_a_real_subprocess() -> None:
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    assert "{auto,local,jump-pattern,dump-player}" in completed.stdout
+    assert "{auto,local,jump-pattern,dump-player,encode-video}" in completed.stdout
 
 
 def test_jump_workers_use_a_forced_spawn_context(monkeypatch) -> None:

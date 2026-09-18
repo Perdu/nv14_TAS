@@ -11,10 +11,14 @@ import nv14_search
 ROOT = Path(__file__).parents[1]
 
 
-def test_build_defines_one_extension_and_links_core_once() -> None:
+def test_build_defines_unified_engine_and_optional_renderer_links_core_once() -> None:
     setup_source = (ROOT / "setup.py").read_text(encoding="utf-8")
 
-    assert setup_source.count("Extension(") == 1
+    # v4.09 added a separate optional renderer; engine/search still share one
+    # extension and must not duplicate the gameplay core.
+    assert setup_source.count("Extension(") == 2
+    assert '"_nv14_render_native"' in setup_source
+    assert 'sources=["native/nv14_render_native.c"]' in setup_source
     assert setup_source.count('"native/nv14_core.c"') == 1
     assert '"_nv14_search"' not in setup_source
     assert '"native/_nv14_native.c"' in setup_source

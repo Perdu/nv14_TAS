@@ -10,6 +10,17 @@ extern "C" {
 /* Idempotent when this exact module has already been registered. */
 nv14_status nv14_objects_guard_register(void);
 
+typedef struct nv14_guard_scene_snapshot {
+    nv14_vec2 position;
+    int direction;
+    int chasing;
+} nv14_guard_scene_snapshot;
+
+nv14_status nv14_objects_guard_scene_at(
+    const nv14_state *state, size_t object_index,
+    nv14_guard_scene_snapshot *out
+);
+
 #ifdef __cplusplus
 }
 #endif
