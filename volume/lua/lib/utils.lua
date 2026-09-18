@@ -37,7 +37,7 @@ function drawList(list, size, r, g, b, draw_number)
    for i, e in ipairs(list) do
       gui.ellipse(e.x, e.y, size, size, 1, rgb(r, g, b))
       if draw_number then
-         gui.text(e.x, e.y, tostring(i), rgb(r, g, b))
+         gui.text(e.x - 3, e.y + 5, tostring(i), rgb(r, g, b))
       end
    end
 end
