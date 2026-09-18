@@ -22,7 +22,7 @@ while IFS= read -r i; do
     splice_ext=$(basename $i)
     splice=${splice_ext%.txt}
     echo -e "\033[32m************** Running ${splice_ext}\033[0m"
-    #python3 optimize_replay.py local "$ORIG" --config "$i" --output wip/$1_$splice.ltm --replay-output wip/$1_$splice.txt --stagnation-rounds 1 --workers 15
+    python3 optimize_replay.py local "$ORIG" --config "$i" --output wip/$1_$splice.ltm --replay-output wip/$1_$splice.txt --stagnation-rounds 1 --workers 15
     ORIG=wip/$1_$splice.ltm
 done < <(printf '%s\n' levels/$1/*.txt | sort -V)
 
