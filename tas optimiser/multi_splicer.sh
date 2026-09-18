@@ -17,6 +17,9 @@ if [ ! -d levels/$1 ] ; then
     exit 1
 fi
 
+# Clean previous runs
+rm wip/$1_*.ltm
+
 ORIG="../n_levels/$1.ltm"
 while IFS= read -r i; do
     splice_ext=$(basename $i)
