@@ -324,6 +324,7 @@ target_frame = %d
 range = "%d:%d"
 target_region = "%d:%d,%d:%d"
 simulate-enemies = false
+objective = "earliest-arrival"
 # secondary_objective = "max-vx"
 # require-interaction = ["testdoor:0"]
 ]],
