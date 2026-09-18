@@ -299,7 +299,19 @@ function onInput()
           if target_prev < 0 then
              target_prev = 0
           end
-          file:write(string.format("target_frame = %d\nrange = \"%d:%d\"\ntarget_region = \"%d:%d,%d:%d\"", f, target_prev, f, x_int - splice_region_size, x_int + splice_region_size, y_int - splice_region_size, y_int + splice_region_size))
+          file:write(string.format([[
+[local]
+search = "population"
+target_frame = %d
+range = "%d:%d"
+target_region = "%d:%d,%d:%d"
+simulate-enemies = false
+# secondary_objective = "max-vx"
+# require-interaction = ["testdoor:0"]
+]],
+f,
+target_prev, f,
+x_int - splice_region_size, x_int + splice_region_size, y_int - splice_region_size, y_int + splice_region_size))
        end
 
        file:close()
