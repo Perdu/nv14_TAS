@@ -28,7 +28,7 @@ splice_files_path = "/home/splices/"
 splice_region_size = 20
 splice_prev_range_prior_frames = 10
 display_switches_numbers = true
-clean_splices_region_markers = true
+clean_splices_region_markers = false
 
 ---- Constants
 SAVE_SLOT = 1             -- Save slot number (1–10)
