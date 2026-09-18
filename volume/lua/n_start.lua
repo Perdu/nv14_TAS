@@ -300,11 +300,11 @@ function onInput()
     end
 
     if input.getKey(KEY_s) ~= 0 then
-       local f = movie.currentFrame()
+       local f_ig = movie.currentFrame() - space_frame
        local level_path = splice_files_path .. "/" .. level
        os.execute('mkdir -p "' .. level_path .. '"')
 
-       local filename = level_path .. "/" .. tostring(f) .. ".txt"
+       local filename = level_path .. "/" .. tostring(f_ig) .. ".txt"
        local file = io.open(filename, "r")
 
        x, y = get_player_position()
@@ -328,18 +328,18 @@ objective = "earliest-arrival"
 # secondary_objective = "max-vx"
 # require-interaction = ["testdoor:0"]
 ]],
-f,
-target_prev, f,
+f_ig,
+target_prev, f_ig,
 x_int - splice_region_size, x_int + splice_region_size, y_int - splice_region_size, y_int + splice_region_size))
        end
 
        file:close()
 
-       if f > prev_splice then
-          prev_splice = f
+       if f_ig > prev_splice then
+          prev_splice = f_ig
        end
-       if splice_regions[f] == nil then
-          splice_regions[f] = {
+       if splice_regions[f_ig] == nil then
+          splice_regions[f_ig] = {
              x = x_int,
              y = y_int,
              size = splice_region_size
