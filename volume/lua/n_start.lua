@@ -208,7 +208,7 @@ function onPaint()
 
    display_drones_number()
 
-   for _, region in ipairs(splice_regions) do
+   for _, region in pairs(splice_regions) do
       gui.rectangle(
          region.x - region.size,
          region.y - region.size,
@@ -337,11 +337,13 @@ x_int - splice_region_size, x_int + splice_region_size, y_int - splice_region_si
        if f > prev_splice then
           prev_splice = f
        end
-       table.insert(splice_regions, {
-                       x = x_int,
-                       y = y_int,
-                       size = splice_region_size
-       })
+       if splice_regions[f] == nil then
+          splice_regions[f] = {
+             x = x_int,
+             y = y_int,
+             size = splice_region_size
+          }
+       end
     end
 end
 
