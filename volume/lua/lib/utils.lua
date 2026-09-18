@@ -33,10 +33,12 @@ function rgb(r,g,b,a)
     return (a << 24) | (r << 16) | (g << 8) | b
 end
 
-function drawList(list, size, r, g, b)
-   -- print(list)
-   for _, e in ipairs(list) do
+function drawList(list, size, r, g, b, draw_number)
+   for i, e in ipairs(list) do
       gui.ellipse(e.x, e.y, size, size, 1, rgb(r, g, b))
+      if draw_number then
+         gui.text(e.x, e.y, tostring(i), rgb(r, g, b))
+      end
    end
 end
 
