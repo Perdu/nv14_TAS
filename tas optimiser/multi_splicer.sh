@@ -25,3 +25,5 @@ for i in levels/$1/*.txt ; do
     python3 optimize_replay.py local "$ORIG" --config "$i" --output wip/$1_$splice.ltm --replay-output wip/$1_$splice.txt --stagnation-rounds 1 --workers 15
     ORIG=wip/$1_$splice.ltm
 done
+
+cp $ORIG wip/optim.ltm
