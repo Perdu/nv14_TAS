@@ -126,7 +126,6 @@ def save_demo(
     authors='zapkt',
     optimization_level=None,
     highscore_ticks=None,
-    preserve_default_authors=True,
 ):
     yaml = YAML()
     yaml.preserve_quotes = True  # keep existing quoting
@@ -177,7 +176,7 @@ def save_demo(
         existing_record = data[level_id][score_type]
         # Recreating a dict to ensure we insert optimization_level at the right place
         # (because order depends on insert in dict)
-        if authors is None or preserve_default_authors:
+        if authors is None:
             # Don't override authors list if default
             new_authors = existing_record.get("authors", authors)
         else:
