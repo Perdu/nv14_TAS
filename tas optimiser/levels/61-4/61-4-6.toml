@@ -1,0 +1,13 @@
+[local]
+workers = 16
+simulate-enemies = true
+local-inputs = "all"
+target-frame = 549
+range = ["396:549"]
+objective = "max-x"
+require-interaction = ["testdoor:0", "testdoor:1"]
+window = 6
+passes = 6
+restarts = 1000
+window-shape = "mixed"
+window-order = "random"

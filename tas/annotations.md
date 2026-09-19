@@ -340,7 +340,7 @@ The second jump we make on the way up makes us land later, but more to the right
 The last jump to go down is extremlely tight. RTA seems to get a better angle for the stumble, which I can't reproduce (i'm not starting with the same speed)
 
 # 08-1
-rerecords: 2196
+rerecords: 2488
 
 In the beginning, landing the fall with a cj on the bb is slower
 It's extremely annoying to find a turnaround strategy around the switch that doesn't get us killed. This solution works. There may be better ones.
@@ -1944,7 +1944,7 @@ Branch 8: attempt at going right
 Branch 7: rta route, faster beginning but slower slope jumps
 
 # 61-4
-rerecords: 0
+rerecords: 1283
 
 
 
@@ -2969,4 +2969,4 @@ rerecords: 0
 # 99-9
 
 
-# Total rerecords: 247363
+# Total rerecords: 248938
