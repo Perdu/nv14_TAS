@@ -1,14 +1,27 @@
 # Use with branch 8. Doesn't find any result.
 [local]
-# search = "population"
+workers = 16
+simulate-enemies = false
 local-inputs = "direction"
+target-frame = 190
+range = ["86:190"]
+objective = "min-y"
+window = 4
+passes = 4
+restarts = 100
 window-shape = "mixed"
 window-order = "random"
-target_frame = 200
-range = "0:200"
-# target_region = "367:407,29:65"
-simulate-enemies = false
-objective = "min-y"
-# objective = "earliest-arrival"
-# secondary_objective = "max-vx"
-# require-interaction = ["testdoor:0"]
+
+#[local]
+## search = "population"
+#local-inputs = "direction"
+#window-shape = "mixed"
+#window-order = "random"
+#target_frame = 200
+#range = "0:200"
+## target_region = "367:407,29:65"
+#simulate-enemies = false
+#objective = "min-y"
+## objective = "earliest-arrival"
+## secondary_objective = "max-vx"
+## require-interaction = ["testdoor:0"]
