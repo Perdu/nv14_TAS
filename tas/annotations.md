@@ -102,7 +102,7 @@ rerecords: 441
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 3200
+rerecords: 3211
 
 Jumping to go down small paths does not save any frame, it's just for style
 
@@ -340,7 +340,7 @@ The second jump we make on the way up makes us land later, but more to the right
 The last jump to go down is extremlely tight. RTA seems to get a better angle for the stumble, which I can't reproduce (i'm not starting with the same speed)
 
 # 08-1
-rerecords: 2488
+rerecords: 2830
 
 In the beginning, landing the fall with a cj on the bb is slower
 It's extremely annoying to find a turnaround strategy around the switch that doesn't get us killed. This solution works. There may be better ones.
@@ -1372,9 +1372,9 @@ rerecords: 0
 
 
 # 42-0
-rerecords: 0
+rerecords: 230
 
-
+Branch 8: setup to get an earlier bwj
 
 # 42-1
 rerecords: 184
@@ -2510,7 +2510,7 @@ rerecords: 0
 
 
 # 82-3
-rerecords: 1307
+rerecords: 1313
 
 Branch 9: attempt at clipping to the door with a rcj combo
 Branch 8: attmpt at clip with a cj
@@ -2963,10 +2963,4 @@ rerecords: 0
 
 
 
-# 99-5
-
-
-# 99-9
-
-
-# Total rerecords: 248938
+# Total rerecords: 249527
