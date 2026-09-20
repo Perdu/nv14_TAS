@@ -1,0 +1,17 @@
+[local]
+workers = 16
+simulate-enemies = false
+local-inputs = "direction"
+target-frame = 165
+range = ["0:165"]
+objective = "min-y"
+#target-point = "494,216"
+#x-window = ":494"
+#y-window = ":216"
+window = 6
+passes = 6
+restarts = 1000
+window-shape = "mixed"
+window-order = "random"
+jump-length-mutation = 4
+immutable-jumps = [47, 86, 116]

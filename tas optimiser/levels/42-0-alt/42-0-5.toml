@@ -1,0 +1,15 @@
+[local]
+workers = 16
+simulate-enemies = false
+local-inputs = "direction"
+target-frame = 151
+range = ["0:151"]
+objective = "min-distance"
+target-point = "466,288"
+x-window = "466:"
+y-window = ":288"
+window = 6
+passes = 6
+restarts = 1000
+window-shape = "mixed"
+window-order = "random"

@@ -1,0 +1,24 @@
+[local]
+workers = 16
+simulate-enemies = true
+target-frame = 154
+range = ["0:154"]
+objective = "earliest-arrival"
+arrival-start = 151
+target-region = "466:466.1,287.9:291" 
+secondary-objective = "min-y"
+#x-window =  ":470"
+#y-window = ":440"
+#target-region = "0:302,0:115"
+#secondary-objective = "min-x"
+#require-interaction = ["switch"]
+search = "population"
+top_results = 10
+iterations = 10000
+beam = 32
+rounds = 0
+stagnation_rounds = 20
+seed = "random"
+mutation_span = 31
+repair_steps = 64
+repair_lookback = 64

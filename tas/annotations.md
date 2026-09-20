@@ -102,7 +102,7 @@ rerecords: 441
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 3211
+rerecords: 3200
 
 Jumping to go down small paths does not save any frame, it's just for style
 
@@ -1372,7 +1372,7 @@ rerecords: 0
 
 
 # 42-0
-rerecords: 230
+rerecords: 323
 
 Branch 8: setup to get an earlier bwj
 
@@ -2510,7 +2510,7 @@ rerecords: 0
 
 
 # 82-3
-rerecords: 1313
+rerecords: 1307
 
 Branch 9: attempt at clipping to the door with a rcj combo
 Branch 8: attmpt at clip with a cj
@@ -2965,4 +2965,10 @@ rerecords: 0
 
 
 
-# Total rerecords: 250401
+# 99-5
+
+
+# 99-9
+
+
+# Total rerecords: 250477
