@@ -16,6 +16,26 @@ local function unquote(s)
 end
 
 
+local function splice_interaction_marker(require_interaction)
+   if not require_interaction then
+      return nil
+   end
+
+   -- ["testdoor:1"] -> S1
+   local testdoor = require_interaction:match('testdoor:(%d+)')
+   if testdoor then
+      return "S" .. testdoor
+   end
+
+   -- ["switch"] -> E
+   if require_interaction:match('"switch"') then
+      return "E"
+   end
+
+   return nil
+end
+
+
 local function splice_direction(objective)
    if objective == "min-x" or objective == "min-vx" then
       return "<"
@@ -112,7 +132,8 @@ function read_splice_files()
                   y1 = y1,
                   y2 = y2,
                   search = search_marker,
-                  direction = splice_direction(direction_objective)
+                  direction = splice_direction(direction_objective),
+                  interaction = splice_interaction_marker(config.require_interaction)
                }
             end
          end
@@ -186,7 +207,21 @@ function display_splices()
             0, 0, 12
          )
       end
+
+      -- Required interaction: S1, S2, ... or E.
+      if region.interaction then
+         local text_width = #region.interaction * 7
+
+         gui.text(
+            region.x2 - text_width - 2,
+            region.y1 + 1,
+            region.interaction,
+            color,
+            0, 0, 12
+         )
+      end
    end
+
 
    if clean_splices_region_markers then
       splice_regions = {}
