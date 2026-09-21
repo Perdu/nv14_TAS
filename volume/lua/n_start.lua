@@ -297,9 +297,15 @@ function onInput()
        local filename = level_path .. "/" .. tostring(f_ig) .. ".txt"
        local file = io.open(filename, "r")
 
-       x, y = get_player_position()
+       local x, y = get_player_position()
        local x_int = math.floor(x + 0.5)
        local y_int = math.floor(y + 0.5)
+
+       local x1 = x_int - splice_region_size
+       local x2 = x_int + splice_region_size
+       local y1 = y_int - splice_region_size
+       local y2 = y_int + splice_region_size
+
        local target_prev = prev_splice - splice_prev_range_prior_frames
        if target_prev < 0 then
           target_prev = 0
@@ -307,6 +313,7 @@ function onInput()
 
        if file == nil then
           file = io.open(filename, "w")
+
           file:write(string.format([[
 [local]
 search = "population"
@@ -320,20 +327,27 @@ objective = "earliest-arrival"
 ]],
 f_ig,
 target_prev, f_ig,
-x_int - splice_region_size, x_int + splice_region_size, y_int - splice_region_size, y_int + splice_region_size))
+x1, x2, y1, y2
+          ))
+
+          print("Created splice file ", f_ig)
        end
 
        file:close()
-       print("Created splice file ", f_ig)
 
        if f_ig > prev_splice then
           prev_splice = f_ig
        end
+
        if splice_regions[f_ig] == nil then
           splice_regions[f_ig] = {
-             x = x_int,
-             y = y_int,
-             size = splice_region_size
+             x1 = x1,
+             x2 = x2,
+             y1 = y1,
+             y2 = y2,
+             search = "P",
+             direction = nil,
+             interaction = nil
           }
        end
     end
