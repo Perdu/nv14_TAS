@@ -73,7 +73,7 @@ function read_splice_files()
          -- Use target_frame when present, otherwise use the filename.
          local splice_frame =
             tonumber(config.target_frame) or
-            tonumber(filename:match("([^/]+)%.txt$"))
+            tonumber(filename:match("([^/]+)%.%w+$"))
 
          print("Found splice file ", splice_frame)
 
