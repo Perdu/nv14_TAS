@@ -9,7 +9,7 @@ objective = "earliest-arrival"
 # Omit this line to prefer fewer changed frames when arrival times tie.
 # secondary_objective = "min-vy"
 secondary_objective = "min-x"
-target_region = "630:653,250:272"
+target_region = "610:636,240:265"
 # arrival_start = 200
 top_results = 5
 iterations = 10000
