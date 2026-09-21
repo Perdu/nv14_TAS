@@ -113,8 +113,8 @@ def test_toml_strategy_conflicts_are_not_silently_ignored(tmp_path):
 @pytest.mark.parametrize("options,message", [
     (["--resume"], "--resume requires --checkpoint"),
     (["--objective", "earliest-arrival"], "requires --target-region"),
-    (["--target-region", "0:1,0:1"], "require --objective earliest-arrival"),
-    (["--arrival-start", "1"], "require --objective earliest-arrival"),
+    (["--target-region", "0:1,0:1"], "requires --objective earliest-arrival"),
+    (["--arrival-start", "1"], "requires --objective earliest-arrival or earliest-interaction"),
     (["--iterations", "0"], "iterations must be at least 1"),
     (["--beam", "0"], "beam must be at least 1"),
     (["--top-results", "0"], "top-results must be at least 1"),

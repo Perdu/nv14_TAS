@@ -1,0 +1,23 @@
+# Activate the selected exit switch on the earliest qualifying tick.
+[local]
+search = "population"
+objective = "earliest-interaction"
+target_object = "switch:0"
+range = "200:500"
+target_frame = 500
+# Optional; defaults to the first editable frame.
+arrival_start = 200
+# Optional signed velocity tie-break, applied only at tied event frames.
+secondary_objective = "max-vx"
+# All windows and route requirements apply on the actual interaction tick.
+vx_window = "1:"
+# require_interaction = ["gold:7"]
+# avoid_interaction = ["trapdoor:any"]
+top_results = 5
+iterations = 10000
+beam = 32
+workers = 8
+rounds = 0
+stagnation_rounds = 20
+seed = 12345
+checkpoint = "local_interaction_checkpoint.json"

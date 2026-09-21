@@ -30,7 +30,7 @@ from nv14_auto import (
 )
 from nv14_auto_parallel import optimise_autonomous_campaign
 from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
-from nv14_endpoint import SECONDARY_OBJECTIVES
+from nv14_endpoint import EARLIEST_OBJECTIVES, SECONDARY_OBJECTIVES
 from nv14_engine import InputFrame, Level, SimulationState, parse_level_string
 from nv14_jump import (
     ImmutableJumpSpec,
@@ -69,6 +69,7 @@ from nv14_objectives import (
     reference_interaction_requirements,
     resolve_interaction_avoidance,
     resolve_interaction_requirement,
+    resolve_interaction_target,
     resolve_target_object,
     target_from_point,
 )
@@ -191,7 +192,7 @@ class LocalConfig:
         if self.search not in ("windows", "population"):
             raise ValueError("local search must be windows or population")
         if self.search == "windows" and (
-            self.objective == "earliest-arrival" or self.vx_window is not None
+            self.objective in EARLIEST_OBJECTIVES or self.vx_window is not None
             or self.vy_window is not None or self.target_region is not None
             or self.arrival_start is not None or self.top_results != 1
             or self.checkpoint_path is not None or self.resume
@@ -202,8 +203,8 @@ class LocalConfig:
             if self.secondary_objective is not None:
                 if self.secondary_objective not in SECONDARY_OBJECTIVES:
                     raise ValueError("secondary-objective must be one of: " + ", ".join(SECONDARY_OBJECTIVES))
-                if self.objective != "earliest-arrival":
-                    raise ValueError("--secondary-objective requires --objective earliest-arrival")
+                if self.objective not in EARLIEST_OBJECTIVES:
+                    raise ValueError("--secondary-objective requires --objective earliest-arrival or earliest-interaction")
             for name in ("iterations", "beam", "top_results", "mutation_span"):
                 if getattr(self, name) < 1:
                     raise ValueError(f"{name.replace('_', '-')} must be at least 1")
@@ -219,12 +220,16 @@ class LocalConfig:
             if self.objective == "earliest-arrival":
                 if self.target_region is None:
                     raise ValueError("--objective earliest-arrival requires --target-region")
+            elif self.target_region is not None:
+                raise ValueError("--target-region requires --objective earliest-arrival")
+            if self.objective in EARLIEST_OBJECTIVES:
                 if self.arrival_start is not None and self.target_frame is not None and self.arrival_start > self.target_frame:
                     raise ValueError("--arrival-start must not exceed --target-frame")
-            elif self.target_region is not None or self.arrival_start is not None:
-                raise ValueError("--target-region/--arrival-start require --objective earliest-arrival")
+            elif self.arrival_start is not None:
+                raise ValueError("--arrival-start requires --objective earliest-arrival or earliest-interaction")
         if self.objective not in (
             "earliest-arrival",
+            "earliest-interaction",
             "max-x",
             "min-x",
             "max-y",
@@ -233,9 +238,14 @@ class LocalConfig:
         ):
             raise ValueError(
                 "local objective must be one of: max-x, min-x, max-y, "
-                "min-y, min-distance, earliest-arrival (population only)"
+                "min-y, min-distance, earliest-arrival or earliest-interaction (population only)"
             )
-        if self.target_object is not None or self.target_point is not None:
+        if self.objective == "earliest-interaction":
+            if self.target_object is None:
+                raise ValueError("--objective earliest-interaction requires --target-object")
+            if self.target_point is not None:
+                raise ValueError("--target-point requires objective=min-distance")
+        elif self.target_object is not None or self.target_point is not None:
             if self.objective != "min-distance":
                 raise ValueError(
                     "target-object/target-point require objective=min-distance"
@@ -1475,8 +1485,8 @@ def _validate_local_strategy(args: argparse.Namespace, explicit: set[str]) -> No
         options = ", ".join("--" + name.replace("_", "-") for name in sorted(incompatible))
         needed = "windows" if args.search == "population" else "population"
         raise SystemExit(f"{options} require --search {needed}")
-    if args.objective == "earliest-arrival" and args.search != "population":
-        raise SystemExit("--objective earliest-arrival requires --search population")
+    if args.objective in EARLIEST_OBJECTIVES and args.search != "population":
+        raise SystemExit(f"--objective {args.objective} requires --search population")
 
 
 class _ConfigArgumentParser(argparse.ArgumentParser):
@@ -2036,7 +2046,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     command.add_argument(
         "--objective", modes=local_modes,
-        choices=("max-x", "min-x", "max-y", "min-y", "min-distance", "earliest-arrival"),
+        choices=("max-x", "min-x", "max-y", "min-y", "min-distance", "earliest-arrival", "earliest-interaction"),
         default="max-x",
     )
     command.add_argument(
@@ -2066,17 +2076,18 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--target-region", modes=local_modes, type=parse_target_region,
                          metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival population goal: inclusive target rectangle")
     command.add_argument("--arrival-start", modes=local_modes, type=parse_nonnegative_int,
-                         metavar="FRAME", help="first eligible arrival frame (default: first editable frame)")
+                         metavar="FRAME", help="first eligible arrival or interaction frame (default: first editable frame)")
     command.add_argument("--secondary-objective", modes=local_modes,
                          choices=SECONDARY_OBJECTIVES, default=None,
-                         help="earliest-arrival population only: maximise or minimise this value at tied arrival frames, before minimising changed inputs (default: none)")
+                         help="earliest-arrival/earliest-interaction population only: maximise or minimise this value at tied endpoint frames, before minimising changed inputs (default: none)")
     command.add_argument(
         "--target-object",
         modes=fixed_frame_modes,
         metavar="SELECTOR",
         help=(
-            "min-distance target selector: TYPE, TYPE:INDEX, "
-            "TYPE:INDEX.ANCHOR or TYPE:any; exits support .door/.switch"
+            "min-distance anchor or earliest-interaction object: TYPE, TYPE:INDEX, "
+            "TYPE:INDEX.ANCHOR or TYPE:any; exits support .door/.switch; "
+            "interaction targets support gold, switches, locked doors, trapdoors and exit completion"
         ),
     )
     command.add_argument(
@@ -2487,11 +2498,14 @@ def _run_local_population(
             config_path=config_path,
         )
         target = None
+        interaction_target = None
         if config.objective == "min-distance":
             if (config.target_object is None) == (config.target_point is None):
                 raise ValueError("--objective min-distance requires exactly one of --target-object or --target-point")
             target = (resolve_target_object(level, config.target_object)
                       if config.target_object is not None else target_from_point(config.target_point))
+        elif config.objective == "earliest-interaction":
+            interaction_target = resolve_interaction_target(level, config.target_object)
         required = tuple(resolve_interaction_requirement(level, selector) for selector in config.require_interaction)
         if config.require_reference_interactions:
             reference_state = simulate_through_frame(level, frames, target_frame)
@@ -2507,9 +2521,10 @@ def _run_local_population(
             vx_window=config.vx_window, vy_window=config.vy_window,
             target_region=config.target_region,
             arrival_start=(config.arrival_start if config.arrival_start is not None else ranges[0][0])
-            if config.objective == "earliest-arrival" else 0,
+            if config.objective in EARLIEST_OBJECTIVES else 0,
             required_interactions=required, avoided_interactions=avoided,
             secondary_objective=config.secondary_objective,
+            interaction_target=interaction_target,
         )
         search_config = PopulationConfig(
             iterations=config.iterations, beam=config.beam, rounds=config.rounds,
@@ -2547,6 +2562,11 @@ def _run_local_population(
             return ""
         return f"; secondary {config.secondary_objective}={evaluation.secondary_value:.15g}"
 
+    def interaction_summary(evaluation) -> str:
+        if not evaluation.interaction_events:
+            return ""
+        return "; interaction=" + ",".join(atom.label for atom in evaluation.interaction_events)
+
     def save_best(candidate) -> bool:
         nonlocal checkpoint_written
         replay_string, _packed, evaluation = verified_candidate(candidate)
@@ -2555,7 +2575,7 @@ def _run_local_population(
         print(f"[local:best] frame {evaluation.frame}; score {evaluation.score:.15g}; "
               f"position ({evaluation.x:.12g}, {evaluation.y:.12g}); "
               f"velocity ({evaluation.vx:.12g}, {evaluation.vy:.12g})"
-              f"{secondary_summary(evaluation)}", flush=True)
+              f"{secondary_summary(evaluation)}{interaction_summary(evaluation)}", flush=True)
         return True
 
     try:
@@ -2577,16 +2597,21 @@ def _run_local_population(
     print(f"baseline frame {baseline.frame}: score={baseline.score:.15g}; "
           f"position=({baseline.x:.15g}, {baseline.y:.15g}); "
           f"velocity=({baseline.vx:.15g}, {baseline.vy:.15g}); feasible={baseline.feasible}"
-          f"{secondary_summary(baseline)}")
+          f"{secondary_summary(baseline)}{interaction_summary(baseline)}")
     print(f"local population: objective={config.objective}; rounds={result.rounds}; "
           f"evaluations={result.evaluations}; feasible outputs={len(verified)}/{config.top_results}")
     if config.objective == "earliest-arrival":
         print(f"arrival region: {config.target_region}; eligible frames {goal.arrival_start}:{target_frame}; "
               "position, velocity and interaction constraints apply at the arrival frame")
-        if config.secondary_objective is not None:
-            print(f"arrival tie-break: {config.secondary_objective}, then fewer changed frames, then encoded inputs")
+    elif config.objective == "earliest-interaction":
+        print(f"interaction target: {interaction_target.selector}; eligible frames {goal.arrival_start}:{target_frame}; "
+              "position, velocity and route constraints apply on a fresh interaction tick")
+        print("resolved interaction targets: " + ", ".join(atom.label for atom in interaction_target.alternatives))
     else:
         print(f"endpoint verification through frame {target_frame}; later replay inputs retained")
+    if config.objective in EARLIEST_OBJECTIVES and config.secondary_objective is not None:
+        label = "interaction" if interaction_target is not None else "arrival"
+        print(f"{label} tie-break: {config.secondary_objective}, then fewer changed frames, then encoded inputs")
     if required:
         print("required interactions satisfied: " + format_interaction_requirements(required))
     if avoided:
@@ -2597,7 +2622,7 @@ def _run_local_population(
         print(f"  {rank}. frame={evaluation.frame}; score={evaluation.score:.15g}; "
               f"position=({evaluation.x:.15g}, {evaluation.y:.15g}); "
               f"velocity=({evaluation.vx:.15g}, {evaluation.vy:.15g}); changed frames={len(changed)}"
-              f"{secondary_summary(evaluation)}")
+              f"{secondary_summary(evaluation)}{interaction_summary(evaluation)}")
         print(f"wrote {main_path}")
         if packed_path is not None:
             print(f"wrote {packed_path}")

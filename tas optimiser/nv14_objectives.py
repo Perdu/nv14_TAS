@@ -117,6 +117,7 @@ INTERACTION_GOLD = "gold"
 INTERACTION_EXIT_SWITCH = "exit-switch"
 INTERACTION_LOCKED_DOOR = "locked-door"
 INTERACTION_TRAPDOOR = "trapdoor"
+INTERACTION_EXIT_DOOR = "exit-door"  # Endpoint target only; not a route requirement.
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,7 +147,38 @@ class InteractionAtom:
         if self.kind == INTERACTION_TRAPDOOR:
             _opened_locked_doors, triggered_trapdoors = door_control_masks(state)
             return bool(triggered_trapdoors & (1 << self.load_index))
+        if self.kind == INTERACTION_EXIT_DOOR:
+            return bool(state.static_state.level_complete
+                        and state.static_state.completed_exit_index == self.state_index)
         raise ValueError(f"unknown interaction kind {self.kind!r}")
+
+
+@dataclass(frozen=True, slots=True)
+class InteractionTarget:
+    """Objects whose fresh interaction can terminate an endpoint search.
+
+    Unlike a route requirement, an already latched bit is not a new event.
+    Public type indices, serialized load ids and static mask indices retain
+    their separate meanings. Exit completion is supported only as a target.
+    """
+
+    selector: str
+    alternatives: tuple[InteractionAtom, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "alternatives", tuple(self.alternatives))
+        if not self.alternatives:
+            raise ValueError("interaction target must contain at least one object")
+        for atom in self.alternatives:
+            if atom.kind not in (INTERACTION_GOLD, INTERACTION_EXIT_SWITCH,
+                                 INTERACTION_LOCKED_DOOR, INTERACTION_TRAPDOOR,
+                                 INTERACTION_EXIT_DOOR):
+                raise ValueError(f"unsupported interaction target kind {atom.kind!r}")
+            indices = [atom.type_index, atom.load_index]
+            if atom.kind in (INTERACTION_GOLD, INTERACTION_EXIT_SWITCH, INTERACTION_EXIT_DOOR):
+                indices.append(atom.state_index)
+            if any(type(index) is not int or index < 0 for index in indices):
+                raise ValueError(f"invalid interaction target index for {atom.label}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -553,6 +585,8 @@ def _interaction_atom(
         label = f"testdoor:{type_index}"
     elif kind == INTERACTION_TRAPDOOR:
         label = f"testdoor:{type_index}"
+    elif kind == INTERACTION_EXIT_DOOR:
+        label = f"exit:{type_index}.door"
     else:
         raise ValueError(f"unknown interaction kind {kind!r}")
     return InteractionAtom(
@@ -1060,6 +1094,40 @@ def resolve_interaction_avoidance(
     )
 
 
+def resolve_interaction_target(level: Level, selector: str) -> InteractionTarget:
+    """Reuse stable object selectors for exact, fresh endpoint interactions.
+
+    TestDoor alternatives include locked switches and trapdoor triggers;
+    transient proximity doors are excluded from :any and rejected explicitly.
+    Existing required/forbidden selector semantics remain unchanged.
+    """
+    type_name, instance, anchor = _parse_object_selector(selector, option_name="target-object")
+    try:
+        if type_name == "exit" and anchor != "switch":
+            if anchor not in (None, "center", "door"):
+                raise ValueError("exit interaction targets support .door or .switch")
+            resolved = _resolve_static_interaction_requirement(
+                level, selector=selector, instance=instance, obj_type=11,
+                canonical_name="exit", kind=INTERACTION_EXIT_DOOR, expected_params=4,
+            )
+        elif type_name in ("gold", "switch", "exitswitch", "exit"):
+            resolved = resolve_interaction_requirement(level, selector)
+        elif type_name in ("testdoor", "trapdoor"):
+            resolved = resolve_interaction_avoidance(level, selector)
+        else:
+            raise ValueError(
+                f"unsupported earliest-interaction target type {type_name!r}; "
+                "use gold, switch, exit (.door/.switch), or a locked testdoor/trapdoor"
+            )
+    except ValueError as exc:
+        message = str(exc).replace("require-interaction", "target-object").replace(
+            "avoid-interaction", "target-object").replace(
+            "required interaction", "interaction target").replace(
+            "avoided interaction", "interaction target")
+        raise ValueError(message) from exc
+    return InteractionTarget(selector.strip(), resolved.alternatives)
+
+
 def merge_interaction_requirements(
     *groups: Sequence[InteractionRequirement],
 ) -> tuple[InteractionRequirement, ...]:
@@ -1238,7 +1306,8 @@ def format_level_objects(level: Level) -> str:
                 f"switch=({params[2]:g}, {params[3]:g})  "
                 f"[interaction=switch:{type_index} or "
                 f"exit:{type_index}.switch; avoid-interaction=switch:{type_index} "
-                f"or exit:{type_index}.switch; load={spec.load_index}]"
+                f"or exit:{type_index}.switch; earliest-interaction="
+                f"exit:{type_index}.door or exit:{type_index}.switch; load={spec.load_index}]"
             )
         elif type_name == "testdoor" and len(params) == 9:
             if bool(params[6]):
@@ -1254,7 +1323,8 @@ def format_level_objects(level: Level) -> str:
                     f"{type_name}:{type_index}  trapdoor trigger="
                     f"({params[0]:g}, {params[1]:g})  "
                     f"[avoid-interaction=testdoor:{type_index} or "
-                    f"trapdoor:{type_index}; required interaction unsupported; "
+                    f"trapdoor:{type_index}; earliest-interaction=testdoor:{type_index}; "
+                    f"required interaction unsupported; "
                     f"load={spec.load_index}]"
                 )
             else:

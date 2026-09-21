@@ -158,18 +158,28 @@ suffix edits can affect later frames.
 
 For population search, select `search = "population"` in `[local]` and
 use `iterations`, `beam`, `rounds`, `stagnation_rounds`, `checkpoint` and
-`resume` there. Position/velocity windows, diverse outputs and earliest-arrival
+`resume` there. Position/velocity windows, diverse outputs and earliest-arrival/earliest-interaction
 examples are documented in [Local population search](LOCAL_POPULATION.md).
 Do not combine explicit window-only controls such as `window`, `passes` or
 `restarts` with that strategy. The ready-to-edit configurations are
-`examples/config/local-population.toml` and `examples/config/local-arrival.toml`.
+`examples/config/local-population.toml`, `examples/config/local-arrival.toml`
+and `examples/config/local-interaction.toml`.
+
+In v4.21, `objective = "earliest-interaction"` reuses `target_object`, for
+example `target_object = "switch:0"` or `"gold:any"`. The deadline remains
+`target_frame`; `arrival_start` defaults to the first editable frame. Selectors
+support gold, exit switches, locked-door switches, trapdoor triggers and exit
+completion (`exit:0.door`). A fresh event must occur in the eligible interval,
+with every constraint satisfied on that same tick. An interaction consumed
+earlier does not qualify later. This objective requires population search and
+rejects `target_point` and `target_region`.
 
 In v3.15, `[local].secondary_objective` (CLI `--secondary-objective`) optionally
-breaks earliest-arrival frame ties using `"max-x"`, `"min-x"`, `"max-y"`,
+breaks earliest-arrival frame ties (also earliest-interaction in v4.21) using `"max-x"`, `"min-x"`, `"max-y"`,
 `"min-y"`, `"max-vx"`, `"min-vx"`, `"max-vy"` or `"min-vy"`.
 It requires `search = "population"` and
-`objective = "earliest-arrival"`; omit it to retain the original edit-count
-tie-break. The signed value is measured at the first qualifying arrival frame.
+`objective = "earliest-arrival"` or `"earliest-interaction"`; omit it to retain the original edit-count
+tie-break. The signed value is measured at the first qualifying endpoint frame.
 Primary arrival time always takes precedence, and secondary gains at tied
 arrival time reset `stagnation_rounds`. CLI values override TOML as usual.
 `min-*` prefers smaller signed values and `max-*` prefers larger ones;

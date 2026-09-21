@@ -26,7 +26,7 @@ from typing import Any
 
 from nv14_checkpoint import OPTIMISER_VERSION, canonical_json_bytes, optimiser_build_hash
 from nv14_engine import InputFrame
-from nv14_endpoint import EndpointEvaluation, EndpointEvaluator, EndpointGoal
+from nv14_endpoint import EndpointEvaluation, EndpointEvaluator, EndpointGoal, pending_interaction_targets
 from nv14_jump import _automatic_jump_worker_count
 from nv14_local import _normalise_local_frame_ranges, _stop_local_executor_for_exception
 from nv14_replay import editable_frames
@@ -477,6 +477,8 @@ def _write_checkpoint(path: str | Path, identity: dict[str, object], seed: int,
                                "secondary_score": _json_value(c.evaluation.secondary_score),
                                "secondary_value": _json_value(c.evaluation.secondary_value),
                                "feasible": c.evaluation.feasible,
+                               "interaction_events": _json_value(c.evaluation.interaction_events),
+                               "completed_exit_index": c.evaluation.completed_exit_index,
                                "state_sha256": hashlib.sha256(c.evaluation.state_key).hexdigest(),
                                "frame": c.evaluation.frame} for c in population]}
     envelope = {"payload": payload, "sha256": hashlib.sha256(canonical_json_bytes(payload)).hexdigest()}
@@ -537,6 +539,8 @@ def _read_checkpoint(path: str | Path, identity: dict[str, object], context: _Se
                     or _json_value(candidate.evaluation.secondary_value) != item["secondary_value"]
                     or candidate.evaluation.feasible != item["feasible"]
                     or candidate.evaluation.frame != item["frame"]
+                    or _json_value(candidate.evaluation.interaction_events) != item["interaction_events"]
+                    or candidate.evaluation.completed_exit_index != item["completed_exit_index"]
                     or hashlib.sha256(candidate.evaluation.state_key).hexdigest() != item["state_sha256"]):
                 raise ValueError("population checkpoint candidate failed endpoint re-verification")
             population.append(candidate)
@@ -580,11 +584,11 @@ def optimise_local_population(
     baseline_candidate = context.candidate(source, ())
     baseline = baseline_candidate.evaluation
     if ranges[0][0] and not (
-        goal.objective == "earliest-arrival" and baseline.feasible
+        goal.is_earliest and baseline.feasible
         and baseline.frame < ranges[0][0]
     ):
         prefix_goal = replace(goal, target_frame=ranges[0][0] - 1, objective="max-x",
-                              target=None, target_region=None, arrival_start=0, secondary_objective=None,
+                              target=None, interaction_target=None, target_region=None, arrival_start=0, secondary_objective=None,
                               x_window=None, y_window=None, vx_window=None, vy_window=None,
                               required_interactions=())
         prefix = EndpointEvaluator(level, prefix_goal).evaluate(source)
@@ -593,6 +597,12 @@ def optimise_local_population(
         if prefix.violated_interactions:
             labels = ", ".join(sorted(item.selector for item in prefix.violated_interactions))
             raise ValueError(f"the immutable prefix already triggered forbidden interaction(s): {labels}")
+        if goal.interaction_target is not None and not pending_interaction_targets(
+            goal.interaction_target, prefix.interaction_state, prefix.completed_exit_index,
+        ):
+            reason = ("completed the level" if prefix.completed_exit_index >= 0 else
+                      "consumed all selected target interactions")
+            raise ValueError(f"the immutable prefix already {reason}; move the range start earlier")
     population = (baseline_candidate,)
     rounds = stagnant = 0
     evaluations = 1
@@ -632,6 +642,8 @@ def optimise_local_population(
             return "no feasible endpoint"
         evaluation = best.evaluation
         summary = f"best {evaluation.score:g} at frame {evaluation.frame}"
+        if evaluation.interaction_events:
+            summary += "; interaction=" + ",".join(atom.label for atom in evaluation.interaction_events)
         if goal.secondary_objective is not None:
             summary += f"; secondary {goal.secondary_objective}={evaluation.secondary_value:.15g}"
         return summary

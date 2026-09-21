@@ -1,8 +1,9 @@
-# Local population search (v3.21)
+# Local population search (v4.21)
 
 `local --search population` evolves a bounded part of an existing replay for
 manual TAS work. It can optimise position or distance at a fixed frame, or
-find the earliest qualifying arrival inside a rectangle. It does not require
+find the earliest qualifying arrival inside a rectangle or interaction with a
+selected object. It does not require
 the level to finish, or the unchanged later replay to remain successful.
 
 This is a heuristic search, not a proof of the global optimum. It uses the
@@ -71,13 +72,83 @@ search while it has no qualifying arrival. Earlier feasible arrival always
 outranks later feasible arrival.
 
 `target-region` is required only for `earliest-arrival`. It is independent of
-`--target-point`/`--target-object`, which belong to `min-distance`.
+`--target-point`/`--target-object` positional anchors used by `min-distance`.
+`earliest-interaction` also uses `--target-object` for an exact event target.
 
-### Secondary objective for tied arrivals
+## Earliest interaction (v4.21)
+
+```bash
+python3 optimize_replay.py local run.txt \
+  --search population --objective earliest-interaction \
+  --target-object switch:0 --range 200:500 --target-frame 500 \
+  --secondary-objective max-vx --vx-window 1: \
+  --iterations 10000 --workers 8 --rounds 0 --stagnation-rounds 20 \
+  --output interaction.txt
+```
+
+The target is the actual engine interaction, checked after each input tick.
+Frame 500 is an inclusive deadline. `--arrival-start` is the first eligible
+interaction frame and defaults to the first editable frame. A target object is
+required; `--target-region` and `--target-point` are not accepted for this goal.
+
+| Selector | Qualifying event |
+|---|---|
+| `gold:7` or `gold:7.center` | Collect that gold piece. |
+| `switch:0` or `exit:0.switch` | Activate that exit switch. |
+| `testdoor:2` (locked door) | Open it using its switch. |
+| `testdoor:2` (trapdoor), or `trapdoor:2` | Activate its permanent trapdoor trigger. |
+| `exit:0`, `exit:0.center` or `exit:0.door` | Complete through that specific exit. |
+
+`--list-objects` lists the stable per-type indices. `switch`/`exit-switch` are
+aliases for exit-switch targets; trapdoor indices are the existing TestDoor
+indices, including ordinary and locked doors. Bare types require one supported
+matching interaction. `:any` permits a fresh event from any supported match;
+`testdoor:any` includes locked switches and trapdoors and excludes transient
+proximity doors. The existing `--require-interaction testdoor:any` still means
+locked switches only. Unsupported objects such as launchpads, mines and
+ordinary proximity doors cannot be used as interaction targets.
+
+Every position/velocity window, required interaction and forbidden interaction
+is checked on the event tick, with the player alive at the end of that tick.
+Death or other interactions later in the retained replay do not invalidate it.
+Exit targets also use this Local survival rule. Full replay completion and a
+neutral completion sentinel are not required for other target types.
+
+A bit which was already set does not represent a fresh interaction. If gold is
+collected at frame 250 and the velocity window is first satisfied at frame 260,
+that pickup does not qualify. For `gold:any`, a later pickup of a different
+piece can still qualify. Simultaneous matching events are all reported in
+stable selector order. Required route interactions still count from the
+immutable prefix, while the selected target must produce a new event in the
+eligible interval. When the immutable prefix has consumed every target or
+completed the level, the search reports that the editable range must start
+earlier. An explicitly eligible event before the editable range can be returned
+as a fixed result, just as an earlier region arrival can.
+
+Reference requirements retain their existing deadline semantics: everything
+required from the source through `target_frame` must already be satisfied on
+the candidate's qualifying interaction tick. The input length and all held
+inputs outside the editable range union are preserved, including the suffix.
+An interaction may occur in a fixed gap or after the last editable input.
+
+The score is the negative interaction frame. Earlier qualifying interactions
+outrank later ones, followed by the optional secondary objective, changed-input
+count and deterministic encoded-input ordering. Infeasible candidates use
+distance to unconsumed targets and constraint errors to guide repair. A failed
+interaction's actual tick or an earlier viable approach is retained; later
+states cannot retroactively satisfy that event's constraints. Every output is
+packed and re-evaluated from frame zero, including its event identity. With
+`--python-resimulate`, the Python engine also verifies the target's transition
+on the selected tick.
+
+See `examples/config/local-interaction.toml` for the TOML equivalent.
+
+## Secondary objective for tied arrivals or interactions
 
 Use `--secondary-objective NAME`, or `secondary_objective = "NAME"` in
 `[local]`, to choose the preferred state when feasible runs arrive at the same
-frame. This option requires `--search population --objective earliest-arrival`.
+frame. This option requires population search with `earliest-arrival` or
+`earliest-interaction`.
 
 | Choice | Value preferred at the qualifying arrival frame |
 |---|---|
@@ -151,17 +222,17 @@ the file in the usual way. The input filename remains positional.
 |---|---|---|---|
 | `--search windows\|population` | `search` | `"windows"` | Choose Local's search strategy. |
 | `--range START:END[,START:END...]` | `range` | `0:target` | Strict mutable input intervals; TOML also accepts a string array. |
-| `--target-frame N` | `target_frame` | required | Fixed scoring frame, or earliest-arrival deadline. |
-| `--objective NAME` | `objective` | `"max-x"` | Existing five positional objectives, plus `earliest-arrival`. |
-| `--secondary-objective NAME` | `secondary_objective` | none | Earliest-arrival ties: `max-x`, `min-x`, `max-y`, `min-y`, `max-vx`, `min-vx`, `max-vy` or `min-vy`, measured at arrival before edit-count ties. |
+| `--target-frame N` | `target_frame` | required | Fixed scoring frame, or inclusive earliest-arrival/interaction deadline. |
+| `--objective NAME` | `objective` | `"max-x"` | Existing five positional objectives, plus `earliest-arrival` and `earliest-interaction`. |
+| `--secondary-objective NAME` | `secondary_objective` | none | Earliest-arrival/interaction ties: `max-x`, `min-x`, `max-y`, `min-y`, `max-vx`, `min-vx`, `max-vy` or `min-vy`, measured on the endpoint tick before edit-count ties. |
 | `--target-point X,Y` | `target_point` | none | Existing explicit min-distance target. |
-| `--target-object SELECTOR` | `target_object` | none | Existing min-distance object anchor. |
+| `--target-object SELECTOR` | `target_object` | none | Min-distance anchor, or required earliest-interaction object selector. |
 | `--x-window MIN:MAX` | `x_window` | none | Inclusive endpoint x constraint. |
 | `--y-window MIN:MAX` | `y_window` | none | Inclusive endpoint y constraint. |
 | `--vx-window MIN:MAX` | `vx_window` | none | Inclusive endpoint horizontal velocity constraint. |
 | `--vy-window MIN:MAX` | `vy_window` | none | Inclusive endpoint vertical velocity constraint. |
 | `--target-region XMIN:XMAX,YMIN:YMAX` | `target_region` | none | Finite inclusive arrival rectangle. |
-| `--arrival-start N` | `arrival_start` | first mutable frame | First frame eligible for arrival. |
+| `--arrival-start N` | `arrival_start` | first mutable frame | First frame eligible for arrival or a fresh interaction. |
 | `--iterations N` | `iterations` | `10000` | Proposal budget per worker per round, including repair proposals. |
 | `--beam N` | `beam` | `32` | Bound on retained candidates per search beam; must be at least top-results. |
 | `--rounds N` | `rounds` | `1` | Total round limit; zero removes the round limit. |
@@ -245,7 +316,9 @@ are fingerprinted so unrelated campaigns cannot be combined accidentally.
 The population checkpoint format is distinct from Auto campaign checkpoints.
 The secondary objective is part of the goal fingerprint, and its value is
 re-evaluated and checked for every restored candidate. Changing it requires a
-new campaign. Local population checkpoints from earlier builds, including v3.15, cannot resume in v3.21;
+new campaign. The resolved interaction target is also fingerprinted, and event
+identity and completed-exit state are re-verified when restoring candidates.
+Local population checkpoints from earlier builds, including v4.20, cannot resume in v4.21;
 use a replay from that campaign as the input to a new search.
 
 ## Implementation
@@ -256,7 +329,7 @@ workers and checkpoints. `nv14_cli.py` owns strategy-specific CLI/TOML validatio
 and TXT/LTM output. The native wrapper exposes persistent door-control masks
 without changing existing snapshot shapes or the physics engine.
 
-The native sources are unchanged from v3.13; an extension built from that
+The native sources are unchanged from v4.20; an extension built from that
 release can be reused. For a new installation or an older extension, run
 `python3 build_native.py`. The source archive includes generated C, so installing
 Cython is not required for that build.

@@ -5,7 +5,7 @@ N. Every score is higher-is-better; ``progress_key`` / ``rank_key`` are ordered
 lower-is-better, with feasible candidates always preceding infeasible candidates.
 The evaluator caches only an immutable input prefix. It never simulates Python
 physics, requires neither exit completion nor survival after the chosen endpoint,
-and scans earliest-arrival goals chronologically (arrival is not monotonic).
+and scans earliest goals chronologically (arrival is not monotonic).
 """
 from __future__ import annotations
 
@@ -21,14 +21,17 @@ from nv14_objectives import (
     InteractionAtom,
     InteractionAvoidance,
     InteractionRequirement,
+    InteractionTarget,
     TargetSelection,
     INTERACTION_GOLD,
     INTERACTION_EXIT_SWITCH,
     INTERACTION_LOCKED_DOOR,
     INTERACTION_TRAPDOOR,
+    INTERACTION_EXIT_DOOR,
 )
 
-_OBJECTIVES = frozenset(("max-x", "min-x", "max-y", "min-y", "min-distance", "earliest-arrival"))
+EARLIEST_OBJECTIVES = frozenset(("earliest-arrival", "earliest-interaction"))
+_OBJECTIVES = frozenset(("max-x", "min-x", "max-y", "min-y", "min-distance")) | EARLIEST_OBJECTIVES
 SECONDARY_OBJECTIVES = ("max-x", "max-y", "max-vx", "max-vy",
                         "min-x", "min-y", "min-vx", "min-vy")
 
@@ -56,6 +59,7 @@ class EndpointGoal:
     required_interactions: tuple[InteractionRequirement, ...] = ()
     avoided_interactions: tuple[InteractionAvoidance, ...] = ()
     secondary_objective: str | None = None
+    interaction_target: InteractionTarget | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.target_frame, bool) or not isinstance(self.target_frame, int) or self.target_frame < 0:
@@ -65,8 +69,8 @@ class EndpointGoal:
         if self.secondary_objective is not None:
             if self.secondary_objective not in SECONDARY_OBJECTIVES:
                 raise ValueError(f"unknown secondary objective {self.secondary_objective!r}")
-            if self.objective != "earliest-arrival":
-                raise ValueError("secondary_objective requires earliest-arrival")
+            if not self.is_earliest:
+                raise ValueError("secondary_objective requires earliest-arrival or earliest-interaction")
         if not isinstance(self.arrival_start, int) or isinstance(self.arrival_start, bool) or not 0 <= self.arrival_start <= self.target_frame:
             raise ValueError("arrival_start must be between 0 and target_frame inclusive")
         for name in ("x_window", "y_window", "vx_window", "vy_window"):
@@ -86,10 +90,21 @@ class EndpointGoal:
                     or region[0] > region[1] or region[2] > region[3]):
                 raise ValueError("target_region must contain four finite, ordered rectangle bounds")
             object.__setattr__(self, "target_region", region)
-        elif self.target_region is not None or self.arrival_start:
-            raise ValueError("target_region and arrival_start require earliest-arrival")
+        elif self.target_region is not None:
+            raise ValueError("target_region requires earliest-arrival")
+        if self.arrival_start and not self.is_earliest:
+            raise ValueError("arrival_start requires earliest-arrival or earliest-interaction")
+        if self.objective == "earliest-interaction":
+            if not isinstance(self.interaction_target, InteractionTarget):
+                raise ValueError("earliest-interaction requires a resolved interaction_target")
+        elif self.interaction_target is not None:
+            raise ValueError("interaction_target requires earliest-interaction")
         object.__setattr__(self, "required_interactions", tuple(self.required_interactions))
         object.__setattr__(self, "avoided_interactions", tuple(self.avoided_interactions))
+
+    @property
+    def is_earliest(self) -> bool:
+        return self.objective in EARLIEST_OBJECTIVES
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +131,9 @@ class EndpointEvaluation:
     player_snapshot: tuple = ()
     secondary_score: float = 0.0
     secondary_value: float = 0.0  # physical value; score negates it for min objectives
+    interaction_events: tuple[InteractionAtom, ...] = ()
+    completed_exit_index: int = -1
+    target_distance: float = 0.0
 
     @property
     def objective_key(self) -> tuple[float, float]:
@@ -138,7 +156,10 @@ def _distance_outside(value: float, window: AxisWindow | None) -> float:
     return max(window.minimum - value, value - window.maximum, 0.0)
 
 
-def _atom_satisfied(atom: InteractionAtom, masks: tuple[int, int, int, int]) -> bool:
+def _atom_satisfied(atom: InteractionAtom, masks: tuple[int, int, int, int],
+                    completed_exit_index: int = -1) -> bool:
+    if atom.kind == INTERACTION_EXIT_DOOR:
+        return atom.state_index is not None and atom.state_index == completed_exit_index
     if atom.kind == INTERACTION_GOLD:
         mask, index = masks[0], atom.state_index
     elif atom.kind == INTERACTION_EXIT_SWITCH:
@@ -154,12 +175,21 @@ def _atom_satisfied(atom: InteractionAtom, masks: tuple[int, int, int, int]) -> 
     return bool(mask & (1 << index))
 
 
+def pending_interaction_targets(target: InteractionTarget, masks: tuple[int, int, int, int],
+                                completed_exit_index: int) -> tuple[InteractionAtom, ...]:
+    """Objects which can still produce a fresh event; completion freezes physics."""
+    if completed_exit_index >= 0:
+        return ()
+    return tuple(atom for atom in target.alternatives
+                 if not _atom_satisfied(atom, masks, completed_exit_index))
+
+
 class EndpointEvaluator:
     """Evaluate candidates using the native engine and an immutable prefix.
 
     ``prefix_frame`` is the first editable input index, so inputs strictly before
-    it are cached. For earliest arrival the cache ends no later than arrival_start
-    to ensure that an arrival in the original prefix cannot be skipped. A changed
+    it are cached. For earliest goals the cache ends no later than arrival_start
+    to ensure that an event in the original prefix cannot be skipped. A changed
     cached prefix is rejected rather than silently producing an invalid result.
     """
 
@@ -178,7 +208,7 @@ class EndpointEvaluator:
                 source, simulate_enemies=bool(level.simulate_enemies))
         self.source_frames = tuple(source_frames)
         prefix_frame = min(prefix_frame, goal.target_frame + 1)
-        if goal.objective == "earliest-arrival":
+        if goal.is_earliest:
             prefix_frame = min(prefix_frame, goal.arrival_start)
         if prefix_frame > len(self.source_frames):
             raise ValueError("cached prefix lies outside source_frames")
@@ -191,6 +221,22 @@ class EndpointEvaluator:
         self._prefix_dead = bool(self._prefix.player_snapshot()["dead"])
         self._descriptors = {int(item["load_index"]): item for item in self.level.object_descriptors()}
         self._has_doors = any(item["object_type"] == 9 for item in self._descriptors.values())
+        self._target_positions: dict[InteractionAtom, tuple[float, float]] = {}
+        if goal.interaction_target is not None:
+            for atom in goal.interaction_target.alternatives:
+                params = self._descriptors[atom.load_index]["parameters"]
+                offset = 2 if atom.kind == INTERACTION_EXIT_SWITCH else 0
+                position = tuple(params[offset:offset + 2])
+                if len(position) != 2 or not all(math.isfinite(value) for value in position):
+                    raise ValueError(f"interaction target {atom.label} needs finite coordinates")
+                self._target_positions[atom] = position
+
+    def _interaction_snapshot(self, state: Any) -> tuple[tuple[int, int, int, int], int]:
+        static = state.static_state()
+        locked, traps = state.door_control_masks() if self._has_doors else (0, 0)
+        masks = (int(static["collected_gold_mask"]), int(static["open_exit_mask"]), locked, traps)
+        completed = int(static["completed_exit_index"]) if static["level_complete"] else -1
+        return masks, completed
 
     def _missing_distance(self, missing: frozenset[InteractionRequirement], x: float, y: float) -> float:
         """Geometric hints only; feasibility always checks permanent exact bits."""
@@ -210,11 +256,11 @@ class EndpointEvaluator:
         return total
 
     def _evaluate_state(self, state: Any, *, arrival_eligible: bool = True,
-                        capture_state_key: bool = True) -> EndpointEvaluation:
+                        capture_state_key: bool = True,
+                        previous_interactions: tuple[tuple[int, int, int, int], int] | None = None,
+                        ) -> EndpointEvaluation:
         player = state.player_snapshot()
-        static = state.static_state()
-        locked, traps = state.door_control_masks() if self._has_doors else (0, 0)
-        masks = (int(static["collected_gold_mask"]), int(static["open_exit_mask"]), locked, traps)
+        masks, completed = self._interaction_snapshot(state)
         x, y = player["pos"]
         ox, oy = player["oldpos"]
         vx, vy = x - ox, y - oy
@@ -225,6 +271,19 @@ class EndpointEvaluator:
         violated = frozenset(item for item in self.goal.avoided_interactions
                              if any(_atom_satisfied(atom, masks) for atom in item.alternatives))
         goal = self.goal
+        events: tuple[InteractionAtom, ...] = ()
+        pending: tuple[InteractionAtom, ...] = ()
+        target_distance = 0.0
+        if goal.interaction_target is not None:
+            if previous_interactions is not None:
+                events = tuple(atom for atom in goal.interaction_target.alternatives
+                               if _atom_satisfied(atom, masks, completed)
+                               and not _atom_satisfied(atom, *previous_interactions))
+            pending = pending_interaction_targets(goal.interaction_target, masks, completed)
+            if not events:
+                target_distance = min((math.hypot(x - self._target_positions[atom][0],
+                                                 y - self._target_positions[atom][1])
+                                       for atom in pending), default=math.inf) if finite else math.inf
         if finite:
             error = sum(_distance_outside(value, window) ** 2 for value, window in (
                 (x, goal.x_window), (y, goal.y_window), (vx, goal.vx_window), (vy, goal.vy_window)))
@@ -248,9 +307,10 @@ class EndpointEvaluator:
             error, region_distance, score = math.inf, math.inf, -math.inf
         dead = bool(player["dead"])
         at_endpoint = ((arrival_eligible and goal.arrival_start <= frame <= goal.target_frame)
-                       if goal.objective == "earliest-arrival" else frame == goal.target_frame)
+                       if goal.is_earliest else frame == goal.target_frame)
         feasible = bool(at_endpoint and finite and not dead and not missing and not violated
-                        and error == 0.0 and region_distance == 0.0)
+                        and error == 0.0 and region_distance == 0.0
+                        and (goal.interaction_target is None or events))
         secondary_value = secondary_score = 0.0
         if feasible:
             if goal.secondary_objective is not None:
@@ -264,19 +324,28 @@ class EndpointEvaluator:
             # gradients toward satisfying the remaining exact goals. Earlier
             # surviving near-misses remain useful even if the later run dies.
             progress_key = (1, len(violated), len(missing), int(dead),
-                            error + region_distance**2 + missing_distance**2,
-                            max(goal.arrival_start-frame, 0) if goal.objective == "earliest-arrival"
+                            error + region_distance**2 + missing_distance**2 + target_distance**2,
+                            max(goal.arrival_start-frame, 0) if goal.is_earliest
                             else max(goal.target_frame-frame, 0), -score)
+            if goal.interaction_target is not None:
+                # States after the final possible interaction cannot repair the
+                # event's failed constraints. Keep its actual tick or an earlier
+                # viable approach, even if requirements become true later.
+                exhausted = not events and not pending
+                progress_key = (progress_key[0], int(exhausted), *progress_key[1:])
         contact = (player["state"], player["in_air"], player["near_wall"],
                    player["floor_n"], player["wall_n"], player["previous_jump_held"])
         quantised = tuple(math.floor(value / step) if math.isfinite(value) else None
                           for value, step in ((x, 4.0), (y, 4.0), (vx, 0.5), (vy, 0.5)))
         niche = (*quantised, *contact, masks)
+        if goal.interaction_target is not None:
+            niche = (*niche, events, completed)
         return EndpointEvaluation(feasible, score, frame, x, y, vx, vy, missing, violated,
                                   dead, progress_key,
                                   state.state_key() if capture_state_key else b"", niche, masks, contact,
                                   error, region_distance, frame, dead,
-                                  tuple(player.items()), secondary_score, secondary_value)
+                                  tuple(player.items()), secondary_score, secondary_value,
+                                  events, completed, target_distance)
 
     def evaluate(self, frames: Sequence[InputFrame]) -> EndpointEvaluation:
         frames = tuple(frames)
@@ -285,7 +354,7 @@ class EndpointEvaluator:
         if frames[:self.prefix_frame] != self.source_frames[:self.prefix_frame]:
             raise ValueError("candidate changed the immutable cached prefix")
         state = self._prefix.clone()
-        if self.goal.objective != "earliest-arrival":
+        if not self.goal.is_earliest:
             if not self._prefix_dead:
                 state.step_many(frames[self.prefix_frame:self.goal.target_frame+1],
                                 stop_on_dead=True, stop_on_complete=False)
@@ -294,13 +363,18 @@ class EndpointEvaluator:
         # can become true, false and true again. Binary search is unsound here.
         best = None
         dead = self._prefix_dead
+        previous = self._interaction_snapshot(state) if self.goal.interaction_target is not None else None
         for frame in range(int(state.frame), self.goal.target_frame + 1):
             if dead:
                 break
             dead = bool(state.step(frames[frame])["dead"])
             if frame < self.goal.arrival_start:
+                if previous is not None:
+                    previous = self._interaction_snapshot(state)
                 continue
-            candidate = self._evaluate_state(state, capture_state_key=False)
+            candidate = self._evaluate_state(state, capture_state_key=False, previous_interactions=previous)
+            if previous is not None:
+                previous = (candidate.interaction_state, candidate.completed_exit_index)
             if candidate.feasible:
                 return replace(candidate, state_key=state.state_key())
             if best is None or candidate.progress_key < best.progress_key:
@@ -322,7 +396,7 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
     """
     result = EndpointEvaluator(level, goal).evaluate(frames)
     if expected is not None:
-        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key")
+        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index")
         mismatch = [name for name in comparable if getattr(result, name) != getattr(expected, name)]
         if mismatch:
             raise ValueError("endpoint verification mismatch: " + ", ".join(mismatch))
@@ -333,13 +407,26 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
             reference_level = parse_level_string(level.level_string, simulate_enemies=level.simulate_enemies)
         else:
             reference_level = parse_level_string(level.source_level_string, simulate_enemies=level.simulate_enemies)
-        state = simulate_through_frame(reference_level, frames, result.frame)
+        previous_atoms: set[InteractionAtom] = set()
+        if goal.interaction_target is not None and result.frame >= 0:
+            state = (simulate_through_frame(reference_level, frames, result.frame - 1)
+                     if result.frame else reference_level.initial_state())
+            previous_atoms = {atom for atom in goal.interaction_target.alternatives if atom.is_satisfied(state)}
+            state.step(frames[result.frame], reference_level.tiles)
+        else:
+            state = simulate_through_frame(reference_level, frames, result.frame)
         player = state.player
         locked, traps = door_control_masks(state)
         actual = (player.pos.x, player.pos.y, player.pos.x-player.oldpos.x,
                   player.pos.y-player.oldpos.y, bool(player.dead),
-                  (state.static_state.collected_gold_mask, state.static_state.open_exit_mask, locked, traps))
-        wanted = (result.x, result.y, result.vx, result.vy, result.dead, result.interaction_state)
+                  (state.static_state.collected_gold_mask, state.static_state.open_exit_mask, locked, traps),
+                  state.static_state.completed_exit_index if state.static_state.level_complete else -1)
+        wanted = (result.x, result.y, result.vx, result.vy, result.dead, result.interaction_state, result.completed_exit_index)
         if actual != wanted:
             raise ValueError("endpoint verification disagrees with Python reference physics")
+        if goal.interaction_target is not None and result.frame >= goal.arrival_start:
+            events = tuple(atom for atom in goal.interaction_target.alternatives
+                           if atom not in previous_atoms and atom.is_satisfied(state))
+            if events != result.interaction_events:
+                raise ValueError("endpoint interaction event disagrees with Python reference physics")
     return result
