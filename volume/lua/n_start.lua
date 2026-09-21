@@ -335,6 +335,7 @@ x_int - splice_region_size, x_int + splice_region_size, y_int - splice_region_si
        end
 
        file:close()
+       print("Created splice file ", f_ig)
 
        if f_ig > prev_splice then
           prev_splice = f_ig
