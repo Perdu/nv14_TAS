@@ -2563,7 +2563,7 @@ rerecords: 152
 
 
 # 84-3
-rerecords: 874
+rerecords: 1050
 
 Branch 8: going back up on the left section using bb and wall
 Branch 7: going back up on the left section using triple bbj
@@ -2965,10 +2965,4 @@ rerecords: 0
 
 
 
-# 99-5
-
-
-# 99-9
-
-
-# Total rerecords: 250778
+# Total rerecords: 250954
