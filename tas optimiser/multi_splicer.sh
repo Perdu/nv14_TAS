@@ -12,7 +12,7 @@ if [ $# -lt 1 ]; then
     usage 1
 fi
 
-if [ ! -d levels/$1 ] ; then
+if [ ! -d ../splices/$1 ] ; then
     echo "No known splice files for level $1"
     exit 1
 fi
@@ -28,4 +28,4 @@ while IFS= read -r i; do
     python3 optimize_replay.py local "$ORIG" --config "$i" --output wip/$1_$splice.ltm --replay-output wip/$1_$splice.txt --stagnation-rounds 1 --workers 15
     ORIG=wip/$1_$splice.ltm
     cp $ORIG wip/optim.ltm
-done < <(printf '%s\n' levels/$1/*.txt | sort -V)
+done < <(printf '%s\n' ../splices/$1/*.txt | sort -V)
