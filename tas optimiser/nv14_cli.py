@@ -598,6 +598,29 @@ def parse_frame_range(
     return ranges[0]
 
 
+def parse_auto_frame_range(
+    spec: str | None, *, target_frame: int
+) -> tuple[int, int | None]:
+    """Keep an omitted Auto endpoint relative to each verified search body."""
+    if spec is None:
+        return 0, None
+    texts = _frame_range_texts(spec)
+    if len(texts) != 1:
+        raise ValueError(
+            "multiple optimisation ranges are only supported by local mode"
+        )
+    start_text, separator, end_text = texts[0].partition(":")
+    if separator and not end_text.strip():
+        start = int(start_text) if start_text.strip() else 0
+        if start < 0:
+            raise ValueError("range must satisfy 0 <= start <= end")
+        # Auto validates this start after trimming the replay and resolving its
+        # highscore workspace. Freezing the end at the input length would make
+        # a shorter parent or later round fail the verified-body bounds check.
+        return start, None
+    return parse_frame_range(texts[0], target_frame=target_frame)
+
+
 def _paths_alias(first: Path, second: Path) -> bool:
     """Return whether two input/output paths resolve to the same file."""
     if first.resolve(strict=False) == second.resolve(strict=False):
@@ -1994,7 +2017,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="START:END",
         help=(
             "inclusive mutation seam/start range; suffixes may alter later "
-            "frames (default: complete verified replay)"
+            "frames; omit END to follow each current verified replay/search "
+            "workspace (default: complete verified replay)"
         ),
     )
     command.add_argument(
@@ -2835,15 +2859,11 @@ def main() -> None:
         if effective_auto_extra_ticks < 0:
             raise SystemExit("--auto-max-extra-ticks must be non-negative")
         try:
-            auto_range_start, auto_range_end = (
-                parse_frame_range(
-                    args.frame_range,
-                    target_frame=(
-                        len(replay.frames) - 1 + effective_auto_extra_ticks
-                    ),
-                )
-                if args.frame_range is not None
-                else (0, None)
+            auto_range_start, auto_range_end = parse_auto_frame_range(
+                args.frame_range,
+                target_frame=(
+                    len(replay.frames) - 1 + effective_auto_extra_ticks
+                ),
             )
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc

@@ -232,6 +232,27 @@ def _released_v308_identity_without_splice_limit() -> dict[str, object]:
     return identity
 
 
+def test_v420_checkpoint_rejects_ambiguous_previous_numeric_range_end() -> None:
+    """Old checkpoints cannot distinguish an explicit end from a frozen one."""
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(2)
+    current_config = current["configuration"]["auto_config"]
+    current_config.update(range_start=100, range_end=None)
+    current["configuration_sha256"] = sha256_json(current["configuration"])
+    stored = _current_identity_with_splice_limit(2)
+    stored_config = stored["configuration"]["auto_config"]
+    stored_config.update(range_start=100, range_end=133)
+    stored["configuration_sha256"] = sha256_json(stored["configuration"])
+    stored["optimiser_version"] = "4.19"
+    stored["optimiser_build_sha256"] = (
+        "b59df672d93ddd58dd43bbe7820c5e307f6e1c3a52e8a3a853a7aef1f087bfb8"
+    )
+
+    with pytest.raises(AutoCheckpointError, match="Auto configuration"):
+        _validate_checkpoint_identity(stored, current)
+
+
 def test_v310_checkpoint_accepts_released_v308_with_old_default_plan_limit() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
 
@@ -434,6 +455,7 @@ def test_v313_checkpoint_rejects_modified_v312() -> None:
 
 
 @pytest.mark.parametrize("version,build", [
+    ("4.19", "b59df672d93ddd58dd43bbe7820c5e307f6e1c3a52e8a3a853a7aef1f087bfb8"),
     ("4.18", "6fabfc548fd47897f1b50279fc950c5ca7c44417184b586ede495511e0904704"),
     ("4.17", "49481841b51d01c01e7b9bb7dc6d77b7c8340b581ed82ae9a04484575d0e9dc1"),
     ("4.16.1", "84b83da1c8dfc7af283bcb0df7711488c8c4ccd74357fc40ff261db957cadd75"),
@@ -472,6 +494,7 @@ def test_checkpoint_accepts_exact_v313_and_v314(auxiliary_limit: int, version: s
 
 
 @pytest.mark.parametrize("version,build", [
+    ("4.19", "b59df672d93ddd58dd43bbe7820c5e307f6e1c3a52e8a3a853a7aef1f087bfb8"),
     ("4.18", "6fabfc548fd47897f1b50279fc950c5ca7c44417184b586ede495511e0904704"),
     ("4.17", "49481841b51d01c01e7b9bb7dc6d77b7c8340b581ed82ae9a04484575d0e9dc1"),
     ("4.16.1", "84b83da1c8dfc7af283bcb0df7711488c8c4ccd74357fc40ff261db957cadd75"),

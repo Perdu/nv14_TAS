@@ -144,6 +144,18 @@ fixed_jump_frames = [242, 273]
 python_resimulate = false
 ```
 
+Auto accepts one inclusive mutation seam/start range. For example,
+`range = "100:"` in `[auto]` (CLI `--range "100:"`) starts at frame 100
+and follows the end of each current verified replay or highscore search
+workspace. An omitted end stays open through initial trimming, different
+starting parents, later rounds and checkpoint resume; surrounding whitespace
+is accepted. `"0:"` and `":"` cover the whole current workspace. This is
+fixed in v4.20; earlier CLI versions froze an omitted end at the original
+input length. Numeric endpoints such as `"100:200"` remain fixed, and the
+start and any explicit end must fit the verified workspace. The completion
+sentinel is not editable. As before, the range bounds mutation seams/starts;
+suffix edits can affect later frames.
+
 For population search, select `search = "population"` in `[local]` and
 use `iterations`, `beam`, `rounds`, `stagnation_rounds`, `checkpoint` and
 `resume` there. Position/velocity windows, diverse outputs and earliest-arrival
