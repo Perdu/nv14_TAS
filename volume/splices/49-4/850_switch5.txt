@@ -1,0 +1,8 @@
+[local]
+search = "population"
+target_frame = 850
+range = "500:850"
+simulate-enemies = false
+secondary_objective = "max-x"
+objective = "earliest-interaction"
+target-object = "testdoor:5"
