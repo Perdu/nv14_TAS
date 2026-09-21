@@ -6,4 +6,4 @@ target_region = "322:362,206:246"
 simulate-enemies = false
 objective = "earliest-arrival"
 # secondary_objective = "max-vx"
-# require-interaction = ["testdoor:0"]
+require-interaction = ["switch"]
