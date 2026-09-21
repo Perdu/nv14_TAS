@@ -1,0 +1,12 @@
+[local]
+workers = 16
+simulate-enemies = false
+local-inputs = "all"
+target-frame = 67
+range = ["0:67"]
+objective = "min-y"
+window = 6
+passes = 6
+restarts = 1000
+window-shape = "mixed"
+window-order = "random"
