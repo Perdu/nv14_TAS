@@ -1994,9 +1994,9 @@ rerecords: 133
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
 
 # 63-4
-rerecords: 0
+rerecords: 267
 
-
+It would possibly be better to get a jump on the 4th instead of the 5th bb (or maybe both if possible). Unsure positioning makes it possible.
 
 # 64-0
 rerecords: 153
@@ -2371,7 +2371,7 @@ rerecords: 0
 
 
 # 77-3
-rerecords: 547
+rerecords: 548
 
 Branch 2: bb bwj on first bb
 Branch 3: lower bb bwj on second bb
@@ -2965,4 +2965,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 251526
+# Total rerecords: 251794
