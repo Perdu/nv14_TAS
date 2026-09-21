@@ -1,0 +1,8 @@
+[local]
+search = "population"
+target_frame = 2142
+range = "1878:2142"
+target_region = "29:69,42:82"
+simulate-enemies = false
+# secondary_objective = "max-vx"
+# require-interaction = ["testdoor:0"]

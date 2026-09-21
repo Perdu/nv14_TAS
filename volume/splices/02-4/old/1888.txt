@@ -1,0 +1,8 @@
+[local]
+search = "population"
+target_frame = 1888
+range = "1739:1888"
+target_region = "329:369,183:223"
+simulate-enemies = false
+secondary_objective = "min-y"
+require-interaction = ["testdoor:6"]
