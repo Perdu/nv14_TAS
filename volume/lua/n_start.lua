@@ -208,7 +208,7 @@ function onPaint()
 
    display_drones_number()
 
-   for _, region in pairs(splice_regions) do
+   for splice_frame, region in pairs(splice_regions) do
       gui.rectangle(
          region.x - region.size,
          region.y - region.size,
@@ -217,6 +217,7 @@ function onPaint()
          1,
          rgb(255, 0, 0)
       )
+      gui.text(region.x - region.size + 1, region.y - region.size, tostring(splice_frame), rgb(255, 0, 0), 0, 0, 12)
    end
    if clean_splices_region_markers then
       splice_regions = {}
