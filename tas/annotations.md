@@ -102,7 +102,7 @@ rerecords: 441
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 3200
+rerecords: 3262
 
 Jumping to go down small paths does not save any frame, it's just for style
 
@@ -2371,16 +2371,16 @@ rerecords: 0
 
 
 # 77-3
-rerecords: 242
+rerecords: 547
 
 Branch 2: bb bwj on first bb
-Branch 3: bb bwj on second bb
+Branch 3: lower bb bwj on second bb
 Branch 4: bb bwj on third bb
-Branch 5: another bb bwj on the first bb
+Branch 5: lower bb bwj on first bb
 Branch 6: thwump bwj
-Branch 7: thwump bwj on first lower thwump
-Branch 8: bb bwj on first bb
-Branch 9: better bb bwj on first bb
+Branch 7: thwump bwj on first lower thwump with stupid end 1
+Branch 8: thwump bwj on first lower thwump with stupid end 2
+Branch 9: Triple jump on the right the bbbwj
 
 # 77-4
 rerecords: 177
@@ -2965,10 +2965,4 @@ rerecords: 0
 
 
 
-# 99-5
-
-
-# 99-9
-
-
-# Total rerecords: 251159
+# Total rerecords: 251526
