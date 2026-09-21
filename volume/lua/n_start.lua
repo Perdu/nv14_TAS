@@ -7,6 +7,7 @@ dofile("/home/lua/lib/keysyms.lua")
 dofile("/home/lua/lib/ghost.lua")
 dofile("/home/lua/lib/speed.lua")
 dofile("/home/lua/lib/drones.lua")
+dofile("/home/lua/lib/splices.lua")
 grounded_levels = dofile("/home/lua/data/grounded_levels.lua")
 levels = dofile("/home/lua/data/levels.lua")
 
@@ -208,20 +209,8 @@ function onPaint()
 
    display_drones_number()
 
-   for splice_frame, region in pairs(splice_regions) do
-      gui.rectangle(
-         region.x - region.size,
-         region.y - region.size,
-         region.size * 2,
-         region.size * 2,
-         1,
-         rgb(255, 0, 0)
-      )
-      gui.text(region.x - region.size + 1, region.y - region.size, tostring(splice_frame), rgb(255, 0, 0), 0, 0, 12)
-   end
-   if clean_splices_region_markers then
-      splice_regions = {}
-   end
+   display_splices()
+
 end
 
 
@@ -384,6 +373,11 @@ function onFrame()
 
       runtime.saveState(10)
       save_best_position = false
+   end
+
+   local f = movie.currentFrame()
+   if f == space_frame + 1 then
+      read_splice_files()
    end
 
    dofile("/home/lua/lib/n_position_ramsearch.lua")
