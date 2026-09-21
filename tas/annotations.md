@@ -1913,7 +1913,7 @@ rerecords: 0
 
 
 # 60-4
-rerecords: 0
+rerecords: 301
 
 
 
@@ -2971,4 +2971,4 @@ rerecords: 0
 # 99-9
 
 
-# Total rerecords: 250477
+# Total rerecords: 250778
