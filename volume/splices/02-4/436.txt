@@ -1,7 +1,7 @@
 [local]
 search = "population"
 target_frame = 436
-range = "2098:436"
+range = "329:436"
 target_region = "498:538,356:396"
 simulate-enemies = false
 objective = "earliest-arrival"
