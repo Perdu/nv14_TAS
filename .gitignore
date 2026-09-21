@@ -18,3 +18,4 @@ tas optimiser/local_arrival_checkpoint.json
 tas optimiser/leaderboard_ghost_cache/
 *.pyd
 *.so
+chatgpt_package.zip
