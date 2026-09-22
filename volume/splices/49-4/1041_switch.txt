@@ -1,0 +1,9 @@
+[local]
+search = "population"
+target_frame = 1041
+range = "887:1041"
+simulate-enemies = true
+objective = "earliest-interaction"
+target-object = "switch"
+secondary_objective = "max-x"
+require-interaction = ["testdoor:6"]

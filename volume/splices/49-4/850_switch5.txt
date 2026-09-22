@@ -3,6 +3,6 @@ search = "population"
 target_frame = 850
 range = "500:850"
 simulate-enemies = false
-secondary_objective = "max-x"
+secondary_objective = "min-y"
 objective = "earliest-interaction"
 target-object = "testdoor:5"
