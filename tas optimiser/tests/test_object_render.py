@@ -94,7 +94,9 @@ def test_laser_prefire_hairline_remains_one_device_pixel(renderer, scale):
     firing = replace(visual, beam=replace(visual.beam, color="#882222", width=3.))
     image = renderer.render(state, object_visuals=[firing])
     column = [image.getpixel((110 * scale, y)) for y in range(96 * scale, 105 * scale)]
-    assert column.count((136, 34, 34)) == 3 * scale
+    # Odd device widths centred on integer coordinates straddle two edge
+    # rows. Integrated coverage, including those half-covered rows, is 3*s.
+    assert sum((202 - rgb[0]) / (202 - 136) for rgb in column) == pytest.approx(3 * scale)
 
 
 def test_blast_applies_dynamic_scale_once_and_uses_endpoint_registration(renderer):

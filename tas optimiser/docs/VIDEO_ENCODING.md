@@ -10,6 +10,12 @@ The CLI, both video APIs and session methods default to `scale=2`,
 `render_workers=8` and `render_quality="fast"`. Explicit arguments and TOML
 settings continue to override these values. Output defaults to 1584x1200.
 
+v4.26 adds four-by-four coverage antialiasing to laser drone prefire and
+firing beams in both `fast` and `exact` modes. Diagonal beams retain fractional
+endpoints and widths; axis-aligned prefire hairlines remain one device pixel.
+Clipped beam masks are cached per renderer and can be pasted into partial
+redraws without seams. This also applies to comparison/leaderboard encodes.
+
 To download leaderboard ghosts and compare them with a TAS, use the bundled
 [`tools/encode_leaderboard_ghosts.py`](LEADERBOARD_GHOSTS.md) helper. It supports
 speedruns and highscores, player-name labels, exclusions, download caching and

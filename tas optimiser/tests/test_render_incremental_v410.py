@@ -177,7 +177,10 @@ def test_wide_laser_dirty_patch_regression_matches_full_viewport(scale):
     for x, y in ((86., 30.), (90., 34.)):
         state = scene(x, y, [beam])
         assert incremental.render(state).tobytes() == full.render(state).tobytes()
-    assert incremental.stats["full_frames"] == 2
+    # Coverage masks are translation invariant when pasted into dirty patches;
+    # lasers no longer need the old Pillow wide-line full-viewport fallback.
+    assert incremental.stats["full_frames"] == 1
+    assert incremental.stats["dirty_frames"] == 1
 
 
 def test_randomized_primitive_redraws_match_original_viewport():

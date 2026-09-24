@@ -252,6 +252,7 @@ class SceneRenderer:
         self._gold_sources = _ImageCache(8 * 1024 * 1024, 1024)
         self._player_transforms = _ImageCache(8 * 1024 * 1024)
         self._player_masks = _ImageCache(8 * 1024 * 1024, 8192)
+        self._beam_masks = _ImageCache(8 * 1024 * 1024, 128)
         self._label_images = _ImageCache(2 * 1024 * 1024, 512)
         self._label_fonts = {}
         self._vectors = None
@@ -588,6 +589,21 @@ class SceneRenderer:
         else:
             self._ImageDraw.Draw(canvas).line(points, fill=fill, width=width)
 
+    def _beam(self, canvas, start, end, fill, width):
+        """Coverage-render a laser without snapping its endpoints or width."""
+        from nv14_vector import rasterize_beam
+        points = tuple((x * self.scale, y * self.scale) for x, y in (start, end))
+        width = max(1., width * self.scale)
+        if not all(math.isfinite(v) for p in points for v in p):
+            return
+        key = (points, width)
+        cached = self._beam_masks.get(key)
+        if cached is None:
+            cached = rasterize_beam(*points, width, self.size)
+            self._beam_masks.put(key, cached)
+        mask, left, top = cached
+        canvas.paste(fill, (left, top, left + mask.width, top + mask.height), mask)
+
     def _circle(self, canvas, x, y, radius, fill=None, outline=None, width=1):
         s = self.scale
         box = tuple(round(v * s) for v in (x-radius, y-radius, x+radius, y+radius))
@@ -615,7 +631,7 @@ class SceneRenderer:
                              rotation=object_visual.eye_rotation)
             beam = getattr(object_visual, "beam", None)
             if beam is not None and beam.visible:
-                self._line(canvas, [beam.start, beam.end], beam.color, beam.width)
+                self._beam(canvas, beam.start, beam.end, beam.color, beam.width)
             self._animated_sprite(canvas, object_visual.blast)
             # With particles disabled preserve the existing instantaneous
             # chaingun ray visual; object clips and eye easing are independent.
@@ -694,7 +710,7 @@ class SceneRenderer:
                 if not self._sprite(canvas, eye, x, y, rotation=math.degrees(math.atan2(dy, dx))):
                     self._circle(canvas, x+dx/length*4, y+dy/length*4, 2, "#292934")
             if obj.get("beam_visible"):
-                self._line(canvas, [obj["beam_start"], obj["beam_end"]], "#e64646", 2)
+                self._beam(canvas, obj["beam_start"], obj["beam_end"], "#e64646", 2)
             if obj.get("shot_visible") and not particle_effects:
                 # view/beam_end is QueryRayObj's actual hit position; the
                 # intended shot_target can lie beyond an intervening wall.

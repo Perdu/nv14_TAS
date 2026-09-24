@@ -245,3 +245,42 @@ def rasterize(art, transform, phase=(0., 0.), clip=None, *, alpha_only=False):
     if alpha_only and not opaque_alpha:
         canvas = canvas.getchannel("A")
     return canvas, left, top
+
+
+def rasterize_beam(start, end, width, viewport):
+    """Return clipped 4x4 coverage for a round-capped device-space laser.
+
+    Scan-convert a capsule outline instead of testing every pixel in a long
+    diagonal's bounding box against a segment. This keeps the Pillow-only
+    fallback practical too. Cap chord error is at most 1/32 output pixel;
+    straight beam edges and fractional endpoints are preserved exactly.
+    """
+    from PIL import Image, ImageDraw
+
+    # Match the vector renderer's Flash hairline grid fitting. Only exactly
+    # axis-aligned one-device-pixel strokes snap; diagonal endpoints stay exact.
+    if width == 1.:
+        start, end = list(start), list(end)
+        for axis in (0, 1):
+            if abs(start[axis] - end[axis]) < 1e-6:
+                start[axis] = end[axis] = math.floor(start[axis] + .5) + .5
+    radius = width / 2
+    left = max(0, math.floor(min(start[0], end[0]) - radius - 1))
+    top = max(0, math.floor(min(start[1], end[1]) - radius - 1))
+    right = min(viewport[0], math.ceil(max(start[0], end[0]) + radius + 1))
+    bottom = min(viewport[1], math.ceil(max(start[1], end[1]) + radius + 1))
+    if right <= left or bottom <= top:
+        return Image.new("L", (1, 1)), 0, 0
+    angle = math.atan2(end[1] - start[1], end[0] - start[0])
+    steps = max(4, math.ceil(math.pi / (2 * math.acos(1 - min(1., 1 / (32 * radius))))))
+    contour = []
+    for (x, y), begin in ((end, angle - math.pi / 2),
+                           (start, angle + math.pi / 2)):
+        for i in range(steps + 1):
+            theta = begin + math.pi * i / steps
+            contour.append(((x + radius * math.cos(theta) - left) * SAMPLES,
+                            (y + radius * math.sin(theta) - top) * SAMPLES))
+    size = ((right - left) * SAMPLES, (bottom - top) * SAMPLES)
+    mask = _fill_mask(size, [contour], Image, ImageDraw)
+    return (mask.resize((right - left, bottom - top), Image.Resampling.BOX),
+            left, top)
