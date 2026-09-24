@@ -49,6 +49,14 @@ static nv14_status nv14_drone_laser_init(
     (void)descriptor;
     (void)error_out;
     if (runtime == NULL) return NV14_STATUS_INVALID_ARGUMENT;
+    /* DroneObject's constructor vectors survive a ray that writes nothing. */
+    runtime->f64[NV14_DRONE_LASER_VIEW_X] = 9.0;
+    runtime->f64[NV14_DRONE_LASER_VIEW_Y] = 4.0;
+    runtime->f64[NV14_DRONE_LASER_TARGET_X] = 4.0;
+    runtime->f64[NV14_DRONE_LASER_TARGET_Y] = 5.0;
+    runtime->f64[NV14_DRONE_LASER_VECTOR_X] = 5.0;
+    runtime->f64[NV14_DRONE_LASER_VECTOR_Y] = 7.0;
+    runtime->f64[NV14_DRONE_LASER_LENGTH] = 7.0;
     runtime->i64[NV14_DRONE_MODE] = NV14_DRONE_MODE_MOVING;
     runtime->i64[NV14_DRONE_FIRE_DELAY_TIMER] = 0;
     runtime->i64[NV14_DRONE_LASER_TIMER] = 0;
@@ -66,6 +74,14 @@ static nv14_status nv14_drone_chain_init(
     (void)descriptor;
     (void)error_out;
     if (runtime == NULL) return NV14_STATUS_INVALID_ARGUMENT;
+    runtime->f64[NV14_DRONE_CHAIN_VIEW_X] = 9.0;
+    runtime->f64[NV14_DRONE_CHAIN_VIEW_Y] = 4.0;
+    runtime->f64[NV14_DRONE_CHAIN_TARGET_X] = 4.0;
+    runtime->f64[NV14_DRONE_CHAIN_TARGET_Y] = 5.0;
+    runtime->f64[NV14_DRONE_CHAIN_VECTOR_X] = 5.0;
+    runtime->f64[NV14_DRONE_CHAIN_VECTOR_Y] = 7.0;
+    runtime->f64[NV14_DRONE_CHAIN_SHOT_X] = 3.0;
+    runtime->f64[NV14_DRONE_CHAIN_SHOT_Y] = 6.0;
     runtime->f64[NV14_DRONE_CHAIN_SPREAD] = 0.3;
     runtime->i64[NV14_DRONE_MODE] = NV14_DRONE_MODE_MOVING;
     runtime->i64[NV14_DRONE_FIRE_DELAY_TIMER] = 0;
@@ -120,8 +136,10 @@ static nv14_status nv14_drone_laser_think(
     runtime = nv14_internal_object_runtime(state, object_index);
     status = nv14_drone_target_query(state, object_index, &query);
     if (status != NV14_STATUS_OK) return status;
-    runtime->f64[NV14_DRONE_LASER_VIEW_X] = query.point.x;
-    runtime->f64[NV14_DRONE_LASER_VIEW_Y] = query.point.y;
+    if (query.circle_hit || query.tile_hit) {
+        runtime->f64[NV14_DRONE_LASER_VIEW_X] = query.point.x;
+        runtime->f64[NV14_DRONE_LASER_VIEW_Y] = query.point.y;
+    }
     if (!query.object_hit) return NV14_STATUS_OK;
 
     /* StartFiring_Laser: leave the thinker ring before locking the beam. */
@@ -143,11 +161,9 @@ static nv14_status nv14_drone_laser_think(
     if (tile.hit) {
         runtime->f64[NV14_DRONE_LASER_TARGET_X] = tile.point.x;
         runtime->f64[NV14_DRONE_LASER_TARGET_Y] = tile.point.y;
-    } else {
-        /* Solid borders make this unreachable for ordinary levels. */
-        runtime->f64[NV14_DRONE_LASER_TARGET_X] = query.point.x;
-        runtime->f64[NV14_DRONE_LASER_TARGET_Y] = query.point.y;
     }
+    /* CollideRayvsTiles writes targ only on a hit.  A corner escape keeps
+       the preceding beam endpoint, including its initial (4, 5) value. */
     dx = runtime->f64[NV14_DRONE_LASER_TARGET_X] -
         runtime->f64[NV14_DRONE_POS_X];
     dy = runtime->f64[NV14_DRONE_LASER_TARGET_Y] -
@@ -177,8 +193,10 @@ static nv14_status nv14_drone_chain_think(
     runtime = nv14_internal_object_runtime(state, object_index);
     status = nv14_drone_target_query(state, object_index, &query);
     if (status != NV14_STATUS_OK) return status;
-    runtime->f64[NV14_DRONE_CHAIN_VIEW_X] = query.point.x;
-    runtime->f64[NV14_DRONE_CHAIN_VIEW_Y] = query.point.y;
+    if (query.circle_hit || query.tile_hit) {
+        runtime->f64[NV14_DRONE_CHAIN_VIEW_X] = query.point.x;
+        runtime->f64[NV14_DRONE_CHAIN_VIEW_Y] = query.point.y;
+    }
     if (query.object_hit) {
         /* StartFiring_Chaingun ends Think and changes only prefire state. */
         nv14_internal_end_think(state, object_index);
@@ -364,8 +382,10 @@ static nv14_status nv14_drone_chain_update_firing(
         &query
     );
     if (status != NV14_STATUS_OK) return status;
-    runtime->f64[NV14_DRONE_CHAIN_VIEW_X] = query.point.x;
-    runtime->f64[NV14_DRONE_CHAIN_VIEW_Y] = query.point.y;
+    if (query.circle_hit || query.tile_hit) {
+        runtime->f64[NV14_DRONE_CHAIN_VIEW_X] = query.point.x;
+        runtime->f64[NV14_DRONE_CHAIN_VIEW_Y] = query.point.y;
+    }
     if (query.object_hit) {
         /* StopFiring_Chaingun runs before KillPlayer; the source still
            increments chaingunCurNum after both calls. */

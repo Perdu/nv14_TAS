@@ -29,7 +29,10 @@ typedef struct nv14_ray_query_result {
     /* The unoccluded geometric circle test, retained for native callers. */
     int circle_hit;
     int tile_hit;
-    /* Matches QueryRayObj: circle point, blocking tile point, or (0, 0). */
+    /* QueryRayObj's written endpoint when circle_hit || tile_hit.  Otherwise
+       the source leaves its out vector unchanged: callers must retain their
+       previous endpoint, not copy this result's zero-initialized point.
+       object_hit alone is insufficient: an occluding tile writes too. */
     nv14_vec2 point;
     double circle_distance;
     double tile_distance;
@@ -62,6 +65,8 @@ nv14_status nv14_rays_test_tile(
  * state is non-NULL, its dense edge overrides take precedence over base tile
  * edges.  A cutoff stops before entering a DDA cell whose entry distance is
  * greater than max_entry_distance; equality is deliberately still tested.
+ * A miss (including zero direction or reaching a NULL border neighbour) does
+ * not replace the caller's persistent endpoint; copy out->point only on hit.
  */
 nv14_status nv14_rays_collide_tiles(
     const nv14_level *level,

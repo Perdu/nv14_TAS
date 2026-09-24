@@ -77,11 +77,15 @@ _SPLICE_TASK_ID_BASE = 1 << 63
 _POPULATION_SPLICE_NICHE_TICKS = 12
 _AUTO_STAGNATION_MIN_DISTANCE_GAIN_PX = 0.5
 
-# Exact older releases can resume into v4.21 when every newly configurable
-# value retains its historical/default behaviour. Pre-v3.11 releases start
+# Exact older releases can resume into v4.23 only with enemy simulation
+# explicitly disabled: retained ray endpoints change enemy behaviour. Every
+# newly configurable value must retain its historical/default behaviour.
+# Pre-v3.11 releases start
 # without pending auxiliary seeds; v3.11 retains its checkpointed seeds.
 # Keep this allow-list exact so modified prior builds still fail validation.
 _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS = {
+    ("4.22", "74ee6ff98177565e06cbc782919e3011fb9f32454fc4f83bcce9804356f8e6ea"),
+    ("4.21", "4076743c11b904ffd4b7fafb85a6bcaf4b23fa8d1e3a37fe93a8df6b5123705d"),
     ("4.20", "1e26074015dad95c6203ceed0e00613d59672118ca30d8b9dcefd84f892aff16"),
     ("4.19", "b59df672d93ddd58dd43bbe7820c5e307f6e1c3a52e8a3a853a7aef1f087bfb8"),
     ("4.18", "6fabfc548fd47897f1b50279fc950c5ca7c44417184b586ede495511e0904704"),
@@ -2603,8 +2607,10 @@ def _validate_checkpoint_identity(
         expected.get("optimiser_build_sha256"),
     )
     previous_build_compatible = (
-        expected.get("optimiser_version") == OPTIMISER_VERSION == "4.21"
+        expected.get("optimiser_version") == OPTIMISER_VERSION == "4.23"
         and stored_build in _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS
+        and stored.get("simulate_enemies") is False
+        and expected.get("simulate_enemies") is False
     )
     build_compatible = stored_build == expected_build or previous_build_compatible
 

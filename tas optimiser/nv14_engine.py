@@ -2471,8 +2471,14 @@ def collide_ray_tiles(
     Public callers retain the unbounded source traversal.
     """
     grid = tiles.grid
+    max_i = tiles.rows + 1
+    max_j = tiles.cols + 1
+    start_i = _floor(p0.x / tiles.tw)
+    start_j = _floor(p0.y / tiles.th)
+    if not (0 <= start_i <= max_i and 0 <= start_j <= max_j):
+        return False, Vec2(), math.inf
+    cell = grid[start_i][start_j]
     if _ray is None:
-        cell = grid[_floor(p0.x / tiles.tw)][_floor(p0.y / tiles.th)]
         vx = p1.x - p0.x
         vy = p1.y - p0.y
         length = math.sqrt(vx * vx + vy * vy)
@@ -2482,7 +2488,6 @@ def collide_ray_tiles(
         dy = vy / length
     else:
         length, dx, dy = _ray
-        cell = grid[_floor(p0.x / tiles.tw)][_floor(p0.y / tiles.th)]
 
     step_x = -1 if dx < 0.0 else (1 if 0.0 < dx else 0)
     step_y = -1 if dy < 0.0 else (1 if 0.0 < dy else 0)
@@ -2543,7 +2548,14 @@ def collide_ray_tiles(
                 edge_value = cell.edges[side]
         else:
             edge_value = cell.edges[side]
-        next_cell = grid[next_i][next_j]
+        # Source neighbour links end at the finite outer border. A ray can
+        # enter that border through a shaped tile's inactive edge and then
+        # leave without a hit; Python negative indexing must not wrap it.
+        next_cell = (
+            grid[next_i][next_j]
+            if 0 <= next_i <= max_i and 0 <= next_j <= max_j
+            else None
+        )
         if 0 < edge_value:
             # Empty-edge crossings need only advance the DDA cell.  Defer the
             # intersection coordinates until a solid or shaped edge can use
@@ -2552,11 +2564,17 @@ def collide_ray_tiles(
             crossing_y = p0.y + crossing_t * dy
             if edge_value == EID_SOLID:
                 return True, Vec2(crossing_x, crossing_y), crossing_t
-            if next_cell.tile_id > TID_EMPTY and next_cell.ctype != CTYPE_FULL:
+            if (
+                next_cell is not None
+                and next_cell.tile_id > TID_EMPTY
+                and next_cell.ctype != CTYPE_FULL
+            ):
                 hit, point = _test_ray_tile(crossing_x, crossing_y, dx, dy, next_cell)
                 if hit:
                     distance = (point.x - p0.x) * dx + (point.y - p0.y) * dy
                     return True, point, distance
+        if next_cell is None:
+            return False, Vec2(), math.inf
         cell = next_cell
 
 
@@ -2567,13 +2585,21 @@ def query_ray_circle(
     obj_pos: Vec2,
     radius: float,
     edge_overrides: EdgeOverrides | None = None,
+    *,
+    previous_point: Vec2 | None = None,
 ) -> tuple[bool, Vec2]:
-    """Port of QueryRayObj for the player's circular collision volume."""
+    """Port of QueryRayObj for the player's circular collision volume.
+
+    A false result with a tile hit still writes the wall endpoint. A zero
+    direction or a ray missing both map and circle leaves the source output
+    untouched: return ``previous_point`` on that path when supplied. The
+    returned vector is not mutated here; callers own their persistent output.
+    """
     vx = p1.x - p0.x
     vy = p1.y - p0.y
     length = math.sqrt(vx * vx + vy * vy)
     if length == 0.0:
-        return False, Vec2()
+        return False, previous_point if previous_point is not None else Vec2()
     dx = vx / length
     dy = vy / length
     circle_hit, circle_point, circle_distance = _ray_circle_first_hit(
@@ -2591,7 +2617,9 @@ def query_ray_circle(
     )
     if circle_hit and (not tile_hit or circle_distance <= tile_distance):
         return True, circle_point
-    return False, tile_point if tile_hit else Vec2()
+    if tile_hit:
+        return False, tile_point
+    return False, previous_point if previous_point is not None else Vec2()
 
 
 @dataclass(slots=True)
@@ -3122,10 +3150,10 @@ class LaserDrone(DroneBase):
     mode: DroneMode = DroneMode.MOVING
     fire_delay_timer: int = 0
     laser_timer: int = 0
-    view: Vec2 = field(default_factory=Vec2)
-    targ: Vec2 = field(default_factory=Vec2)
-    targ2: Vec2 = field(default_factory=Vec2)
-    laser_len: float = 0.0
+    view: Vec2 = field(default_factory=lambda: Vec2(9.0, 4.0))
+    targ: Vec2 = field(default_factory=lambda: Vec2(4.0, 5.0))
+    targ2: Vec2 = field(default_factory=lambda: Vec2(5.0, 7.0))
+    laser_len: float = 7.0
     load_index: int = 0
     r: float = APP_TILE_SCALE * 0.75
     prefire_delay: int = 30
@@ -3192,13 +3220,12 @@ class LaserDrone(DroneBase):
         hit, target, _distance = collide_ray_tiles(
             tiles, self.pos, self.view, edge_overrides
         )
-        if not hit:
-            # The source level has a solid outer border, so a non-zero ray
-            # should always terminate. Keep the acquisition point as a safe
-            # fallback for malformed/nonstandard maps.
-            target = self.view.copy()
-        self.targ.x = target.x
-        self.targ.y = target.y
+        # CollideRayvsTiles only writes its output on a hit. StartFiring_Laser
+        # uses the retained target even on failure, including the initial (4, 5)
+        # target and an endpoint left by an earlier successful shot.
+        if hit:
+            self.targ.x = target.x
+            self.targ.y = target.y
         self.targ2.x = self.targ.x - self.pos.x
         self.targ2.y = self.targ.y - self.pos.y
         self.laser_len = math.sqrt(
@@ -3222,6 +3249,7 @@ class LaserDrone(DroneBase):
             player.pos,
             player.r,
             edge_overrides,
+            previous_point=self.view,
         )
         self.view.x = view.x
         self.view.y = view.y
@@ -3312,10 +3340,10 @@ class ChaingunDrone(DroneBase):
     chaingun_max_num: int = 8
     chaingun_cur_num: int = 0
     chaingun_spread: float = 0.3
-    view: Vec2 = field(default_factory=Vec2)
-    targ: Vec2 = field(default_factory=Vec2)
-    targ2: Vec2 = field(default_factory=Vec2)
-    targ3: Vec2 = field(default_factory=Vec2)
+    view: Vec2 = field(default_factory=lambda: Vec2(9.0, 4.0))
+    targ: Vec2 = field(default_factory=lambda: Vec2(4.0, 5.0))
+    targ2: Vec2 = field(default_factory=lambda: Vec2(5.0, 7.0))
+    targ3: Vec2 = field(default_factory=lambda: Vec2(3.0, 6.0))
     load_index: int = 0
     r: float = APP_TILE_SCALE * 0.75
     prefire_delay: int = 35
@@ -3391,6 +3419,7 @@ class ChaingunDrone(DroneBase):
             player.pos,
             player.r,
             edge_overrides,
+            previous_point=self.view,
         )
         self.view.x = view.x
         self.view.y = view.y
@@ -3472,6 +3501,7 @@ class ChaingunDrone(DroneBase):
                     player.pos,
                     player.r,
                     edge_overrides,
+                    previous_point=self.view,
                 )
                 self.view.x = view.x
                 self.view.y = view.y
@@ -3592,6 +3622,7 @@ class Turret:
             player.pos,
             player.r,
             edge_overrides,
+            previous_point=self.view,
         )
         self.view.x = view.x
         self.view.y = view.y
@@ -3688,6 +3719,7 @@ class Turret:
             player.pos,
             player.r,
             edge_overrides,
+            previous_point=self.targ,
         )
         self.targ.x = target.x
         self.targ.y = target.y
@@ -3833,6 +3865,7 @@ class HomingLauncher:
             player.pos,
             player.r,
             edge_overrides,
+            previous_point=self.view,
         )
         self.view.x = view.x
         self.view.y = view.y
@@ -6036,12 +6069,13 @@ class SimulationState:
                     obj.ai_counter,
                     obj.ai_counter2,
                     int(obj.mode),
+                    # A later failed ray reuses this endpoint in every mode.
+                    obj.targ.x,
+                    obj.targ.y,
                 )
                 if obj.mode == DroneMode.PREFIRE:
                     mode_values = (
                         obj.fire_delay_timer,
-                        obj.targ.x,
-                        obj.targ.y,
                         obj.targ2.x,
                         obj.targ2.y,
                         obj.laser_len,
@@ -6049,8 +6083,6 @@ class SimulationState:
                 elif obj.mode == DroneMode.FIRING:
                     mode_values = (
                         obj.laser_timer,
-                        obj.targ.x,
-                        obj.targ.y,
                         obj.targ2.x,
                         obj.targ2.y,
                         obj.laser_len,
@@ -6068,7 +6100,7 @@ class SimulationState:
                 object_values.extend(values)
             elif obj_type is Turret:
                 # view/targ are diagnostic/drawing outputs only; they are
-                # overwritten before any gameplay use, so excluding them keeps
+                # not used by gameplay, so excluding them keeps
                 # search deduplication from splitting equivalent branches.
                 values = (
                     int(obj.mode),

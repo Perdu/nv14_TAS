@@ -57,7 +57,7 @@ def test_v308_checkpoint_identity_accepts_exact_released_v305_build() -> None:
         "optimiser_build_sha256": optimiser_build_hash(),
         "level_identifier": "00-3",
         "level_sha256": "level",
-        "simulate_enemies": True,
+        "simulate_enemies": False,
         "input_replay_sha256": "input",
         "parent_replay_sha256": ["parent"],
         "configuration_sha256": "config",
@@ -80,7 +80,7 @@ def test_v308_checkpoint_identity_rejects_other_v305_build() -> None:
         "optimiser_build_sha256": optimiser_build_hash(),
         "level_identifier": "00-3",
         "level_sha256": "level",
-        "simulate_enemies": True,
+        "simulate_enemies": False,
         "input_replay_sha256": "input",
         "parent_replay_sha256": ["parent"],
         "configuration_sha256": "config",
@@ -102,7 +102,7 @@ def test_v308_checkpoint_identity_accepts_exact_released_v306_build() -> None:
         "optimiser_build_sha256": optimiser_build_hash(),
         "level_identifier": "00-3",
         "level_sha256": "level",
-        "simulate_enemies": True,
+        "simulate_enemies": False,
         "input_replay_sha256": "input",
         "parent_replay_sha256": ["parent"],
         "configuration_sha256": "config",
@@ -125,7 +125,7 @@ def test_v308_checkpoint_identity_rejects_other_v306_build() -> None:
         "optimiser_build_sha256": optimiser_build_hash(),
         "level_identifier": "00-3",
         "level_sha256": "level",
-        "simulate_enemies": True,
+        "simulate_enemies": False,
         "input_replay_sha256": "input",
         "parent_replay_sha256": ["parent"],
         "configuration_sha256": "config",
@@ -147,7 +147,7 @@ def test_v308_checkpoint_identity_accepts_exact_released_v307_build() -> None:
         "optimiser_build_sha256": optimiser_build_hash(),
         "level_identifier": "00-3",
         "level_sha256": "level",
-        "simulate_enemies": True,
+        "simulate_enemies": False,
         "input_replay_sha256": "input",
         "parent_replay_sha256": ["parent"],
         "configuration_sha256": "config",
@@ -170,7 +170,7 @@ def test_v308_checkpoint_identity_rejects_other_v307_build() -> None:
         "optimiser_build_sha256": optimiser_build_hash(),
         "level_identifier": "00-3",
         "level_sha256": "level",
-        "simulate_enemies": True,
+        "simulate_enemies": False,
         "input_replay_sha256": "input",
         "parent_replay_sha256": ["parent"],
         "configuration_sha256": "config",
@@ -230,6 +230,80 @@ def _released_v308_identity_without_splice_limit() -> dict[str, object]:
         }
     )
     return identity
+
+
+@pytest.mark.parametrize("version,build", [
+    ("4.22", "74ee6ff98177565e06cbc782919e3011fb9f32454fc4f83bcce9804356f8e6ea"),
+    ("4.21", "4076743c11b904ffd4b7fafb85a6bcaf4b23fa8d1e3a37fe93a8df6b5123705d"),
+    ("3.05", "d0a7ea78c7b24de46bac1ff1c00774de833ef23107a07b743ebffe67d755e43e"),
+])
+def test_v423_checkpoint_rejects_previous_enemy_physics(
+    version: str, build: str,
+) -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(2)
+    current["simulate_enemies"] = True
+    stored = dict(current)
+    stored["optimiser_version"] = version
+    stored["optimiser_build_sha256"] = build
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, current)
+
+
+@pytest.mark.parametrize("side", ["stored", "expected", "both"])
+@pytest.mark.parametrize("setting", [True, None, 0])
+def test_v423_previous_checkpoint_requires_explicitly_disabled_enemies(
+    side: str, setting: object,
+) -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(2)
+    stored = dict(current)
+    stored["optimiser_version"] = "4.22"
+    stored["optimiser_build_sha256"] = (
+        "74ee6ff98177565e06cbc782919e3011fb9f32454fc4f83bcce9804356f8e6ea"
+    )
+    for identity in (stored, current) if side == "both" else (
+        stored if side == "stored" else current,
+    ):
+        if setting is None:
+            identity.pop("simulate_enemies")
+        else:
+            identity["simulate_enemies"] = setting
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, current)
+
+
+@pytest.mark.parametrize("simulate_enemies", [False, True])
+def test_v423_checkpoint_accepts_same_build_in_both_enemy_modes(
+    simulate_enemies: bool,
+) -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(2)
+    current["simulate_enemies"] = simulate_enemies
+    _validate_checkpoint_identity(dict(current), current)
+
+
+@pytest.mark.parametrize("relative_path", [
+    "native/nv14_rays.c",
+    "native/nv14_rays.h",
+    "native/nv14_drone_weapons.c",
+    "native/nv14_objects_ranged.c",
+])
+def test_v423_checkpoint_build_hash_tracks_ray_physics_sources(
+    tmp_path, monkeypatch, relative_path: str,
+) -> None:
+    import nv14_checkpoint
+
+    monkeypatch.setattr(nv14_checkpoint, "__file__", str(tmp_path / "nv14_checkpoint.py"))
+    source = tmp_path / relative_path
+    source.parent.mkdir(parents=True)
+    source.write_text("before", encoding="utf-8")
+    original = nv14_checkpoint.optimiser_build_hash()
+    source.write_text("after", encoding="utf-8")
+    assert nv14_checkpoint.optimiser_build_hash() != original
 
 
 def test_v420_checkpoint_rejects_ambiguous_previous_numeric_range_end() -> None:
@@ -455,6 +529,8 @@ def test_v313_checkpoint_rejects_modified_v312() -> None:
 
 
 @pytest.mark.parametrize("version,build", [
+    ("4.22", "74ee6ff98177565e06cbc782919e3011fb9f32454fc4f83bcce9804356f8e6ea"),
+    ("4.21", "4076743c11b904ffd4b7fafb85a6bcaf4b23fa8d1e3a37fe93a8df6b5123705d"),
     ("4.20", "1e26074015dad95c6203ceed0e00613d59672118ca30d8b9dcefd84f892aff16"),
     ("4.19", "b59df672d93ddd58dd43bbe7820c5e307f6e1c3a52e8a3a853a7aef1f087bfb8"),
     ("4.18", "6fabfc548fd47897f1b50279fc950c5ca7c44417184b586ede495511e0904704"),
@@ -495,6 +571,8 @@ def test_checkpoint_accepts_exact_v313_and_v314(auxiliary_limit: int, version: s
 
 
 @pytest.mark.parametrize("version,build", [
+    ("4.22", "74ee6ff98177565e06cbc782919e3011fb9f32454fc4f83bcce9804356f8e6ea"),
+    ("4.21", "4076743c11b904ffd4b7fafb85a6bcaf4b23fa8d1e3a37fe93a8df6b5123705d"),
     ("4.20", "1e26074015dad95c6203ceed0e00613d59672118ca30d8b9dcefd84f892aff16"),
     ("4.19", "b59df672d93ddd58dd43bbe7820c5e307f6e1c3a52e8a3a853a7aef1f087bfb8"),
     ("4.18", "6fabfc548fd47897f1b50279fc950c5ca7c44417184b586ede495511e0904704"),

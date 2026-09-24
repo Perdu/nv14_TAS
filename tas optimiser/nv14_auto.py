@@ -555,11 +555,13 @@ class AutoEvaluation:
 def pre_finish_exit_edge_distance(
     level: Level, evaluation: AutoEvaluation
 ) -> float | None:
-    """Return the ninja-edge to exit-edge gap immediately before completion.
+    """Return the signed ninja-edge to exit-edge gap before completion.
 
     The evaluation stores centre-to-centre distance for the existing ranking
-    tie-break.  Status output is more intuitive as the remaining collision
-    gap, so subtract both collision radii and clamp any overlap to zero.
+    tie-break.  Status output subtracts both collision radii and preserves
+    negative values when the circles already overlap after the final input.
+    A jump or collision-order effect can create this overlap before the next
+    tick detects completion.
     """
     centre_distance = evaluation.pre_finish_exit_distance
     exit_index = evaluation.completed_exit_index
@@ -574,7 +576,7 @@ def pre_finish_exit_edge_distance(
     )
     if door is None:
         return None
-    return max(0.0, centre_distance - level.player.r - door.r)
+    return centre_distance - level.player.r - door.r
 
 
 @dataclass(frozen=True, slots=True)

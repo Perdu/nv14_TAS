@@ -41,14 +41,14 @@ def _two_contact_exit_level():
     return parse_level_string(f"{_empty_map()}|5^100,100!11^101,100,100,100")
 
 
-def _running_exit_level():
+def _running_exit_level(*, exit_x: float = 140, exit_y: float = 134):
     chars = ["0"] * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
     # Level map serialization is x-major.  This floor has tile centres y=156,
     # so a radius-10 ninja is supported at y=134.
     for x in range(APP_NUM_GRIDCOLS):
         chars[x * APP_NUM_GRIDROWS + 5] = "1"
     return parse_level_string(
-        f"{''.join(chars)}|5^60,134!11^140,134,60,134"
+        f"{''.join(chars)}|5^60,134!11^{exit_x},{exit_y},60,134"
     )
 
 
@@ -111,14 +111,35 @@ def test_pre_finish_exit_edge_distance_reports_remaining_collision_gap() -> None
     assert evaluation.finish_tick == 34
     door = level.static_world.entry_for_ref(level.static_world.exit_door_ref(0))
     assert door is not None
-    expected = max(
-        0.0,
-        evaluation.pre_finish_exit_distance - level.player.r - door.r,
-    )
+    expected = evaluation.pre_finish_exit_distance - level.player.r - door.r
     assert pre_finish_exit_edge_distance(level, evaluation) == pytest.approx(
         expected, abs=1e-12
     )
     assert expected == pytest.approx(2.799439917578567, abs=1e-12)
+
+
+def test_pre_finish_exit_edge_distance_preserves_post_jump_overlap() -> None:
+    # The open exit is just outside collision range while standing. The last
+    # input jumps into its circle after object collision checks; completion
+    # is detected on the following implicit neutral sentinel.
+    level = _running_exit_level(exit_x=60, exit_y=111)
+    source = [InputFrame(), InputFrame(jump=True)]
+    evaluation = evaluate_replay_with_sentinel(level, source)
+
+    assert evaluation.valid
+    assert evaluation.finish_tick == len(source)
+    assert evaluation.successful_jumps == (1,)
+    final_input = evaluation.point(1)
+    assert final_input is not None
+    assert not final_input.complete
+    assert final_input.y == pytest.approx(131.0, abs=1e-12)
+    sentinel = evaluation.point(2)
+    assert sentinel is not None and sentinel.complete
+    assert sentinel.y < final_input.y
+    assert evaluation.pre_finish_exit_distance == pytest.approx(20.0, abs=1e-12)
+    assert pre_finish_exit_edge_distance(level, evaluation) == pytest.approx(
+        -2.0, abs=1e-12
+    )
 
 
 def test_same_finish_closer_candidate_outranks_source_only_for_saved_best() -> None:

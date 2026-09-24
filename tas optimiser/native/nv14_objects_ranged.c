@@ -316,8 +316,10 @@ static nv14_status nv14_turret_line_of_sight(
         &query
     );
     if (status != NV14_STATUS_OK) return status;
-    runtime->f64[NV14_TURRET_VIEW_X] = query.point.x;
-    runtime->f64[NV14_TURRET_VIEW_Y] = query.point.y;
+    if (query.circle_hit || query.tile_hit) {
+        runtime->f64[NV14_TURRET_VIEW_X] = query.point.x;
+        runtime->f64[NV14_TURRET_VIEW_Y] = query.point.y;
+    }
     *detected_out = query.object_hit;
     return NV14_STATUS_OK;
 }
@@ -350,8 +352,10 @@ static nv14_status nv14_turret_fire(
         &query
     );
     if (status != NV14_STATUS_OK) return status;
-    runtime->f64[NV14_TURRET_TARGET_X] = query.point.x;
-    runtime->f64[NV14_TURRET_TARGET_Y] = query.point.y;
+    if (query.circle_hit || query.tile_hit) {
+        runtime->f64[NV14_TURRET_TARGET_X] = query.point.x;
+        runtime->f64[NV14_TURRET_TARGET_Y] = query.point.y;
+    }
     if (query.object_hit) state->player.dead = 1;
     return NV14_STATUS_OK;
 }
@@ -693,8 +697,10 @@ static nv14_status nv14_homing_think(
         &query
     );
     if (status != NV14_STATUS_OK) return status;
-    runtime->f64[NV14_HOMING_VIEW_X] = query.point.x;
-    runtime->f64[NV14_HOMING_VIEW_Y] = query.point.y;
+    if (query.circle_hit || query.tile_hit) {
+        runtime->f64[NV14_HOMING_VIEW_X] = query.point.x;
+        runtime->f64[NV14_HOMING_VIEW_Y] = query.point.y;
+    }
     if (query.object_hit) {
         runtime->i64[NV14_RANGED_MODE] = NV14_RANGED_HOMING_PREFIRE;
         runtime->i64[NV14_RANGED_FIRE_DELAY_TIMER] = 0;
