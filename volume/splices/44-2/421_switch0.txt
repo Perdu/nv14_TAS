@@ -1,0 +1,9 @@
+[local]
+search = "population"
+target_frame = 421
+range = "200:421"
+simulate-enemies = true
+objective = "earliest-interaction"
+target-object = "testdoor:0"
+# secondary_objective = "min-x"
+require-interaction = ["testdoor:4", "testdoor:1"]
