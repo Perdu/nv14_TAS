@@ -2312,11 +2312,12 @@ def _ray_circle_first_hit(
     if not (0.0 <= disc):
         return False, Vec2(), math.inf
     root = math.sqrt(disc)
-    # Preserve the supplied ActionScript's (1 / 2) * a evaluation order.
-    # Even normalized directions can have a != 1 after binary64 rounding.
-    factor = 0.5 * a
-    t1 = (-b + root) * factor
-    t2 = (-b - root) * factor
+    # SWF bytecode: 1 / (2 * a), then multiply each numerator. The dump's
+    # (1 / 2) * a is incorrect; direct numerator division can also round differently.
+    # Squared lengths are nonnegative; AVM1 divides by zero without raising.
+    factor = 1.0 / (2.0 * a) if a != 0.0 else math.inf
+    t1 = ((0.0 - b) + root) * factor
+    t2 = ((0.0 - b) - root) * factor
     if t2 < 0.0:
         if t1 < 0.0:
             return False, Vec2(), math.inf
@@ -2381,9 +2382,10 @@ def _test_ray_tile(
         if not (0.0 <= disc):
             return False, Vec2()
         root = math.sqrt(disc)
-        factor = 0.5 * a
-        q1 = (-b + root) * factor
-        q2 = (-b - root) * factor
+        # Preserve the SWF's shared reciprocal and subsequent multiplications.
+        factor = 1.0 / (2.0 * a) if a != 0.0 else math.inf
+        q1 = ((0.0 - b) + root) * factor
+        q2 = ((0.0 - b) - root) * factor
         q = q1 if q2 < q1 else q2
         # The ActionScript selects the farther root for this concave arc.
         if q2 < q1:
@@ -2405,9 +2407,10 @@ def _test_ray_tile(
         if not (0.0 <= disc):
             return False, Vec2()
         root = math.sqrt(disc)
-        factor = 0.5 * a
-        q1 = (-b + root) * factor
-        q2 = (-b - root) * factor
+        # Preserve the SWF's shared reciprocal and subsequent multiplications.
+        factor = 1.0 / (2.0 * a) if a != 0.0 else math.inf
+        q1 = ((0.0 - b) + root) * factor
+        q2 = ((0.0 - b) - root) * factor
         q = q2 if q2 < q1 else q1
         return True, Vec2(px + q * dx, py + q * dy)
 

@@ -1,8 +1,8 @@
-"""Binary64 boundary regressions derived from the supplied ActionScript dump.
+"""Binary64 boundary regressions derived from ActionScript and SWF bytecode.
 
 These fixtures deliberately differ from mathematically equivalent shortcuts.
-The quadratic expectations follow the dump; original AVM1 bytecode has not
-been provided to independently resolve its decompiler-parentheses caveat.
+v4.25 corrects the quadratic fixtures using the original SWF's arithmetic
+instructions. See docs/changelog/CHANGELOG_v4.25.md for bytecode offsets.
 """
 from pathlib import Path
 import math
@@ -18,21 +18,21 @@ import nv14_engine as engine
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_circle_root_preserves_dump_multiplication_order():
+def test_circle_root_preserves_swf_reciprocal_order():
     d = 1.0 / math.sqrt(2.0)
     hit, point, distance = engine._ray_circle_first_hit(
         0.0, 0.0, d, d, engine.Vec2(13.0, 13.0), 10.0)
     assert hit
-    assert distance == 8.38477631085023
-    assert distance != 8.384776310850233  # Conventional / (2*a).
+    assert distance == 8.384776310850233
+    assert distance != 8.38477631085023  # Incorrect decompiled (1/2)*a.
     assert point.x == point.y == distance * d
 
 
 @pytest.mark.parametrize("tile_id,origin,direction,expected", [
-    (engine.TID_CONCAVEPP, 60.0, -1.0, 31.02943725152287),
-    (engine.TID_CONVEXPP, 47.0, 1.0, 7.029437251522872),
+    (engine.TID_CONCAVEPP, 60.0, -1.0, 31.02943725152286),
+    (engine.TID_CONVEXPP, 47.0, 1.0, 7.02943725152285),
 ])
-def test_arc_roots_preserve_dump_multiplication_order(tile_id, origin, direction, expected):
+def test_arc_roots_preserve_swf_reciprocal_order(tile_id, origin, direction, expected):
     tiles = engine.TileMap("0" * 713)
     cell = tiles.grid[1][1]
     cell.tile_id = tile_id
@@ -41,6 +41,58 @@ def test_arc_roots_preserve_dump_multiplication_order(tile_id, origin, direction
     hit, point = engine._test_ray_tile(origin, origin, d, d, cell)
     assert hit
     assert point.x == point.y == expected
+
+
+def test_circle_reciprocal_multiplication_differs_from_direct_division():
+    # Expected roots obtained by evaluating the extracted AVM1 arithmetic
+    # instructions; these rounded unit vectors also distinguish v4.23 division.
+    hit, point, distance = engine._ray_circle_first_hit(
+        0.0, 0.0, 0.9707167334536857, 0.24022702469332174,
+        engine.Vec2(13.0, 13.0), 10.0)
+    assert hit
+    assert distance == 12.608735908615264
+    assert distance != 12.608735908615262  # Numerator / (2*a).
+    assert (point.x, point.y) == (12.239510934191198, 3.0289591124704915)
+
+
+@pytest.mark.parametrize("tile_id,origin,dx,dy,expected", [
+    (engine.TID_CONCAVEPP, 60.0, -0.6097934905119338, -0.7925603440302018,
+     (35.164437582307215, 27.720741201377372)),
+    (engine.TID_CONVEXPP, 47.0, 0.8208762181538163, 0.5711061499139088,
+     (1.5908365548490835, 15.40759674546678)),
+])
+def test_arc_reciprocal_multiplication_differs_from_direct_division(
+    tile_id, origin, dx, dy, expected,
+):
+    tiles = engine.TileMap("0" * 713)
+    cell = tiles.grid[1][1]
+    cell.tile_id = tile_id
+    tiles._update_type(cell)
+    hit, point = engine._test_ray_tile(origin, origin, dx, dy, cell)
+    assert hit
+    assert (point.x, point.y) == expected
+
+
+def test_nonunit_circle_direction_uses_reciprocal():
+    hit, point, distance = engine._ray_circle_first_hit(
+        0.0, 0.0, 2.0, 0.0, engine.Vec2(13.0, 0.0), 10.0)
+    assert hit and distance == 1.5
+    assert (point.x, point.y) == (3.0, 0.0)
+
+
+@pytest.mark.parametrize("direction", [0.0, 1e-200])
+def test_zero_squared_ray_length_keeps_avm1_division_continuation(direction):
+    # The second direction is nonzero but its square underflows to zero.
+    hit, point, distance = engine._ray_circle_first_hit(
+        0.0, 0.0, direction, 0.0, engine.Vec2(), 10.0)
+    assert hit and math.isnan(distance)
+    assert math.isnan(point.x) and math.isnan(point.y)
+    tiles = engine.TileMap("0" * 713)
+    cell = tiles.grid[1][1]
+    cell.tile_id = engine.TID_CONVEXPP
+    tiles._update_type(cell)
+    hit, point = engine._test_ray_tile(24.0, 24.0, direction, 0.0, cell)
+    assert hit and math.isnan(point.x) and math.isnan(point.y)
 
 
 def test_nan_discriminant_does_not_write_circle_hit():

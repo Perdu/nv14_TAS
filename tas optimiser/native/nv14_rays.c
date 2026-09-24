@@ -81,10 +81,11 @@ nv14_status nv14_rays_circle_first_hit(
     if (!(0.0 <= disc))
         return NV14_STATUS_OK;
     root = sqrt(disc);
-    /* Supplied AS evaluates (1 / 2) * a, even for rounded unit vectors. */
-    factor = 0.5 * a;
-    t1 = (-b + root) * factor;
-    t2 = (-b - root) * factor;
+    /* SWF bytecode uses a shared 1 / (2 * a), not the dump's (1 / 2) * a.
+       Direct numerator division can also round differently. */
+    factor = 1.0 / (2.0 * a);
+    t1 = ((0.0 - b) + root) * factor;
+    t2 = ((0.0 - b) - root) * factor;
     if (t2 < 0.0) {
         if (t1 < 0.0)
             return NV14_STATUS_OK;
@@ -184,9 +185,10 @@ nv14_status nv14_rays_test_tile(
         if (!(0.0 <= disc))
             return NV14_STATUS_OK;
         root = sqrt(disc);
-        factor = 0.5 * a;
-        q1 = (-b + root) * factor;
-        q2 = (-b - root) * factor;
+        /* Preserve the SWF's shared reciprocal and subsequent multiplications. */
+        factor = 1.0 / (2.0 * a);
+        q1 = ((0.0 - b) + root) * factor;
+        q2 = ((0.0 - b) - root) * factor;
         q = q2 < q1 ? q1 : q2;
         /* The source selects the farther quadratic root for a concave arc. */
         if (q2 < q1)
@@ -209,9 +211,10 @@ nv14_status nv14_rays_test_tile(
         if (!(0.0 <= disc))
             return NV14_STATUS_OK;
         root = sqrt(disc);
-        factor = 0.5 * a;
-        q1 = (-b + root) * factor;
-        q2 = (-b - root) * factor;
+        /* Preserve the SWF's shared reciprocal and subsequent multiplications. */
+        factor = 1.0 / (2.0 * a);
+        q1 = ((0.0 - b) + root) * factor;
+        q2 = ((0.0 - b) - root) * factor;
         q = q2 < q1 ? q2 : q1;
         out->hit = 1;
         out->point.x = px + q * dx;
