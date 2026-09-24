@@ -53,6 +53,9 @@ typedef struct nv14_ranged_snapshot {
 const nv14_internal_object_module *nv14_objects_ranged_module(void);
 nv14_status nv14_objects_ranged_register(void);
 
+/* Source IdleAfterDeath; invoked only on death/completion transitions. */
+void nv14_objects_ranged_idle_after_death(nv14_state *state, size_t object_index);
+
 /* Locate a ranged object by serialized load index and copy its mutable state. */
 nv14_status nv14_objects_ranged_snapshot(
     const nv14_state *state,

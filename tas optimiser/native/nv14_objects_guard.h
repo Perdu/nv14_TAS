@@ -10,6 +10,9 @@ extern "C" {
 /* Idempotent when this exact module has already been registered. */
 nv14_status nv14_objects_guard_register(void);
 
+/* Source IdleAfterDeath; invoked only on death/completion transitions. */
+void nv14_objects_guard_idle_after_death(nv14_state *state, size_t object_index);
+
 typedef struct nv14_guard_scene_snapshot {
     nv14_vec2 position;
     int direction;

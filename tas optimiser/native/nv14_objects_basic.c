@@ -61,7 +61,8 @@ enum nv14_thwomp_i64_slot {
     NV14_THWOMP_MIN_I = 3,
     NV14_THWOMP_MIN_J = 4,
     NV14_THWOMP_MAX_I = 5,
-    NV14_THWOMP_MAX_J = 6
+    NV14_THWOMP_MAX_J = 6,
+    NV14_THWOMP_WAITING_DISABLED = 7
 };
 
 enum nv14_door_i64_slot {
@@ -770,7 +771,8 @@ static void nv14_basic_thwomp_start_raise(
 static void nv14_basic_thwomp_start_wait(nv14_object_runtime *runtime)
 {
     runtime->i64[NV14_THWOMP_IS_MOVING] = 0;
-    runtime->i64[NV14_THWOMP_MODE] = 0;
+    runtime->i64[NV14_THWOMP_MODE] =
+        runtime->i64[NV14_THWOMP_WAITING_DISABLED] ? 2 : 0;
 }
 
 static nv14_status nv14_basic_update_thwomp(
@@ -800,7 +802,7 @@ static nv14_status nv14_basic_update_thwomp(
                 nv14_basic_thwomp_start_fall(runtime);
             }
         }
-    } else {
+    } else if (was_moving) {
         double dx = runtime->f64[NV14_THWOMP_GOAL_X] -
             runtime->f64[NV14_THWOMP_POS_X];
         double dy = runtime->f64[NV14_THWOMP_GOAL_Y] -
@@ -828,14 +830,10 @@ static nv14_status nv14_basic_update_thwomp(
     if (was_moving) {
         int cell_i;
         int cell_j;
-        if (!nv14_internal_floor_index(
-                runtime->f64[NV14_THWOMP_POS_X], NV14_TILE_W, &cell_i
-            ) ||
-            !nv14_internal_floor_index(
-                runtime->f64[NV14_THWOMP_POS_Y], NV14_TILE_H, &cell_j
-            )) {
-            return NV14_STATUS_OUT_OF_BOUNDS;
-        }
+        (void)nv14_internal_floor_index(
+            runtime->f64[NV14_THWOMP_POS_X], NV14_TILE_W, &cell_i);
+        (void)nv14_internal_floor_index(
+            runtime->f64[NV14_THWOMP_POS_Y], NV14_TILE_H, &cell_j);
         return nv14_internal_grid_move(state, object_index, cell_i, cell_j);
     }
     return NV14_STATUS_OK;
@@ -1102,4 +1100,17 @@ const nv14_internal_object_module *nv14_objects_basic_module(void)
 nv14_status nv14_objects_basic_register(void)
 {
     return nv14_internal_register_object_module(&NV14_BASIC_MODULE);
+}
+
+void nv14_objects_basic_idle_after_death(nv14_state *state, size_t object_index)
+{
+    nv14_object_runtime *runtime = nv14_internal_object_runtime(state, object_index);
+    int kind = state->level->native_objects[object_index].kind;
+    if (kind == NV14_NATIVE_TESTDOOR) {
+        nv14_internal_grid_remove(state, object_index);
+    } else if (kind == NV14_NATIVE_THWOMP) {
+        runtime->i64[NV14_THWOMP_WAITING_DISABLED] = 1;
+        if (!runtime->i64[NV14_THWOMP_IS_MOVING])
+            runtime->i64[NV14_THWOMP_MODE] = 2;
+    }
 }

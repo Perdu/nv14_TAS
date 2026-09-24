@@ -302,3 +302,9 @@ nv14_status nv14_objects_guard_scene_at(
     out->chasing = runtime->i64[NV14_GUARD_CHASING] != 0;
     return NV14_STATUS_OK;
 }
+
+void nv14_objects_guard_idle_after_death(nv14_state *state, size_t object_index)
+{
+    nv14_internal_object_runtime(state, object_index)->i64[NV14_GUARD_CHASING] = 0;
+    nv14_internal_end_update(state, object_index);
+}

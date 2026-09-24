@@ -316,6 +316,7 @@ static nv14_status nv14_drone_descriptor_init(
 
 static int nv14_drone_rotate(int current_direction, int rotation)
 {
+    if (current_direction < 0) return -1; /* AVM1 undefined + rotation -> NaN */
     if (rotation < NV14_AI_ROT_0 || rotation > NV14_AI_ROT_270)
         return current_direction;
     return (current_direction + rotation) % 4;
@@ -333,14 +334,14 @@ static nv14_status nv14_drone_test_edge(
     int cell_i;
     int cell_j;
     int side;
-    if (open_out == NULL || direction < NV14_AI_DIR_R ||
-        direction > NV14_AI_DIR_U)
-        return NV14_STATUS_INVALID_ARGUMENT;
+    if (open_out == NULL) return NV14_STATUS_INVALID_ARGUMENT;
     *open_out = 0;
+    if (direction < NV14_AI_DIR_R || direction > NV14_AI_DIR_U)
+        return NV14_STATUS_OK;
     cell_i = (int)runtime->i64[NV14_DRONE_CELL_I];
     cell_j = (int)runtime->i64[NV14_DRONE_CELL_J];
     cell = nv14_drone_tile(state->level, cell_i, cell_j);
-    if (cell == NULL) return NV14_STATUS_OUT_OF_BOUNDS;
+    if (cell == NULL) return NV14_STATUS_OK;
     side = NV14_DRONE_EDGE_SIDE[direction];
     if (nv14_drone_edge_value(state, cell, side) != NV14_EID_OFF)
         return NV14_STATUS_OK;
@@ -349,9 +350,8 @@ static nv14_status nv14_drone_test_edge(
         cell_i + NV14_DRONE_EDGE_DI[direction],
         cell_j + NV14_DRONE_EDGE_DJ[direction]
     );
-    if (next_cell == NULL) return NV14_STATUS_OUT_OF_BOUNDS;
-    runtime->f64[NV14_DRONE_GOAL_X] = next_cell->x;
-    runtime->f64[NV14_DRONE_GOAL_Y] = next_cell->y;
+    runtime->f64[NV14_DRONE_GOAL_X] = next_cell == NULL ? NAN : next_cell->x;
+    runtime->f64[NV14_DRONE_GOAL_Y] = next_cell == NULL ? NAN : next_cell->y;
     *open_out = 1;
     return NV14_STATUS_OK;
 }
@@ -392,7 +392,7 @@ static nv14_status nv14_drone_get_goal_simple(
             return NV14_STATUS_OK;
         }
     }
-    *direction_out = current_direction;
+    *direction_out = -1; /* GetNewGoal_Simple has no return when boxed. */
     return NV14_STATUS_OK;
 }
 
@@ -511,6 +511,11 @@ static nv14_status nv14_drone_chase_axis(
     int current_direction = (int)runtime->i64[NV14_DRONE_CUR_DIR];
     nv14_status status;
     *chasing_out = 0;
+    /* Undefined cell.i/j comparisons cannot select an axis, and must not
+       overflow the native integer sentinel during subtraction/abs. */
+    if (state->player.cell_i == INT_MIN ||
+        runtime->i64[NV14_DRONE_CELL_I] == INT_MIN)
+        return NV14_STATUS_OK;
     cell_dx = state->player.cell_i - (int)runtime->i64[NV14_DRONE_CELL_I];
     cell_dy = state->player.cell_j - (int)runtime->i64[NV14_DRONE_CELL_J];
     if (abs(cell_dx) < 1) {
@@ -538,7 +543,8 @@ static nv14_status nv14_drone_chase_axis(
         state, runtime, direction, target_cells, &found
     );
     if (status != NV14_STATUS_OK || !found) return status;
-    runtime->i64[NV14_DRONE_CUR_DIR] = direction;
+    if (runtime->i64[NV14_DRONE_CUR_DIR] >= 0)
+        runtime->i64[NV14_DRONE_CUR_DIR] = direction;
     if (runtime->i64[NV14_DRONE_MOVE_TYPE] < NV14_DRONE_MOVE_WANDER_CW) {
         int rotation =
             runtime->i64[NV14_DRONE_MOVE_TYPE] ==
@@ -560,10 +566,12 @@ static nv14_status nv14_drone_chase(
 )
 {
     *chasing_out = 0;
-    if (!runtime->i64[NV14_DRONE_IS_CHASER]) return NV14_STATUS_OK;
+    if (!runtime->i64[NV14_DRONE_IS_CHASER] || state->objects_idled)
+        return NV14_STATUS_OK;
     if (runtime->i64[NV14_DRONE_SURFACE_GRAB_PENDING]) {
         runtime->i64[NV14_DRONE_SURFACE_GRAB_PENDING] = 0;
-        if (runtime->i64[NV14_DRONE_SURFACE_FUTURE_DIR] >= 0)
+        if (runtime->i64[NV14_DRONE_SURFACE_FUTURE_DIR] >= 0 &&
+            runtime->i64[NV14_DRONE_CUR_DIR] >= 0)
             runtime->i64[NV14_DRONE_CUR_DIR] =
                 runtime->i64[NV14_DRONE_SURFACE_FUTURE_DIR];
         return NV14_STATUS_OK;
@@ -628,14 +636,15 @@ nv14_status nv14_drones_update_move(
     } else {
         double move_speed = speed;
         current_direction = (int)runtime->i64[NV14_DRONE_CUR_DIR];
-        if (current_direction < NV14_AI_DIR_R ||
-            current_direction > NV14_AI_DIR_U)
-            return NV14_STATUS_INVALID_LEVEL;
         if (allow_zap_chase && object->kind == NV14_NATIVE_DRONE_ZAP &&
             runtime->i64[NV14_DRONE_IS_CHASING])
             move_speed *= 2.0;
-        pos_x += NV14_DRONE_DIR_X[current_direction] * move_speed;
-        pos_y += NV14_DRONE_DIR_Y[current_direction] * move_speed;
+        if (current_direction < NV14_AI_DIR_R || current_direction > NV14_AI_DIR_U) {
+            pos_x = pos_y = NAN; /* undefined curDirV.x/y arithmetic */
+        } else {
+            pos_x += NV14_DRONE_DIR_X[current_direction] * move_speed;
+            pos_y += NV14_DRONE_DIR_Y[current_direction] * move_speed;
+        }
         runtime->f64[NV14_DRONE_POS_X] = pos_x;
         runtime->f64[NV14_DRONE_POS_Y] = pos_y;
     }
@@ -656,9 +665,11 @@ nv14_status nv14_drones_update_move(
         pos_y < ((double)old_j + 1.0) * NV14_TILE_H) {
         return NV14_STATUS_OK;
     }
-    if (!nv14_internal_floor_index(pos_x, NV14_TILE_W, &new_i) ||
-        !nv14_internal_floor_index(pos_y, NV14_TILE_H, &new_j))
-        return NV14_STATUS_OUT_OF_BOUNDS;
+    (void)nv14_internal_floor_index(pos_x, NV14_TILE_W, &new_i);
+    (void)nv14_internal_floor_index(pos_y, NV14_TILE_H, &new_j);
+    if (new_i < 0 || new_i >= NV14_TILE_COLS ||
+        new_j < 0 || new_j >= NV14_TILE_ROWS)
+        new_i = new_j = INT_MIN;
     runtime->i64[NV14_DRONE_CELL_I] = new_i;
     runtime->i64[NV14_DRONE_CELL_J] = new_j;
     return nv14_internal_grid_move(state, object_index, new_i, new_j);
@@ -713,6 +724,8 @@ static nv14_status nv14_drone_think_object(
     int weapon_type;
     if (state == NULL || object_index >= state->level->native_object_count)
         return NV14_STATUS_INVALID_ARGUMENT;
+    /* Assigning Think=null leaves this object in the source's thinker ring. */
+    if (state->objects_idled) return NV14_STATUS_OK;
     object = &state->level->native_objects[object_index];
     weapon_type = nv14_drone_weapon_from_kind((nv14_native_kind)object->kind);
     hooks = nv14_drone_hooks(weapon_type);
@@ -746,7 +759,8 @@ static nv14_status nv14_drone_collide_player(
     dx = runtime->f64[NV14_DRONE_POS_X] - state->player.pos.x;
     dy = runtime->f64[NV14_DRONE_POS_Y] - state->player.pos.y;
     contact_radius = object->r + state->player.r;
-    if (dx * dx + dy * dy < contact_radius * contact_radius)
+    /* Preserve source sqrt rounding at the strict contact boundary. */
+    if (sqrt(dx * dx + dy * dy) < contact_radius)
         state->player.dead = 1;
     return NV14_STATUS_OK;
 }
@@ -834,4 +848,15 @@ nv14_status nv14_objects_drones_snapshot(
     out->thinking = state->thinker_active[object_index] != 0;
     out->grid_active = state->object_cell_slot[object_index] >= 0;
     return NV14_STATUS_OK;
+}
+
+void nv14_objects_drones_idle_after_death(nv14_state *state, size_t object_index)
+{
+    nv14_object_runtime *runtime = nv14_internal_object_runtime(state, object_index);
+    runtime->i64[NV14_DRONE_IS_CHASING] = 0;
+    if (runtime->i64[NV14_DRONE_MODE] == NV14_DRONE_MODE_FIRING) {
+        runtime->i64[NV14_DRONE_MODE] = NV14_DRONE_MODE_POSTFIRE;
+        runtime->i64[NV14_DRONE_FIRE_DELAY_TIMER] = 0;
+    }
+    /* isFiring is false during prefire, which must still run to completion. */
 }

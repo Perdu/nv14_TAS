@@ -438,10 +438,14 @@ def test_native_auto_decoder_preserves_wide_gold_and_door_masks() -> None:
     assert native.trace[1].opened_locked_door_mask == 1 << 71
 
 
-def test_native_auto_preserves_completion_and_death_on_the_same_tick() -> None:
+@pytest.mark.parametrize("mine_y, dead_tick", [(60, None), (74.3, 1)])
+def test_native_auto_preserves_exit_cell_traversal(mine_y, dead_tick) -> None:
     _require_native_auto()
+    # The exit removes itself: an older same-cell mine is skipped, but the
+    # down-cell mine is reached on the completion tick.  The latter starts
+    # outside contact range and gravity brings it into range on tick 1.
     level = parse_level_string(
-        f"{EMPTY_MAP}|5^115,100!12^115,100!11^115,100,115,100"
+        f"{EMPTY_MAP}|5^60,60!12^60,{mine_y}!11^60,60,60,60"
     )
     frames = (NEUTRAL,)
 
@@ -453,30 +457,37 @@ def test_native_auto_preserves_completion_and_death_on_the_same_tick() -> None:
     )
 
     assert native == reference
-    assert native.finish_tick == native.dead_tick == 1
+    assert native.finish_tick == 1
+    assert native.dead_tick == dead_tick
     assert native.trace[-1].complete
-    assert native.trace[-1].dead
+    assert native.trace[-1].dead is (dead_tick is not None)
     assert native.valid
 
 
-def test_v307_player_tile_domain_exit_is_a_terminal_death() -> None:
+def test_player_tile_domain_exit_continues_without_artificial_death() -> None:
     _require_native_auto()
     # The oversized launch vector moves the player completely across the solid
     # outer border during object collision, reproducing the high-velocity
-    # speculative-mutation failure without a test-only state mutation API.
+    # speculative-mutation case without a test-only state mutation API.
+    # GetTile_V returns undefined outside the grid; AVM1 treats collision
+    # calls on that missing tile as no-ops and keeps integrating the player.
     level = parse_level_string(f"{EMPTY_MAP}|5^100,100!2^100,100,200,0")
 
-    native = auto.evaluate_replay_with_sentinel(level, ())
+    native = auto.evaluate_replay_with_sentinel(level, (NEUTRAL,))
     reference = _python_reference_evaluation(
         level,
-        (NEUTRAL,),
+        (NEUTRAL, NEUTRAL),
         trace_stride=1,
     )
 
     assert native == reference
     assert native.finish_tick is None
-    assert native.dead_tick == native.last_tick == 0
-    assert native.trace[-1].dead
+    assert native.dead_tick is None
+    assert native.last_tick == 1
+    assert not native.trace[-1].dead
+    assert native.trace[0].x == 1128.5714285714287
+    assert native.trace[1].x == 2146.857142857143
+    assert native.trace[1].y == 100.30000000000001
     assert not native.valid
 
 

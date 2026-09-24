@@ -797,13 +797,21 @@ static void nv14_patch_evaluate_one(
         candidate->endpoint = working->player;
         candidate->has_endpoint = 1;
     }
+    /* Preserve AVM1 NaN continuation in physics, but reject its endpoint even
+       when this patch uses the constant-score objective. Once per candidate. */
+    if (!isfinite(working->player.pos.x) ||
+        !isfinite(working->player.pos.y) ||
+        !isfinite(working->player.oldpos.x) ||
+        !isfinite(working->player.oldpos.y))
+        return;
     if (!nv14_patch_all_requirements_satisfied(spec, working) ||
         !nv14_patch_jump_requirement_satisfied(spec, context->jump_hits) ||
         working->player.jump_events < spec->minimum_jump_events)
         return;
-    candidate->feasible = 1;
     candidate->score = spec->trace_target == NULL
         ? 0.0 : nv14_search_trace_distance(spec->trace_target, working);
+    if (!isfinite(candidate->score)) return;
+    candidate->feasible = 1;
     if (nv14_patch_candidate_is_best(context, patch_index))
         context->result->best_patch_index = patch_index;
 }

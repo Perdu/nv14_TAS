@@ -260,7 +260,10 @@ static nv14_status nv14_drone_laser_update(
             /* StopFiring_Laser precedes KillPlayer. */
             runtime->i64[NV14_DRONE_MODE] = NV14_DRONE_MODE_POSTFIRE;
             runtime->i64[NV14_DRONE_FIRE_DELAY_TIMER] = 0;
-            state->player.dead = 1;
+            if (!state->player.dead) {
+                state->player.dead = 1;
+                nv14_internal_idle_objects_after_death(state);
+            }
             return NV14_STATUS_OK;
         }
         ++runtime->i64[NV14_DRONE_LASER_TIMER];
@@ -390,7 +393,10 @@ static nv14_status nv14_drone_chain_update_firing(
         /* StopFiring_Chaingun runs before KillPlayer; the source still
            increments chaingunCurNum after both calls. */
         nv14_drone_chain_stop(runtime);
-        state->player.dead = 1;
+        if (!state->player.dead) {
+            state->player.dead = 1;
+            nv14_internal_idle_objects_after_death(state);
+        }
     }
     ++runtime->i64[NV14_DRONE_CHAIN_CURRENT];
     return NV14_STATUS_OK;

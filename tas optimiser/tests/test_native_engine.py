@@ -125,7 +125,7 @@ def test_completed_state_clears_tick_events_and_keys_include_frame() -> None:
     assert after_completion["collected_gold"] is False
     assert after_completion["exploded_mine"] is False
     assert after_completion["opened_exit"] is False
-    assert first_key.startswith(b"NV14KEY4")
+    assert first_key.startswith(b"NV14KEY5")
     assert second_key != first_key
 
 
@@ -182,9 +182,9 @@ def test_native_boundary_thwomp_can_leave_dense_grid() -> None:
     # This reproduces the source's left-facing boundary-thwomp quirk.  Its
     # fall goal is three pixels to the right of its anchor; StartRaise then
     # combines movedir=-1 with dir.x=-1 and sends it right indefinitely.  The
-    # Python grid accepts the resulting unbounded cell keys.  Native removes
-    # the object from its bounded dense grid once it reaches cell 34 instead
-    # of failing the whole evaluation.
+    # source removes it from the old cell once it reaches missing cell 33.
+    # Both engines now keep updating its position with no collision-grid
+    # node, matching undefined.InsertObj's AVM1 no-op continuation.
     map_chars = ["0"] * (31 * 23)
     for tile_x in range(31):
         map_chars[tile_x * 23 + 5] = "1"
@@ -204,10 +204,29 @@ def test_native_boundary_thwomp_can_leave_dense_grid() -> None:
     )
 
     assert result.compared_ticks == 521
-    assert result.final_state_checksum == (
-        "39509700b6245000fb5188b6d6d6eab06ec8201936a1e6dbb858d6c882a3c9bc"
-    )
     assert result.completed is False
+
+    # Assert the source behavior directly: the old checksum included Python's
+    # spurious sparse off-map cell (38, 4), unlike the source's missing member.
+    reference = load_reference_engine()
+    level = reference.parse_level_string(level_string, simulate_enemies=True)
+    state = level.initial_state()
+    native_state = native.parse_level_string(
+        level_string, simulate_enemies=True,
+    ).initial_state()
+    for _ in range(tick_count + 1):
+        state.step(reference.InputFrame(), level.tiles)
+        native_state.step(False, False, False, False)
+    thwomp = state.objects_by_uid[0]
+    observed = native_state.scene_snapshot()["objects"][0]
+    assert (thwomp.pos.x, thwomp.pos.y) == (916.7142857142758, 108.0)
+    assert (observed["x"], observed["y"]) == (thwomp.pos.x, thwomp.pos.y)
+    assert thwomp.is_moving and observed["moving"] and observed["updating"]
+    assert thwomp.goal.x == 24.0 and thwomp.movedir == -1
+    assert state.grid_state.cells == {}
+    assert state.grid_state.occupancy_mask == 0
+    assert state.grid_state.object_cells[0] == reference._UNDEFINED_CELL
+    assert not observed["grid_active"]
 
 
 def test_native_supported_synthetic_benchmark_has_equal_checksums() -> None:

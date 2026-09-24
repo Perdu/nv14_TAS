@@ -12,6 +12,10 @@
  */
 
 #include "nv14_internal.h"
+#include "nv14_objects_basic.h"
+#include "nv14_objects_drones.h"
+#include "nv14_objects_guard.h"
+#include "nv14_objects_ranged.h"
 
 #include <errno.h>
 #include <locale.h>
@@ -195,6 +199,7 @@ static int nv14_python_floor_index(double value, double divisor, int *out)
     }
     q = floor(q);
     if (!isfinite(q) || q < (double)INT32_MIN || q > (double)INT32_MAX) {
+        *out = INT32_MIN; /* internal sentinel for an undefined tile */
         return 0;
     }
     *out = (int)q;
@@ -1306,12 +1311,12 @@ nv14_status nv14_internal_grid_move(
     int slot;
     if (state == NULL || object_index >= state->level->native_object_count)
         return NV14_STATUS_INVALID_ARGUMENT;
-    slot = nv14_cell_slot(cell_i, cell_j);
-    /* The Python object grid is an unbounded dictionary, while the native
-       dense grid covers only map cells plus the player-query margin.  An
-       object outside that representable region cannot collide with an
-       in-bounds player: unlink it without treating the source-valid movement
-       as an error.  A later move back into the margin re-adds it below. */
+    /* Moved assigns undefined outside the actual tile array. RemoveObj
+       unlinks the old node; undefined.InsertObj does nothing. The update
+       callback keeps running, and re-entry can insert a new real node. */
+    slot = (cell_i >= 0 && cell_i < NV14_TILE_COLS &&
+            cell_j >= 0 && cell_j < NV14_TILE_ROWS)
+        ? nv14_cell_slot(cell_i, cell_j) : -1;
     if (slot < 0) {
         nv14_grid_remove(state, object_index);
         return NV14_STATUS_OK;
@@ -1737,7 +1742,8 @@ nv14_status nv14_state_copy_into(
     destination->event_exploded_mine = source->event_exploded_mine;
     destination->event_opened_exit = source->event_opened_exit;
     destination->phase_skip_player = source->phase_skip_player;
-    memcpy(destination->reserved, source->reserved, sizeof(destination->reserved));
+    destination->objects_idled = source->objects_idled;
+    destination->exit_trigger_guard_removed = source->exit_trigger_guard_removed;
     destination->phase_jump_events_before = source->phase_jump_events_before;
     destination->gold_bonus_ticks = source->gold_bonus_ticks;
     destination->completed_exit_index = source->completed_exit_index;
@@ -1888,6 +1894,8 @@ static void nv14_player_fall(
 )
 {
     if (player->state == NV14_PLAYER_JUMPING) player->g = player->norm_grav;
+    /* Fall calls ExitState; ExitDie restores TickNormal and clears isDead. */
+    player->dead = 0;
     player->state = NV14_PLAYER_FALLING;
     if (visual != NULL) nv14_visual_state_changed(visual, player);
 }
@@ -1926,6 +1934,7 @@ static void nv14_player_jump(
 static void nv14_player_celebrate(nv14_player_snapshot *player)
 {
     if (player->state == NV14_PLAYER_JUMPING) player->g = player->norm_grav;
+    player->dead = 0;
     player->state = NV14_PLAYER_CELEBRATING;
     player->celeb_was_in_air = player->in_air;
 }
@@ -1939,12 +1948,12 @@ static int nv14_query_point(const nv14_level *level, double x, double y, nv14_st
     double dy;
     if (!nv14_python_floor_index(x, NV14_TILE_W, &i) ||
         !nv14_python_floor_index(y, NV14_TILE_H, &j)) {
-        *status = NV14_STATUS_OUT_OF_BOUNDS;
+        *status = NV14_STATUS_OK;
         return 0;
     }
     cell = nv14_tile_at_const(level, i, j);
     if (cell == NULL) {
-        *status = NV14_STATUS_OUT_OF_BOUNDS;
+        *status = NV14_STATUS_OK;
         return 0;
     }
     if (cell->tile_id == NV14_TID_EMPTY) return 0;
@@ -2228,6 +2237,38 @@ static void nv14_player_think(
     }
 }
 
+void nv14_internal_idle_objects_after_death(nv14_state *state)
+{
+    size_t index;
+    if (state->player.dead) {
+        if (state->player.state == NV14_PLAYER_JUMPING)
+            state->player.g = state->player.norm_grav;
+        state->player.state = NV14_PLAYER_RAGDOLL;
+    }
+    state->objects_idled = 1;
+    /* IdleObjectsAfterDeath enumerates registered objects in descending UID
+       order. Gold is removed without being collected, and exits synchronously
+       unlink themselves. Exit triggers share gridList[undefined]. */
+    for (index = state->level->native_object_count; index-- > 0;) {
+        const nv14_native_object *obj = &state->level->native_objects[index];
+        if (obj->kind == NV14_NATIVE_GOLD || obj->kind == NV14_NATIVE_EXIT_DOOR) {
+            nv14_grid_remove(state, index);
+        } else if (obj->kind == NV14_NATIVE_EXIT_SWITCH &&
+                   !state->exit_trigger_guard_removed) {
+            nv14_grid_remove(state, index);
+            state->exit_trigger_guard_removed = 1;
+        } else if (obj->kind == NV14_NATIVE_THWOMP || obj->kind == NV14_NATIVE_TESTDOOR) {
+            nv14_objects_basic_idle_after_death(state, index);
+        } else if (obj->kind == NV14_NATIVE_TURRET || obj->kind == NV14_NATIVE_HOMING) {
+            nv14_objects_ranged_idle_after_death(state, index);
+        } else if (obj->kind == NV14_NATIVE_FLOORGUARD) {
+            nv14_objects_guard_idle_after_death(state, index);
+        } else if (obj->kind >= NV14_NATIVE_DRONE_ZAP && obj->kind <= NV14_NATIVE_DRONE_CHAINGUN) {
+            nv14_objects_drones_idle_after_death(state, index);
+        }
+    }
+}
+
 static int nv14_native_object_active(const nv14_state *state, const nv14_native_object *obj)
 {
     size_t bit = obj->state_index;
@@ -2251,7 +2292,7 @@ static nv14_status nv14_test_native_object(
     if (obj->kind <= NV14_NATIVE_EXIT_DOOR) {
         double dx = obj->x - player->pos.x;
         double dy = obj->y - player->pos.y;
-        if (sqrt(dx * dx + dy * dy) >= obj->r + player->r)
+        if (!(sqrt(dx * dx + dy * dy) < obj->r + player->r))
             return NV14_STATUS_OK;
         if (obj->kind == NV14_NATIVE_GOLD) {
             nv14_mask_set(state->collected_gold, obj->state_index);
@@ -2267,7 +2308,8 @@ static nv14_status nv14_test_native_object(
             size_t door_index;
             nv14_mask_set(state->open_exit, obj->state_index);
             state->event_opened_exit = 1;
-            *removed_current = 1;
+            *removed_current = !state->exit_trigger_guard_removed;
+            state->exit_trigger_guard_removed = 1;
             for (door_index = 0; door_index < state->level->native_object_count; ++door_index) {
                 const nv14_native_object *door = &state->level->native_objects[door_index];
                 if (door->kind == NV14_NATIVE_EXIT_DOOR &&
@@ -2280,6 +2322,8 @@ static nv14_status nv14_test_native_object(
             nv14_player_celebrate(player);
             state->completed_exit_index = (int64_t)obj->state_index;
             state->level_complete = 1;
+            *removed_current = 1;
+            nv14_internal_idle_objects_after_death(state);
         }
         return NV14_STATUS_OK;
     }
@@ -2383,17 +2427,11 @@ static nv14_status nv14_state_begin_player_step_internal(nv14_state *state)
     current_y = player->oldpos.y;
     player->pos.x += player->d * (current_x - old_x_before);
     player->pos.y += player->d * (current_y - old_y_before) + player->g;
-    if (!nv14_python_floor_index(player->pos.x, NV14_TILE_W, &player->cell_i) ||
-        !nv14_python_floor_index(player->pos.y, NV14_TILE_H, &player->cell_j)) {
-        /* A malformed internal index is still an error everywhere else, but
-         * a replay mutation may legitimately fling the player beyond the
-         * finite tile domain (or to a non-finite coordinate).  This branch is
-         * terminal gameplay state, not a corrupt search/evaluator buffer.
-         * Mark it as an ordinary death so every native caller can discard the
-         * candidate without aborting the complete worker. */
-        player->dead = 1;
-        return NV14_STATUS_OK;
-    }
+    (void)nv14_python_floor_index(player->pos.x, NV14_TILE_W, &player->cell_i);
+    (void)nv14_python_floor_index(player->pos.y, NV14_TILE_H, &player->cell_j);
+    if (player->cell_i < 0 || player->cell_i >= NV14_TILE_COLS ||
+        player->cell_j < 0 || player->cell_j >= NV14_TILE_ROWS)
+        player->cell_i = player->cell_j = INT32_MIN;
     player->old_v.x = player->pos.x - player->oldpos.x;
     player->old_v.y = player->pos.y - player->oldpos.y;
     player->was_in_air = player->in_air;
@@ -2417,8 +2455,10 @@ static nv14_status nv14_state_collide_native_objects_internal(nv14_state *state)
     int k;
     if (state == NULL) return NV14_STATUS_INVALID_ARGUMENT;
     if (state->phase != 1) return NV14_STATUS_PHASE_ERROR;
-    if (state->level_complete || state->player.dead) return NV14_STATUS_OK;
+    if (state->phase_skip_player || state->objects_idled) return NV14_STATUS_OK;
     if (state->level->native_object_count == 0) return NV14_STATUS_OK;
+    if (state->player.cell_i == INT32_MIN ||
+        state->player.cell_j == INT32_MIN) return NV14_STATUS_OK;
     for (k = 0; k < 9; ++k) {
         int slot = nv14_cell_slot(
             state->player.cell_i + offsets[k][0],
@@ -2426,7 +2466,6 @@ static nv14_status nv14_state_collide_native_objects_internal(nv14_state *state)
         );
         int32_t object_index = slot >= 0 ? state->cell_heads[slot] : -1;
         while (object_index >= 0) {
-            int32_t next = state->object_next[object_index];
             int removed = 0;
             nv14_status status = nv14_test_native_object(
                 state, (size_t)object_index, &removed
@@ -2435,11 +2474,13 @@ static nv14_status nv14_state_collide_native_objects_internal(nv14_state *state)
             if (removed) {
                 nv14_grid_remove(state, (size_t)object_index);
             }
-            if (state->player.dead) break;
+            if (state->player.dead && state->player.state != NV14_PLAYER_RAGDOLL)
+                nv14_internal_idle_objects_after_death(state);
             if (removed) break;
-            object_index = next;
+            /* The callback may unlink other objects (including this one).
+               Follow the live next pointer, exactly like v2 = v2.next. */
+            object_index = state->object_next[object_index];
         }
-        if (state->player.dead) break;
     }
     return NV14_STATUS_OK;
 }
@@ -3658,6 +3699,7 @@ static nv14_status nv14_resolve_circle_tile(
     int *collision_out
 )
 {
+    if (tile == NULL) { *collision_out = NV14_COL_NONE; return NV14_STATUS_OK; }
     if (tile->tile_id == NV14_TID_EMPTY) {
         *collision_out = NV14_COL_NONE;
         return NV14_STATUS_OK;
@@ -3726,9 +3768,9 @@ static nv14_status nv14_collide_circle_tiles(nv14_state *state)
     nv14_status status;
     if (!nv14_python_floor_index(player->pos.x, NV14_TILE_W, &centre_i) ||
         !nv14_python_floor_index(player->pos.y, NV14_TILE_H, &centre_j))
-        return NV14_STATUS_OUT_OF_BOUNDS;
+        return NV14_STATUS_OK;
     centre = nv14_tile_at_const(level, centre_i, centre_j);
-    if (centre == NULL) return NV14_STATUS_OUT_OF_BOUNDS;
+    if (centre == NULL) return NV14_STATUS_OK;
     cx = centre->x;
     cy = centre->y;
     dx = player->pos.x - cx;
@@ -3753,7 +3795,6 @@ static nv14_status nv14_collide_circle_tiles(nv14_state *state)
             v_neighbour = nv14_tile_at_const(level, centre_i, centre_j + 1);
             o_v = -1;
         }
-        if (v_neighbour == NULL) return NV14_STATUS_OUT_OF_BOUNDS;
         if (edge_value > NV14_EID_OFF) {
             if (edge_value == NV14_EID_SOLID) {
                 col_v = NV14_COL_AXIS;
@@ -3782,7 +3823,6 @@ static nv14_status nv14_collide_circle_tiles(nv14_state *state)
             h_neighbour = nv14_tile_at_const(level, centre_i + 1, centre_j);
             o_h = -1;
         }
-        if (h_neighbour == NULL) return NV14_STATUS_OUT_OF_BOUNDS;
         if (edge_value > NV14_EID_OFF) {
             if (edge_value == NV14_EID_SOLID) {
                 col_h = NV14_COL_AXIS;
@@ -3809,7 +3849,7 @@ static nv14_status nv14_collide_circle_tiles(nv14_state *state)
             v_cell = nv14_tile_at_const(level, centre_i - 1, centre_j);
             diagonal = nv14_tile_at_const(level, centre_i - 1, centre_j - 1);
             if (h_cell == NULL || v_cell == NULL || diagonal == NULL)
-                return NV14_STATUS_OUT_OF_BOUNDS;
+                return NV14_STATUS_OK;
             edge_h = nv14_edge_value(state, h_cell, NV14_EDGE_L);
             edge_v = nv14_edge_value(state, v_cell, NV14_EDGE_U);
         } else if (dx < 0.0 && dy > 0.0) {
@@ -3817,7 +3857,7 @@ static nv14_status nv14_collide_circle_tiles(nv14_state *state)
             v_cell = nv14_tile_at_const(level, centre_i - 1, centre_j);
             diagonal = nv14_tile_at_const(level, centre_i - 1, centre_j + 1);
             if (h_cell == NULL || v_cell == NULL || diagonal == NULL)
-                return NV14_STATUS_OUT_OF_BOUNDS;
+                return NV14_STATUS_OK;
             edge_h = nv14_edge_value(state, h_cell, NV14_EDGE_L);
             edge_v = nv14_edge_value(state, v_cell, NV14_EDGE_D);
         } else if (dx > 0.0 && dy > 0.0) {
@@ -3825,7 +3865,7 @@ static nv14_status nv14_collide_circle_tiles(nv14_state *state)
             v_cell = nv14_tile_at_const(level, centre_i + 1, centre_j);
             diagonal = nv14_tile_at_const(level, centre_i + 1, centre_j + 1);
             if (h_cell == NULL || v_cell == NULL || diagonal == NULL)
-                return NV14_STATUS_OUT_OF_BOUNDS;
+                return NV14_STATUS_OK;
             edge_h = nv14_edge_value(state, h_cell, NV14_EDGE_R);
             edge_v = nv14_edge_value(state, v_cell, NV14_EDGE_D);
         } else if (dx > 0.0 && dy < 0.0) {
@@ -3833,7 +3873,7 @@ static nv14_status nv14_collide_circle_tiles(nv14_state *state)
             v_cell = nv14_tile_at_const(level, centre_i + 1, centre_j);
             diagonal = nv14_tile_at_const(level, centre_i + 1, centre_j - 1);
             if (h_cell == NULL || v_cell == NULL || diagonal == NULL)
-                return NV14_STATUS_OUT_OF_BOUNDS;
+                return NV14_STATUS_OK;
             edge_h = nv14_edge_value(state, h_cell, NV14_EDGE_R);
             edge_v = nv14_edge_value(state, v_cell, NV14_EDGE_U);
         } else {
@@ -3944,14 +3984,10 @@ static nv14_status nv14_finish_player_step_internal(
        source still performs tile collision and ThinkCelebrate on that same
        frame.  Only a state that was already complete before Begin skips the
        player tick. */
-    if (!state->phase_skip_player && !state->player.dead) {
-        double pre_tile_x = state->player.pos.x;
-        double pre_tile_y = state->player.pos.y;
+    if (!state->phase_skip_player) {
         int collision_i;
         int collision_j;
         status = nv14_collide_circle_tiles(state);
-        if (status == NV14_STATUS_OUT_OF_BOUNDS)
-            goto player_out_of_bounds;
         if (status != NV14_STATUS_OK) {
             nv14_fill_step_result(
                 state, frame_before, jumps_before, jump_callable, status, result_out
@@ -3959,26 +3995,26 @@ static nv14_status nv14_finish_player_step_internal(
             return status;
         }
         status = nv14_player_handle_collisions(&state->player, state->level);
-        if (status == NV14_STATUS_OUT_OF_BOUNDS)
-            goto player_out_of_bounds;
         if (status != NV14_STATUS_OK) {
             nv14_fill_step_result(
                 state, frame_before, jumps_before, jump_callable, status, result_out
             );
             return status;
         }
-        if (state->player.pos.x == pre_tile_x && state->player.pos.y == pre_tile_y) {
-            if (!nv14_python_floor_index(pre_tile_x, NV14_TILE_W, &collision_i) ||
-                !nv14_python_floor_index(pre_tile_y, NV14_TILE_H, &collision_j)) {
-                goto player_out_of_bounds;
-            }
-            state->player.cell_i = collision_i;
-            state->player.cell_j = collision_j;
-        } else if (!nv14_python_floor_index(
-                       state->player.pos.x, NV14_TILE_W, &state->player.cell_i) ||
-                   !nv14_python_floor_index(
-                       state->player.pos.y, NV14_TILE_H, &state->player.cell_j)) {
-            goto player_out_of_bounds;
+        (void)nv14_python_floor_index(
+            state->player.pos.x, NV14_TILE_W, &collision_i);
+        (void)nv14_python_floor_index(
+            state->player.pos.y, NV14_TILE_H, &collision_j);
+        if (collision_i < 0 || collision_i >= NV14_TILE_COLS ||
+            collision_j < 0 || collision_j >= NV14_TILE_ROWS)
+            collision_i = collision_j = INT32_MIN;
+        state->player.cell_i = collision_i;
+        state->player.cell_j = collision_j;
+        if (state->player.dead) {
+            if (state->player.state != NV14_PLAYER_RAGDOLL)
+                nv14_internal_idle_objects_after_death(state);
+            if (have_alternate) alternate_player = state->player;
+            goto player_tick_finished;
         }
         jump_callable = (uint8_t)nv14_player_jump_callable(&state->player);
         if (have_alternate) {
@@ -4012,14 +4048,6 @@ static nv14_status nv14_finish_player_step_internal(
         alternate_player = state->player;
     }
     goto player_tick_finished;
-
-player_out_of_bounds:
-    /* Tile-domain exits are an expected terminal result of speculative replay
-     * mutations.  Keep OUT_OF_BOUNDS fatal for object schedulers, grids,
-     * masks and result capacities by translating it only at these player/tile
-     * collision sites. */
-    state->player.dead = 1;
-    if (have_alternate) alternate_player = state->player;
 
 player_tick_finished:
     for (module_index = 0;
@@ -4516,7 +4544,7 @@ size_t nv14_state_key_size(const nv14_state *state, int precision)
     /* magic/version + frame + player + flags/static state + edge count. */
     if (!nv14_key_size_add(
             &size,
-            8u + 8u + 8u * 8u + 4u * 4u + 6u + 8u + 8u + 2u
+            8u + 8u + 8u * 8u + 4u * 4u + 8u + 8u + 8u + 2u
         ) ||
         /* A valid linked grid is uniquely reconstructible from each object's
            next index and cell slot; heads and previous links are derived. */
@@ -4580,7 +4608,7 @@ nv14_status nv14_state_write_key(
     if (required == 0) return NV14_STATUS_INVALID_ARGUMENT;
     if (buffer_size < required) return NV14_STATUS_BUFFER_TOO_SMALL;
     cursor = buffer;
-    memcpy(cursor, "NV14KEY4", 8);
+    memcpy(cursor, "NV14KEY5", 8);
     cursor += 8;
     nv14_key_write_u64(&cursor, state->frame);
     p = &state->player;
@@ -4602,6 +4630,8 @@ nv14_status nv14_state_write_key(
     *cursor++ = p->celeb_was_in_air;
     *cursor++ = p->dead;
     *cursor++ = state->level_complete;
+    *cursor++ = state->objects_idled;
+    *cursor++ = state->exit_trigger_guard_removed;
     nv14_key_write_u64(&cursor, state->gold_bonus_ticks);
     nv14_key_write_u64(&cursor, (uint64_t)state->completed_exit_index);
     nv14_key_write_u16(&cursor, state->edge_override_count);

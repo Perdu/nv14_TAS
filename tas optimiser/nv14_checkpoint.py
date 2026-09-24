@@ -16,11 +16,16 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-OPTIMISER_VERSION = "4.23"
+OPTIMISER_VERSION = "4.24"
 AUTO_CHECKPOINT_KIND = "nv14-auto-campaign"
 AUTO_CHECKPOINT_FORMAT_VERSION = 1
 
+# Hash stable source inputs, including every native engine module/header.
+# Generated wrappers and platform binaries are excluded so rebuilt copies of
+# the same release retain their identity across worker/spot-instance hosts.
 _BUILD_FINGERPRINT_FILES = (
+    "build_native.py",
+    "setup.py",
     "nv14_auto.py",
     "nv14_auto_parallel.py",
     "nv14_checkpoint.py",
@@ -30,18 +35,36 @@ _BUILD_FINGERPRINT_FILES = (
     "nv14_replay.py",
     "nv14_search.py",
     "nv14_splice_index.py",
+    "native/_nv14_native.pyx",
     "native/nv14_auto.c",
     "native/nv14_auto.h",
     "native/nv14_core.c",
     "native/nv14_core.h",
     "native/nv14_drone_weapons.c",
+    "native/nv14_drone_weapons.h",
+    "native/nv14_drones_internal.h",
+    "native/nv14_dump.c",
+    "native/nv14_dump.h",
+    "native/nv14_internal.h",
+    "native/nv14_objects_basic.c",
+    "native/nv14_objects_basic.h",
+    "native/nv14_objects_drones.c",
+    "native/nv14_objects_drones.h",
+    "native/nv14_objects_guard.c",
+    "native/nv14_objects_guard.h",
     "native/nv14_objects_ranged.c",
+    "native/nv14_objects_ranged.h",
     "native/nv14_patch.c",
     "native/nv14_patch.h",
     "native/nv14_rays.c",
     "native/nv14_rays.h",
+    "native/nv14_scene.c",
+    "native/nv14_scene.h",
     "native/nv14_search.c",
     "native/nv14_search.h",
+    "native/nv14_visual.c",
+    "native/nv14_visual.h",
+    "native/nv14_visual_internal.h",
 )
 
 

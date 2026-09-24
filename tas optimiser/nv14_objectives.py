@@ -1239,6 +1239,10 @@ def _evaluation_with_interactions(
     *,
     compiled_constraints: _CompiledInteractionConstraints | None = None,
 ) -> Evaluation:
+    # AVM1 can continue with NaN player coordinates after a singular collision.
+    # Such states remain valid physics traces, but cannot be search winners.
+    if feasible and not math.isfinite(score):
+        score, feasible = float("-inf"), False
     if not required_interactions and not avoided_interactions:
         return Evaluation(
             score,
@@ -1374,7 +1378,9 @@ def position_within_windows(
 ) -> bool:
     player = state.player
     return (
-        (x_window is None or x_window.contains(player.pos.x))
+        math.isfinite(player.pos.x) and math.isfinite(player.pos.y)
+        and math.isfinite(player.oldpos.x) and math.isfinite(player.oldpos.y)
+        and (x_window is None or x_window.contains(player.pos.x))
         and (y_window is None or y_window.contains(player.pos.y))
     )
 

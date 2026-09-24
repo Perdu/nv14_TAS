@@ -77,115 +77,6 @@ _SPLICE_TASK_ID_BASE = 1 << 63
 _POPULATION_SPLICE_NICHE_TICKS = 12
 _AUTO_STAGNATION_MIN_DISTANCE_GAIN_PX = 0.5
 
-# Exact older releases can resume into v4.23 only with enemy simulation
-# explicitly disabled: retained ray endpoints change enemy behaviour. Every
-# newly configurable value must retain its historical/default behaviour.
-# Pre-v3.11 releases start
-# without pending auxiliary seeds; v3.11 retains its checkpointed seeds.
-# Keep this allow-list exact so modified prior builds still fail validation.
-_CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS = {
-    ("4.22", "74ee6ff98177565e06cbc782919e3011fb9f32454fc4f83bcce9804356f8e6ea"),
-    ("4.21", "4076743c11b904ffd4b7fafb85a6bcaf4b23fa8d1e3a37fe93a8df6b5123705d"),
-    ("4.20", "1e26074015dad95c6203ceed0e00613d59672118ca30d8b9dcefd84f892aff16"),
-    ("4.19", "b59df672d93ddd58dd43bbe7820c5e307f6e1c3a52e8a3a853a7aef1f087bfb8"),
-    ("4.18", "6fabfc548fd47897f1b50279fc950c5ca7c44417184b586ede495511e0904704"),
-    ("4.17", "49481841b51d01c01e7b9bb7dc6d77b7c8340b581ed82ae9a04484575d0e9dc1"),
-    ("4.16.1", "84b83da1c8dfc7af283bcb0df7711488c8c4ccd74357fc40ff261db957cadd75"),
-    ("4.16", "e0e9694fff1e09972226f546f4b92008bcb102dd3d753f58cee8a67820c12cfb"),
-    ("4.15", "d01e9952902390bdf34655c6829107122047a5d4731ba33afb93a5200180f263"),
-    ("4.14", "31904e99868ca0999b68e64fc5de4f1268d394db8e0f6d4696c61d6cfae84127"),
-    ("4.13", "5c57bc9ed211356c6f5feaf46a1e8d36b5431d824f407381948e88392b5fa667"),
-    ("4.12", "b03fff98694b5484ce994a35ff3858133c7e877a296d1b64d7da0f74f44e9caf"),
-    ("4.11", "1163754396f1032f6a9442f1377e0be463567f926cc26abc4c559bc1335a0571"),
-    ("4.10", "651d4adf531cb3935ebe3a04cfa1830f0606578c56c40399677fdeba037bcd01"),
-    ("4.09", "d523d67b05a4446d606c4a6dd72b82885fea889204e8e1b2509a2ad8b40aa60d"),
-    ("4.08.1", "7e14cf84ace05735e5fbe8b22f7428600a68e5ffe73671373155359c59c84704"),
-    (
-        "4.08",
-        "695db08b11807cfa6ca60193118b3442d4ffcb858db2e796f8563771e5f5f05b",
-    ),
-    (
-        "4.07",
-        "2b8191af0d999db0061fb8b7dc06fb625f945fd9199e0d94c95f559607c8b533",
-    ),
-    (
-        "4.06",
-        "1e4b46614c73d789dd76aa2b7bf9b95c5625dfb7b8a77767d7b855480a7f5a8c",
-    ),
-    (
-        "4.05",
-        "527e0eeb51ddb07c495f09749f9f2729792f8b81b8ec19b453fa0180f7ab1531",
-    ),
-    (
-        "4.04",
-        "bce21a68e65a6d53d1b356027888a5dc97495fc85894a2acc78fea66334197c3",
-    ),
-    (
-        "4.03",
-        "c7b7bf9921313a69ce3bea95ff6cbe6b3e6cbfae4701818a2c39646400eeed4f",
-    ),
-    (
-        "4.02",
-        "7194de5087a50029b424aa24d5723e0a17d1e0c2d7475d66a7b7e7169b790a39",
-    ),
-    (
-        "4.01",
-        "0b07774c0484180458466818510a3c195ed69659f95037b651b78acf0ec1a4fb",
-    ),
-    (
-        "4.00",
-        "8eb8ebac48658d944e3bb704dc1737cac379f6ef7fcf43c47907b8f4884bb0b1",
-    ),
-    (
-        "3.21",
-        "4e14f7fe91d5f9e98c77fe9ed20c3f405b5850b0cc1cd322f074b8a8e5e3f4c0",
-    ),
-    (
-        "3.15",
-        "7fefdab32516b6ebbdc06f24ddd0f39249ea7a020e1c40b83b94e51d0c977afb",
-    ),
-    (
-        "3.05",
-        "d0a7ea78c7b24de46bac1ff1c00774de833ef23107a07b743ebffe67d755e43e",
-    ),
-    (
-        "3.06",
-        "f394554d7ca12ac8a9e1d05b443a709a7e9597f7340e511ef3bd1e029d6f3475",
-    ),
-    (
-        "3.07",
-        "9ee3cd695e42f53bc157f9edb2970914a276ffc1e640e6a39e5d7817bbf8b79e",
-    ),
-    (
-        "3.08",
-        "0403296b82bdd9c711a35f719608cea5982da23413d2d476f4b2bfcaffdd47e5",
-    ),
-    (
-        "3.09",
-        "759ff49138cbafe636c515d26f033255b11079da4ffe1d5fb5ccb9d7073a8220",
-    ),
-    (
-        "3.10",
-        "48e851b680b4be8c460210fe270d8be51a7f622aa866c59a0112d05456a07879",
-    ),
-    (
-        "3.11",
-        "2ec99abdb9288c9774443f8a104eda2003eb1f4691c8d17075f285b45465c218",
-    ),
-    (
-        "3.12",
-        "e4c5c7f5cb35c7db295ce0f0a41ba44d134818e9729da57d9907130d515dfcf9",
-    ),
-    (
-        "3.13",
-        "225bfb93af3451cfee6fd9601ddd495cb4105b1a21bf025ff0e3f96ff2244371",
-    ),
-    (
-        "3.14",
-        "5481fae4dab85df23652b933c162c8277338fc1896f3a426a7b7b3beea32f0f7",
-    ),
-}
-
 
 @dataclass(frozen=True, slots=True)
 class AutoSpliceDonor:
@@ -2606,50 +2497,13 @@ def _validate_checkpoint_identity(
         expected.get("optimiser_version"),
         expected.get("optimiser_build_sha256"),
     )
-    previous_build_compatible = (
-        expected.get("optimiser_version") == OPTIMISER_VERSION == "4.23"
-        and stored_build in _CHECKPOINT_COMPATIBLE_PREVIOUS_BUILDS
-        and stored.get("simulate_enemies") is False
-        and expected.get("simulate_enemies") is False
-    )
-    build_compatible = stored_build == expected_build or previous_build_compatible
-
+    # v4.24 changes static/player collision semantics as well as enemies.
+    # No earlier physics build can safely resume even with enemies disabled.
+    build_compatible = stored_build == expected_build
     configuration_compatible = (
         stored.get("configuration_sha256")
         == expected.get("configuration_sha256")
     )
-    if not configuration_compatible and previous_build_compatible:
-        # v3.08 and earlier used a fixed two plans per pair; v3.10 and earlier
-        # predate auxiliary beam seeds. Inject only absent historical defaults;
-        # v3.11's explicit seed setting must still match the current invocation.
-        stored_configuration = stored.get("configuration")
-        expected_configuration = expected.get("configuration")
-        if (
-            isinstance(stored_configuration, Mapping)
-            and isinstance(expected_configuration, Mapping)
-            and isinstance(stored_configuration.get("auto_config"), Mapping)
-        ):
-            normalised_configuration = dict(stored_configuration)
-            normalised_auto_config = dict(stored_configuration["auto_config"])
-            normalised_auto_config.setdefault("splice_plans_per_pair", 2)
-            normalised_auto_config.setdefault("auxiliary_beam_seeds", 1)
-            normalised_configuration["auto_config"] = normalised_auto_config
-            normalised_expected = dict(expected_configuration)
-            expected_auto_config = normalised_expected.get("auto_config")
-            if isinstance(expected_auto_config, Mapping):
-                normalised_expected_auto_config = dict(expected_auto_config)
-                normalised_expected_auto_config.setdefault(
-                    "splice_plans_per_pair", 2
-                )
-                normalised_expected_auto_config.setdefault(
-                    "auxiliary_beam_seeds", 1
-                )
-                normalised_expected["auto_config"] = (
-                    normalised_expected_auto_config
-                )
-            configuration_compatible = (
-                normalised_configuration == normalised_expected
-            )
     labels = {
         "level_identifier": "level identifier",
         "level_sha256": "level data",

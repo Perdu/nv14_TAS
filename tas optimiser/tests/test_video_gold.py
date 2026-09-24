@@ -261,10 +261,12 @@ def test_cli_and_toml_options(tmp_path, monkeypatch):
         nv14_video.encode_replay_data_video("invalid", [], tmp_path/"bad.mp4", secondary_gold=True)
 
 
-def test_exact_v412_checkpoints_remain_compatible():
+def test_v424_rejects_exact_v412_checkpoints():
+    from nv14_checkpoint import AutoCheckpointError
     from nv14_auto_parallel import _validate_checkpoint_identity
     from test_auto_checkpoint import _current_identity_with_splice_limit
     current = _current_identity_with_splice_limit(2)
     old = {**current, "optimiser_version": "4.12",
            "optimiser_build_sha256": "b03fff98694b5484ce994a35ff3858133c7e877a296d1b64d7da0f74f44e9caf"}
-    _validate_checkpoint_identity(old, current)
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(old, current)

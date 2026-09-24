@@ -138,11 +138,13 @@ static nv14_status nv14_ranged_query_point(
     if (level == NULL || solid_out == NULL)
         return NV14_STATUS_INVALID_ARGUMENT;
     *solid_out = 0;
+    if (cell_out != NULL) *cell_out = NULL;
     if (!nv14_internal_floor_index(x, NV14_TILE_W, &i) ||
         !nv14_internal_floor_index(y, NV14_TILE_H, &j))
-        return NV14_STATUS_OUT_OF_BOUNDS;
+        return NV14_STATUS_OK;
     cell = nv14_ranged_tile_at(level, i, j);
-    if (cell == NULL) return NV14_STATUS_OUT_OF_BOUNDS;
+    /* Undefined tile dispatch is a no-op in AVM1, including NaN positions. */
+    if (cell == NULL) return NV14_STATUS_OK;
     if (cell_out != NULL) *cell_out = cell;
     if (cell->tile_id == NV14_TID_EMPTY)
         return NV14_STATUS_OK;
@@ -356,7 +358,10 @@ static nv14_status nv14_turret_fire(
         runtime->f64[NV14_TURRET_TARGET_X] = query.point.x;
         runtime->f64[NV14_TURRET_TARGET_Y] = query.point.y;
     }
-    if (query.object_hit) state->player.dead = 1;
+    if (query.object_hit && !state->player.dead) {
+        state->player.dead = 1;
+        nv14_internal_idle_objects_after_death(state);
+    }
     return NV14_STATUS_OK;
 }
 
@@ -500,7 +505,7 @@ static nv14_status nv14_homing_explode(
     nv14_internal_end_update(state, object_index);
     nv14_internal_grid_remove(state, object_index);
     runtime->i64[NV14_RANGED_MODE] = NV14_RANGED_HOMING_IDLE;
-    if (restart_thinker)
+    if (restart_thinker && !state->objects_idled)
         return nv14_internal_start_think(state, object_index);
     return NV14_STATUS_OK;
 }
@@ -599,24 +604,23 @@ static nv14_status nv14_homing_update_active(
 
     old_i = (int)runtime->i64[NV14_RANGED_CELL_I];
     old_j = (int)runtime->i64[NV14_RANGED_CELL_J];
-    new_i = cell->i;
-    new_j = cell->j;
+    new_i = cell != NULL ? cell->i : INT32_MIN;
+    new_j = cell != NULL ? cell->j : INT32_MIN;
     if (new_i != old_i || new_j != old_j) {
         status = nv14_internal_grid_move(state, object_index, new_i, new_j);
         if (status != NV14_STATUS_OK) return status;
         runtime->i64[NV14_RANGED_CELL_I] = new_i;
         runtime->i64[NV14_RANGED_CELL_J] = new_j;
         old_cell = nv14_ranged_tile_at(state->level, old_i, old_j);
-        if (old_cell == NULL) return NV14_STATUS_OUT_OF_BOUNDS;
-        if (new_i == old_i + 1 && new_j == old_j)
+        if (old_cell != NULL && new_i == old_i + 1 && new_j == old_j)
             side = NV14_EDGE_R;
-        else if (new_i == old_i - 1 && new_j == old_j)
+        else if (old_cell != NULL && new_i == old_i - 1 && new_j == old_j)
             side = NV14_EDGE_L;
-        else if (new_i == old_i && new_j == old_j - 1)
+        else if (old_cell != NULL && new_i == old_i && new_j == old_j - 1)
             side = NV14_EDGE_U;
-        else if (new_i == old_i && new_j == old_j + 1)
+        else if (old_cell != NULL && new_i == old_i && new_j == old_j + 1)
             side = NV14_EDGE_D;
-        if (side >= 0 &&
+        if (old_cell != NULL && side >= 0 &&
             nv14_ranged_edge_value(state, old_cell, side) == NV14_EID_SOLID)
             return nv14_homing_explode(state, object_index, 1);
     }
@@ -630,7 +634,7 @@ static nv14_status nv14_homing_update_active(
     dx = predicted_x - rocket_next_x;
     dy = predicted_y - rocket_next_y;
     target_len = sqrt(dx * dx + dy * dy);
-    if (target_len == 0.0) return NV14_STATUS_OK;
+    /* AVM1 deliberately continues through zero-target 0 / 0 into NaNs. */
     dx /= target_len;
     dy /= target_len;
     cross = (-runtime->f64[NV14_HOMING_DIR_Y]) * dx +
@@ -775,7 +779,10 @@ static nv14_status nv14_ranged_collide_player(
     dy = state->player.pos.y - runtime->f64[NV14_HOMING_POS_Y];
     distance = sqrt(dx * dx + dy * dy);
     if (distance < state->player.r) {
-        state->player.dead = 1;
+        if (!state->player.dead) {
+            state->player.dead = 1;
+            nv14_internal_idle_objects_after_death(state);
+        }
         status = nv14_homing_explode(state, object_index, 0);
         if (status != NV14_STATUS_OK) return status;
         if (removed_current_out != NULL) *removed_current_out = 1;
@@ -878,4 +885,19 @@ nv14_status nv14_objects_ranged_snapshot(
         out->cell_j = (int32_t)runtime->i64[NV14_RANGED_CELL_J];
     }
     return NV14_STATUS_OK;
+}
+
+void nv14_objects_ranged_idle_after_death(nv14_state *state, size_t object_index)
+{
+    nv14_object_runtime *runtime = nv14_internal_object_runtime(state, object_index);
+    int kind = state->level->native_objects[object_index].kind;
+    if (kind == NV14_NATIVE_TURRET) {
+        runtime->i64[NV14_RANGED_MODE] = NV14_RANGED_TURRET_WAITING;
+        nv14_internal_end_update(state, object_index);
+        nv14_internal_end_think(state, object_index);
+    } else if (runtime->i64[NV14_RANGED_MODE] == NV14_RANGED_HOMING_IDLE) {
+        nv14_internal_end_think(state, object_index);
+    }
+    /* An active homing launcher continues until ExplodeMissile; its future
+       StartIdle is suppressed by state->objects_idled at that call. */
 }

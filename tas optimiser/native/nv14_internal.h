@@ -238,7 +238,8 @@ struct nv14_state {
     uint8_t event_exploded_mine;
     uint8_t event_opened_exit;
     uint8_t phase_skip_player;
-    uint8_t reserved[2];
+    uint8_t objects_idled;
+    uint8_t exit_trigger_guard_removed;
     uint64_t phase_jump_events_before;
     uint64_t gold_bonus_ticks;
     int64_t completed_exit_index;
@@ -291,6 +292,7 @@ static inline const nv14_object_runtime *nv14_internal_object_runtime_const(
 }
 
 /* Internal helpers intentionally exported only to sibling native units. */
+void nv14_internal_idle_objects_after_death(nv14_state *state);
 nv14_status nv14_internal_register_object_module(
     const nv14_internal_object_module *module
 );

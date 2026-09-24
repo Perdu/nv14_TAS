@@ -25,6 +25,19 @@ from typing import Iterable, Iterator, Sequence
 # across the millions of cell calculations in optimiser simulations.
 _floor = math.floor
 
+# AVM1 arithmetic and missing tile properties continue with NaN/undefined.
+# Keep the normal floor builtin above; use this only where singular runtime
+# positions can reach a grid lookup. The integer sentinel never names a tile.
+_UNDEFINED_CELL_INDEX = -2147483648
+_UNDEFINED_CELL = (_UNDEFINED_CELL_INDEX, _UNDEFINED_CELL_INDEX)
+
+
+def _avm_floor(value: float) -> int:
+    try:
+        return _floor(value)
+    except (ValueError, OverflowError):
+        return _UNDEFINED_CELL_INDEX
+
 # Game constants from the ActionScript dump.
 APP_TILE_SCALE = 12.0
 APP_NUM_GRIDCOLS = 31  # x dimension
@@ -368,6 +381,17 @@ class ObjectGridState:
         self._state_key_cache = None
         if ref in self.membership:
             self.remove(ref)
+        if not (0 <= cell[0] < APP_NUM_GRIDCOLS + 2 and
+                0 <= cell[1] < APP_NUM_GRIDROWS + 2):
+            # Moved removes the old node then assigns undefined as obj.cell.
+            # Calling undefined.InsertObj is a no-op, not a sparse new cell.
+            self.membership[ref] = _UNDEFINED_CELL
+            if ref[0] == GRIDREF_OBJECT:
+                uid = ref[1]
+                if uid >= len(self.object_cells):
+                    self.object_cells.extend([None] * (uid + 1 - len(self.object_cells)))
+                self.object_cells[uid] = _UNDEFINED_CELL
+            return
         refs = self.cells.get(cell)
         if refs is None:
             self.cells[cell] = [ref]
@@ -421,6 +445,10 @@ class ObjectGridState:
             old = self.membership.get(ref)
         if old is None or (old[0] == cell_i and old[1] == cell_j):
             return False
+        if (old == _UNDEFINED_CELL or not
+                (0 <= cell_i < APP_NUM_GRIDCOLS + 2 and
+                 0 <= cell_j < APP_NUM_GRIDROWS + 2)):
+            return self.moved(ref, (cell_i, cell_j))
         self._ensure_mutable()
         self._state_key_cache = None
         # This is the hot path for moving enemies.  Inline the remove/add
@@ -465,6 +493,10 @@ class ObjectGridState:
         old = self.object_cells[uid]
         if old is None or (old[0] == cell_i and old[1] == cell_j):
             return False
+        if (old == _UNDEFINED_CELL or not
+                (0 <= cell_i < APP_NUM_GRIDCOLS + 2 and
+                 0 <= cell_j < APP_NUM_GRIDROWS + 2)):
+            return self.moved(ref, (cell_i, cell_j))
         self._ensure_mutable()
         self._state_key_cache = None
         self.membership.pop(ref, None)
@@ -551,6 +583,10 @@ class StaticObjectState:
     level_complete: bool = False
     gold_bonus_ticks: int = 0
     completed_exit_index: int | None = None
+    # The source has one gridList[undefined] entry for every exit trigger.
+    exit_trigger_guard_removed: bool = False
+    # IdleAfterDeath nulls Player.CollideVsObjects; ExitDie does not restore it.
+    objects_idled: bool = False
 
     def clone(self) -> "StaticObjectState":
         return StaticObjectState(
@@ -560,9 +596,11 @@ class StaticObjectState:
             self.level_complete,
             self.gold_bonus_ticks,
             self.completed_exit_index,
+            self.exit_trigger_guard_removed,
+            self.objects_idled,
         )
 
-    def state_key(self) -> tuple[int, int, int, bool, int, int | None]:
+    def state_key(self) -> tuple:
         return (
             self.collected_gold_mask,
             self.exploded_mine_mask,
@@ -570,6 +608,8 @@ class StaticObjectState:
             self.level_complete,
             self.gold_bonus_ticks,
             self.completed_exit_index,
+            self.exit_trigger_guard_removed,
+            self.objects_idled,
         )
 
 
@@ -744,6 +784,18 @@ class TileCell:
             self.object_collision_mask = _collision_neighbourhood_mask(i, j)
 
 
+_UNDEFINED_TILE = TileCell(
+    i=_UNDEFINED_CELL_INDEX, j=_UNDEFINED_CELL_INDEX,
+    pos=Vec2(math.nan, math.nan), tile_id=math.nan, ctype=math.nan,
+    xw=math.nan, yw=math.nan, signx=math.nan, signy=math.nan,
+    sx=math.nan, sy=math.nan,
+    e_u=math.nan, e_d=math.nan, e_l=math.nan, e_r=math.nan,
+)
+_UNDEFINED_TILE.edges = (math.nan,) * 4
+_UNDEFINED_TILE.object_collision_cells = ()
+_UNDEFINED_TILE.object_collision_mask = 0
+
+
 class UnsupportedTileCollision(RuntimeError):
     pass
 
@@ -791,14 +843,16 @@ class TileMap:
 
     def get(self, i: int, j: int) -> TileCell:
         grid = self.grid
-        return grid[i][j]
+        if 0 <= i < len(grid) and 0 <= j < len(grid[i]):
+            return grid[i][j]
+        return _UNDEFINED_TILE
 
     def get_tile_xy(self, x: float, y: float) -> TileCell:
         tw = self.tw
         th = self.th
-        i = _floor(x / tw)
-        j = _floor(y / th)
-        return self.grid[i][j]
+        i = _avm_floor(x / tw)
+        j = _avm_floor(y / th)
+        return self.get(i, j)
 
     @staticmethod
     def base_edge(cell: TileCell, side: int) -> int:
@@ -1046,7 +1100,15 @@ class TileMap:
         # avoiding a helper call in this frequently used query.  Homing
         # missiles can pass their already-indexed post-move cell.
         if cell is None:
+            # Keep hot wall probes on the direct builtin-floor/list path;
+            # ordered comparisons reject NaN and undefined-domain positions.
+            if not (0.0 <= x < self.tw * (self.rows + 2) and
+                    0.0 <= y < self.th * (self.cols + 2)):
+                return False
             cell = self.grid[_floor(x / self.tw)][_floor(y / self.th)]
+        if cell is _UNDEFINED_TILE:
+            # TestPoint's shape-dispatch lookup is undefined: no hit.
+            return False
         if cell.tile_id == TID_EMPTY:
             return False
         if cell.ctype == CTYPE_FULL:
@@ -1101,7 +1163,16 @@ class TileMap:
         grid = self.grid
         resolve = self._resolve_circle_tile
         if centre is None:
-            centre = grid[_floor(p.x / self.tw)][_floor(p.y / self.th)]
+            centre = self.get_tile_xy(p.x, p.y)
+        if centre is _UNDEFINED_TILE:
+            return
+        # Keep ordinary interior collision indexing unchanged. Only a centre
+        # in the solid outer border can need undefined neighbours; use a tiny
+        # local grid for that rare path to avoid Python's negative wrapping.
+        if not (0 < centre.i < self.rows + 1 and 0 < centre.j < self.cols + 1):
+            grid = {i: {j: self.get(i, j)
+                        for j in range(centre.j - 1, centre.j + 2)}
+                    for i in range(centre.i - 1, centre.i + 2)}
         cx = centre.pos.x
         cy = centre.pos.y
         xw = centre.xw
@@ -1271,7 +1342,7 @@ class TileMap:
         player: "Player",
         tile: TileCell,
     ) -> int:
-        if tile.tile_id == TID_EMPTY:
+        if tile is _UNDEFINED_TILE or tile.tile_id == TID_EMPTY:
             return COL_NONE
         if tile.ctype == CTYPE_FULL:
             return self._project_circle_full(x, y, o_h, o_v, player, tile)
@@ -1413,8 +1484,8 @@ class TileMap:
             length = math.sqrt(vx * vx + vy * vy)
             penetration = radius + player.r - length
             if 0.0 < penetration:
-                vx /= length
-                vy /= length
+                vx = vx / length if length != 0.0 else math.nan
+                vy = vy / length if length != 0.0 else math.nan
                 player.report_collision_world(
                     vx * penetration, vy * penetration, vx, vy, tile
                 )
@@ -1442,8 +1513,8 @@ class TileMap:
                     if len_p < penetration:
                         player.report_collision_world(x, y, x / len_p, y / len_p, tile)
                         return COL_AXIS
-                    vx /= length
-                    vy /= length
+                    vx = vx / length if length != 0.0 else math.nan
+                    vy = vy / length if length != 0.0 else math.nan
                     player.report_collision_world(
                         vx * penetration, vy * penetration, vx, vy, tile
                     )
@@ -1475,8 +1546,8 @@ class TileMap:
                 vx = o_h / math.sqrt(2.0)
                 vy = o_v / math.sqrt(2.0)
             else:
-                vx /= length
-                vy /= length
+                vx = vx / length if length != 0.0 else math.nan
+                vy = vy / length if length != 0.0 else math.nan
             player.report_collision_world(vx * penetration, vy * penetration, vx, vy, tile)
             return COL_OTHER
         return COL_NONE
@@ -2238,12 +2309,14 @@ def _ray_circle_first_hit(
     b = 2.0 * (dx * vx + dy * vy)
     c = vx * vx + vy * vy - radius * radius
     disc = b * b - 4.0 * a * c
-    if disc < 0.0:
+    if not (0.0 <= disc):
         return False, Vec2(), math.inf
     root = math.sqrt(disc)
-    denom = 2.0 * a
-    t1 = (-b + root) / denom
-    t2 = (-b - root) / denom
+    # Preserve the supplied ActionScript's (1 / 2) * a evaluation order.
+    # Even normalized directions can have a != 1 after binary64 rounding.
+    factor = 0.5 * a
+    t1 = (-b + root) * factor
+    t2 = (-b - root) * factor
     if t2 < 0.0:
         if t1 < 0.0:
             return False, Vec2(), math.inf
@@ -2305,12 +2378,12 @@ def _test_ray_tile(
         radius = t.xw * 2.0
         c = cx * cx + cy * cy - radius * radius
         disc = b * b - 4.0 * a * c
-        if disc < 0.0:
+        if not (0.0 <= disc):
             return False, Vec2()
         root = math.sqrt(disc)
-        denom2 = 2.0 * a
-        q1 = (-b + root) / denom2
-        q2 = (-b - root) / denom2
+        factor = 0.5 * a
+        q1 = (-b + root) * factor
+        q2 = (-b - root) * factor
         q = q1 if q2 < q1 else q2
         # The ActionScript selects the farther root for this concave arc.
         if q2 < q1:
@@ -2329,12 +2402,12 @@ def _test_ray_tile(
         radius = t.xw * 2.0
         c = ox * ox + oy * oy - radius * radius
         disc = b * b - 4.0 * a * c
-        if disc < 0.0:
+        if not (0.0 <= disc):
             return False, Vec2()
         root = math.sqrt(disc)
-        denom = 2.0 * a
-        q1 = (-b + root) / denom
-        q2 = (-b - root) / denom
+        factor = 0.5 * a
+        q1 = (-b + root) * factor
+        q2 = (-b - root) * factor
         q = q2 if q2 < q1 else q1
         return True, Vec2(px + q * dx, py + q * dy)
 
@@ -2473,8 +2546,8 @@ def collide_ray_tiles(
     grid = tiles.grid
     max_i = tiles.rows + 1
     max_j = tiles.cols + 1
-    start_i = _floor(p0.x / tiles.tw)
-    start_j = _floor(p0.y / tiles.th)
+    start_i = _avm_floor(p0.x / tiles.tw)
+    start_j = _avm_floor(p0.y / tiles.th)
     if not (0 <= start_i <= max_i and 0 <= start_j <= max_j):
         return False, Vec2(), math.inf
     cell = grid[start_i][start_j]
@@ -2522,14 +2595,16 @@ def collide_ray_tiles(
     while True:
         if tmax_x < tmax_y:
             side = EDGE_L if step_x < 0 else EDGE_R
-            next_i = cell.i + step_x
+            # The source follows nR/nL even when a NaN direction makes its
+            # numeric step zero; reusing that step would loop in this cell.
+            next_i = cell.i + (-1 if step_x < 0 else 1)
             next_j = cell.j
             crossing_t = tmax_x
             tmax_x += tdelta_x
         else:
             side = EDGE_U if step_y < 0 else EDGE_D
             next_i = cell.i
-            next_j = cell.j + step_y
+            next_j = cell.j + (-1 if step_y < 0 else 1)
             crossing_t = tmax_y
             tmax_y += tdelta_y
 
@@ -2998,6 +3073,8 @@ class DroneBase:
             return Vec2(-1.0, 0.0)
         if self.cur_dir == AI_DIR_U:
             return Vec2(0.0, -1.0)
+        if self.cur_dir is None:
+            return Vec2(math.nan, math.nan)
         raise KeyError(self.cur_dir)
 
     def _move_list(self) -> tuple[int, int, int, int]:
@@ -3011,6 +3088,8 @@ class DroneBase:
 
     @staticmethod
     def _rotate_dir(cur_dir: int, rotation: int) -> int:
+        if cur_dir is None:
+            return None
         if rotation < AI_ROT_0 or AI_ROT_270 < rotation:
             return cur_dir
         return (cur_dir + rotation) % 4
@@ -3022,8 +3101,8 @@ class DroneBase:
         edge_overrides: EdgeOverrides,
     ) -> bool:
         grid = tiles.grid
-        cell = grid[self.cell_i][self.cell_j]
-        if direction < AI_DIR_R or AI_DIR_U < direction:
+        cell = tiles.get(self.cell_i, self.cell_j)
+        if direction is None or direction < AI_DIR_R or AI_DIR_U < direction:
             return False
         side, di, dj = DRONE_EDGE_INFO[direction]
         if edge_overrides:
@@ -3034,7 +3113,7 @@ class DroneBase:
             edge_value = cell.edges[side]
         if edge_value != EID_OFF:
             return False
-        next_cell = grid[cell.i + di][cell.j + dj]
+        next_cell = tiles.get(cell.i + di, cell.j + dj)
         self.goal.x = next_cell.pos.x
         self.goal.y = next_cell.pos.y
         return True
@@ -3050,7 +3129,8 @@ class DroneBase:
             direction = self._rotate_dir(self.cur_dir, rotation)
             if self._test_edge(direction, tiles, edge_overrides):
                 return direction
-        return self.cur_dir
+        # Missing return in GetNewGoal_Simple yields undefined in AVM1.
+        return None
 
     def _get_new_goal(self, tiles: TileMap, edge_overrides: EdgeOverrides) -> int:
         if self.move_type == DRONEMOVE_WANDER_ALTERNATING:
@@ -3098,15 +3178,16 @@ class DroneBase:
             self._on_reach_goal(player, tiles, edge_overrides)
             # Arrival can begin movement on either axis, so retain the full
             # source-style cell reindex at the snapped position.
-            self.cell_i = _floor(pos.x / tw)
-            self.cell_j = _floor(pos.y / th)
+            self.cell_i = _avm_floor(pos.x / tw)
+            self.cell_j = _avm_floor(pos.y / th)
         else:
             # The tuple contains the same four literal vectors as the source
             # branch below, without repeatedly testing all four directions.
             cur_dir = self.cur_dir
-            if cur_dir < AI_DIR_R or AI_DIR_U < cur_dir:
-                raise KeyError(cur_dir)
-            direction_x, direction_y = DRONE_DIR_VECTORS[cur_dir]
+            if cur_dir is None:
+                direction_x = direction_y = math.nan
+            else:
+                direction_x, direction_y = DRONE_DIR_VECTORS[cur_dir]
             # The only current caller that supplies ``player`` is ZapDrone,
             # whose source path doubles speed while its axis chase is active.
             # Keep the non-chasing base path allocation/dispatch free while
@@ -3122,10 +3203,12 @@ class DroneBase:
             pos.y += direction_y * move_speed
             # A moving drone follows one cardinal axis.  Its other cell index
             # is already exact and cannot change until a later turn.
-            if direction_x:
-                self.cell_i = _floor(pos.x / tw)
+            if cur_dir is None:
+                self.cell_i = self.cell_j = _UNDEFINED_CELL_INDEX
+            elif direction_x:
+                self.cell_i = _avm_floor(pos.x / tw)
             else:
-                self.cell_j = _floor(pos.y / th)
+                self.cell_j = _avm_floor(pos.y / th)
 
 
 @dataclass(slots=True)
@@ -3738,6 +3821,7 @@ class Turret:
         tiles: TileMap,
         edge_overrides: EdgeOverrides,
         frame: int,
+        idle_objects: Callable[[], None] | None = None,
     ) -> str | None:
         """Run the current Update callback.
 
@@ -3756,7 +3840,10 @@ class Turret:
             self.fire_delay_timer += 1
             if self.prefire_delay <= self.fire_delay_timer:
                 if self._line_of_sight(player, tiles, edge_overrides):
+                    was_dead = player.dead
                     self._fire(player, tiles, edge_overrides)
+                    if not was_dead and player.dead and idle_objects is not None:
+                        idle_objects()
                 self._stop_firing()
                 return "start_think"
             return None
@@ -3904,6 +3991,8 @@ class HomingLauncher:
         new_j: int,
         edge_overrides: EdgeOverrides,
     ) -> int:
+        if not (0 <= old_i < len(tiles.grid) and 0 <= old_j < len(tiles.grid[0])):
+            return EID_OFF
         old_cell = tiles.grid[old_i][old_j]
         if new_i == old_i + 1 and new_j == old_j:
             side = EDGE_R
@@ -3950,9 +4039,7 @@ class HomingLauncher:
 
         # Point-query and cell tracking use the same post-move cell.  Reuse
         # that lookup so homing missiles do not floor/index the grid twice.
-        cell = tiles.grid[
-            _floor(self.pos.x / tiles.tw)
-        ][_floor(self.pos.y / tiles.th)]
+        cell = tiles.get_tile_xy(self.pos.x, self.pos.y)
         if tiles.query_point(self.pos.x, self.pos.y, cell):
             self._explode()
             return True
@@ -3981,13 +4068,13 @@ class HomingLauncher:
         dy = predicted_y - rocket_next_y
         target_len = math.sqrt(dx * dx + dy * dy)
 
-        # A zero target vector would produce NaNs in AVM1. It does not occur in
-        # the supplied trace; keeping the prior heading is the least invasive
-        # deterministic fallback for malformed/synthetic test positions.
+        # AVM1 divides 0 / 0 into NaN and continues steering; Python needs the
+        # zero case explicitly to avoid raising ZeroDivisionError.
         if target_len == 0.0:
-            return False
-        dx /= target_len
-        dy /= target_len
+            dx = dy = math.nan
+        else:
+            dx /= target_len
+            dy /= target_len
 
         cross = (-self.mdir.y) * dx + self.mdir.x * dy
         steer_x = cross * (-self.mdir.y)
@@ -4007,9 +4094,8 @@ class HomingLauncher:
         dx = guy.pos.x - self.pos.x
         dy = guy.pos.y - self.pos.y
         if math.sqrt(dx * dx + dy * dy) < guy.r:
-            # KillPlayer runs before ExplodeMissile. Once the ninja is dead the
-            # branch is terminal, so the death-specific StartIdle thinker
-            # suppression has no further gameplay consequence here.
+            # The enclosing collision pass idles the world and suppresses
+            # rejoining the thinker ring after ExplodeMissile.
             guy.dead = True
             self._explode()
 
@@ -4033,6 +4119,7 @@ class ZapDrone(DroneBase):
     surface_grab_pending: bool = False
     load_index: int = 0
     r: float = APP_TILE_SCALE * 0.75
+    chase_disabled: bool = False
 
     @classmethod
     def from_spec(cls, spec: ObjectSpec, tiles: TileMap) -> "ZapDrone":
@@ -4073,6 +4160,7 @@ class ZapDrone(DroneBase):
             self.surface_grab_pending,
             self.load_index,
             self.r,
+            self.chase_disabled,
         )
 
     def _movement_speed(self) -> float:
@@ -4101,7 +4189,7 @@ class ZapDrone(DroneBase):
         side, di, dj = self._dir_edge(direction)
         distance = 0
         grid = tiles.grid
-        cell = grid[self.cell_i][self.cell_j]
+        cell = tiles.get(self.cell_i, self.cell_j)
 
         while distance < target_cells:
             distance += 1
@@ -4113,7 +4201,7 @@ class ZapDrone(DroneBase):
                 edge_value = cell.edges[side]
             if edge_value != EID_OFF:
                 return False
-            cell = grid[cell.i + di][cell.j + dj]
+            cell = tiles.get(cell.i + di, cell.j + dj)
 
         while True:
             if edge_overrides:
@@ -4125,9 +4213,9 @@ class ZapDrone(DroneBase):
             if edge_value != EID_OFF:
                 break
             distance += 1
-            cell = grid[cell.i + di][cell.j + dj]
+            cell = tiles.get(cell.i + di, cell.j + dj)
 
-        origin = grid[self.cell_i][self.cell_j]
+        origin = tiles.get(self.cell_i, self.cell_j)
         if direction == AI_DIR_R:
             self.goal.x = origin.pos.x + distance * (2.0 * origin.xw)
         elif direction == AI_DIR_D:
@@ -4144,6 +4232,8 @@ class ZapDrone(DroneBase):
         tiles: TileMap,
         edge_overrides: EdgeOverrides,
     ) -> bool:
+        if self.cell_i == _UNDEFINED_CELL_INDEX or player.cell_i == _UNDEFINED_CELL_INDEX:
+            return False
         cell_dx = player.cell_i - self.cell_i
         cell_dy = player.cell_j - self.cell_j
 
@@ -4173,7 +4263,10 @@ class ZapDrone(DroneBase):
         if not self._find_target(direction, target_cells, tiles, edge_overrides):
             return False
 
-        self.cur_dir = direction
+        # SetDir tests this.dir != this.curDir; this.dir is undefined.
+        # Once curDir is undefined too, later valid requests are ignored.
+        if self.cur_dir is not None:
+            self.cur_dir = direction
         if self.move_type < DRONEMOVE_WANDER_CW:
             self.surface_grab_pending = True
             rotation = (
@@ -4190,14 +4283,14 @@ class ZapDrone(DroneBase):
         tiles: TileMap,
         edge_overrides: EdgeOverrides,
     ) -> bool:
-        if not self.is_chaser:
+        if not self.is_chaser or self.chase_disabled:
             return False
         if self.surface_grab_pending:
             # Chase_SurfaceGrab restores Chase_AxisSearch, turns toward the
             # surface-following direction, then returns false. Update_Move then
             # immediately runs GetNewGoal from that direction.
             self.surface_grab_pending = False
-            if self.surface_future_dir is not None:
+            if self.surface_future_dir is not None and self.cur_dir is not None:
                 self.cur_dir = self.surface_future_dir
             return False
         return self._chase_axis_search(player, tiles, edge_overrides)
@@ -4227,9 +4320,11 @@ class ZapDrone(DroneBase):
         dy = self.pos.y - guy.pos.y
         distance_sq = dx * dx + dy * dy
         contact_radius = self.r + guy.r
-        if distance_sq < contact_radius * contact_radius:
+        # The source square root can round an adjacent distance up to safe
+        # tangency; a squared-radius comparison is not equivalent.
+        if math.sqrt(distance_sq) < contact_radius:
             # KillPlayer's impulse/contact-point arguments only matter after
-            # death; the optimiser stops simulating a dead branch immediately.
+            # death; the current collision invocation continues afterwards.
             guy.dead = True
 
 
@@ -4254,8 +4349,9 @@ class Thwomp:
     raisespeed: float = APP_TILE_SCALE * 0.1428571428571429
     speed: float = APP_TILE_SCALE * 0.3571428571428572
     is_moving: bool = False
-    mode: int = 0  # 0 waiting, 1 moving
+    mode: int = 0  # 0 waiting, 1 moving, 2 disabled waiting
     load_index: int = 0
+    waiting_disabled: bool = False
 
     @classmethod
     def from_spec(cls, spec: ObjectSpec, tiles: TileMap) -> "Thwomp":
@@ -4351,6 +4447,7 @@ class Thwomp:
             self.is_moving,
             self.mode,
             self.load_index,
+            self.waiting_disabled,
         )
 
     def start_fall(self) -> None:
@@ -4371,11 +4468,13 @@ class Thwomp:
 
     def start_wait(self) -> None:
         self.is_moving = False
-        self.mode = 0
+        self.mode = 2 if self.waiting_disabled else 0
 
     def update(self, player: "Player") -> None:
         mode = self.mode
         pos = self.pos
+        if mode == 2:
+            return
         if mode == 0:
             # ObjectManager.Tick() runs before Player.Tick(), so the source sees
             # the player's cell retained from the end of the previous tick.
@@ -4851,7 +4950,7 @@ class Player:
         """Test one active static collider; return whether it removed itself."""
         dx = entry.x - self.pos.x
         dy = entry.y - self.pos.y
-        if math.sqrt(dx * dx + dy * dy) >= entry.r + self.r:
+        if not math.sqrt(dx * dx + dy * dy) < entry.r + self.r:
             return False
 
         bit = 1 << entry.state_index
@@ -4865,12 +4964,48 @@ class Player:
             return True
         if entry.kind == StaticColliderKind.EXIT_SWITCH:
             state.open_exit_mask |= bit
-            return True
+            removed = not state.exit_trigger_guard_removed
+            state.exit_trigger_guard_removed = True
+            return removed
 
         self.celebrate()
         state.completed_exit_index = entry.state_index
         state.level_complete = True
-        return False
+        return True
+
+    def _idle_objects_after_death(
+        self,
+        static_world: StaticWorld | None,
+        static_state: StaticObjectState | None,
+        grid_state: ObjectGridState,
+        idle_objects: Callable[[], None] | None = None,
+    ) -> None:
+        """Synchronous App death/win callback; the current scan keeps running."""
+        if self.dead:
+            if self.state == PlayerState.JUMPING:
+                self.g = self.norm_grav
+            self.state = PlayerState.RAGDOLL
+        if static_state is None:
+            return
+        static_state.objects_idled = True
+        # Preserve the executing list as a snapshot. Removed references are
+        # skipped below, while surviving callbacks keep their source order.
+        grid_state._copy_on_write = True
+        if static_world is not None:
+            for entry in static_world.by_ref.values():
+                if entry.kind in (StaticColliderKind.GOLD, StaticColliderKind.EXIT_DOOR):
+                    grid_state.remove(entry.grid_ref)
+            if not static_state.exit_trigger_guard_removed and static_world.exit_count:
+                # objList enumerates descending numeric UIDs. Only the first
+                # exit's trigger removal passes the shared undefined guard.
+                grid_state.remove((
+                    GRIDREF_STATIC,
+                    int(StaticColliderKind.EXIT_SWITCH),
+                    static_world.exit_count - 1,
+                ))
+                static_state.exit_trigger_guard_removed = True
+        if idle_objects is not None:
+            idle_objects()
 
     def step(
         self,
@@ -4892,6 +5027,7 @@ class Player:
         # callbacks can mutate object state.  None retains the legacy callback
         # behaviour for direct Player.step() callers.
         shared_object_mask: int | None = None,
+        idle_objects: Callable[[], None] | None = None,
     ) -> "Player | None":
         if self.dead:
             return None
@@ -4911,39 +5047,15 @@ class Player:
         # traverses the current cell and eight neighbours in this exact order.
         integrated_x = self.pos.x
         integrated_y = self.pos.y
-        integrated_i = _floor(integrated_x / tiles.tw)
-        integrated_j = _floor(integrated_y / tiles.th)
+        integrated_i = _avm_floor(integrated_x / tiles.tw)
+        integrated_j = _avm_floor(integrated_y / tiles.th)
+        collision_cell = tiles.get(integrated_i, integrated_j)
+        if collision_cell is _UNDEFINED_TILE:
+            integrated_i = integrated_j = _UNDEFINED_CELL_INDEX
         self.cell_i = integrated_i
         self.cell_j = integrated_j
-        cell_i = integrated_i
-        cell_j = integrated_j
-        try:
-            collision_cell = tiles.grid[cell_i][cell_j]
-        except IndexError:
-            collision_cell = None
-        if (
-            collision_cell is not None
-            and collision_cell.i == cell_i
-            and collision_cell.j == cell_j
-        ):
-            collision_cells = collision_cell.object_collision_cells
-            collision_mask = collision_cell.object_collision_mask
-        else:
-            # Preserve the legacy coordinate keys for direct callers that put
-            # the player outside the normal non-negative map grid.  Python's
-            # negative grid indexing cannot use the cached TileCell indices.
-            collision_cells = (
-                (cell_i, cell_j),
-                (cell_i, cell_j + 1),
-                (cell_i + 1, cell_j + 1),
-                (cell_i - 1, cell_j + 1),
-                (cell_i - 1, cell_j),
-                (cell_i - 1, cell_j - 1),
-                (cell_i + 1, cell_j),
-                (cell_i + 1, cell_j - 1),
-                (cell_i, cell_j - 1),
-            )
-            collision_mask = 0
+        collision_cells = collision_cell.object_collision_cells
+        collision_mask = collision_cell.object_collision_mask
 
         # Object collision order comes from ObjectManager/TileMapCell's live
         # linked lists, not from current positions or load order. Build a small
@@ -4958,7 +5070,7 @@ class Player:
                     continue
                 grid_state.add(
                     object_grid_ref(obj.load_index),
-                    (_floor(obj.pos.x / tiles.tw), _floor(obj.pos.y / tiles.th)),
+                    (_avm_floor(obj.pos.x / tiles.tw), _avm_floor(obj.pos.y / tiles.th)),
                 )
             if static_world is not None and static_state is not None:
                 for entries in static_world.by_cell.values():
@@ -4987,6 +5099,8 @@ class Player:
                 collision_cells = ()
         elif grid_cells.keys().isdisjoint(collision_cells):
             collision_cells = ()
+        if static_state is not None and static_state.objects_idled:
+            collision_cells = ()
         # Fetch each cell through ``grid_state`` rather than binding
         # ``grid_state.cells.get`` once for the whole traversal.  Removing a
         # collider can detach a shared copy-on-write grid by replacing its
@@ -4999,7 +5113,11 @@ class Player:
         for cell in collision_cells:
             refs = grid_state.cells.get(cell, ())
             for ref in refs:
+                if (static_state is not None and static_state.objects_idled
+                        and ref not in grid_state.membership):
+                    continue
                 removed_current = False
+                completed_now = False
                 if ref[0] == GRIDREF_OBJECT:
                     uid = ref[1]
                     if object_slots is None:
@@ -5067,8 +5185,11 @@ class Player:
                             # each new block the current thinker. Recording the
                             # live collision order is therefore essential.
                             scheduler_events.append(("wake_bounce", obj.load_index))
-                        if obj_type is HomingLauncher and self.dead:
+                        if (obj_type is HomingLauncher
+                                and obj.mode == HomingMode.IDLE):
                             # TestVsPlayer calls ExplodeMissile after KillPlayer.
+                            # A player already killed by an earlier collider
+                            # must not remove a later, non-overlapping rocket.
                             # ExplodeMissile calls EndUpdate and removes the
                             # missile from the grid. KillPlayer has already
                             # replaced StartIdle with StartIdle_Death, so the
@@ -5097,23 +5218,25 @@ class Player:
                     if not active:
                         continue
                     removed_current = self._test_static_collider(entry, static_state)
+                    completed_now = (
+                        entry.kind == StaticColliderKind.EXIT_DOOR and removed_current
+                    )
                     if removed_current:
                         grid_state.remove(ref)
-                        if entry.kind == StaticColliderKind.EXIT_SWITCH:
-                            door_ref = static_world.exit_door_ref(entry.state_index)
-                            door = static_entries.get(door_ref)
-                            if door is not None:
-                                grid_state.add(door_ref, (door.cell_i, door.cell_j))
+                    if (entry.kind == StaticColliderKind.EXIT_SWITCH
+                            and static_state.open_exit_mask & bit):
+                        door_ref = static_world.exit_door_ref(entry.state_index)
+                        door = static_entries.get(door_ref)
+                        if door is not None:
+                            grid_state.add(door_ref, (door.cell_i, door.cell_j))
 
-                if self.dead:
-                    break
+                if completed_now or (self.dead and self.state != PlayerState.RAGDOLL):
+                    self._idle_objects_after_death(
+                        static_world, static_state, grid_state, idle_objects
+                    )
                 if removed_current:
                     # TileMapCell.RemoveObj sets current.next = null.
                     break
-            if self.dead:
-                break
-        if self.dead:
-            return
 
         # The tile collision routine needs the cell containing the player's
         # post-object-collision position.  Compute it here so the routine can
@@ -5122,39 +5245,30 @@ class Player:
             collision_i = integrated_i
             collision_j = integrated_j
         else:
-            collision_i = _floor(self.pos.x / tiles.tw)
-            collision_j = _floor(self.pos.y / tiles.th)
-        # Speculative optimiser mutations can acquire enough velocity to skip
-        # completely across the solid outer border in one tick.  Python's
-        # negative indexing would otherwise wrap to the opposite edge, while a
-        # positive overflow raises IndexError and aborts the worker.  Neither
-        # is a usable gameplay trajectory, so classify the finite tile-domain
-        # exit as the same terminal invalid result as an ordinary death.
-        if not (
-            0 <= collision_i < len(tiles.grid)
-            and 0 <= collision_j < len(tiles.grid[collision_i])
-        ):
-            self.dead = True
-            return None
-        collision_centre = tiles.grid[collision_i][collision_j]
+            collision_i = _avm_floor(self.pos.x / tiles.tw)
+            collision_j = _avm_floor(self.pos.y / tiles.th)
+        collision_centre = tiles.get(collision_i, collision_j)
         pre_tile_x = self.pos.x
         pre_tile_y = self.pos.y
-        try:
-            tiles.collide_circle(self, edge_overrides, collision_centre)
-        except IndexError:
-            # A centre inside an outermost cell can still require a neighbour
-            # beyond the finite tile array.  This is the same crossed-boundary
-            # terminal case, not an internal optimiser failure.
-            self.dead = True
-            return None
+        tiles.collide_circle(self, edge_overrides, collision_centre)
         self.handle_collisions(tiles)
         # Second objects.Moved(this) in TickNormal, before Think()/Jump().
         if self.pos.x == pre_tile_x and self.pos.y == pre_tile_y:
             self.cell_i = collision_i
             self.cell_j = collision_j
         else:
-            self.cell_i = _floor(self.pos.x / tiles.tw)
-            self.cell_j = _floor(self.pos.y / tiles.th)
+            self.cell_i = _avm_floor(self.pos.x / tiles.tw)
+            self.cell_j = _avm_floor(self.pos.y / tiles.th)
+        if not (0 <= self.cell_i < tiles.rows + 2 and
+                0 <= self.cell_j < tiles.cols + 2):
+            self.cell_i = self.cell_j = _UNDEFINED_CELL_INDEX
+
+        if self.dead:
+            if self.state != PlayerState.RAGDOLL:
+                self._idle_objects_after_death(
+                    static_world, static_state, grid_state, idle_objects
+                )
+            return None
 
         jump_trigger = (
             inputs.jump and not self.previous_jump_held
@@ -5329,6 +5443,8 @@ class Player:
         # to ThinkCelebrate. Only ExitJump has physics-relevant behaviour.
         if self.state == PlayerState.JUMPING:
             self.g = self.norm_grav
+        # Celebrate and Fall both call ExitState, including ExitDie.
+        self.dead = False
         self.state = PlayerState.CELEBRATING
         self.celeb_was_in_air = self.in_air
 
@@ -5363,6 +5479,7 @@ class Player:
     def fall(self) -> None:
         if self.state == PlayerState.JUMPING:
             self.g = self.norm_grav
+        self.dead = False
         self.state = PlayerState.FALLING
 
     def _would_invoke_jump(self, jump_trigger: bool) -> bool:
@@ -5638,6 +5755,49 @@ class SimulationState:
     def end_turret_update(self, uid: int) -> None:
         self.end_update(uid)
 
+    def _idle_after_death(self) -> None:
+        self.player._idle_objects_after_death(
+            self.static_world, self.static_state, self.grid_state,
+            self._idle_dynamic_objects_after_death,
+        )
+
+    def _idle_dynamic_objects_after_death(self) -> None:
+        """Apply source IdleAfterDeath callbacks in reverse UID order."""
+        # If a firing drone kills during an otherwise stable update traversal,
+        # preserve its enumeration without adding copies to ordinary ticks.
+        self.update_uids = self.update_uids.copy()
+        for uid in sorted(self.objects_by_uid, reverse=True):
+            obj_type = self.object_type_slots[uid]
+            if obj_type not in (Turret, FloorGuard, TestDoor, Thwomp,
+                                HomingLauncher, ZapDrone, LaserDrone, ChaingunDrone):
+                continue
+            self._ensure_object_mutable(uid)
+            obj = self.object_slots[uid]
+            if obj_type is Turret:
+                obj._stop_targeting()
+                self.end_update(uid)
+                self.end_think(uid)
+            elif obj_type is FloorGuard:
+                obj.chasing = False
+                self.end_update(uid)
+            elif obj_type is TestDoor:
+                self.grid_state.remove(self.object_ref_slots[uid])
+            elif obj_type is Thwomp:
+                obj.waiting_disabled = True
+                if not obj.is_moving:
+                    obj.mode = 2
+            elif obj_type is HomingLauncher:
+                if obj.mode == HomingMode.IDLE:
+                    self.end_think(uid)
+            elif obj_type is ZapDrone:
+                obj.chase_disabled = True
+                obj.is_chasing = False
+            elif obj.mode == DroneMode.FIRING:
+                # Prefire is deliberately allowed to finish: isFiring only
+                # becomes true on Fire, not on StartFiring in the source.
+                obj.mode = DroneMode.POSTFIRE
+                obj.fire_delay_timer = 0
+
     def _tick_thinker(self, tiles: TileMap) -> None:
         if not self.thinker_uids:
             return
@@ -5671,7 +5831,8 @@ class SimulationState:
                     self.start_update(uid)
                     removed = True
             elif obj is not None and self.object_type_slots[uid] in (LaserDrone, ChaingunDrone):
-                if obj.think(self.player, tiles, self.edge_overrides):
+                if (not self.static_state.objects_idled
+                        and obj.think(self.player, tiles, self.edge_overrides)):
                     self.end_think(uid)
                     removed = True
 
@@ -5759,7 +5920,7 @@ class SimulationState:
                             if abs(obj.pos.y - player_pos.y) < 2.0 * (obj.yw + player.yw):
                                 if obj.mini <= player.cell_i <= obj.maxi:
                                     obj.start_fall()
-                    else:
+                    elif obj.mode == 1:
                         dx = obj.goal.x - obj.pos.x
                         dy = obj.goal.y - obj.pos.y
                         distance2 = dx * dx + dy * dy
@@ -5774,8 +5935,8 @@ class SimulationState:
                             obj.pos.x += obj.movedir * obj.dir.x * obj.speed
                             obj.pos.y += obj.movedir * obj.dir.y * obj.speed
                     if was_moving:
-                        new_i = _floor(obj.pos.x / tiles.tw)
-                        new_j = _floor(obj.pos.y / tiles.th)
+                        new_i = _avm_floor(obj.pos.x / tiles.tw)
+                        new_j = _avm_floor(obj.pos.y / tiles.th)
                         old_cell = grid_state.object_cells[uid]
                         if old_cell is not None and (
                             old_cell[0] != new_i or old_cell[1] != new_j
@@ -5815,7 +5976,13 @@ class SimulationState:
                                 uid, ref, obj.cell_i, obj.cell_j
                             )
                 elif obj_type is Turret:
-                    action = obj.update(player, tiles, edge_overrides, frame)
+                    action = obj.update(
+                        player, tiles, edge_overrides, frame,
+                        idle_objects=self._idle_after_death,
+                    )
+                    if player.dead:
+                        update_uids = self.update_uids
+                        snapshot_required = True
                     if action == "end_think":
                         self.end_think(uid)
                     elif action == "start_think":
@@ -5832,6 +5999,10 @@ class SimulationState:
                         restarted = False
                     else:
                         restarted = obj.update(player, tiles, edge_overrides)
+                        if player.dead and player.state != PlayerState.RAGDOLL:
+                            self._idle_after_death()
+                            update_uids = self.update_uids
+                            snapshot_required = True
                     if restarted:
                         self.start_think(uid)
                     old_cell = grid_state.object_cells[uid]
@@ -5877,7 +6048,8 @@ class SimulationState:
                         # ExplodeMissile: EndUpdate, RemoveFromGrid, StartThink.
                         self.end_update(uid)
                         grid_state.remove(ref)
-                        self.start_think(uid)
+                        if not self.static_state.objects_idled:
+                            self.start_think(uid)
                 elif obj_type is ChaingunDrone:
                     # As with lasers, retain the full update callback for
                     # firing states but take the player-independent movement
@@ -5887,6 +6059,10 @@ class SimulationState:
                         restarted = False
                     else:
                         restarted = obj.update(player, tiles, edge_overrides, frame)
+                        if player.dead and player.state != PlayerState.RAGDOLL:
+                            self._idle_after_death()
+                            update_uids = self.update_uids
+                            snapshot_required = True
                     if restarted:
                         self.start_think(uid)
                     old_cell = grid_state.object_cells[uid]
@@ -5935,6 +6111,7 @@ class SimulationState:
                 shared_object_mask=collision_shared_mask,
                 alternate_inputs=alternate_inputs,
                 alternate_jump=alternate_jump,
+                idle_objects=self._idle_dynamic_objects_after_death,
             )
 
             # These source calls occur during Player.CollideVsObjects, after
@@ -5989,6 +6166,7 @@ class SimulationState:
                     obj.is_chasing,
                     obj.surface_future_dir,
                     obj.surface_grab_pending,
+                    obj.chase_disabled,
                 )
                 if precision is not None:
                     values = tuple(
@@ -6141,6 +6319,7 @@ class SimulationState:
                     obj.speed,
                     obj.is_moving,
                     obj.mode,
+                    obj.waiting_disabled,
                 )
                 if precision is not None:
                     values = tuple(

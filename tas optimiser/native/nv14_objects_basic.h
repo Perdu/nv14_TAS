@@ -17,6 +17,9 @@ extern "C" {
 const nv14_internal_object_module *nv14_objects_basic_module(void);
 nv14_status nv14_objects_basic_register(void);
 
+/* Source IdleAfterDeath; invoked only on death/completion transitions. */
+void nv14_objects_basic_idle_after_death(nv14_state *state, size_t object_index);
+
 /* Query-only presentation data. No runtime slots are added for rendering. */
 typedef struct nv14_basic_scene_snapshot {
     nv14_vec2 position;

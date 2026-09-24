@@ -55,10 +55,11 @@ def _running_exit_level(*, exit_x: float = 140, exit_y: float = 134):
 def _same_tick_completion_and_death_level():
     # Tick 0 hits the exit switch, whose self-removal stops current-cell
     # traversal and inserts the door at the head.  Tick 1 therefore hits the
-    # door first (completing the level), then the mine later in the same live
-    # collision traversal (killing the ninja on the completion tick).
+    # door first (completing the level).  The exit also removes itself, so a
+    # mine in that cell would be shielded.  Put this mine in the down-cell:
+    # gravity brings it into range on tick 1, and traversal still reaches it.
     return parse_level_string(
-        f"{_empty_map()}|5^115,100!12^115,100!11^115,100,115,100"
+        f"{_empty_map()}|5^60,60!12^60,74.3!11^60,60,60,60"
     )
 
 

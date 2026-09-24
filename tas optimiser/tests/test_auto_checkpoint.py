@@ -48,7 +48,7 @@ def test_v304_checkpoint_format_rejects_non_checkpoint_json(tmp_path) -> None:
         read_auto_checkpoint(path)
 
 
-def test_v308_checkpoint_identity_accepts_exact_released_v305_build() -> None:
+def test_v424_checkpoint_identity_rejects_exact_released_v305_build() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
     from nv14_checkpoint import OPTIMISER_VERSION, optimiser_build_hash
 
@@ -68,7 +68,8 @@ def test_v308_checkpoint_identity_accepts_exact_released_v305_build() -> None:
         "d0a7ea78c7b24de46bac1ff1c00774de833ef23107a07b743ebffe67d755e43e"
     )
 
-    _validate_checkpoint_identity(stored, expected)
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, expected)
 
 
 def test_v308_checkpoint_identity_rejects_other_v305_build() -> None:
@@ -93,7 +94,7 @@ def test_v308_checkpoint_identity_rejects_other_v305_build() -> None:
         _validate_checkpoint_identity(stored, expected)
 
 
-def test_v308_checkpoint_identity_accepts_exact_released_v306_build() -> None:
+def test_v424_checkpoint_identity_rejects_exact_released_v306_build() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
     from nv14_checkpoint import OPTIMISER_VERSION, optimiser_build_hash
 
@@ -113,7 +114,8 @@ def test_v308_checkpoint_identity_accepts_exact_released_v306_build() -> None:
         "f394554d7ca12ac8a9e1d05b443a709a7e9597f7340e511ef3bd1e029d6f3475"
     )
 
-    _validate_checkpoint_identity(stored, expected)
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, expected)
 
 
 def test_v308_checkpoint_identity_rejects_other_v306_build() -> None:
@@ -138,7 +140,7 @@ def test_v308_checkpoint_identity_rejects_other_v306_build() -> None:
         _validate_checkpoint_identity(stored, expected)
 
 
-def test_v308_checkpoint_identity_accepts_exact_released_v307_build() -> None:
+def test_v424_checkpoint_identity_rejects_exact_released_v307_build() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
     from nv14_checkpoint import OPTIMISER_VERSION, optimiser_build_hash
 
@@ -158,7 +160,8 @@ def test_v308_checkpoint_identity_accepts_exact_released_v307_build() -> None:
         "9ee3cd695e42f53bc157f9edb2970914a276ffc1e640e6a39e5d7817bbf8b79e"
     )
 
-    _validate_checkpoint_identity(stored, expected)
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, expected)
 
 
 def test_v308_checkpoint_identity_rejects_other_v307_build() -> None:
@@ -233,11 +236,12 @@ def _released_v308_identity_without_splice_limit() -> dict[str, object]:
 
 
 @pytest.mark.parametrize("version,build", [
+    ("4.23", "daca4e2ab9ab61d680cd6fb5a8dd51f54d69415f312f1a1d2347d85186a65a81"),
     ("4.22", "74ee6ff98177565e06cbc782919e3011fb9f32454fc4f83bcce9804356f8e6ea"),
     ("4.21", "4076743c11b904ffd4b7fafb85a6bcaf4b23fa8d1e3a37fe93a8df6b5123705d"),
     ("3.05", "d0a7ea78c7b24de46bac1ff1c00774de833ef23107a07b743ebffe67d755e43e"),
 ])
-def test_v423_checkpoint_rejects_previous_enemy_physics(
+def test_v424_checkpoint_rejects_previous_enemy_physics(
     version: str, build: str,
 ) -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
@@ -252,8 +256,8 @@ def test_v423_checkpoint_rejects_previous_enemy_physics(
 
 
 @pytest.mark.parametrize("side", ["stored", "expected", "both"])
-@pytest.mark.parametrize("setting", [True, None, 0])
-def test_v423_previous_checkpoint_requires_explicitly_disabled_enemies(
+@pytest.mark.parametrize("setting", [False, True, None, 0])
+def test_v424_previous_checkpoint_rejects_any_enemy_setting(
     side: str, setting: object,
 ) -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
@@ -276,7 +280,7 @@ def test_v423_previous_checkpoint_requires_explicitly_disabled_enemies(
 
 
 @pytest.mark.parametrize("simulate_enemies", [False, True])
-def test_v423_checkpoint_accepts_same_build_in_both_enemy_modes(
+def test_v424_checkpoint_accepts_same_build_in_both_enemy_modes(
     simulate_enemies: bool,
 ) -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
@@ -287,19 +291,47 @@ def test_v423_checkpoint_accepts_same_build_in_both_enemy_modes(
 
 
 @pytest.mark.parametrize("relative_path", [
+    "build_native.py",
+    "setup.py",
+    "native/_nv14_native.pyx",
+    "native/nv14_auto.c",
+    "native/nv14_auto.h",
+    "native/nv14_core.c",
+    "native/nv14_core.h",
+    "native/nv14_drone_weapons.c",
+    "native/nv14_drone_weapons.h",
+    "native/nv14_drones_internal.h",
+    "native/nv14_dump.c",
+    "native/nv14_dump.h",
+    "native/nv14_internal.h",
+    "native/nv14_objects_basic.c",
+    "native/nv14_objects_basic.h",
+    "native/nv14_objects_drones.c",
+    "native/nv14_objects_drones.h",
+    "native/nv14_objects_guard.c",
+    "native/nv14_objects_guard.h",
+    "native/nv14_objects_ranged.c",
+    "native/nv14_objects_ranged.h",
+    "native/nv14_patch.c",
+    "native/nv14_patch.h",
     "native/nv14_rays.c",
     "native/nv14_rays.h",
-    "native/nv14_drone_weapons.c",
-    "native/nv14_objects_ranged.c",
+    "native/nv14_scene.c",
+    "native/nv14_scene.h",
+    "native/nv14_search.c",
+    "native/nv14_search.h",
+    "native/nv14_visual.c",
+    "native/nv14_visual.h",
+    "native/nv14_visual_internal.h",
 ])
-def test_v423_checkpoint_build_hash_tracks_ray_physics_sources(
+def test_v424_checkpoint_build_hash_tracks_native_behavior_sources(
     tmp_path, monkeypatch, relative_path: str,
 ) -> None:
     import nv14_checkpoint
 
     monkeypatch.setattr(nv14_checkpoint, "__file__", str(tmp_path / "nv14_checkpoint.py"))
     source = tmp_path / relative_path
-    source.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text("before", encoding="utf-8")
     original = nv14_checkpoint.optimiser_build_hash()
     source.write_text("after", encoding="utf-8")
@@ -327,13 +359,14 @@ def test_v420_checkpoint_rejects_ambiguous_previous_numeric_range_end() -> None:
         _validate_checkpoint_identity(stored, current)
 
 
-def test_v310_checkpoint_accepts_released_v308_with_old_default_plan_limit() -> None:
+def test_v424_checkpoint_rejects_released_v308_with_old_default_plan_limit() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
 
-    _validate_checkpoint_identity(
-        _released_v308_identity_without_splice_limit(),
-        _current_identity_with_splice_limit(2),
-    )
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(
+            _released_v308_identity_without_splice_limit(),
+            _current_identity_with_splice_limit(2),
+        )
 
 
 def test_v310_checkpoint_rejects_v308_when_new_plan_limit_is_nondefault() -> None:
@@ -365,13 +398,14 @@ def _released_v309_identity(limit: int = 2) -> dict[str, object]:
     return identity
 
 
-def test_v310_checkpoint_accepts_exact_released_v309_build() -> None:
+def test_v424_checkpoint_rejects_exact_released_v309_build() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
 
-    _validate_checkpoint_identity(
-        _released_v309_identity(),
-        _current_identity_with_splice_limit(2),
-    )
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(
+            _released_v309_identity(),
+            _current_identity_with_splice_limit(2),
+        )
 
 
 def test_v310_checkpoint_rejects_modified_v309_build() -> None:
@@ -386,13 +420,14 @@ def test_v310_checkpoint_rejects_modified_v309_build() -> None:
         )
 
 
-def test_v310_checkpoint_accepts_v309_nondefault_plan_limit_when_equal() -> None:
+def test_v424_checkpoint_rejects_v309_nondefault_plan_limit_when_equal() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
 
-    _validate_checkpoint_identity(
-        _released_v309_identity(5),
-        _current_identity_with_splice_limit(5),
-    )
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(
+            _released_v309_identity(5),
+            _current_identity_with_splice_limit(5),
+        )
 
 
 def test_v310_checkpoint_rejects_v309_changed_plan_limit() -> None:
@@ -426,22 +461,24 @@ def _released_v310_identity_without_auxiliary_limit(
     return identity
 
 
-def test_v311_checkpoint_accepts_exact_v310_at_new_default() -> None:
+def test_v424_checkpoint_rejects_exact_v310_at_new_default() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
 
-    _validate_checkpoint_identity(
-        _released_v310_identity_without_auxiliary_limit(),
-        _current_identity_with_splice_limit(2),
-    )
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(
+            _released_v310_identity_without_auxiliary_limit(),
+            _current_identity_with_splice_limit(2),
+        )
 
 
-def test_v311_checkpoint_accepts_v310_nondefault_existing_limit() -> None:
+def test_v424_checkpoint_rejects_v310_nondefault_existing_limit() -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
 
-    _validate_checkpoint_identity(
-        _released_v310_identity_without_auxiliary_limit(5),
-        _current_identity_with_splice_limit(5),
-    )
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(
+            _released_v310_identity_without_auxiliary_limit(5),
+            _current_identity_with_splice_limit(5),
+        )
 
 
 def test_v311_checkpoint_rejects_v310_at_nondefault_auxiliary_limit() -> None:
@@ -470,7 +507,7 @@ def test_v311_checkpoint_rejects_modified_v310_build() -> None:
 
 
 @pytest.mark.parametrize("auxiliary_limit", [0, 1, 3])
-def test_v312_checkpoint_accepts_exact_v311_with_matching_configuration(
+def test_v424_checkpoint_rejects_exact_v311_with_matching_configuration(
     auxiliary_limit: int,
 ) -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
@@ -483,7 +520,8 @@ def test_v312_checkpoint_accepts_exact_v311_with_matching_configuration(
     stored["optimiser_build_sha256"] = (
         "2ec99abdb9288c9774443f8a104eda2003eb1f4691c8d17075f285b45465c218"
     )
-    _validate_checkpoint_identity(stored, current)
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, current)
 
 
 @pytest.mark.parametrize("mismatch", ["build", "configuration"])
@@ -505,7 +543,7 @@ def test_v312_checkpoint_rejects_v311_identity_mismatches(mismatch: str) -> None
 
 
 @pytest.mark.parametrize("auxiliary_limit", [0, 1, 3])
-def test_v313_checkpoint_accepts_exact_v312(auxiliary_limit: int) -> None:
+def test_v424_checkpoint_rejects_exact_v312(auxiliary_limit: int) -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
 
     current = _current_identity_with_splice_limit(5, auxiliary_beam_seeds=auxiliary_limit)
@@ -514,7 +552,8 @@ def test_v313_checkpoint_accepts_exact_v312(auxiliary_limit: int) -> None:
     stored["optimiser_build_sha256"] = (
         "e4c5c7f5cb35c7db295ce0f0a41ba44d134818e9729da57d9907130d515dfcf9"
     )
-    _validate_checkpoint_identity(stored, current)
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, current)
 
 
 def test_v313_checkpoint_rejects_modified_v312() -> None:
@@ -529,6 +568,7 @@ def test_v313_checkpoint_rejects_modified_v312() -> None:
 
 
 @pytest.mark.parametrize("version,build", [
+    ("4.23", "daca4e2ab9ab61d680cd6fb5a8dd51f54d69415f312f1a1d2347d85186a65a81"),
     ("4.22", "74ee6ff98177565e06cbc782919e3011fb9f32454fc4f83bcce9804356f8e6ea"),
     ("4.21", "4076743c11b904ffd4b7fafb85a6bcaf4b23fa8d1e3a37fe93a8df6b5123705d"),
     ("4.20", "1e26074015dad95c6203ceed0e00613d59672118ca30d8b9dcefd84f892aff16"),
@@ -560,17 +600,19 @@ def test_v313_checkpoint_rejects_modified_v312() -> None:
     ("3.15", "7fefdab32516b6ebbdc06f24ddd0f39249ea7a020e1c40b83b94e51d0c977afb"),
 ])
 @pytest.mark.parametrize("auxiliary_limit", [0, 1, 3])
-def test_checkpoint_accepts_exact_v313_and_v314(auxiliary_limit: int, version: str, build: str) -> None:
+def test_v424_checkpoint_rejects_all_released_builds(auxiliary_limit: int, version: str, build: str) -> None:
     from nv14_auto_parallel import _validate_checkpoint_identity
 
     current = _current_identity_with_splice_limit(5, auxiliary_beam_seeds=auxiliary_limit)
     stored = dict(current)
     stored["optimiser_version"] = version
     stored["optimiser_build_sha256"] = build
-    _validate_checkpoint_identity(stored, current)
+    with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
+        _validate_checkpoint_identity(stored, current)
 
 
 @pytest.mark.parametrize("version,build", [
+    ("4.23", "daca4e2ab9ab61d680cd6fb5a8dd51f54d69415f312f1a1d2347d85186a65a81"),
     ("4.22", "74ee6ff98177565e06cbc782919e3011fb9f32454fc4f83bcce9804356f8e6ea"),
     ("4.21", "4076743c11b904ffd4b7fafb85a6bcaf4b23fa8d1e3a37fe93a8df6b5123705d"),
     ("4.20", "1e26074015dad95c6203ceed0e00613d59672118ca30d8b9dcefd84f892aff16"),
@@ -654,3 +696,36 @@ def test_v412_checkpoint_requires_exact_v411_version_and_build_pair(version: str
     )
     with pytest.raises(AutoCheckpointError, match="optimiser version/build"):
         _validate_checkpoint_identity(stored, current)
+
+
+@pytest.mark.parametrize("mismatch", ["version", "build", "configuration"])
+@pytest.mark.parametrize("simulate_enemies", [False, True])
+def test_v424_checkpoint_rejects_current_identity_mismatches(
+    mismatch: str, simulate_enemies: bool,
+) -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(2)
+    current["simulate_enemies"] = simulate_enemies
+    stored = _current_identity_with_splice_limit(5 if mismatch == "configuration" else 2)
+    stored["simulate_enemies"] = simulate_enemies
+    if mismatch == "version":
+        stored["optimiser_version"] = "4.23"
+    elif mismatch == "build":
+        stored["optimiser_build_sha256"] = "modified-current-build"
+    message = "Auto configuration" if mismatch == "configuration" else "optimiser version/build"
+    with pytest.raises(AutoCheckpointError, match=message):
+        _validate_checkpoint_identity(stored, current)
+
+
+@pytest.mark.parametrize("auxiliary_limit", [0, 1, 3])
+@pytest.mark.parametrize("splice_limit", [2, 5])
+def test_v424_checkpoint_accepts_matching_current_configuration(
+    auxiliary_limit: int, splice_limit: int,
+) -> None:
+    from nv14_auto_parallel import _validate_checkpoint_identity
+
+    current = _current_identity_with_splice_limit(
+        splice_limit, auxiliary_beam_seeds=auxiliary_limit,
+    )
+    _validate_checkpoint_identity(dict(current), current)

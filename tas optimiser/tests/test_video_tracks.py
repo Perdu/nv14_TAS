@@ -103,8 +103,10 @@ def test_terminal_final_neutral_is_counted():
 
 
 def test_same_tick_completion_and_death_on_final_neutral():
+    # Completion unlinks the exit and shields older objects in its cell.
+    # The down-cell mine remains reachable in the same collision scan.
     level = native.parse_level_string(
-        "0" * 713 + "|5^115,100!12^115,100!11^115,100,115,100")
+        "0" * 713 + "|5^60,60!12^60,74.3!11^60,60,60,60")
     with tracks.VisualTrack(level, [NEUTRAL], True) as track:
         track.precompute()
         assert track.completion_tick == track.total_ticks == 2

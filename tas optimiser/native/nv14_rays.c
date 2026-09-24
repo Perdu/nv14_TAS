@@ -63,7 +63,7 @@ nv14_status nv14_rays_circle_first_hit(
     double c;
     double disc;
     double root;
-    double denom;
+    double factor;
     double t1;
     double t2;
     double t;
@@ -78,12 +78,13 @@ nv14_status nv14_rays_circle_first_hit(
     b = 2.0 * (dx * vx + dy * vy);
     c = vx * vx + vy * vy - radius * radius;
     disc = b * b - 4.0 * a * c;
-    if (disc < 0.0)
+    if (!(0.0 <= disc))
         return NV14_STATUS_OK;
     root = sqrt(disc);
-    denom = 2.0 * a;
-    t1 = (-b + root) / denom;
-    t2 = (-b - root) / denom;
+    /* Supplied AS evaluates (1 / 2) * a, even for rounded unit vectors. */
+    factor = 0.5 * a;
+    t1 = (-b + root) * factor;
+    t2 = (-b - root) * factor;
     if (t2 < 0.0) {
         if (t1 < 0.0)
             return NV14_STATUS_OK;
@@ -127,7 +128,7 @@ nv14_status nv14_rays_test_tile(
     double c;
     double disc;
     double root;
-    double denom2;
+    double factor;
     double q1;
     double q2;
     double q;
@@ -180,12 +181,12 @@ nv14_status nv14_rays_test_tile(
         radius = NV14_TILE_SCALE * 2.0;
         c = cx * cx + cy * cy - radius * radius;
         disc = b * b - 4.0 * a * c;
-        if (disc < 0.0)
+        if (!(0.0 <= disc))
             return NV14_STATUS_OK;
         root = sqrt(disc);
-        denom2 = 2.0 * a;
-        q1 = (-b + root) / denom2;
-        q2 = (-b - root) / denom2;
+        factor = 0.5 * a;
+        q1 = (-b + root) * factor;
+        q2 = (-b - root) * factor;
         q = q2 < q1 ? q1 : q2;
         /* The source selects the farther quadratic root for a concave arc. */
         if (q2 < q1)
@@ -205,12 +206,12 @@ nv14_status nv14_rays_test_tile(
         radius = NV14_TILE_SCALE * 2.0;
         c = ox * ox + oy * oy - radius * radius;
         disc = b * b - 4.0 * a * c;
-        if (disc < 0.0)
+        if (!(0.0 <= disc))
             return NV14_STATUS_OK;
         root = sqrt(disc);
-        denom = 2.0 * a;
-        q1 = (-b + root) / denom;
-        q2 = (-b - root) / denom;
+        factor = 0.5 * a;
+        q1 = (-b + root) * factor;
+        q2 = (-b - root) * factor;
         q = q2 < q1 ? q2 : q1;
         out->hit = 1;
         out->point.x = px + q * dx;
@@ -395,10 +396,10 @@ static nv14_status nv14_rays_collide_tiles_normalized(
     nv14_ray_hit_clear(out);
     if (!nv14_internal_floor_index(p0.x, NV14_TILE_W, &i) ||
         !nv14_internal_floor_index(p0.y, NV14_TILE_H, &j))
-        return NV14_STATUS_OUT_OF_BOUNDS;
+        return NV14_STATUS_OK;
     cell = nv14_rays_tile_at(level, i, j);
     if (cell == NULL)
-        return NV14_STATUS_OUT_OF_BOUNDS;
+        return NV14_STATUS_OK;
 
     step_x = dx < 0.0 ? -1 : (0.0 < dx ? 1 : 0);
     step_y = dy < 0.0 ? -1 : (0.0 < dy ? 1 : 0);
@@ -433,14 +434,15 @@ static nv14_status nv14_rays_collide_tiles_normalized(
     while (cell != NULL) {
         if (tmax_x < tmax_y) {
             side = step_x < 0 ? NV14_EDGE_L : NV14_EDGE_R;
-            next_i = cell->i + step_x;
+            /* Source nR/nL links advance even when NaN makes step zero. */
+            next_i = cell->i + (step_x < 0 ? -1 : 1);
             next_j = cell->j;
             crossing_t = tmax_x;
             tmax_x += tdelta_x;
         } else {
             side = step_y < 0 ? NV14_EDGE_U : NV14_EDGE_D;
             next_i = cell->i;
-            next_j = cell->j + step_y;
+            next_j = cell->j + (step_y < 0 ? -1 : 1);
             crossing_t = tmax_y;
             tmax_y += tdelta_y;
         }

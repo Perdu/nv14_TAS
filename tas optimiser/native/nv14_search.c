@@ -727,7 +727,10 @@ static int nv14_search_position_feasible(
 {
     double x = state->player.pos.x;
     double y = state->player.pos.y;
-    return (!spec->has_x_window ||
+    /* Singular AVM1 states keep simulating, but are not search endpoints. */
+    return isfinite(x) && isfinite(y) &&
+        isfinite(state->player.oldpos.x) && isfinite(state->player.oldpos.y) &&
+        (!spec->has_x_window ||
             (x >= spec->x_minimum && x <= spec->x_maximum)) &&
         (!spec->has_y_window ||
             (y >= spec->y_minimum && y <= spec->y_maximum));
@@ -780,7 +783,7 @@ static int nv14_search_candidate_better(
     const nv14_search_result *best = context->result;
     int candidate_dominates;
     int best_dominates;
-    if (!feasible) return 0;
+    if (!feasible || !isfinite(score)) return 0;
     if (!nv14_search_flags_subset(
             missing_requirements,
             spec->incumbent_missing_requirements,
@@ -1528,8 +1531,10 @@ static int nv14_search_allocate_result(
     size_t bytes;
     size_t index;
     (void)nv14_search_result_init(result, result->struct_size);
-    result->score = spec->incumbent_score;
-    result->feasible = spec->incumbent_feasible != 0;
+    result->score = isfinite(spec->incumbent_score)
+        ? spec->incumbent_score : -INFINITY;
+    result->feasible = spec->incumbent_feasible != 0 &&
+        isfinite(spec->incumbent_score);
     result->best_input_count = spec->mutable_count;
     result->missing_requirement_count = spec->required_group_count;
     result->violated_avoidance_count = spec->avoided_group_count;
@@ -1894,7 +1899,9 @@ static int nv14_pattern_position_feasible(
 {
     double x = state->player.pos.x;
     double y = state->player.pos.y;
-    return (!spec->has_x_window ||
+    return isfinite(x) && isfinite(y) &&
+        isfinite(state->player.oldpos.x) && isfinite(state->player.oldpos.y) &&
+        (!spec->has_x_window ||
             (x >= spec->x_minimum && x <= spec->x_maximum)) &&
         (!spec->has_y_window ||
          (y >= spec->y_minimum && y <= spec->y_maximum));
@@ -1929,6 +1936,7 @@ static void nv14_pattern_retain(
     nv14_pattern_search_result *result = context->result;
     nv14_pattern_search_candidate *candidate;
     size_t index;
+    if (!isfinite(score)) return;
     uint64_t ordinal = ++context->feasible_ordinal;
     if (result->candidate_count < result->candidate_capacity) {
         index = result->candidate_count++;

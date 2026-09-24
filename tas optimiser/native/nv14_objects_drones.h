@@ -34,6 +34,9 @@ typedef struct nv14_drone_snapshot {
 const nv14_internal_object_module *nv14_objects_drones_module(void);
 nv14_status nv14_objects_drones_register(void);
 
+/* Source IdleAfterDeath; invoked only on death/completion transitions. */
+void nv14_objects_drones_idle_after_death(nv14_state *state, size_t object_index);
+
 /* Diagnostic state view used by native differential harnesses. */
 nv14_status nv14_objects_drones_snapshot(
     const nv14_state *state,
