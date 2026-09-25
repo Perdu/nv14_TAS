@@ -7,4 +7,4 @@ echo "Updating annotations..."
 ./get_annotations.sh
 echo "Updating stats..."
 python3 stats.py github > tas/stats.txt
-echo "Updating Readme with number of remaining levels"
+
