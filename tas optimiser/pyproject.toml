@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nv14-tas-starter"
-version = "4.27"
+version = "4.28"
 requires-python = ">=3.11"
 
 [project.optional-dependencies]

@@ -53,10 +53,10 @@ static double square(double x, int *overflow)
 
 typedef struct endpoint_rank {
     size_t violated, missing, pending;
-    int exhausted, dead, events, finite;
+    int exhausted, dead, events, finite, missing_jump;
     double penalty, frame;
     double values[4];
-    double distances[6]; /* exact arguments to the metric's square/hypot calls */
+    double distances[8]; /* exact arguments to the metric's square/hypot calls */
 } endpoint_rank;
 
 static int discrete_compare(const endpoint_rank *a, const endpoint_rank *b)
@@ -72,9 +72,11 @@ static int identical_metric_inputs(const endpoint_rank *a, const endpoint_rank *
     /* All interaction bits are permanent. Equal missing/pending counts on a
      * single chronological trajectory imply the same remaining identities. */
     if (a->pending != b->pending || a->events != b->events) return 0;
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < 8; ++i)
         if (a->distances[i] != b->distances[i]) return 0;
-    if (a->missing || (a->pending && !a->events))
+    /* A missing jump's geometry is fully described by distances[6:8]. Only
+     * missing object interactions need the original player position as well. */
+    if (a->missing > (size_t)a->missing_jump || (a->pending && !a->events))
         for (int i = 0; i < 2; ++i)
             if (a->values[i] != b->values[i]) return 0;
     return 1;
@@ -87,12 +89,15 @@ nv14_status nv14_endpoint_scan(
     nv14_state *state = NULL, *best = NULL;
     uint8_t *previous = NULL, *events = NULL;
     endpoint_rank best_rank = {0};
+    nv14_endpoint_jump jump = {-1, 0.0, 0.0};
     nv14_error error = {0};
     nv14_status status = NV14_STATUS_OK;
     int ambiguous = 0, overflow = 0;
     if (!p || !prefix || !out || !inputs || p->target_frame >= input_count ||
         prefix->frame > p->target_frame + 1 || (p->target_count && !out->events))
         return NV14_STATUS_INVALID_ARGUMENT;
+    if (p->has_jump_region) jump = p->prefix_jump;
+    out->jump = jump;
     out->state = NULL;
     out->eligible = out->needs_reference = 0;
     if (p->target_count) {
@@ -113,6 +118,16 @@ nv14_status nv14_endpoint_scan(
         status = nv14_state_step(state, input, &step);
         if (status != NV14_STATUS_OK) goto done;
         if (step.unsupported) { status = NV14_STATUS_UNSUPPORTED_OBJECTS; goto done; }
+        /* Track before endpoint eligibility filtering, including fixed-frame goals. */
+        if (p->has_jump_region && jump.frame < 0 && step.jumped &&
+            frame >= p->jump_start && frame <= p->jump_end &&
+            isfinite(step.jump_origin_x) && isfinite(step.jump_origin_y) &&
+            step.jump_origin_x >= p->jump_region[0] && step.jump_origin_x <= p->jump_region[1] &&
+            step.jump_origin_y >= p->jump_region[2] && step.jump_origin_y <= p->jump_region[3]) {
+            jump.frame = (int64_t)frame;
+            jump.x = step.jump_origin_x;
+            jump.y = step.jump_origin_y;
+        }
         if (!p->earliest) continue;
         endpoint_rank rank = {0};
         rank.dead = state->player.dead;
@@ -138,7 +153,11 @@ nv14_status nv14_endpoint_scan(
             }
         }
         if (frame < p->arrival_start) continue;
-        rank.exhausted = p->target_count && !rank.events && !rank.pending;
+        int missing_jump = p->has_jump_region && jump.frame < 0;
+        rank.missing_jump = missing_jump;
+        rank.exhausted = (p->target_count && !rank.events && !rank.pending) ||
+                         (missing_jump && frame >= p->jump_end);
+        rank.missing += missing_jump;
         if (!p->target_count || rank.events) target_distance = 0.0;
         double missing_distance = 0.0;
         for (size_t i = 0; i < p->required_count; ++i) {
@@ -173,6 +192,11 @@ nv14_status nv14_endpoint_scan(
             }
             rank.penalty = constraint + square(region, &overflow) +
                            square(missing_distance, &overflow) + square(target_distance, &overflow);
+            if (missing_jump) {
+                rank.distances[6] = outside(rank.values[0], p->jump_region[0], p->jump_region[1]);
+                rank.distances[7] = outside(rank.values[1], p->jump_region[2], p->jump_region[3]);
+                rank.penalty += square(hypot(rank.distances[6], rank.distances[7]), &overflow);
+            }
         } else rank.penalty = INFINITY;
         int feasible = rank.finite && !rank.dead && !rank.missing && !rank.violated &&
                        constraint == 0.0 && region == 0.0 &&
@@ -199,6 +223,7 @@ nv14_status nv14_endpoint_scan(
                 if (status != NV14_STATUS_OK) goto done;
             }
             best_rank = rank;
+            out->jump = jump;
             out->eligible = 1;
             if (p->target_count) memcpy(out->events, events, p->target_count);
         }
@@ -207,7 +232,7 @@ nv14_status nv14_endpoint_scan(
     out->terminal_frame = (int64_t)state->frame - 1;
     out->terminal_dead = state->player.dead;
     out->needs_reference = (uint8_t)(ambiguous || overflow);
-    if (!best) { best = state; state = NULL; }
+    if (!best) { best = state; state = NULL; out->jump = jump; }
     out->state = best;
     best = NULL;
 done:

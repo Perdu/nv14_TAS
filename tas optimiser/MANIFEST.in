@@ -42,3 +42,4 @@ include native/nv14_drone_weapons.h
 include native/nv14_endpoint.c
 include native/nv14_endpoint.h
 include tests/test_native_population_nonfinite.c
+include tests/test_required_jump_native.c

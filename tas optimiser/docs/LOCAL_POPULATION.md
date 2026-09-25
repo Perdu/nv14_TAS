@@ -1,4 +1,4 @@
-# Local population search (v4.27)
+# Local population search (v4.28)
 
 `local --search population` evolves a bounded part of an existing replay for
 manual TAS work. It can optimise position or distance at a fixed frame, or
@@ -213,6 +213,85 @@ Enemy simulation defaults to enabled for population searches; it remains
 disabled by default for Local window searches. Explicit `--simulate-enemies`
 or `--no-simulate-enemies` overrides either default.
 
+## Required intermediate jump
+
+Add an actual-jump requirement to **any** population objective:
+
+```bash
+python3 optimize_replay.py local run.txt \
+  --search population --range 200:400 --target-frame 400 \
+  --objective earliest-arrival --target-region 700:740,90:130 \
+  --require-jump-region 250:280,120:160 \
+  --require-jump-frames 200:350 \
+  --iterations 10000 --beam 32 --workers 8 --output run_optimised.txt
+```
+
+`--require-jump-region XMIN:XMAX,YMIN:YMAX` is one finite, inclusive rectangle
+in level pixels. The player's **centre at the real `Player.jump()` call** must
+lie inside it. The centre is sampled after that tick's movement and collisions,
+but before the jump impulse changes position. The ninja's radius does not
+expand the rectangle. Floor jumps, wall jumps, corner/probe jumps and other
+jumps permitted by the engine all count if they actually invoke `Player.jump()`.
+
+A jump button press that does nothing, continued jump holding, entering the
+rectangle during an earlier jump, and object launches without `Player.jump()`
+do not satisfy it. This option does not alter which jumps the physics permits.
+
+`--require-jump-frames START:END` restricts qualifying events to a zero-based,
+inclusive input-frame interval. Both explicit bounds are required; they must
+be ordered, non-negative, and at most `target_frame`. It requires the region
+option. **Omitting it uses the first editable frame through `target_frame`.**
+These indices refer to the replay after common retiming, just like `--range`.
+
+The first matching jump is latched. The accepted endpoint must have that event
+in its history; a jump on the endpoint tick can count. A later jump cannot
+validate an earlier arrival or already-consumed interaction. Existing live-player,
+position, velocity, required-interaction and avoidance constraints still apply.
+There is no requirement to survive after the accepted endpoint.
+
+The interval is independent of `arrival_start` and of the editable ranges.
+A jump before `arrival_start` can count, as can a jump in an immutable gap. An
+explicit interval may include the immutable prefix; its jump history is computed
+once per evaluator/worker and cached with the prefix state. With the default
+interval, jumps before the first editable frame do not count.
+
+TOML accepts strings or arrays:
+
+```toml
+[local]
+search = "population"
+require_jump_region = [250.0, 280.0, 120.0, 160.0]
+require_jump_frames = [200, 350]
+```
+
+See `examples/config/local-jump-region.toml` for a full example. These options
+are rejected by Local windows, Auto and jump-pattern search.
+
+The population rank treats a missing jump as an unsatisfied requirement and
+uses distance to the rectangle as a movement hint. Proximity alone never
+qualifies. Exhausted event opportunities retain earlier useful repair states.
+Satisfaction contributes to population diversity; physical engine state keys
+remain unchanged. Output and progress report the first qualifying jump frame;
+verified result summaries also show its origin.
+
+For Python users, `EndpointGoal` accepts `require_jump_region` and
+`require_jump_frames`. `optimise_local_population()` resolves an omitted
+interval from its editable ranges. Direct `EndpointEvaluator`/`verify_endpoint`
+calls have no editable-range argument and therefore default to `0:target_frame`;
+pass the resolved interval when independently verifying a population result.
+`EndpointEvaluation.jump_event` is `(frame, origin_x, origin_y)` or `None`, with
+`missing_jump` and `jump_distance` describing unmet requirements.
+
+All event tracking is native. `nv14_step_result` exposes two origin coordinates
+valid only when `jumped` is true; the Python step result uses `jump_origin=None`
+otherwise. Cython marshals the rectangle once and returns only selected-state
+history. No Python callbacks or per-tick snapshots are added to ordinary scans.
+The precision-sensitive reference fallback remains available. Reference scans
+and optional Python physics resimulation independently validate jump history.
+The native core ABI is now 3, the population endpoint API is 2, and the
+player-dump ABI is 2 (its capture rows embed the step result): rebuild the
+extension after upgrading.
+
 ## Options
 
 All these controls live in `[local]` when using TOML. CLI scalar values override
@@ -232,6 +311,8 @@ the file in the usual way. The input filename remains positional.
 | `--vx-window MIN:MAX` | `vx_window` | none | Inclusive endpoint horizontal velocity constraint. |
 | `--vy-window MIN:MAX` | `vy_window` | none | Inclusive endpoint vertical velocity constraint. |
 | `--target-region XMIN:XMAX,YMIN:YMAX` | `target_region` | none | Finite inclusive arrival rectangle. |
+| `--require-jump-region XMIN:XMAX,YMIN:YMAX` | `require_jump_region` | none | Require a real jump whose pre-impulse centre is inside the rectangle. |
+| `--require-jump-frames START:END` | `require_jump_frames` | first mutable frame:target | Inclusive qualifying jump interval; requires a jump region. |
 | `--arrival-start N` | `arrival_start` | first mutable frame | First frame eligible for arrival or a fresh interaction. |
 | `--iterations N` | `iterations` | `10000` | Proposal budget per worker per round, including repair proposals. |
 | `--beam N` | `beam` | `32` | Bound on retained candidates per search beam; must be at least top-results. |
@@ -318,7 +399,7 @@ The secondary objective is part of the goal fingerprint, and its value is
 re-evaluated and checked for every restored candidate. Changing it requires a
 new campaign. The resolved interaction target is also fingerprinted, and event
 identity and completed-exit state are re-verified when restoring candidates.
-Local population checkpoints from earlier builds cannot resume in v4.27;
+Local population checkpoints from earlier builds cannot resume in v4.28;
 use a replay from that campaign as the input to a new search.
 
 ## Implementation
@@ -350,9 +431,9 @@ workers and checkpoints. `nv14_cli.py` owns strategy-specific CLI/TOML validatio
 and TXT/LTM output. The native wrapper exposes persistent door-control masks
 without changing existing snapshot shapes or the physics engine.
 
-Rebuild the native extension for v4.27 with `python3 build_native.py`. An older
+Rebuild the native extension for v4.28 with `python3 build_native.py`. An older
 extension cannot run the new population API. The source archive includes
-generated C, so installing Cython is not required for that build. No new search
-flags or runtime dependencies are introduced. See the
-[v4.27 changelog](changelog/CHANGELOG_v4.27.md) for benchmark conditions; the
+generated C, so installing Cython is not required for that build. No new
+runtime dependencies are introduced. See the
+[v4.28 changelog](changelog/CHANGELOG_v4.28.md) for benchmark conditions; the
 speedup depends on the goal, replay length and object workload.

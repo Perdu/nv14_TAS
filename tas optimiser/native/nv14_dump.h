@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 
-#define NV14_PLAYER_DUMP_ABI_VERSION 1u
+/* v2 embeds the core-v3 step result, including pre-impulse jump origins. */
+#define NV14_PLAYER_DUMP_ABI_VERSION 2u
 
 typedef struct nv14_player_dump_row {
     nv14_input input; /* jump_trigger is resolved to 0/1 before stepping. */

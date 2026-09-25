@@ -15,6 +15,8 @@ from cpython.bytes cimport PyBytes_AS_STRING, PyBytes_FromStringAndSize
 from cpython.mem cimport PyMem_Free, PyMem_Malloc
 from cpython.ref cimport PyObject
 from libc.stddef cimport size_t
+import math
+
 from libc.stdint cimport int32_t, int64_t, int8_t, uint8_t, uint16_t, uint32_t, uint64_t
 from libc.string cimport memcpy, memset
 
@@ -138,6 +140,7 @@ cdef extern from "nv14_core.h":
         uint8_t opened_exit
         uint8_t unsupported
         uint8_t jump_callable
+        double jump_origin_x, jump_origin_y
 
     nv14_level *nv14_level_create(
         const char *level_string,
@@ -378,6 +381,7 @@ cdef dict _step_result_dict(const nv14_step_result *result):
         "opened_exit": bool(result.opened_exit),
         "unsupported": bool(result.unsupported),
         "jump_callable": bool(result.jump_callable),
+        "jump_origin": (result.jump_origin_x, result.jump_origin_y) if result.jumped else None,
     }
 
 
@@ -1328,7 +1332,7 @@ def backend_info():
         "object_visual_queries": True,
         "optional_visual_tracker": True,
         "compact_visual_capture": 1,
-        "population_endpoint_api": 1,
+        "population_endpoint_api": 2,
         "implementation": "cython-unified-native",
         "strict_fp": bool(nv14_wrapper_strict_fp()),
         "complete_step_capability": NV14_CAP_COMPLETE_STEP,
@@ -4160,6 +4164,9 @@ cdef extern from "nv14_endpoint.h":
         uint8_t kind, has_position
     ctypedef struct nv14_endpoint_group:
         size_t first, count
+    ctypedef struct nv14_endpoint_jump:
+        int64_t frame
+        double x, y
     ctypedef struct nv14_endpoint_plan:
         size_t target_frame, arrival_start
         uint8_t earliest, has_region
@@ -4172,11 +4179,16 @@ cdef extern from "nv14_endpoint.h":
         size_t required_count, avoided_count
         nv14_endpoint_atom *targets
         size_t target_count
+        uint8_t has_jump_region
+        double jump_region[4]
+        size_t jump_start, jump_end
+        nv14_endpoint_jump prefix_jump
     ctypedef struct nv14_endpoint_result:
         nv14_state *state
         uint8_t *events
         int64_t terminal_frame
         uint8_t terminal_dead, eligible, needs_reference
+        nv14_endpoint_jump jump
     nv14_status nv14_endpoint_scan(
         const nv14_endpoint_plan *, const nv14_state *,
         const uint8_t *, size_t, nv14_endpoint_result *,
@@ -4240,7 +4252,8 @@ cdef class NativeEndpointPlan:
         self._construction_started = False
 
     def __init__(self, *, target_frame, arrival_start=0, earliest=False,
-                 windows, region=None, required=(), avoided=(), targets=()):
+                 windows, region=None, required=(), avoided=(), targets=(),
+                 jump_region=None, jump_frames=None):
         cdef Py_ssize_t i
         cdef size_t cursor = 0
         cdef nv14_endpoint_group *group
@@ -4262,6 +4275,24 @@ cdef class NativeEndpointPlan:
             self._plan.has_region = 1
             for i in range(4):
                 self._plan.region[i] = region[i]
+        self._plan.prefix_jump.frame = -1
+        if jump_frames is not None and jump_region is None:
+            raise ValueError("jump frames require a jump region")
+        if jump_region is not None:
+            if (len(jump_region) != 4 or not all(math.isfinite(v) for v in jump_region)
+                    or jump_region[0] > jump_region[1] or jump_region[2] > jump_region[3]):
+                raise ValueError("jump region needs four finite ordered bounds")
+            self._plan.has_jump_region = 1
+            for i in range(4):
+                self._plan.jump_region[i] = jump_region[i]
+            if jump_frames is None:
+                jump_frames = (0, target_frame)
+            if len(jump_frames) != 2:
+                raise ValueError("jump frames need two inclusive bounds")
+            _as_size(jump_frames[0], &self._plan.jump_start, "jump start")
+            _as_size(jump_frames[1], &self._plan.jump_end, "jump end")
+            if self._plan.jump_start > self._plan.jump_end or self._plan.jump_end > self._plan.target_frame:
+                raise ValueError("jump frames must be ordered and within the deadline")
         required = tuple(tuple(items) for items in required)
         avoided = tuple(tuple(items) for items in avoided)
         targets = tuple(targets)
@@ -4295,7 +4326,9 @@ cdef class NativeEndpointPlan:
         PyMem_Free(self._plan.avoided)
         PyMem_Free(self._plan.targets)
 
-    def scan(self, NativeState prefix not None, bytes inputs not None):
+    def scan(self, NativeState prefix not None, bytes inputs not None,
+             jump_event=None, prefix_frames=None):
+        cdef nv14_endpoint_plan plan = self._plan
         cdef nv14_endpoint_result result
         cdef nv14_status status
         cdef size_t count = len(inputs), i
@@ -4304,7 +4337,23 @@ cdef class NativeEndpointPlan:
         memset(&result, 0, sizeof(nv14_endpoint_result))
         if not self._initialised:
             raise RuntimeError("native endpoint plan is not initialised")
-        if self._plan.target_frame >= count:
+        if prefix_frames is not None:
+            _as_size(prefix_frames, &plan.target_frame, "prefix frame count")
+            if plan.target_frame == 0 or plan.target_frame > self._plan.target_frame + 1:
+                raise ValueError("prefix frame count must be within the endpoint horizon")
+            plan.target_frame -= 1
+            plan.earliest = 0
+        if jump_event is not None:
+            if (not plan.has_jump_region or len(jump_event) != 3
+                    or not isinstance(jump_event[0], int) or isinstance(jump_event[0], bool)
+                    or not plan.jump_start <= jump_event[0] <= plan.jump_end
+                    or jump_event[0] >= prefix.frame
+                    or not all(math.isfinite(v) for v in jump_event[1:])
+                    or not plan.jump_region[0] <= jump_event[1] <= plan.jump_region[1]
+                    or not plan.jump_region[2] <= jump_event[2] <= plan.jump_region[3]):
+                raise ValueError("invalid cached prefix jump event")
+            plan.prefix_jump.frame, plan.prefix_jump.x, plan.prefix_jump.y = jump_event
+        if plan.target_frame >= count:
             raise ValueError("endpoint deadline lies outside replay")
         for i in range(count):
             if data[i] > 31:
@@ -4313,7 +4362,7 @@ cdef class NativeEndpointPlan:
             result.events = <uint8_t *>_checked_alloc(self._plan.target_count, 1, "endpoint events")
         try:
             with nogil:
-                status = nv14_endpoint_scan(&self._plan, prefix._handle, data, count, &result)
+                status = nv14_endpoint_scan(&plan, prefix._handle, data, count, &result)
             if status != NV14_STATUS_OK:
                 _raise_status(status, "scan native population endpoint")
             PyErr_CheckSignals()
@@ -4322,7 +4371,9 @@ cdef class NativeEndpointPlan:
             result.state = NULL  # _from_handle owns cleanup, including on failure
             state = NativeState._from_handle(prefix._level, selected)
             return (state, event_indices, bool(result.eligible), result.terminal_frame,
-                    bool(result.terminal_dead), bool(result.needs_reference))
+                    bool(result.terminal_dead),
+                    None if result.jump.frame < 0 else (result.jump.frame, result.jump.x, result.jump.y),
+                    bool(result.needs_reference))
         finally:
             nv14_state_destroy(result.state)
             PyMem_Free(result.events)

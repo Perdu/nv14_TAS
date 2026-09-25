@@ -1,0 +1,18 @@
+# Rectangle contains the player's centre at the actual Player.jump() call.
+# Coordinates are level pixels; input-frame bounds are zero-based and inclusive.
+[local]
+search = "population"
+range = "200:400"
+target_frame = 400
+objective = "earliest-arrival"
+target_region = "700:740,90:130"
+require_jump_region = "250:280,120:160"
+# Optional: omit to allow the first editable frame through target_frame.
+require_jump_frames = "200:350"
+iterations = 10000
+beam = 32
+workers = 8
+rounds = 0
+stagnation_rounds = 20
+seed = "random"
+checkpoint = "local_jump_region_checkpoint.json"

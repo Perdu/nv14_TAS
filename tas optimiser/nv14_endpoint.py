@@ -60,6 +60,8 @@ class EndpointGoal:
     avoided_interactions: tuple[InteractionAvoidance, ...] = ()
     secondary_objective: str | None = None
     interaction_target: InteractionTarget | None = None
+    require_jump_region: tuple[float, float, float, float] | None = None
+    require_jump_frames: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.target_frame, bool) or not isinstance(self.target_frame, int) or self.target_frame < 0:
@@ -99,6 +101,20 @@ class EndpointGoal:
                 raise ValueError("earliest-interaction requires a resolved interaction_target")
         elif self.interaction_target is not None:
             raise ValueError("interaction_target requires earliest-interaction")
+        if self.require_jump_region is not None:
+            region = tuple(float(v) for v in self.require_jump_region)
+            if (len(region) != 4 or not all(math.isfinite(v) for v in region)
+                    or region[0] > region[1] or region[2] > region[3]):
+                raise ValueError("require_jump_region needs four finite ordered rectangle bounds")
+            object.__setattr__(self, "require_jump_region", region)
+        if self.require_jump_frames is not None:
+            if self.require_jump_region is None:
+                raise ValueError("require_jump_frames requires require_jump_region")
+            interval = tuple(self.require_jump_frames)
+            if (len(interval) != 2 or any(type(v) is not int for v in interval)
+                    or not 0 <= interval[0] <= interval[1] <= self.target_frame):
+                raise ValueError("require_jump_frames must be ordered non-negative integers within target_frame")
+            object.__setattr__(self, "require_jump_frames", interval)
         object.__setattr__(self, "required_interactions", tuple(self.required_interactions))
         object.__setattr__(self, "avoided_interactions", tuple(self.avoided_interactions))
 
@@ -134,6 +150,11 @@ class EndpointEvaluation:
     interaction_events: tuple[InteractionAtom, ...] = ()
     completed_exit_index: int = -1
     target_distance: float = 0.0
+    # First qualifying actual jump: (zero-based input frame, origin x, origin y).
+    # This is evaluation history; state_key remains an exact physical state key.
+    jump_event: tuple[int, float, float] | None = None
+    missing_jump: bool = False
+    jump_distance: float = 0.0
 
     @property
     def objective_key(self) -> tuple[float, float]:
@@ -215,12 +236,9 @@ class EndpointEvaluator:
         self.prefix_frame = prefix_frame
         self._prefix = self.level.initial_state()
         native = require_native()
-        if not callable(getattr(native, "NativeEndpointPlan", None)):
-            raise RuntimeError("endpoint search requires the v4.27 native extension; run 'python build_native.py'")
+        if native.backend_info().get("population_endpoint_api", 0) < 2:
+            raise RuntimeError("endpoint search requires the v4.28 native extension; run 'python build_native.py'")
         self._source_key = native.population_input_key(self.source_frames)[0]
-        if prefix_frame:
-            self._prefix.step_many(self.source_frames[:prefix_frame], stop_on_dead=True, stop_on_complete=False)
-        self._prefix_dead = bool(self._prefix.player_snapshot()["dead"])
         self._descriptors = {int(item["load_index"]): item for item in self.level.object_descriptors()}
         self._has_doors = any(item["object_type"] == 9 for item in self._descriptors.values())
         self._target_positions: dict[InteractionAtom, tuple[float, float]] = {}
@@ -233,6 +251,15 @@ class EndpointEvaluator:
                     raise ValueError(f"interaction target {atom.label} needs finite coordinates")
                 self._target_positions[atom] = position
         self._native_plan = self._compile_native_plan()
+        self._prefix_jump = None
+        if prefix_frame:
+            if goal.require_jump_region is None:
+                self._prefix.step_many(self.source_frames[:prefix_frame], stop_on_dead=True, stop_on_complete=False)
+            else:
+                # One native scan per evaluator, retaining route history in the cached prefix.
+                scan = self._native_plan.scan(self._prefix, self._source_key, prefix_frames=prefix_frame)
+                self._prefix, self._prefix_jump = scan[0], scan[-2]
+        self._prefix_dead = bool(self._prefix.player_snapshot()["dead"])
 
     def _compile_native_plan(self) -> Any:
         kinds = {INTERACTION_GOLD: 0, INTERACTION_EXIT_SWITCH: 1,
@@ -268,7 +295,8 @@ class EndpointEvaluator:
         return require_native().NativeEndpointPlan(
             target_frame=goal.target_frame, arrival_start=goal.arrival_start,
             earliest=goal.is_earliest, windows=windows, region=goal.target_region,
-            required=required, avoided=avoided, targets=targets)
+            required=required, avoided=avoided, targets=targets,
+            jump_region=goal.require_jump_region, jump_frames=goal.require_jump_frames)
 
     def _interaction_snapshot(self, state: Any) -> tuple[tuple[int, int, int, int], int]:
         static = state.static_state()
@@ -298,6 +326,7 @@ class EndpointEvaluator:
                         capture_state_key: bool = True,
                         previous_interactions: tuple[tuple[int, int, int, int], int] | None = None,
                         interaction_events: tuple[InteractionAtom, ...] | None = None,
+                        jump_event: tuple[int, float, float] | None = None,
                         ) -> EndpointEvaluation:
         player = state.player_snapshot()
         masks, completed = self._interaction_snapshot(state)
@@ -347,10 +376,16 @@ class EndpointEvaluator:
                 score = -float(frame)
         else:
             error, region_distance, score = math.inf, math.inf, -math.inf
+        missing_jump = goal.require_jump_region is not None and jump_event is None
+        jump_distance = 0.0
+        if missing_jump:
+            xmin, xmax, ymin, ymax = goal.require_jump_region
+            jump_distance = (math.hypot(max(xmin-x, x-xmax, 0.0), max(ymin-y, y-ymax, 0.0))
+                             if finite else math.inf)
         dead = bool(player["dead"])
         at_endpoint = ((arrival_eligible and goal.arrival_start <= frame <= goal.target_frame)
                        if goal.is_earliest else frame == goal.target_frame)
-        feasible = bool(at_endpoint and finite and not dead and not missing and not violated
+        feasible = bool(at_endpoint and finite and not dead and not missing and not violated and not missing_jump
                         and error == 0.0 and region_distance == 0.0
                         and (goal.interaction_target is None or events))
         secondary_value = secondary_score = 0.0
@@ -365,15 +400,17 @@ class EndpointEvaluator:
             # Keep requirements/avoidances discrete, then offer useful movement
             # gradients toward satisfying the remaining exact goals. Earlier
             # surviving near-misses remain useful even if the later run dies.
-            progress_key = (1, len(violated), len(missing), int(dead),
-                            error + region_distance**2 + missing_distance**2 + target_distance**2,
+            progress_key = (1, len(violated), len(missing) + int(missing_jump), int(dead),
+                            error + region_distance**2 + missing_distance**2 + target_distance**2
+                            + (jump_distance**2 if missing_jump else 0.0),
                             max(goal.arrival_start-frame, 0) if goal.is_earliest
                             else max(goal.target_frame-frame, 0), -score)
-            if goal.interaction_target is not None:
+            if goal.interaction_target is not None or goal.require_jump_region is not None:
                 # States after the final possible interaction cannot repair the
                 # event's failed constraints. Keep its actual tick or an earlier
                 # viable approach, even if requirements become true later.
-                exhausted = not events and not pending
+                exhausted = ((goal.interaction_target is not None and not events and not pending)
+                             or (missing_jump and frame >= (goal.require_jump_frames or (0, goal.target_frame))[1]))
                 progress_key = (progress_key[0], int(exhausted), *progress_key[1:])
         contact = (player["state"], player["in_air"], player["near_wall"],
                    player["floor_n"], player["wall_n"], player["previous_jump_held"])
@@ -382,12 +419,24 @@ class EndpointEvaluator:
         niche = (*quantised, *contact, masks)
         if goal.interaction_target is not None:
             niche = (*niche, events, completed)
+        if goal.require_jump_region is not None:
+            niche = (*niche, not missing_jump)
         return EndpointEvaluation(feasible, score, frame, x, y, vx, vy, missing, violated,
                                   dead, progress_key,
                                   state.state_key() if capture_state_key else b"", niche, masks, contact,
                                   error, region_distance, frame, dead,
                                   tuple(player.items()), secondary_score, secondary_value,
-                                  events, completed, target_distance)
+                                  events, completed, target_distance, jump_event, missing_jump, jump_distance)
+
+    def _qualifying_jump(self, frame: int, jumped: bool, origin: tuple | None) -> bool:
+        """Independent reference event predicate; never called by the C tick loop."""
+        region = self.goal.require_jump_region
+        if region is None or not jumped or origin is None:
+            return False
+        start, end = self.goal.require_jump_frames or (0, self.goal.target_frame)
+        x, y = origin
+        return (start <= frame <= end and math.isfinite(x) and math.isfinite(y)
+                and region[0] <= x <= region[1] and region[2] <= y <= region[3])
 
     def evaluate(self, frames: Sequence[InputFrame]) -> EndpointEvaluation:
         frames = tuple(frames)
@@ -401,7 +450,8 @@ class EndpointEvaluator:
             raise ValueError("candidate changed the immutable cached prefix")
         if self._reference_required:
             return self.evaluate_reference(frames)
-        state, events, eligible, terminal_frame, terminal_dead, ambiguous = self._native_plan.scan(self._prefix, key)
+        state, events, eligible, terminal_frame, terminal_dead, jump_event, ambiguous = self._native_plan.scan(
+            self._prefix, key, jump_event=self._prefix_jump)
         if ambiguous:
             # libc hypot and Python math.hypot can differ in their final bit.
             # Re-evaluate only precision-sensitive scans with the exact original
@@ -409,7 +459,7 @@ class EndpointEvaluator:
             return self.evaluate_reference(frames)
         atoms = (() if self.goal.interaction_target is None else
                  tuple(self.goal.interaction_target.alternatives[index] for index in events))
-        result = self._evaluate_state(state, arrival_eligible=eligible, interaction_events=atoms)
+        result = self._evaluate_state(state, arrival_eligible=eligible, interaction_events=atoms, jump_event=jump_event)
         if result.terminal_frame != terminal_frame or result.terminal_dead != terminal_dead:
             result = replace(result, terminal_frame=terminal_frame, terminal_dead=terminal_dead)
         return result
@@ -422,7 +472,7 @@ class EndpointEvaluator:
         if frames[:self.prefix_frame] != self.source_frames[:self.prefix_frame]:
             raise ValueError("candidate changed the immutable cached prefix")
         state = self._prefix.clone()
-        if not self.goal.is_earliest:
+        if not self.goal.is_earliest and self.goal.require_jump_region is None:
             if not self._prefix_dead:
                 state.step_many(frames[self.prefix_frame:self.goal.target_frame+1],
                                 stop_on_dead=True, stop_on_complete=False)
@@ -430,24 +480,31 @@ class EndpointEvaluator:
         # Inspect every eligible input tick: entry/exit and momentum constraints
         # can become true, false and true again. Binary search is unsound here.
         best = None
+        jump_event = self._prefix_jump
         dead = self._prefix_dead
         previous = self._interaction_snapshot(state) if self.goal.interaction_target is not None else None
         for frame in range(int(state.frame), self.goal.target_frame + 1):
             if dead:
                 break
-            dead = bool(state.step(frames[frame])["dead"])
+            step = state.step(frames[frame])
+            dead = bool(step["dead"])
+            if jump_event is None and self._qualifying_jump(frame, step["jumped"], step["jump_origin"]):
+                jump_event = (frame, *step["jump_origin"])
+            if not self.goal.is_earliest:
+                continue
             if frame < self.goal.arrival_start:
                 if previous is not None:
                     previous = self._interaction_snapshot(state)
                 continue
-            candidate = self._evaluate_state(state, capture_state_key=False, previous_interactions=previous)
+            candidate = self._evaluate_state(state, capture_state_key=False, previous_interactions=previous,
+                                             jump_event=jump_event)
             if previous is not None:
                 previous = (candidate.interaction_state, candidate.completed_exit_index)
             if candidate.feasible:
                 return replace(candidate, state_key=state.state_key())
             if best is None or candidate.progress_key < best.progress_key:
                 best = replace(candidate, state_key=state.state_key())
-        terminal = self._evaluate_state(state, arrival_eligible=False)
+        terminal = self._evaluate_state(state, arrival_eligible=False, jump_event=jump_event)
         if best is None:
             best = terminal
         return replace(best, terminal_frame=terminal.frame, terminal_dead=terminal.dead)
@@ -462,9 +519,10 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
     The exact native state key catches differences in enemies, doors and all
     other simulation state, not merely player coordinates.
     """
-    result = EndpointEvaluator(level, goal).evaluate_reference(frames)
+    evaluator = EndpointEvaluator(level, goal)
+    result = evaluator.evaluate_reference(frames)
     if expected is not None:
-        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index")
+        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index", "jump_event", "missing_jump")
         mismatch = [name for name in comparable if getattr(result, name) != getattr(expected, name)]
         if mismatch:
             raise ValueError("endpoint verification mismatch: " + ", ".join(mismatch))
@@ -476,7 +534,20 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
         else:
             reference_level = parse_level_string(level.source_level_string, simulate_enemies=level.simulate_enemies)
         previous_atoms: set[InteractionAtom] = set()
-        if goal.interaction_target is not None and result.frame >= 0:
+        if goal.require_jump_region is not None:
+            state = reference_level.initial_state()
+            python_jump = None
+            for frame in range(result.frame + 1):
+                if frame == result.frame and goal.interaction_target is not None:
+                    previous_atoms = {atom for atom in goal.interaction_target.alternatives if atom.is_satisfied(state)}
+                before = state.player.jump_events
+                state.step(frames[frame], reference_level.tiles)
+                if python_jump is None and evaluator._qualifying_jump(
+                        frame, state.player.jump_events > before, state.player.last_jump_origin):
+                    python_jump = (frame, *state.player.last_jump_origin)
+            if python_jump != result.jump_event:
+                raise ValueError("endpoint jump event disagrees with Python reference physics")
+        elif goal.interaction_target is not None and result.frame >= 0:
             state = (simulate_through_frame(reference_level, frames, result.frame - 1)
                      if result.frame else reference_level.initial_state())
             previous_atoms = {atom for atom in goal.interaction_target.alternatives if atom.is_satisfied(state)}

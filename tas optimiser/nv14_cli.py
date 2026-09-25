@@ -150,6 +150,8 @@ class LocalConfig:
     vy_window: AxisWindow | None = None
     target_region: tuple[float, float, float, float] | None = None
     arrival_start: int | None = None
+    require_jump_region: tuple[float, float, float, float] | None = None
+    require_jump_frames: tuple[int, int] | None = None
     top_results: int = 1
     iterations: int = 10000
     beam: int = 32
@@ -195,11 +197,21 @@ class LocalConfig:
             self.objective in EARLIEST_OBJECTIVES or self.vx_window is not None
             or self.vy_window is not None or self.target_region is not None
             or self.arrival_start is not None or self.top_results != 1
+            or self.require_jump_region is not None or self.require_jump_frames is not None
             or self.checkpoint_path is not None or self.resume
             or self.secondary_objective is not None
         ):
             raise ValueError("endpoint extensions require --search population")
         if self.search == "population":
+            if self.require_jump_frames is not None:
+                if self.require_jump_region is None:
+                    raise ValueError("--require-jump-frames requires --require-jump-region")
+                if (len(self.require_jump_frames) != 2
+                        or any(type(v) is not int for v in self.require_jump_frames)
+                        or not 0 <= self.require_jump_frames[0] <= self.require_jump_frames[1]):
+                    raise ValueError("--require-jump-frames must be ordered non-negative integer bounds")
+                if self.target_frame is not None and self.require_jump_frames[1] > self.target_frame:
+                    raise ValueError("--require-jump-frames must not exceed --target-frame")
             if self.secondary_objective is not None:
                 if self.secondary_objective not in SECONDARY_OBJECTIVES:
                     raise ValueError("secondary-objective must be one of: " + ", ".join(SECONDARY_OBJECTIVES))
@@ -323,6 +335,8 @@ class LocalConfig:
             vy_window=args.vy_window,
             target_region=args.target_region,
             arrival_start=args.arrival_start,
+            require_jump_region=args.require_jump_region,
+            require_jump_frames=args.require_jump_frames,
             top_results=args.top_results,
             iterations=args.iterations,
             beam=args.beam,
@@ -1049,6 +1063,17 @@ def parse_target_region(text: str) -> tuple[float, float, float, float]:
     return values
 
 
+def parse_required_jump_frames(text: str) -> tuple[int, int]:
+    """A bounded, inclusive zero-based input interval; separate from editable ranges."""
+    parts = text.split(":")
+    if len(parts) != 2 or not all(part.strip() for part in parts):
+        raise ValueError("require-jump-frames must be START:END with both bounds")
+    start, end = map(int, parts)
+    if not 0 <= start <= end:
+        raise ValueError("require-jump-frames must be ordered non-negative integer bounds")
+    return start, end
+
+
 def parse_jump_count_range(text: str) -> tuple[int, int]:
     """Parse ``N`` or inclusive ``MIN:MAX`` successful-jump counts."""
     if ":" not in text:
@@ -1269,6 +1294,10 @@ def _format_config_value_for_type(
         if len(value) != 4:
             raise ValueError("target-region arrays must contain XMIN, XMAX, YMIN, YMAX")
         return f"{value[0]}:{value[1]},{value[2]}:{value[3]}"
+    if action_type is parse_required_jump_frames:
+        if len(value) != 2 or any(type(v) is not int for v in value):
+            raise ValueError("require-jump-frames arrays must contain two integer bounds")
+        return f"{value[0]}:{value[1]}"
     if action_type is parse_target_point:
         if len(value) != 2:
             raise ValueError("target-point arrays must contain exactly two values")
@@ -1470,6 +1499,7 @@ _LOCAL_POPULATION_OPTIONS = frozenset({
     "iterations", "beam", "rounds", "stagnation_rounds", "repair_steps",
     "repair_lookback", "mutation_span", "checkpoint", "resume", "top_results",
     "vx_window", "vy_window", "target_region", "arrival_start",
+    "require_jump_region", "require_jump_frames",
     "secondary_objective",
 })
 
@@ -2075,6 +2105,12 @@ def build_parser() -> argparse.ArgumentParser:
                          metavar="MIN:MAX", help="population only: inclusive vertical velocity bounds")
     command.add_argument("--target-region", modes=local_modes, type=parse_target_region,
                          metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival population goal: inclusive target rectangle")
+    command.add_argument("--require-jump-region", modes=local_modes, type=parse_target_region,
+                         metavar="XMIN:XMAX,YMIN:YMAX",
+                         help="population only: require an actual jump originating inside this inclusive rectangle")
+    command.add_argument("--require-jump-frames", modes=local_modes, type=parse_required_jump_frames,
+                         metavar="START:END",
+                         help="population only: inclusive jump interval (default: first editable frame through target-frame)")
     command.add_argument("--arrival-start", modes=local_modes, type=parse_nonnegative_int,
                          metavar="FRAME", help="first eligible arrival or interaction frame (default: first editable frame)")
     command.add_argument("--secondary-objective", modes=local_modes,
@@ -2525,6 +2561,9 @@ def _run_local_population(
             required_interactions=required, avoided_interactions=avoided,
             secondary_objective=config.secondary_objective,
             interaction_target=interaction_target,
+            require_jump_region=config.require_jump_region,
+            require_jump_frames=(config.require_jump_frames or (ranges[0][0], target_frame))
+            if config.require_jump_region is not None else None,
         )
         search_config = PopulationConfig(
             iterations=config.iterations, beam=config.beam, rounds=config.rounds,
@@ -2563,9 +2602,15 @@ def _run_local_population(
         return f"; secondary {config.secondary_objective}={evaluation.secondary_value:.15g}"
 
     def interaction_summary(evaluation) -> str:
-        if not evaluation.interaction_events:
-            return ""
-        return "; interaction=" + ",".join(atom.label for atom in evaluation.interaction_events)
+        summary = ("; interaction=" + ",".join(atom.label for atom in evaluation.interaction_events)
+                   if evaluation.interaction_events else "")
+        if goal.require_jump_region is not None:
+            if evaluation.jump_event is None:
+                summary += "; required jump missing"
+            else:
+                frame, x, y = evaluation.jump_event
+                summary += f"; required jump at frame {frame}, origin ({x:.12g}, {y:.12g})"
+        return summary
 
     def save_best(candidate) -> bool:
         nonlocal checkpoint_written
@@ -2612,6 +2657,9 @@ def _run_local_population(
     if config.objective in EARLIEST_OBJECTIVES and config.secondary_objective is not None:
         label = "interaction" if interaction_target is not None else "arrival"
         print(f"{label} tie-break: {config.secondary_objective}, then fewer changed frames, then encoded inputs")
+    if goal.require_jump_region is not None:
+        print(f"required jump region: {goal.require_jump_region}; eligible frames "
+              f"{goal.require_jump_frames[0]}:{goal.require_jump_frames[1]} (jump origin, inclusive)")
     if required:
         print("required interactions satisfied: " + format_interaction_requirements(required))
     if avoided:

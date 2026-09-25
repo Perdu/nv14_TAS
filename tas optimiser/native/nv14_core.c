@@ -1912,11 +1912,13 @@ static void nv14_player_launch(
 }
 
 static void nv14_player_jump(
-    nv14_player_snapshot *player, double x, double y, nv14_visual_tracker *visual
+    nv14_player_snapshot *player, double x, double y, nv14_visual_tracker *visual,
+    nv14_vec2 *jump_origin
 )
 {
     double vx;
     double vy;
+    if (jump_origin != NULL) *jump_origin = player->pos;
     ++player->jump_events;
     if (player->state == NV14_PLAYER_JUMPING) player->g = player->norm_grav;
     player->state = NV14_PLAYER_JUMPING;
@@ -2067,7 +2069,8 @@ static void nv14_player_think(
     int horizontal,
     int jump_held,
     int jump_trigger,
-    nv14_visual_tracker *visual
+    nv14_visual_tracker *visual,
+    nv14_vec2 *jump_origin
 )
 {
     double vx = player->pos.x - player->oldpos.x;
@@ -2120,7 +2123,7 @@ static void nv14_player_think(
                     player,
                     player->wall_n.x * jump_x,
                     player->wall_n.y - jump_y_bias,
-                    visual
+                    visual, jump_origin
                 );
                 return;
             }
@@ -2160,9 +2163,9 @@ static void nv14_player_think(
         }
         if (jump_trigger) {
             if ((double)horizontal * player->floor_n.x < 0.0)
-                nv14_player_jump(player, 0.0, -0.7, visual);
+                nv14_player_jump(player, 0.0, -0.7, visual, jump_origin);
             else
-                nv14_player_jump(player, player->floor_n.x, player->floor_n.y, visual);
+                nv14_player_jump(player, player->floor_n.x, player->floor_n.y, visual, jump_origin);
             return;
         }
         if (state == NV14_PLAYER_RUNNING) {
@@ -3921,7 +3924,8 @@ static void nv14_fill_step_result(
     uint64_t jumps_before,
     uint8_t jump_callable,
     nv14_status status,
-    nv14_step_result *result_out
+    nv14_step_result *result_out,
+    const nv14_vec2 *jump_origin
 )
 {
     if (result_out == NULL) return;
@@ -3939,6 +3943,10 @@ static void nv14_fill_step_result(
     result_out->unsupported = status == NV14_STATUS_UNSUPPORTED_TILE ||
         status == NV14_STATUS_UNSUPPORTED_OBJECTS;
     result_out->jump_callable = jump_callable;
+    if (result_out->jumped && jump_origin != NULL) {
+        result_out->jump_origin_x = jump_origin->x;
+        result_out->jump_origin_y = jump_origin->y;
+    }
 }
 
 static int nv14_player_jump_callable(const nv14_player_snapshot *player)
@@ -3971,6 +3979,7 @@ static nv14_status nv14_finish_player_step_internal(
     int jump_trigger;
     uint8_t jump_callable = 0;
     nv14_player_snapshot alternate_player;
+    nv14_vec2 jump_origin = {0.0, 0.0}, alternate_jump_origin = {0.0, 0.0};
     int have_alternate = alternate_input != NULL;
     if (state == NULL) return NV14_STATUS_INVALID_ARGUMENT;
     if (state->phase != 1) return NV14_STATUS_PHASE_ERROR;
@@ -3990,14 +3999,14 @@ static nv14_status nv14_finish_player_step_internal(
         status = nv14_collide_circle_tiles(state);
         if (status != NV14_STATUS_OK) {
             nv14_fill_step_result(
-                state, frame_before, jumps_before, jump_callable, status, result_out
+                state, frame_before, jumps_before, jump_callable, status, result_out, &jump_origin
             );
             return status;
         }
         status = nv14_player_handle_collisions(&state->player, state->level);
         if (status != NV14_STATUS_OK) {
             nv14_fill_step_result(
-                state, frame_before, jumps_before, jump_callable, status, result_out
+                state, frame_before, jumps_before, jump_callable, status, result_out, &jump_origin
             );
             return status;
         }
@@ -4032,7 +4041,7 @@ static nv14_status nv14_finish_player_step_internal(
                 alternate_horizontal,
                 alternate_input->jump != 0,
                 alternate_jump_trigger,
-                NULL
+                NULL, &alternate_jump_origin
             );
             alternate_player.previous_jump_held = alternate_input->jump != 0;
         }
@@ -4041,7 +4050,7 @@ static nv14_status nv14_finish_player_step_internal(
             : input.jump_trigger != 0;
         horizontal = (input.right != 0) - (input.left != 0);
         nv14_player_think(
-            &state->player, horizontal, input.jump != 0, jump_trigger, state->visual
+            &state->player, horizontal, input.jump != 0, jump_trigger, state->visual, &jump_origin
         );
         state->player.previous_jump_held = input.jump != 0;
     } else if (have_alternate) {
@@ -4060,7 +4069,7 @@ player_tick_finished:
             if (status != NV14_STATUS_OK) {
                 nv14_fill_step_result(
                     state, frame_before, jumps_before, jump_callable,
-                    status, result_out
+                    status, result_out, &jump_origin
                 );
                 return status;
             }
@@ -4072,7 +4081,7 @@ player_tick_finished:
         );
         if (status != NV14_STATUS_OK) {
             nv14_fill_step_result(
-                state, frame_before, jumps_before, jump_callable, status, result_out
+                state, frame_before, jumps_before, jump_callable, status, result_out, &jump_origin
             );
             return NV14_STATUS_HOOK_ERROR;
         }
@@ -4081,7 +4090,7 @@ player_tick_finished:
     ++state->frame;
     state->phase = 0;
     nv14_fill_step_result(
-        state, frame_before, jumps_before, jump_callable, NV14_STATUS_OK, result_out
+        state, frame_before, jumps_before, jump_callable, NV14_STATUS_OK, result_out, &jump_origin
     );
     if (have_alternate) {
         memset(alternate_result_out, 0, sizeof(*alternate_result_out));
@@ -4097,6 +4106,10 @@ player_tick_finished:
         alternate_result_out->exploded_mine = state->event_exploded_mine;
         alternate_result_out->opened_exit = state->event_opened_exit;
         alternate_result_out->jump_callable = jump_callable;
+        if (alternate_result_out->jumped) {
+            alternate_result_out->jump_origin_x = alternate_jump_origin.x;
+            alternate_result_out->jump_origin_y = alternate_jump_origin.y;
+        }
         *alternate_player_out = alternate_player;
     }
     return NV14_STATUS_OK;
@@ -4129,14 +4142,14 @@ static nv14_status nv14_state_step_internal(
     jumps_before = state->player.jump_events;
     if ((state->level->capabilities & NV14_CAP_TILE_COLLISION) == 0) {
         nv14_fill_step_result(state, frame_before, jumps_before,
-            0, NV14_STATUS_UNSUPPORTED_TILE, result_out);
+            0, NV14_STATUS_UNSUPPORTED_TILE, result_out, NULL);
         return NV14_STATUS_UNSUPPORTED_TILE;
     }
     if (state->level->unsupported_object_mask != 0) {
         if (hooks == NULL ||
             (hooks->flags & NV14_HOOK_SUPPORTS_DYNAMIC_OBJECTS) == 0) {
             nv14_fill_step_result(state, frame_before, jumps_before,
-                0, NV14_STATUS_UNSUPPORTED_OBJECTS, result_out);
+                0, NV14_STATUS_UNSUPPORTED_OBJECTS, result_out, NULL);
             return NV14_STATUS_UNSUPPORTED_OBJECTS;
         }
     }
@@ -4153,7 +4166,7 @@ static nv14_status nv14_state_step_internal(
         state->event_opened_exit = 0;
         ++state->frame;
         nv14_fill_step_result(
-            state, frame_before, jumps_before, 0, NV14_STATUS_OK, result_out
+            state, frame_before, jumps_before, 0, NV14_STATUS_OK, result_out, NULL
         );
         return NV14_STATUS_OK;
     }
@@ -4261,7 +4274,7 @@ nv14_status nv14_internal_state_step_alternate(
             jumps_before,
             0,
             NV14_STATUS_UNSUPPORTED_TILE,
-            primary_result_out
+            primary_result_out, NULL
         );
         return NV14_STATUS_UNSUPPORTED_TILE;
     }
@@ -4272,7 +4285,7 @@ nv14_status nv14_internal_state_step_alternate(
             jumps_before,
             0,
             NV14_STATUS_UNSUPPORTED_OBJECTS,
-            primary_result_out
+            primary_result_out, NULL
         );
         return NV14_STATUS_UNSUPPORTED_OBJECTS;
     }

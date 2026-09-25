@@ -170,14 +170,14 @@ def _diverse_results(
             niches.add(candidate.evaluation.niche_key)
             keys.add(candidate.input_key)
     # Do not pad with input aliases whose simulated endpoint is identical.
-    states = {candidate.evaluation.state_key for candidate in chosen}
+    states = {(candidate.evaluation.state_key, candidate.evaluation.missing_jump) for candidate in chosen}
     for candidate in ranked[1:]:
         if len(chosen) >= count:
             break
-        if candidate.input_key not in keys and candidate.evaluation.state_key not in states:
+        if candidate.input_key not in keys and (candidate.evaluation.state_key, candidate.evaluation.missing_jump) not in states:
             chosen.append(candidate)
             keys.add(candidate.input_key)
-            states.add(candidate.evaluation.state_key)
+            states.add((candidate.evaluation.state_key, candidate.evaluation.missing_jump))
     return tuple(sorted(chosen, key=_primary_rank))
 
 
@@ -474,6 +474,8 @@ def _write_checkpoint(path: str | Path, identity: dict[str, object], seed: int,
                                "secondary_value": _json_value(c.evaluation.secondary_value),
                                "feasible": c.evaluation.feasible,
                                "interaction_events": _json_value(c.evaluation.interaction_events),
+                               "jump_event": _json_value(c.evaluation.jump_event),
+                               "missing_jump": c.evaluation.missing_jump,
                                "completed_exit_index": c.evaluation.completed_exit_index,
                                "state_sha256": hashlib.sha256(c.evaluation.state_key).hexdigest(),
                                "frame": c.evaluation.frame} for c in population]}
@@ -536,6 +538,8 @@ def _read_checkpoint(path: str | Path, identity: dict[str, object], context: _Se
                     or candidate.evaluation.feasible != item["feasible"]
                     or candidate.evaluation.frame != item["frame"]
                     or _json_value(candidate.evaluation.interaction_events) != item["interaction_events"]
+                    or _json_value(candidate.evaluation.jump_event) != item["jump_event"]
+                    or candidate.evaluation.missing_jump != item["missing_jump"]
                     or candidate.evaluation.completed_exit_index != item["completed_exit_index"]
                     or hashlib.sha256(candidate.evaluation.state_key).hexdigest() != item["state_sha256"]):
                 raise ValueError("population checkpoint candidate failed endpoint re-verification")
@@ -576,6 +580,8 @@ def optimise_local_population(
     if config.resume and not config.checkpoint_path:
         raise ValueError("population resume requires a checkpoint path")
     worker_count = config.workers or _automatic_jump_worker_count()
+    if goal.require_jump_region is not None and goal.require_jump_frames is None:
+        goal = replace(goal, require_jump_frames=(ranges[0][0], goal.target_frame))
     context = _SearchContext(level, source, goal, ranges, config)
     baseline_candidate = context.candidate(source, ())
     baseline = baseline_candidate.evaluation
@@ -586,7 +592,7 @@ def optimise_local_population(
         prefix_goal = replace(goal, target_frame=ranges[0][0] - 1, objective="max-x",
                               target=None, interaction_target=None, target_region=None, arrival_start=0, secondary_objective=None,
                               x_window=None, y_window=None, vx_window=None, vy_window=None,
-                              required_interactions=())
+                              required_interactions=(), require_jump_region=None, require_jump_frames=None)
         prefix = EndpointEvaluator(level, prefix_goal).evaluate(source)
         if prefix.dead:
             raise ValueError("the immutable prefix dies before the editable ranges; move the range start earlier")
@@ -638,6 +644,8 @@ def optimise_local_population(
             return "no feasible endpoint"
         evaluation = best.evaluation
         summary = f"best {evaluation.score:g} at frame {evaluation.frame}"
+        if evaluation.jump_event is not None:
+            summary += f"; required jump={evaluation.jump_event[0]}"
         if evaluation.interaction_events:
             summary += "; interaction=" + ",".join(atom.label for atom in evaluation.interaction_events)
         if goal.secondary_objective is not None:

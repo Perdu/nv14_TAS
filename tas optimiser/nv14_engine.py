@@ -4787,6 +4787,8 @@ class Player:
     # future physics. Search code can compare the counter before/after a frame
     # to distinguish a successful jump from a jump button press that did nothing.
     jump_events: int = 0
+    # Instrumentation, excluded from physical state keys; updated only on a real jump.
+    last_jump_origin: tuple[float, float] | None = None
     # Tile-grid cell retained by ObjectManager.Moved(); thwomp AI reads this
     # before the player integrates the next frame.
     cell_i: int = 0
@@ -4849,6 +4851,7 @@ class Player:
         q.previous_jump_held = self.previous_jump_held
         q.celeb_was_in_air = self.celeb_was_in_air
         q.jump_events = self.jump_events
+        q.last_jump_origin = self.last_jump_origin
         q.cell_i = self.cell_i
         q.cell_j = self.cell_j
         return q
@@ -5464,6 +5467,7 @@ class Player:
             self.celeb_was_in_air = False
 
     def jump(self, x: float, y: float) -> None:
+        self.last_jump_origin = (self.pos.x, self.pos.y)
         self.jump_events += 1
         if self.state == PlayerState.JUMPING:
             self.g = self.norm_grav

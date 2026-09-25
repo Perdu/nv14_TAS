@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-#define NV14_CORE_ABI_VERSION 2u
+#define NV14_CORE_ABI_VERSION 3u
 #define NV14_MAP_CHARS 713u
 #define NV14_GRID_COLS 31
 #define NV14_GRID_ROWS 23
@@ -163,6 +163,8 @@ typedef struct nv14_step_result {
     uint8_t unsupported;
     /* Set when a fresh jump edge at this tick would call Player.jump(). */
     uint8_t jump_callable;
+    /* Player centre immediately before the actual jump impulse; valid iff jumped. */
+    double jump_origin_x, jump_origin_y;
 } nv14_step_result;
 
 typedef enum nv14_hook_phase {

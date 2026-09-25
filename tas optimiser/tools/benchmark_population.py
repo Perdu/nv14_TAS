@@ -1,8 +1,8 @@
 """Compare equal-work local population searches against an extracted baseline.
 
-Run from v4.27::
+Run from the current source tree::
 
-    python -m tools.benchmark_population --baseline-root ../v4.26 --output results.json
+    python -m tools.benchmark_population --baseline-root ../v4.27 --output results.json
 
 Both source trees need their own built native extension. Each timed workload
 uses the same seed, input, proposal budget and worker count. Full result hashes
@@ -35,10 +35,19 @@ def _worker(root: Path, iterations: int, repetitions: int) -> dict:
 
     def canonical(value):
         if is_dataclass(value):
-            return canonical(asdict(value))
+            fields = asdict(value)
+            # v4.28 adds optional jump-history fields. Compare the entire old
+            # result contract when that feature is disabled, requiring defaults.
+            return canonical(fields)
         if isinstance(value, bytes):
             return value.hex()
         if isinstance(value, dict):
+            value = dict(value)
+            if "jump_event" in value and "missing_jump" in value and "jump_distance" in value:
+                if value["jump_event"] is not None or value["missing_jump"] or value["jump_distance"] != 0.0:
+                    raise RuntimeError("disabled-feature benchmark unexpectedly has jump history")
+                for name in ("jump_event", "missing_jump", "jump_distance"):
+                    del value[name]
             return {str(k): canonical(v) for k, v in value.items()}
         if isinstance(value, (set, frozenset)):
             return sorted((canonical(v) for v in value), key=lambda x: json.dumps(x, sort_keys=True))

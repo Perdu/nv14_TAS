@@ -16,6 +16,12 @@ typedef struct nv14_endpoint_group {
     size_t first, count;
 } nv14_endpoint_group;
 
+/* Evaluator history, separate from the physical state/key. frame=-1 means missing. */
+typedef struct nv14_endpoint_jump {
+    int64_t frame;
+    double x, y;
+} nv14_endpoint_jump;
+
 typedef struct nv14_endpoint_plan {
     size_t target_frame, arrival_start;
     uint8_t earliest, has_region;
@@ -26,6 +32,10 @@ typedef struct nv14_endpoint_plan {
     size_t required_count, avoided_count;
     nv14_endpoint_atom *targets;
     size_t target_count;
+    uint8_t has_jump_region;
+    double jump_region[4];
+    size_t jump_start, jump_end;
+    nv14_endpoint_jump prefix_jump;
 } nv14_endpoint_plan;
 
 typedef struct nv14_endpoint_result {
@@ -33,6 +43,7 @@ typedef struct nv14_endpoint_result {
     uint8_t *events;   /* caller allocates target_count bytes */
     int64_t terminal_frame;
     uint8_t terminal_dead, eligible, needs_reference;
+    nv14_endpoint_jump jump; /* history at the selected state, not the terminal state */
 } nv14_endpoint_result;
 
 /* Packed inputs use PopulationCandidate.input_key's lossless five-bit format.

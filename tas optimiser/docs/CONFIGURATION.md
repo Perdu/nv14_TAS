@@ -163,7 +163,16 @@ examples are documented in [Local population search](LOCAL_POPULATION.md).
 Do not combine explicit window-only controls such as `window`, `passes` or
 `restarts` with that strategy. The ready-to-edit configurations are
 `examples/config/local-population.toml`, `examples/config/local-arrival.toml`
-and `examples/config/local-interaction.toml`.
+`examples/config/local-interaction.toml` and `examples/config/local-jump-region.toml`.
+
+In v4.28, population searches accept `require_jump_region` as
+`"XMIN:XMAX,YMIN:YMAX"` or `[XMIN, XMAX, YMIN, YMAX]`. It requires a real
+`Player.jump()` originating inside the inclusive rectangle by the endpoint.
+Optional `require_jump_frames` is `"START:END"` or `[START, END]`, with bounded,
+zero-based, inclusive indices. It defaults to the first editable frame through
+`target_frame`, independently of `arrival_start`, and requires a jump region.
+Both options work with every population objective and are rejected for other
+search strategies. See [the detailed semantics](LOCAL_POPULATION.md#required-intermediate-jump).
 
 In v4.21, `objective = "earliest-interaction"` reuses `target_object`, for
 example `target_object = "switch:0"` or `"gold:any"`. The deadline remains
