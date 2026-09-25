@@ -16,7 +16,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-OPTIMISER_VERSION = "4.26"
+OPTIMISER_VERSION = "4.27"
 AUTO_CHECKPOINT_KIND = "nv14-auto-campaign"
 AUTO_CHECKPOINT_FORMAT_VERSION = 1
 
@@ -46,6 +46,8 @@ _BUILD_FINGERPRINT_FILES = (
     "native/nv14_dump.c",
     "native/nv14_dump.h",
     "native/nv14_internal.h",
+    "native/nv14_endpoint.c",
+    "native/nv14_endpoint.h",
     "native/nv14_objects_basic.c",
     "native/nv14_objects_basic.h",
     "native/nv14_objects_drones.c",

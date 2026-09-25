@@ -28,6 +28,7 @@ from nv14_checkpoint import OPTIMISER_VERSION, canonical_json_bytes, optimiser_b
 from nv14_engine import InputFrame
 from nv14_endpoint import EndpointEvaluation, EndpointEvaluator, EndpointGoal, pending_interaction_targets
 from nv14_jump import _automatic_jump_worker_count
+from nv14_native import require_native
 from nv14_local import _normalise_local_frame_ranges, _stop_local_executor_for_exception
 from nv14_replay import editable_frames
 from nv14_search import ALL_INPUT_CHOICES
@@ -71,12 +72,7 @@ class PopulationResult:
 
 
 def _input_key(frames: Sequence[InputFrame]) -> bytes:
-    return bytes(
-        int(frame.left) | (int(frame.right) << 1) | (int(frame.jump) << 2)
-        | (int(bool(frame.jump_trigger)) << 3)
-        | (int(frame.jump_trigger is None) << 4)
-        for frame in frames
-    )
+    return require_native().population_input_key(tuple(frames))[0]
 
 
 def _decode_frames(values: object) -> tuple[InputFrame, ...]:
@@ -291,26 +287,26 @@ class _SearchContext:
         self.config = config
         self.mutable_frames = tuple(i for start, end in ranges for i in range(start, end + 1))
         self.mutable = frozenset(self.mutable_frames)
+        self._mutable_mask = bytes(i in self.mutable for i in range(len(source)))
         self.evaluator = EndpointEvaluator(level, goal, source_frames=source,
                                            prefix_frame=ranges[0][0])
+        self._pack_inputs = require_native().population_input_key
         self.cache: OrderedDict[bytes, EndpointEvaluation] = OrderedDict()
         self.events = events
         self.evaluations = 0
 
     def candidate(self, frames: tuple[InputFrame, ...], history: tuple[str, ...]) -> PopulationCandidate:
-        _assert_bounded(self.source, frames, self.mutable)
-        key = _input_key(frames)
+        key, edits = self._pack_inputs(frames, self.source, self._mutable_mask)
         evaluation = self.cache.get(key)
         if evaluation is None:
-            evaluation = self.evaluator.evaluate(frames)
+            evaluation = self.evaluator._evaluate_packed(key, frames)
             self.cache[key] = evaluation
             self.evaluations += 1
             if len(self.cache) > 4096:
                 self.cache.popitem(last=False)
         else:
             self.cache.move_to_end(key)
-        return PopulationCandidate(frames, evaluation, history[-64:],
-                                   sum(a != b for a, b in zip(self.source, frames)), key)
+        return PopulationCandidate(frames, evaluation, history[-64:], edits, key)
 
 
 _WORKER_CONTEXT: _SearchContext | None = None

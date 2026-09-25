@@ -11,6 +11,7 @@ snapshots/results back to ordinary Python values.
 """
 
 from cpython.exc cimport PyErr_CheckSignals
+from cpython.bytes cimport PyBytes_AS_STRING, PyBytes_FromStringAndSize
 from cpython.mem cimport PyMem_Free, PyMem_Malloc
 from cpython.ref cimport PyObject
 from libc.stddef cimport size_t
@@ -1327,6 +1328,7 @@ def backend_info():
         "object_visual_queries": True,
         "optional_visual_tracker": True,
         "compact_visual_capture": 1,
+        "population_endpoint_api": 1,
         "implementation": "cython-unified-native",
         "strict_fp": bool(nv14_wrapper_strict_fp()),
         "complete_step_capability": NV14_CAP_COMPLETE_STEP,
@@ -4149,3 +4151,178 @@ def search_backend_info():
         "implementation": "cython-unified-native",
         "strict_fp": bool(nv14_wrapper_strict_fp()),
     }
+
+
+cdef extern from "nv14_endpoint.h":
+    ctypedef struct nv14_endpoint_atom:
+        size_t index
+        double x, y
+        uint8_t kind, has_position
+    ctypedef struct nv14_endpoint_group:
+        size_t first, count
+    ctypedef struct nv14_endpoint_plan:
+        size_t target_frame, arrival_start
+        uint8_t earliest, has_region
+        double lower[4]
+        double upper[4]
+        double region[4]
+        nv14_endpoint_atom *atoms
+        nv14_endpoint_group *required
+        nv14_endpoint_group *avoided
+        size_t required_count, avoided_count
+        nv14_endpoint_atom *targets
+        size_t target_count
+    ctypedef struct nv14_endpoint_result:
+        nv14_state *state
+        uint8_t *events
+        int64_t terminal_frame
+        uint8_t terminal_dead, eligible, needs_reference
+    nv14_status nv14_endpoint_scan(
+        const nv14_endpoint_plan *, const nv14_state *,
+        const uint8_t *, size_t, nv14_endpoint_result *,
+    ) noexcept nogil
+
+
+def population_input_key(tuple frames, tuple source=(), bytes mutable=b""):
+    """Pack inputs and, when supplied, validate bounds/count edits in one pass.
+
+    Unchanged immutable InputFrame objects take an identity comparison. The
+    lossless byte format remains identical to population checkpoint format 1.
+    """
+    cdef Py_ssize_t count = len(frames), index, edits = 0
+    cdef bint checked = len(source) != 0 or len(mutable) != 0
+    cdef object frame
+    cdef object original
+    cdef nv14_input item
+    cdef bytes key = PyBytes_FromStringAndSize(NULL, count)
+    cdef unsigned char *output = <unsigned char *>PyBytes_AS_STRING(key)
+    cdef const unsigned char *allowed = <const unsigned char *>PyBytes_AS_STRING(mutable)
+    if checked and (len(source) != count or len(mutable) != count):
+        raise ValueError("population candidate changed the fixed replay length")
+    for index in range(count):
+        frame = frames[index]
+        if checked:
+            original = source[index]
+            if frame is not original and frame != original:
+                if not allowed[index]:
+                    raise ValueError("population candidate changed an input outside the editable ranges")
+                edits += 1
+        _fill_input(frame, &item)
+        output[index] = (item.left | (item.right << 1) | (item.jump << 2)
+                         | (16 if item.jump_trigger < 0 else (item.jump_trigger << 3)))
+    return key, edits
+
+
+cdef int _fill_endpoint_atom(object value, nv14_endpoint_atom *atom) except -1:
+    cdef int kind
+    if len(value) != 4:
+        raise ValueError("endpoint atoms require kind, index, x, y")
+    kind = _operator.index(value[0])
+    if kind < 0 or kind > 4:
+        raise ValueError("invalid endpoint interaction kind")
+    atom.kind = <uint8_t>kind
+    _as_size(value[1], &atom.index, "endpoint interaction index")
+    atom.has_position = value[2] is not None and value[3] is not None
+    atom.x = float(value[2]) if atom.has_position else 0.0
+    atom.y = float(value[3]) if atom.has_position else 0.0
+    return 0
+
+
+cdef class NativeEndpointPlan:
+    """Immutable compiled goal; one native call scans a candidate's ticks."""
+    cdef nv14_endpoint_plan _plan
+    cdef bint _initialised
+    cdef bint _construction_started
+
+    def __cinit__(self):
+        memset(&self._plan, 0, sizeof(nv14_endpoint_plan))
+        self._initialised = False
+        self._construction_started = False
+
+    def __init__(self, *, target_frame, arrival_start=0, earliest=False,
+                 windows, region=None, required=(), avoided=(), targets=()):
+        cdef Py_ssize_t i
+        cdef size_t cursor = 0
+        cdef nv14_endpoint_group *group
+        if self._construction_started:
+            raise RuntimeError("native endpoint plan is already initialised")
+        self._construction_started = True
+        _as_size(target_frame, &self._plan.target_frame, "endpoint target frame")
+        _as_size(arrival_start, &self._plan.arrival_start, "endpoint arrival start")
+        if self._plan.arrival_start > self._plan.target_frame:
+            raise ValueError("endpoint arrival start exceeds deadline")
+        self._plan.earliest = bool(earliest)
+        if len(windows) != 4 or any(len(pair) != 2 for pair in windows):
+            raise ValueError("endpoint needs four inclusive windows")
+        for i in range(4):
+            self._plan.lower[i], self._plan.upper[i] = windows[i]
+        if region is not None:
+            if len(region) != 4:
+                raise ValueError("endpoint region needs four bounds")
+            self._plan.has_region = 1
+            for i in range(4):
+                self._plan.region[i] = region[i]
+        required = tuple(tuple(items) for items in required)
+        avoided = tuple(tuple(items) for items in avoided)
+        targets = tuple(targets)
+        groups = required + avoided
+        atoms = tuple(atom for items in groups for atom in items)
+        self._plan.required_count = len(required)
+        self._plan.avoided_count = len(avoided)
+        self._plan.target_count = len(targets)
+        if atoms:
+            self._plan.atoms = <nv14_endpoint_atom *>_checked_alloc(len(atoms), sizeof(nv14_endpoint_atom), "endpoint atoms")
+        if required:
+            self._plan.required = <nv14_endpoint_group *>_checked_alloc(len(required), sizeof(nv14_endpoint_group), "endpoint requirements")
+        if avoided:
+            self._plan.avoided = <nv14_endpoint_group *>_checked_alloc(len(avoided), sizeof(nv14_endpoint_group), "endpoint avoidances")
+        if targets:
+            self._plan.targets = <nv14_endpoint_atom *>_checked_alloc(len(targets), sizeof(nv14_endpoint_atom), "endpoint targets")
+        for i in range(len(atoms)):
+            _fill_endpoint_atom(atoms[i], &self._plan.atoms[i])
+        for i in range(len(groups)):
+            group = (&self._plan.required[i] if i < len(required)
+                     else &self._plan.avoided[i - len(required)])
+            group.first, group.count = cursor, len(groups[i])
+            cursor += group.count
+        for i in range(len(targets)):
+            _fill_endpoint_atom(targets[i], &self._plan.targets[i])
+        self._initialised = True
+
+    def __dealloc__(self):
+        PyMem_Free(self._plan.atoms)
+        PyMem_Free(self._plan.required)
+        PyMem_Free(self._plan.avoided)
+        PyMem_Free(self._plan.targets)
+
+    def scan(self, NativeState prefix not None, bytes inputs not None):
+        cdef nv14_endpoint_result result
+        cdef nv14_status status
+        cdef size_t count = len(inputs), i
+        cdef const uint8_t *data = <const uint8_t *>PyBytes_AS_STRING(inputs)
+        cdef nv14_state *selected
+        memset(&result, 0, sizeof(nv14_endpoint_result))
+        if not self._initialised:
+            raise RuntimeError("native endpoint plan is not initialised")
+        if self._plan.target_frame >= count:
+            raise ValueError("endpoint deadline lies outside replay")
+        for i in range(count):
+            if data[i] > 31:
+                raise ValueError("invalid packed endpoint input")
+        if self._plan.target_count:
+            result.events = <uint8_t *>_checked_alloc(self._plan.target_count, 1, "endpoint events")
+        try:
+            with nogil:
+                status = nv14_endpoint_scan(&self._plan, prefix._handle, data, count, &result)
+            if status != NV14_STATUS_OK:
+                _raise_status(status, "scan native population endpoint")
+            PyErr_CheckSignals()
+            event_indices = tuple(i for i in range(self._plan.target_count) if result.events[i])
+            selected = result.state
+            result.state = NULL  # _from_handle owns cleanup, including on failure
+            state = NativeState._from_handle(prefix._level, selected)
+            return (state, event_indices, bool(result.eligible), result.terminal_frame,
+                    bool(result.terminal_dead), bool(result.needs_reference))
+        finally:
+            nv14_state_destroy(result.state)
+            PyMem_Free(result.events)

@@ -1,4 +1,4 @@
-# Local population search (v4.21)
+# Local population search (v4.27)
 
 `local --search population` evolves a bounded part of an existing replay for
 manual TAS work. It can optimise position or distance at a fixed frame, or
@@ -318,18 +318,41 @@ The secondary objective is part of the goal fingerprint, and its value is
 re-evaluated and checked for every restored candidate. Changing it requires a
 new campaign. The resolved interaction target is also fingerprinted, and event
 identity and completed-exit state are re-verified when restoring candidates.
-Local population checkpoints from earlier builds, including v4.20, cannot resume in v4.21;
+Local population checkpoints from earlier builds cannot resume in v4.27;
 use a replay from that campaign as the input to a new search.
 
 ## Implementation
 
-`nv14_endpoint.py` owns native endpoint evaluation and independent verification.
+`nv14_endpoint.py` compiles goals and creates public endpoint evaluations.
+`native/nv14_endpoint.c` scans every eligible tick chronologically in C with the
+GIL released. It checks region/velocity windows, exact requirements/avoidances,
+fresh object events and infeasible progress ranking, and retains the selected
+full native state. Python snapshots, niche keys and exact state keys are built
+only for that selected endpoint. A compiled plan is reused for each worker's
+candidates; it contains goal data and object coordinates, not mutable simulation
+state. Fixed-frame goals use the same packed-input native replay path.
+
+The original per-tick scorer remains available as `evaluate_reference()`.
+`verify_endpoint()` uses it for independent endpoint selection; optional Python
+physics verification remains available. Native numeric comparisons conservatively
+detect very close progress rankings, where libc and Python distance rounding
+could change the chosen frame, and use the reference scorer for those candidates.
+Nonfinite player states retain their original infeasible treatment. Accepted
+arrivals still stop immediately, without requiring survival after that tick.
+
+Input encoding, immutable-range checking and changed-input counting run in one
+compiled pass. The resulting lossless replay key is reused for caching and
+native evaluation. Every candidate is checked, including cache hits; explicit
+jump-trigger bits and disjoint immutable gaps retain their previous semantics.
+
 `nv14_population.py` owns mutations, evolving beams, crossover, repair, diversity,
 workers and checkpoints. `nv14_cli.py` owns strategy-specific CLI/TOML validation
 and TXT/LTM output. The native wrapper exposes persistent door-control masks
 without changing existing snapshot shapes or the physics engine.
 
-The native sources are unchanged from v4.20; an extension built from that
-release can be reused. For a new installation or an older extension, run
-`python3 build_native.py`. The source archive includes generated C, so installing
-Cython is not required for that build.
+Rebuild the native extension for v4.27 with `python3 build_native.py`. An older
+extension cannot run the new population API. The source archive includes
+generated C, so installing Cython is not required for that build. No new search
+flags or runtime dependencies are introduced. See the
+[v4.27 changelog](changelog/CHANGELOG_v4.27.md) for benchmark conditions; the
+speedup depends on the goal, replay length and object workload.

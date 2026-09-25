@@ -214,8 +214,10 @@ class EndpointEvaluator:
             raise ValueError("cached prefix lies outside source_frames")
         self.prefix_frame = prefix_frame
         self._prefix = self.level.initial_state()
-        if not callable(getattr(self._prefix, "door_control_masks", None)):
-            raise RuntimeError("endpoint search requires the v3.13 native extension; run 'python build_native.py'")
+        native = require_native()
+        if not callable(getattr(native, "NativeEndpointPlan", None)):
+            raise RuntimeError("endpoint search requires the v4.27 native extension; run 'python build_native.py'")
+        self._source_key = native.population_input_key(self.source_frames)[0]
         if prefix_frame:
             self._prefix.step_many(self.source_frames[:prefix_frame], stop_on_dead=True, stop_on_complete=False)
         self._prefix_dead = bool(self._prefix.player_snapshot()["dead"])
@@ -230,6 +232,43 @@ class EndpointEvaluator:
                 if len(position) != 2 or not all(math.isfinite(value) for value in position):
                     raise ValueError(f"interaction target {atom.label} needs finite coordinates")
                 self._target_positions[atom] = position
+        self._native_plan = self._compile_native_plan()
+
+    def _compile_native_plan(self) -> Any:
+        kinds = {INTERACTION_GOLD: 0, INTERACTION_EXIT_SWITCH: 1,
+                 INTERACTION_LOCKED_DOOR: 2, INTERACTION_TRAPDOOR: 3,
+                 INTERACTION_EXIT_DOOR: 4}
+        self._reference_required = False
+
+        def atom_spec(atom: InteractionAtom) -> tuple:
+            index = (atom.load_index if atom.kind in (INTERACTION_LOCKED_DOOR, INTERACTION_TRAPDOOR)
+                     else atom.state_index)
+            if index is None or index < 0:
+                raise ValueError(f"invalid interaction index for {atom.label}")
+            item = self._descriptors.get(atom.load_index)
+            params = () if item is None else item["parameters"]
+            offset = 2 if atom.kind == INTERACTION_EXIT_SWITCH else 0
+            position = params[offset:offset + 2]
+            x, y = position if len(position) == 2 else (None, None)
+            if x is not None and not all(math.isfinite(v) for v in (x, y)):
+                self._reference_required = True
+            return kinds[atom.kind], index, x, y
+
+        goal = self.goal
+        windows = tuple((-math.inf, math.inf) if window is None else (window.minimum, window.maximum)
+                        for window in (goal.x_window, goal.y_window, goal.vx_window, goal.vy_window))
+        # The reference scorer counts frozensets, including duplicate goals only
+        # once. Compile coordinates and exact event identities once per worker.
+        required = tuple(tuple(atom_spec(atom) for atom in item.alternatives)
+                         for item in dict.fromkeys(goal.required_interactions))
+        avoided = tuple(tuple(atom_spec(atom) for atom in item.alternatives)
+                        for item in dict.fromkeys(goal.avoided_interactions))
+        targets = (() if goal.interaction_target is None else
+                   tuple(atom_spec(atom) for atom in goal.interaction_target.alternatives))
+        return require_native().NativeEndpointPlan(
+            target_frame=goal.target_frame, arrival_start=goal.arrival_start,
+            earliest=goal.is_earliest, windows=windows, region=goal.target_region,
+            required=required, avoided=avoided, targets=targets)
 
     def _interaction_snapshot(self, state: Any) -> tuple[tuple[int, int, int, int], int]:
         static = state.static_state()
@@ -258,6 +297,7 @@ class EndpointEvaluator:
     def _evaluate_state(self, state: Any, *, arrival_eligible: bool = True,
                         capture_state_key: bool = True,
                         previous_interactions: tuple[tuple[int, int, int, int], int] | None = None,
+                        interaction_events: tuple[InteractionAtom, ...] | None = None,
                         ) -> EndpointEvaluation:
         player = state.player_snapshot()
         masks, completed = self._interaction_snapshot(state)
@@ -275,7 +315,9 @@ class EndpointEvaluator:
         pending: tuple[InteractionAtom, ...] = ()
         target_distance = 0.0
         if goal.interaction_target is not None:
-            if previous_interactions is not None:
+            if interaction_events is not None:
+                events = interaction_events
+            elif previous_interactions is not None:
                 events = tuple(atom for atom in goal.interaction_target.alternatives
                                if _atom_satisfied(atom, masks, completed)
                                and not _atom_satisfied(atom, *previous_interactions))
@@ -349,6 +391,32 @@ class EndpointEvaluator:
 
     def evaluate(self, frames: Sequence[InputFrame]) -> EndpointEvaluation:
         frames = tuple(frames)
+        return self._evaluate_packed(require_native().population_input_key(frames)[0], frames)
+
+    def _evaluate_packed(self, key: bytes, frames: tuple[InputFrame, ...]) -> EndpointEvaluation:
+        """Use the already validated population key without re-encoding inputs."""
+        if self.goal.target_frame >= len(key):
+            raise ValueError(f"target frame {self.goal.target_frame} is outside a {len(key)}-frame replay")
+        if key[:self.prefix_frame] != self._source_key[:self.prefix_frame]:
+            raise ValueError("candidate changed the immutable cached prefix")
+        if self._reference_required:
+            return self.evaluate_reference(frames)
+        state, events, eligible, terminal_frame, terminal_dead, ambiguous = self._native_plan.scan(self._prefix, key)
+        if ambiguous:
+            # libc hypot and Python math.hypot can differ in their final bit.
+            # Re-evaluate only precision-sensitive scans with the exact original
+            # scorer so the selected frame and seeded search order stay intact.
+            return self.evaluate_reference(frames)
+        atoms = (() if self.goal.interaction_target is None else
+                 tuple(self.goal.interaction_target.alternatives[index] for index in events))
+        result = self._evaluate_state(state, arrival_eligible=eligible, interaction_events=atoms)
+        if result.terminal_frame != terminal_frame or result.terminal_dead != terminal_dead:
+            result = replace(result, terminal_frame=terminal_frame, terminal_dead=terminal_dead)
+        return result
+
+    def evaluate_reference(self, frames: Sequence[InputFrame]) -> EndpointEvaluation:
+        """Original per-tick scorer, retained for verification and numeric ties."""
+        frames = tuple(frames)
         if self.goal.target_frame >= len(frames):
             raise ValueError(f"target frame {self.goal.target_frame} is outside a {len(frames)}-frame replay")
         if frames[:self.prefix_frame] != self.source_frames[:self.prefix_frame]:
@@ -394,7 +462,7 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
     The exact native state key catches differences in enemies, doors and all
     other simulation state, not merely player coordinates.
     """
-    result = EndpointEvaluator(level, goal).evaluate(frames)
+    result = EndpointEvaluator(level, goal).evaluate_reference(frames)
     if expected is not None:
         comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index")
         mismatch = [name for name in comparable if getattr(result, name) != getattr(expected, name)]
