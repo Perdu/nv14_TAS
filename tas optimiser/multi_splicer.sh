@@ -28,4 +28,4 @@ while IFS= read -r i; do
     python3 optimize_replay.py local "$ORIG" --config "$i" --output wip/$1_$splice.ltm --replay-output wip/$1_$splice.txt --stagnation-rounds 1 --workers 15
     ORIG=wip/$1_$splice.ltm
     cp $ORIG wip/optim.ltm
-done < <(printf '%s\n' ../splices/$1/*.txt | sort -V)
+done < <(printf '%s\n' ../splices/"$1"/*.txt ../splices/"$1"/*.toml | sort -V)
