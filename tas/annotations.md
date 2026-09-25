@@ -102,7 +102,9 @@ rerecords: 441
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 3262
+rerecords: 3484
+
+Branch 9: earlier jump on the way to switch 2 that crashes on the ceiling
 
 Jumping to go down small paths does not save any frame, it's just for style
 
@@ -1437,9 +1439,12 @@ rerecords: 0
 
 
 # 44-2
-rerecords: 0
+rerecords: 461
 
+Branch 9: attempt at reverse slope jump directly to the top
+Branch 7: other ending
 
+You can add an additional bwj in the ascent on the left but you get so much speed that I couldn't find a path that doesn't crash on left wall or ceiling while keeping the same path
 
 # 44-3
 rerecords: 0
@@ -1576,9 +1581,18 @@ rerecords: 0
 
 
 # 49-4
-rerecords: 1922
+rerecords: 3454
 
-Somehow, not delaying the jump at 467 was always faster. Current solution may not be the absolute best one.
+This is an ugly deoptimized version due to pacelocking by drone (see branch 9)
+Had to deoptimized another time before the exit switch because the bbbwj is worth it (although the optimiser may have cleaned that up)
+That last drone really makes a good job at pacelocking us at every step of the way. Gaining earlier time and managing to beat it would really save a lot of time later on.
+
+Branch 9: fastest route, pacelocked by drone
+Branch 8: rcj near switch 4
+Branch 7: beating the first drone (unoptimized). This may be the key.
+Branch 6: going left over the drone
+Branch 5: other path
+Branch 4: old unoptimized beginning, that used a bbbwj in the end (-1f)
 
 Doing two proper bounce corner jump in the beginning gets us too fast: we end up hitting the drone on the left. I had to slow down a bit to be able to pass it
 
@@ -1994,9 +2008,11 @@ rerecords: 133
 rta way of going across the bottom didn't allow as good an angle for the cj, and was 2 frames slower to the last cj
 
 # 63-4
-rerecords: 267
+rerecords: 342
 
 It would possibly be better to get a jump on the 4th instead of the 5th bb (or maybe both if possible). Unsure positioning makes it possible.
+
+Branch 9: delaying start for a longer jump
 
 # 64-0
 rerecords: 153
@@ -2965,4 +2981,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 251794
+# Total rerecords: 254084
