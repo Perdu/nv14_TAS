@@ -733,7 +733,15 @@ static int nv14_search_position_feasible(
         (!spec->has_x_window ||
             (x >= spec->x_minimum && x <= spec->x_maximum)) &&
         (!spec->has_y_window ||
-            (y >= spec->y_minimum && y <= spec->y_maximum));
+            (y >= spec->y_minimum && y <= spec->y_maximum)) &&
+        (!spec->has_vx_window ||
+            (isfinite(x - state->player.oldpos.x) &&
+             x - state->player.oldpos.x >= spec->vx_minimum &&
+             x - state->player.oldpos.x <= spec->vx_maximum)) &&
+        (!spec->has_vy_window ||
+            (isfinite(y - state->player.oldpos.y) &&
+             y - state->player.oldpos.y >= spec->vy_minimum &&
+             y - state->player.oldpos.y <= spec->vy_maximum));
 }
 
 static unsigned int nv14_search_input_key(nv14_input input)
@@ -1392,10 +1400,18 @@ static int nv14_search_validate_spec(
         (spec->has_y_window &&
          (isnan(spec->y_minimum) || isnan(spec->y_maximum) ||
           spec->y_minimum > spec->y_maximum)) ||
+        (spec->has_vx_window &&
+         (isnan(spec->vx_minimum) || isnan(spec->vx_maximum) ||
+          spec->vx_minimum > spec->vx_maximum ||
+          spec->vx_minimum == INFINITY || spec->vx_maximum == -INFINITY)) ||
+        (spec->has_vy_window &&
+         (isnan(spec->vy_minimum) || isnan(spec->vy_maximum) ||
+          spec->vy_minimum > spec->vy_maximum ||
+          spec->vy_minimum == INFINITY || spec->vy_maximum == -INFINITY)) ||
         isnan(spec->incumbent_score)) {
         nv14_search_set_error(
             error_out, NV14_STATUS_INVALID_ARGUMENT,
-            "invalid native search objective or coordinate window"
+            "invalid native search objective or axis window"
         );
         return 0;
     }

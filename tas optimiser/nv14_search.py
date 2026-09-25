@@ -52,8 +52,8 @@ OBJECTIVE_MIN_DISTANCE = 4
 OBJECTIVE_TRACE_DISTANCE = 5
 OBJECTIVE_CONSTANT = 6
 
-SEARCH_WRAPPER_API = 7
-SEARCH_ABI_VERSION = 3
+SEARCH_WRAPPER_API = 8
+SEARCH_ABI_VERSION = 4
 SEARCH_CORE_ABI_VERSION = 3
 PATCH_ABI_VERSION = 2
 TRACE_ABI_VERSION = 2
@@ -243,6 +243,8 @@ def evaluate_fixed_replay_native(
     *,
     x_window: AxisWindow | None = None,
     y_window: AxisWindow | None = None,
+    vx_window: AxisWindow | None = None,
+    vy_window: AxisWindow | None = None,
 ) -> Evaluation:
     """Evaluate one fixed target-frame replay in C and adapt its endpoint.
 
@@ -279,7 +281,8 @@ def evaluate_fixed_replay_native(
         consumed == target_frame + 1
         and not state.player.dead
         and position_within_windows(
-            state, x_window=x_window, y_window=y_window
+            state, x_window=x_window, y_window=y_window,
+            vx_window=vx_window, vy_window=vy_window
         )
     )
     score = float(objective(state)) if feasible else float("-inf")
@@ -556,6 +559,8 @@ class SearchSpec:
     required_jump_any: bool = False
     tie_break_low_edit_lex: bool = False
     max_simulated_ticks: int = 0
+    vx_window: tuple[float, float] | None = None
+    vy_window: tuple[float, float] | None = None
 
     def __post_init__(self) -> None:
         if not self.mutable_frames:
@@ -588,7 +593,8 @@ class SearchSpec:
             for coordinate in target
         ):
             raise ValueError("native search target coordinates must be finite")
-        for name, window in (("x", self.x_window), ("y", self.y_window)):
+        for name, window in (("x", self.x_window), ("y", self.y_window),
+                             ("vx", self.vx_window), ("vy", self.vy_window)):
             if window is not None:
                 if len(window) != 2:
                     raise ValueError(
@@ -596,6 +602,8 @@ class SearchSpec:
                     )
                 if math.isnan(window[0]) or math.isnan(window[1]):
                     raise ValueError(f"native {name} window bounds cannot be NaN")
+                if name in ("vx", "vy") and (window[0] == math.inf or window[1] == -math.inf):
+                    raise ValueError(f"native {name} window cannot contain only infinity")
                 if window[0] > window[1]:
                     raise ValueError(
                         f"native {name} window minimum exceeds maximum"
@@ -640,6 +648,8 @@ class SearchSpec:
             ),
             "x_window": self.x_window,
             "y_window": self.y_window,
+            "vx_window": self.vx_window,
+            "vy_window": self.vy_window,
             "required_groups": tuple(
                 tuple((atom.kind, atom.index) for atom in group.alternatives)
                 for group in self.required_groups

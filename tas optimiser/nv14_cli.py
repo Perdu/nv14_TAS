@@ -194,8 +194,7 @@ class LocalConfig:
         if self.search not in ("windows", "population"):
             raise ValueError("local search must be windows or population")
         if self.search == "windows" and (
-            self.objective in EARLIEST_OBJECTIVES or self.vx_window is not None
-            or self.vy_window is not None or self.target_region is not None
+            self.objective in EARLIEST_OBJECTIVES or self.target_region is not None
             or self.arrival_start is not None or self.top_results != 1
             or self.require_jump_region is not None or self.require_jump_frames is not None
             or self.checkpoint_path is not None or self.resume
@@ -895,6 +894,8 @@ def _verify_packed_replay_for_output(
     expected_evaluation: Evaluation,
     x_window: AxisWindow | None,
     y_window: AxisWindow | None,
+    vx_window: AxisWindow | None = None,
+    vy_window: AxisWindow | None = None,
     required_interactions: Sequence[InteractionRequirement] = (),
     avoided_interactions: Sequence[InteractionAvoidance] = (),
     expected_missing_jump_frames: frozenset[int] = frozenset(),
@@ -954,6 +955,8 @@ def _verify_packed_replay_for_output(
             objective,
             x_window=x_window,
             y_window=y_window,
+            vx_window=vx_window,
+            vy_window=vy_window,
             required_interactions=required_interactions,
             avoided_interactions=avoided_interactions,
         )
@@ -965,6 +968,8 @@ def _verify_packed_replay_for_output(
             objective,
             x_window=x_window,
             y_window=y_window,
+            vx_window=vx_window,
+            vy_window=vy_window,
         )
     if not packed_evaluation.feasible:
         raise ValueError("the packed replay failed clean frame-zero verification")
@@ -1498,7 +1503,7 @@ _LOCAL_WINDOWS_OPTIONS = frozenset({
 _LOCAL_POPULATION_OPTIONS = frozenset({
     "iterations", "beam", "rounds", "stagnation_rounds", "repair_steps",
     "repair_lookback", "mutation_span", "checkpoint", "resume", "top_results",
-    "vx_window", "vy_window", "target_region", "arrival_start",
+    "target_region", "arrival_start",
     "require_jump_region", "require_jump_frames",
     "secondary_objective",
 })
@@ -2100,9 +2105,9 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--resume", modes=local_modes, action="store_true",
                          help="population only: resume --checkpoint after validating seed, level and goal")
     command.add_argument("--vx-window", modes=local_modes, type=parse_axis_window,
-                         metavar="MIN:MAX", help="population only: inclusive horizontal velocity bounds")
+                         metavar="MIN:MAX", help="inclusive endpoint horizontal velocity bounds (windows and population)")
     command.add_argument("--vy-window", modes=local_modes, type=parse_axis_window,
-                         metavar="MIN:MAX", help="population only: inclusive vertical velocity bounds")
+                         metavar="MIN:MAX", help="inclusive endpoint vertical velocity bounds (windows and population)")
     command.add_argument("--target-region", modes=local_modes, type=parse_target_region,
                          metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival population goal: inclusive target rectangle")
     command.add_argument("--require-jump-region", modes=local_modes, type=parse_target_region,
@@ -3360,6 +3365,8 @@ def main() -> None:
     target_point_value = mode_config.target_point
     x_window = mode_config.x_window
     y_window = mode_config.y_window
+    vx_window = mode_config.vx_window if isinstance(mode_config, LocalConfig) else None
+    vy_window = mode_config.vy_window if isinstance(mode_config, LocalConfig) else None
     python_resimulate = mode_config.python_resimulate
 
     if isinstance(mode_config, LocalConfig):
@@ -3478,6 +3485,8 @@ def main() -> None:
         objective,
         x_window=x_window,
         y_window=y_window,
+        vx_window=vx_window,
+        vy_window=vy_window,
     )
     retimed_seed_eval = (
         evaluate(
@@ -3487,6 +3496,8 @@ def main() -> None:
             objective,
             x_window=x_window,
             y_window=y_window,
+            vx_window=vx_window,
+            vy_window=vy_window,
         )
         if applied_retimes
         else None
@@ -3607,6 +3618,8 @@ def main() -> None:
                         expected_evaluation=run.evaluation,
                         x_window=x_window,
                         y_window=y_window,
+                        vx_window=vx_window,
+                        vy_window=vy_window,
                         required_interactions=effective_required_interactions,
                         avoided_interactions=effective_avoided_interactions,
                         expected_missing_jump_frames=(
@@ -3644,6 +3657,8 @@ def main() -> None:
                 minimum_improvement=minimum_improvement,
                 x_window=x_window,
                 y_window=y_window,
+                vx_window=vx_window,
+                vy_window=vy_window,
                 local_inputs=local_inputs,
                 physics_prune=physics_prune,
                 window_order=window_order,
@@ -3675,6 +3690,8 @@ def main() -> None:
                 expected_evaluation=final_eval,
                 x_window=x_window,
                 y_window=y_window,
+                vx_window=vx_window,
+                vy_window=vy_window,
                 required_interactions=(
                     effective_required_interactions
                     if args.mode == "local"

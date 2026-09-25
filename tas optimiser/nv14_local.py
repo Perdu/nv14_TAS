@@ -664,6 +664,8 @@ class _LocalRunContext:
     minimum_improvement: float
     x_window: AxisWindow | None
     y_window: AxisWindow | None
+    vx_window: AxisWindow | None
+    vy_window: AxisWindow | None
     local_inputs: str
     physics_prune: bool
     window_shape: str
@@ -820,6 +822,8 @@ def _execute_local_run(
         minimum_improvement=context.minimum_improvement,
         x_window=context.x_window,
         y_window=context.y_window,
+        vx_window=context.vx_window,
+        vy_window=context.vy_window,
         local_inputs=context.local_inputs,
         physics_prune=context.physics_prune,
         required_jump_frames=run_required_jump_frames,
@@ -1113,6 +1117,8 @@ def _optimise_local_single_run(
     minimum_improvement: float,
     x_window: AxisWindow | None,
     y_window: AxisWindow | None,
+    vx_window: AxisWindow | None,
+    vy_window: AxisWindow | None,
     local_inputs: str,
     physics_prune: bool,
     required_jump_frames: frozenset[int],
@@ -1165,6 +1171,8 @@ def _optimise_local_single_run(
     native_avoided_groups = compile_interaction_groups(avoided_interactions)
     native_x_window = compile_axis_window(x_window)
     native_y_window = compile_axis_window(y_window)
+    native_vx_window = compile_axis_window(vx_window)
+    native_vy_window = compile_axis_window(vy_window)
     search_session = NativeSearchSession(level)
 
     def interaction_indices(
@@ -1198,6 +1206,8 @@ def _optimise_local_single_run(
             objective,
             x_window=x_window,
             y_window=y_window,
+            vx_window=vx_window,
+            vy_window=vy_window,
             required_interactions=required_interactions,
             avoided_interactions=avoided_interactions,
         )
@@ -1340,6 +1350,8 @@ def _optimise_local_single_run(
                     targets=native_targets,
                     x_window=native_x_window,
                     y_window=native_y_window,
+                    vx_window=native_vx_window,
+                    vy_window=native_vy_window,
                     required_groups=native_required_groups,
                     avoided_groups=native_avoided_groups,
                     incumbent_missing_requirements=incumbent_missing_requirements,
@@ -1395,6 +1407,8 @@ def _optimise_local_single_run(
                         objective,
                         x_window=x_window,
                         y_window=y_window,
+                        vx_window=vx_window,
+                        vy_window=vy_window,
                         required_interactions=required_interactions,
                         avoided_interactions=avoided_interactions,
                         successful_jump_frames_out=successful_jumps,
@@ -1647,6 +1661,8 @@ def optimise_local_windows(
     minimum_improvement: float = 0.0,
     x_window: AxisWindow | None = None,
     y_window: AxisWindow | None = None,
+    vx_window: AxisWindow | None = None,
+    vy_window: AxisWindow | None = None,
     local_inputs: str = "all",
     physics_prune: bool = False,
     window_order: str = "forward",
@@ -1677,6 +1693,12 @@ def optimise_local_windows(
     are protected in both input modes. Direction-only search additionally
     protects required jump presses; hard repairs outrank the positional
     objective.
+
+    ``vx_window`` and ``vy_window`` are inclusive hard constraints on velocity
+    (``pos - oldpos``, in pixels per tick) after ``target_frame``. They apply
+    only at that endpoint, including any fixed suffix after the mutable window.
+    Like position windows, infeasible seeds can be repaired by a feasible
+    candidate; the objective only ranks candidates that pass all axis windows.
 
     ``frame_ranges`` may describe multiple disjoint inclusive mutable ranges;
     the legacy ``range_start``/``range_end`` pair remains the single-range
@@ -1730,6 +1752,13 @@ def optimise_local_windows(
     compared exactly. It is false by default so result adaptation stays out of
     the simulation hot path.
     """
+    for name, window in (("vx_window", vx_window), ("vy_window", vy_window)):
+        if window is not None and (
+            math.isnan(window.minimum) or math.isnan(window.maximum)
+            or window.minimum > window.maximum
+            or window.minimum == math.inf or window.maximum == -math.inf
+        ):
+            raise ValueError(f"{name} must be an ordered inclusive interval without NaN")
     if window_size < 1:
         raise ValueError("window size must be at least 1")
     if passes < 1:
@@ -1850,6 +1879,8 @@ def optimise_local_windows(
         objective,
         x_window=x_window,
         y_window=y_window,
+        vx_window=vx_window,
+        vy_window=vy_window,
         successful_jump_frames_out=baseline_successful_jump_events,
     )
     explicit_interactions = tuple(required_interactions)
@@ -2130,6 +2161,8 @@ def optimise_local_windows(
         minimum_improvement=minimum_improvement,
         x_window=x_window,
         y_window=y_window,
+        vx_window=vx_window,
+        vy_window=vy_window,
         local_inputs=local_inputs,
         physics_prune=physics_prune,
         window_shape=window_shape,

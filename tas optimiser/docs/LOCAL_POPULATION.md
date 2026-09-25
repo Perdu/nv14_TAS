@@ -34,6 +34,9 @@ between 1 and 6 pixels per tick, and have activated `switch:0`. Among feasible
 results, the smallest endpoint x wins. The velocity constraint does not become
 an extra weighted objective.
 
+Since v4.29, `vx_window` and `vy_window` are also supported by
+`local --search windows`, at its fixed target-frame endpoint.
+
 Negative window bounds are easiest to pass using `--vx-window=-6:-1` so argparse
 does not mistake the value for another option. Velocities are the engine's
 implicit `pos - oldpos` in pixels per tick; positive x points right and positive

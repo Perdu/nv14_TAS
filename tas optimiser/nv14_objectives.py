@@ -34,7 +34,7 @@ class Evaluation:
 
 @dataclass(frozen=True, slots=True)
 class AxisWindow:
-    """Inclusive permitted interval for one target-frame coordinate."""
+    """Inclusive permitted interval for one endpoint coordinate or velocity."""
 
     minimum: float
     maximum: float
@@ -1375,13 +1375,24 @@ def position_within_windows(
     *,
     x_window: AxisWindow | None = None,
     y_window: AxisWindow | None = None,
+    vx_window: AxisWindow | None = None,
+    vy_window: AxisWindow | None = None,
 ) -> bool:
+    """Check finite endpoint geometry and optional position/velocity bounds."""
     player = state.player
     return (
         math.isfinite(player.pos.x) and math.isfinite(player.pos.y)
         and math.isfinite(player.oldpos.x) and math.isfinite(player.oldpos.y)
         and (x_window is None or x_window.contains(player.pos.x))
         and (y_window is None or y_window.contains(player.pos.y))
+        and (vx_window is None or (
+            math.isfinite(vx := player.pos.x - player.oldpos.x)
+            and vx_window.contains(vx)
+        ))
+        and (vy_window is None or (
+            math.isfinite(vy := player.pos.y - player.oldpos.y)
+            and vy_window.contains(vy)
+        ))
     )
 
 
@@ -1393,6 +1404,8 @@ def evaluate(
     *,
     x_window: AxisWindow | None = None,
     y_window: AxisWindow | None = None,
+    vx_window: AxisWindow | None = None,
+    vy_window: AxisWindow | None = None,
     required_interactions: Sequence[InteractionRequirement] = (),
     avoided_interactions: Sequence[InteractionAvoidance] = (),
     successful_jump_frames_out: set[int] | None = None,
@@ -1429,7 +1442,8 @@ def evaluate(
             required_interactions, avoided_interactions,
         )
     if not position_within_windows(
-        state, x_window=x_window, y_window=y_window
+        state, x_window=x_window, y_window=y_window,
+        vx_window=vx_window, vy_window=vy_window
     ):
         return _evaluation_with_interactions(
             float("-inf"), state, False,
@@ -1458,6 +1472,8 @@ def evaluate_window_candidate(
     *,
     x_window: AxisWindow | None = None,
     y_window: AxisWindow | None = None,
+    vx_window: AxisWindow | None = None,
+    vy_window: AxisWindow | None = None,
     required_interactions: Sequence[InteractionRequirement] = (),
     avoided_interactions: Sequence[InteractionAvoidance] = (),
 ) -> Evaluation:
@@ -1483,7 +1499,8 @@ def evaluate_window_candidate(
             required_interactions, avoided_interactions,
         )
     if not position_within_windows(
-        state, x_window=x_window, y_window=y_window
+        state, x_window=x_window, y_window=y_window,
+        vx_window=vx_window, vy_window=vy_window
     ):
         return _evaluation_with_interactions(
             float("-inf"), state, False,
@@ -1506,6 +1523,8 @@ def evaluate_frame_set_candidate(
     objective: Callable[[SimulationState], float],
     x_window: AxisWindow | None = None,
     y_window: AxisWindow | None = None,
+    vx_window: AxisWindow | None = None,
+    vy_window: AxisWindow | None = None,
     required_interactions: Sequence[InteractionRequirement] = (),
     avoided_interactions: Sequence[InteractionAvoidance] = (),
 ) -> Evaluation:
@@ -1540,7 +1559,8 @@ def evaluate_frame_set_candidate(
         )
 
     if not position_within_windows(
-        state, x_window=x_window, y_window=y_window
+        state, x_window=x_window, y_window=y_window,
+        vx_window=vx_window, vy_window=vy_window
     ):
         return _evaluation_with_interactions(
             float("-inf"), state, False,

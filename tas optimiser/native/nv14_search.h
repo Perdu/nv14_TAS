@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-#define NV14_SEARCH_ABI_VERSION 3u
+#define NV14_SEARCH_ABI_VERSION 4u
 
 typedef enum nv14_search_status {
     NV14_SEARCH_OK = 0,
@@ -138,6 +138,8 @@ typedef struct nv14_search_spec {
 
     uint8_t has_x_window;
     uint8_t has_y_window;
+    uint8_t has_vx_window;
+    uint8_t has_vy_window;
     uint8_t prune_inactive_jump;
     /* Physics pruning is valid only when every supplied choice preserves the
        replay frame's jump and jump_trigger fields. The kernel validates this
@@ -158,6 +160,10 @@ typedef struct nv14_search_spec {
     double x_maximum;
     double y_minimum;
     double y_maximum;
+    double vx_minimum;
+    double vx_maximum;
+    double vy_minimum;
+    double vy_maximum;
 
     const nv14_search_interaction_atom *required_atoms;
     size_t required_atom_count;

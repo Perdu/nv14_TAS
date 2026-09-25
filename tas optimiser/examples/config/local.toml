@@ -7,3 +7,7 @@ objective = "max-x"
 window = 4
 passes = 3
 
+# Optional inclusive endpoint velocity bounds (pixels/tick), checked after
+# target_frame, including any unchanged suffix. Positive vy is downward.
+# vx_window = "1:"
+# vy_window = [-3, 3]

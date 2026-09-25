@@ -1431,6 +1431,8 @@ cdef extern from "nv14_search.h":
         const nv14_search_trace_target *trace_target
         uint8_t has_x_window
         uint8_t has_y_window
+        uint8_t has_vx_window
+        uint8_t has_vy_window
         uint8_t prune_inactive_jump
         uint8_t physics_prune
         uint8_t skip_unchanged_final_step
@@ -1441,6 +1443,10 @@ cdef extern from "nv14_search.h":
         double x_maximum
         double y_minimum
         double y_maximum
+        double vx_minimum
+        double vx_maximum
+        double vy_minimum
+        double vy_maximum
         const nv14_search_interaction_atom *required_atoms
         size_t required_atom_count
         const nv14_search_interaction_group *required_groups
@@ -2523,6 +2529,20 @@ cdef class _SearchMarshal:
             &self.spec.y_minimum,
             &self.spec.y_maximum,
             "y_window",
+        )
+        _marshal_window(
+            payload.get("vx_window"),
+            &self.spec.has_vx_window,
+            &self.spec.vx_minimum,
+            &self.spec.vx_maximum,
+            "vx_window",
+        )
+        _marshal_window(
+            payload.get("vy_window"),
+            &self.spec.has_vy_window,
+            &self.spec.vy_minimum,
+            &self.spec.vy_maximum,
+            "vy_window",
         )
         _marshal_groups(
             _required(payload, "required_groups", "required_interactions"),
@@ -4146,7 +4166,7 @@ def search_backend_info():
     """Return ABI metadata for search APIs in this unified extension."""
     return {
         "available": True,
-        "wrapper_api": 7,
+        "wrapper_api": 8,
         "search_abi": NV14_SEARCH_ABI_VERSION,
         "patch_abi": NV14_PATCH_ABI_VERSION,
         "trace_abi": NV14_REPLAY_TRACE_ABI_VERSION,

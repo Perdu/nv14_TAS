@@ -37,8 +37,7 @@ def test_defaults_keep_windows_and_existing_modes_unchanged():
     ("--iterations", "1"), ("--beam", "2"), ("--rounds", "1"),
     ("--stagnation-rounds", "2"), ("--repair-steps", "0"),
     ("--repair-lookback", "0"), ("--mutation-span", "3"),
-    ("--top-results", "1"), ("--vx-window", "0:1"),
-    ("--vy-window", "0:1"), ("--target-region", "0:1,0:1"),
+    ("--top-results", "1"), ("--target-region", "0:1,0:1"),
     ("--arrival-start", "0"), ("--checkpoint", "state.json"),
 ])
 def test_windows_rejects_every_explicit_population_control(option, value):

@@ -165,6 +165,25 @@ Do not combine explicit window-only controls such as `window`, `passes` or
 `examples/config/local-population.toml`, `examples/config/local-arrival.toml`
 `examples/config/local-interaction.toml` and `examples/config/local-jump-region.toml`.
 
+In v4.29, both local strategies accept `vx_window` and `vy_window` as
+strings (`"-6:-1"`, `"1:"`, `":0"`, `"0"`) or two-number arrays (`[-3, 3]`).
+Window search checks these inclusive velocity bounds after `target_frame`,
+including the unchanged suffix. Velocity is `pos - oldpos` in pixels per tick;
+positive y is downward. Bounds combine with x/y windows and interaction/jump
+constraints. For example:
+
+```toml
+[local]
+search = "windows"
+target_frame = 161
+range = "100:150"
+objective = "max-x"
+vx_window = "1:"
+vy_window = [-3, 3]
+window = 4
+passes = 3
+```
+
 In v4.28, population searches accept `require_jump_region` as
 `"XMIN:XMAX,YMIN:YMAX"` or `[XMIN, XMAX, YMIN, YMAX]`. It requires a real
 `Player.jump()` originating inside the inclusive rectangle by the endpoint.
