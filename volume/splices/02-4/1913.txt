@@ -1,9 +1,9 @@
 [local]
 search = "population"
-target_frame = 1854
-range = "1705:1854"
-target_region = "329:369,183:223"
+target_frame = 1913
+range = "1800:1913"
+target_region = "334:374,90:130"
 simulate-enemies = false
 objective = "earliest-arrival"
-secondary_objective = "min-y"
+secondary_objective = "min-x"
 require-interaction = ["testdoor:5"]

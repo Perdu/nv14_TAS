@@ -5,5 +5,5 @@ range = "1063:1230"
 target_region = "557:597,138:178"
 simulate-enemies = false
 objective = "earliest-arrival"
-# secondary_objective = "max-vx"
-# require-interaction = ["testdoor:0"]
+secondary_objective = "min-x"
+require-interaction = ["testdoor:3"]
