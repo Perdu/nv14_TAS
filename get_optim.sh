@@ -7,7 +7,12 @@ SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 cd "$SCRIPT_DIR"
 
 EXTRACT_FOLDER="extract"
-OPTIM_FILE="tas optimiser/wip/optim.ltm"
+
+if [ $# -lt 1 ]; then
+    OPTIM_FILE="tas optimiser/wip/optim.ltm"
+else
+    OPTIM_FILE="tas optimiser/wip/$1.ltm"
+fi
 
 tar xzf "$OPTIM_FILE" -C $EXTRACT_FOLDER
 sed '0,/^|K20/d' "$EXTRACT_FOLDER/inputs" | xclip -selection clipboard
