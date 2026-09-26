@@ -290,6 +290,7 @@ function onInput()
     end
 
     if input.getKey(KEY_s) ~= 0 then
+       input.setKey(KEY_s, 0)
        local f_ig = movie.currentFrame() - space_frame
        local level_path = splice_files_path .. "/" .. level
        os.execute('mkdir -p "' .. level_path .. '"')
