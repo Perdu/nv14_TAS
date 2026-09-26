@@ -2,7 +2,9 @@
 search = "population"
 target_frame = 489
 range = "389:489"
-simulate-enemies = false
+# touching the same bb twice requires enemy simulation because of enemy
+# thinker schedule
+simulate-enemies = true
 objective = "earliest-interaction"
 target-object = "exit:0"
 # secondary_objective = "max-x"
