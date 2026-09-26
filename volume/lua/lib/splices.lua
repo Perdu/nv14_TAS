@@ -37,19 +37,16 @@ end
 
 
 local function splice_direction(objective)
-   if objective == "min-x" or objective == "min-vx" then
-      return "<"
-   elseif objective == "max-x" or objective == "max-vx" then
-      return ">"
-   elseif objective == "min-y" or objective == "min-vy" then
-      return "^"
-   elseif objective == "max-y" or objective == "max-vy" then
-      return "v"
-   end
+   -- Position objectives use a single arrow; velocity uses a double arrow.
+   local arrows = {
+      ["min-x"] = "<", ["max-x"] = ">",
+      ["min-y"] = "^", ["max-y"] = "v",
+      ["min-vx"] = "<<", ["max-vx"] = ">>",
+      ["min-vy"] = "^^", ["max-vy"] = "vv"
+   }
 
-   return nil
+   return arrows[objective]
 end
-
 
 function read_splice_files()
    splice_regions = {}
@@ -90,14 +87,15 @@ function read_splice_files()
 
          file:close()
 
-         -- Use target_frame when present, otherwise use the filename.
-         local splice_frame =
-            tonumber(config.target_frame) or
-            tonumber(filename:match("([^/]+)%.%w+$"))
+         -- Keep the filename for the label even if target_frame differs.
+         local splice_name = filename:match("([^/]+)%.%w+$")
+            or filename:match("([^/]+)$")
+         local splice_frame = tonumber(config.target_frame) or tonumber(splice_name)
 
-         print("Found splice file ", splice_frame)
+         print("Found splice file ", splice_name)
 
-         if config.target_region and splice_frame then
+         -- Only files with a target_region have drawable rectangles.
+         if config.target_region then
             local x1, x2, y1, y2 = config.target_region:match(
                "^%s*([%-%d%.]+)%s*:%s*([%-%d%.]+)%s*,%s*" ..
                "([%-%d%.]+)%s*:%s*([%-%d%.]+)%s*$"
@@ -109,14 +107,8 @@ function read_splice_files()
             y2 = tonumber(y2)
 
             if x1 and x2 and y1 and y2 then
-               local search = config.search or "windows"
-
-               local search_marker
-               if search == "population" then
-                  search_marker = "P"
-               else
-                  search_marker = "W"
-               end
+               -- Missing search means window search.
+               local search = (config.search == "population") and "population" or "windows"
 
                -- Population earliest-arrival uses secondary_objective.
                -- Window searches commonly use objective directly.
@@ -126,15 +118,25 @@ function read_splice_files()
                   direction_objective = config.objective
                end
 
-               splice_regions[splice_frame] = {
+               local region = {
+                  name = splice_name,
                   x1 = x1,
                   x2 = x2,
                   y1 = y1,
                   y2 = y2,
-                  search = search_marker,
+                  search = search,
                   direction = splice_direction(direction_objective),
                   interaction = splice_interaction_marker(config.require_interaction)
                }
+
+               -- Preserve numeric frame keys where possible, so a newly
+               -- created splice won't be reinserted by the existing S handler.
+               -- Distinct files sharing a target frame are kept separately.
+               local key = splice_frame or filename
+               if splice_regions[key] ~= nil then
+                  key = filename
+               end
+               splice_regions[key] = region
             end
          end
       end
@@ -144,71 +146,73 @@ function read_splice_files()
 end
 
 function display_splices()
-   for splice_frame, region in pairs(splice_regions) do
-      local color = rgb(255, 0, 0)
-
-      local width = region.x2 - region.x1
-      local height = region.y2 - region.y1
+   for splice_key, region in pairs(splice_regions) do
+      -- Backward-compatible with newly created regions that still use "P"/"W".
+      local population = region.search == "population" or region.search == "P"
+      local color = population and rgb(255, 0, 0) or rgb(0, 0, 255)
 
       gui.rectangle(
          region.x1,
          region.y1,
-         width,
-         height,
+         region.x2 - region.x1,
+         region.y2 - region.y1,
          1,
          color
       )
 
-      -- Frame number above the rectangle.
+      -- Display the source filename without its .txt / .toml extension.
+      -- The fallback also handles regions inserted by the existing S handler.
       gui.text(
          region.x1 + 1,
          region.y1 - 12,
-         tostring(splice_frame),
+         region.name or tostring(splice_key),
          color,
          0, 0, 12
       )
 
-      -- P = population, W = window.
-      gui.text(
-         region.x1 + 2,
-         region.y1 + 1,
-         region.search,
-         color,
-         0, 0, 12
-      )
-
-      -- Direction arrow, placed on the corresponding side.
+      -- Direction arrow on the corresponding side of the rectangle.
       if region.direction then
+         local direction = region.direction
+         local middle_x = (region.x1 + region.x2) / 2
+         local middle_y = (region.y1 + region.y2) / 2
          local text_x
          local text_y
 
-         if region.direction == "<" then
+         if direction == "<" or direction == "<<" then
             text_x = region.x1 + 2
-            text_y = (region.y1 + region.y2) / 2 - 6
+            text_y = middle_y - 6
 
-         elseif region.direction == ">" then
-            text_x = region.x2 - 8
-            text_y = (region.y1 + region.y2) / 2 - 6
+         elseif direction == ">" or direction == ">>" then
+            text_x = region.x2 - (direction == ">>" and 16 or 8)
+            text_y = middle_y - 6
 
-         elseif region.direction == "^" then
-            text_x = (region.x1 + region.x2) / 2 - 4
+         elseif direction == "^" then
+            text_x = middle_x - 4
             text_y = region.y1 + 1
 
-         elseif region.direction == "v" then
-            text_x = (region.x1 + region.x2) / 2 - 4
+         elseif direction == "v" then
+            text_x = middle_x - 4
             text_y = region.y2 - 12
+
+         elseif direction == "^^" then
+            -- Stack vertical speed arrows rather than writing "^^" side by side.
+            text_x = middle_x - 4
+            gui.text(text_x, region.y1 + 1, "^", color, 0, 0, 12)
+            gui.text(text_x, region.y1 + 11, "^", color, 0, 0, 12)
+
+         elseif direction == "vv" then
+            text_x = middle_x - 4
+            gui.text(text_x, region.y2 - 22, "v", color, 0, 0, 12)
+            gui.text(text_x, region.y2 - 12, "v", color, 0, 0, 12)
          end
 
-         gui.text(
-            text_x,
-            text_y,
-            region.direction,
-            color,
-            0, 0, 12
-         )
+         -- Horizontal arrows and single vertical position arrows.
+         if text_x and text_y then
+            gui.text(text_x, text_y, direction, color, 0, 0, 12)
+         end
       end
 
-      -- Required interaction: S1, S2, ... or E.
+      -- Required interaction in the upper-right corner: S1, S2, ... or E.
       if region.interaction then
          local text_width = #region.interaction * 7
 
@@ -221,7 +225,6 @@ function display_splices()
          )
       end
    end
-
 
    if clean_splices_region_markers then
       splice_regions = {}
