@@ -34,7 +34,7 @@ while IFS= read -r i; do
     fi
 
     echo -e "\033[32m************** Running ${splice_ext}\033[0m"
-    python3 optimize_replay.py local "$ORIG" --config "$i" --output wip/$1_$splice.ltm --replay-output wip/$1_$splice.txt --stagnation-rounds 1 --workers 15
+    python3 optimize_replay.py local "$ORIG" --config "$i" --output wip/$1_$splice.ltm --replay-output wip/$1_$splice.txt --rounds 10 --workers 15
     ORIG=wip/$1_$splice.ltm
     cp $ORIG wip/optim.ltm
 done < <(printf '%s\n' ../splices/"$1"/*.txt ../splices/"$1"/*.toml | sort -V)
