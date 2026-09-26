@@ -295,8 +295,8 @@ def calculate_highscore_ticks(demo, raw_sol_score):
     return emulate_highscore_ticks(demo), 'optimiser emulation'
 
 
-def print_to_tmp(demo_full, episode, level):
-    output_path = Path(gettempdir()) / f"{episode}-{level}.txt"
+def print_to_n_demos(demo_full, episode, level):
+    output_path = SCRIPT_DIR / "volume" / "n_demos" / f"{episode}-{level}.txt"
     with output_path.open('w', encoding='utf-8') as f:
         f.write(demo_full + "\n")
 
@@ -461,7 +461,7 @@ def main(argv=None):
             print(demo)
             print()
             print(demo_full)
-        print_to_tmp(demo_full, episode, level)
+        print_to_n_demos(demo_full, episode, level)
         if save:
             save_demo(
                 demo_full,
