@@ -2,7 +2,7 @@
 search = "population"
 target_frame = 558
 range = "458:558"
-simulate-enemies = false
+simulate-enemies = true
 objective = "earliest-interaction"
 target-object = "exit:0"
 # secondary_objective = "max-x"
