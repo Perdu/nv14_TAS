@@ -172,6 +172,7 @@ def save_demo(
     ):
         print(f'Correcting misspelled Highsore key for {level_id}.')
         data[level_id]["Highscore"] = data[level_id].pop("Highsore")
+    distance_to_door = emulate_distance_to_door(demo)
     if level_id in data and score_type in data[level_id]:
         existing_record = data[level_id][score_type]
         # Recreating a dict to ensure we insert optimization_level at the right place
@@ -187,10 +188,14 @@ def save_demo(
             new_optimization_level = existing_record.get(
                 "optimization_level", DEFAULT_OPTIMIZATION_LEVEL
             )
+        if distance_to_door in existing_record:
+            saved_score_distance_to_door = float(existing_record["distance_to_door"])
+        else:
+            saved_score_distance_to_door = 10000
         if score_type == "Speedrun":
             saved_score = int(str(existing_record["time"]).split()[0])
-            if saved_score < number_of_frames:
-                print(f"Error: saved level already has a better score ({saved_score}). Not saving.")
+            if saved_score < number_of_frames or (saved_score == number_of_frames and saved_score_distance_to_door < distance_to_door):
+                print(f"Error: saved level already has a better score ({saved_score}, distance to door: {saved_score_distance_to_door}) than score you're trying to save ({number_of_frames}, {distance_to_door}). Not saving.")
                 return False
         else:
             saved_score, score_prefix = parse_saved_highscore(
@@ -200,7 +205,7 @@ def save_demo(
             if saved_score > score_decimal:
                 print(
                     f"Error: saved level already has a better highscore "
-                    f"({saved_score:.3f}). Not saving."
+                    f"({saved_score:.3f}, distance to door: {saved_score_distance_to_door}) than score you're trying to save ({score_decimal}, {distance_to_door}). Not saving."
                 )
                 return False
             if score_prefix is not None:
@@ -210,7 +215,7 @@ def save_demo(
             'diff_with_0th': diff_str_total,
             "authors": new_authors,
             "optimization_level": new_optimization_level,
-            "distance_to_door": emulate_distance_to_door(demo),
+            "distance_to_door": distance_to_door,
             "demo": LiteralScalarString(demo)
         }
         if authors is None and 'authors' not in existing_record:
