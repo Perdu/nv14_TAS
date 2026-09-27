@@ -290,68 +290,10 @@ function onInput()
     end
 
     if input.getKey(KEY_s) ~= 0 then
+       create_splice_file()
        input.setKey(KEY_s, 0)
-       local f_ig = movie.currentFrame() - space_frame
-       local level_path = splice_files_path .. "/" .. level
-       os.execute('mkdir -p "' .. level_path .. '"')
-
-       local filename = level_path .. "/" .. tostring(f_ig) .. ".txt"
-       local file = io.open(filename, "r")
-
-       local x, y = get_player_position()
-       local x_int = math.floor(x + 0.5)
-       local y_int = math.floor(y + 0.5)
-
-       local x1 = x_int - splice_region_size
-       local x2 = x_int + splice_region_size
-       local y1 = y_int - splice_region_size
-       local y2 = y_int + splice_region_size
-
-       local target_prev = prev_splice - splice_prev_range_prior_frames
-       if target_prev < 0 then
-          target_prev = 0
-       end
-
-       if file == nil then
-          file = io.open(filename, "w")
-
-          file:write(string.format([[
-[local]
-search = "population"
-target_frame = %d
-range = "%d:%d"
-target_region = "%d:%d,%d:%d"
-simulate-enemies = false
-objective = "earliest-arrival"
-# secondary_objective = "max-vx"
-# require-interaction = ["testdoor:0"]
-]],
-f_ig,
-target_prev, f_ig,
-x1, x2, y1, y2
-          ))
-
-          print("Created splice file ", f_ig)
-       end
-
-       file:close()
-
-       if f_ig > prev_splice then
-          prev_splice = f_ig
-       end
-
-       if splice_regions[f_ig] == nil then
-          splice_regions[f_ig] = {
-             x1 = x1,
-             x2 = x2,
-             y1 = y1,
-             y2 = y2,
-             search = "P",
-             direction = nil,
-             interaction = nil
-          }
-       end
     end
+
 end
 
 
