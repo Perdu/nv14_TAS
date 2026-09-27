@@ -290,8 +290,32 @@ function onInput()
     end
 
     if input.getKey(KEY_s) ~= 0 then
-       create_splice_file()
+       create_splice_file("s")
        input.setKey(KEY_s, 0)
+    elseif input.getKey(KEY_r) ~= 0 then
+       create_splice_file("r")
+       input.setKey(KEY_r, 0)
+    elseif input.getKey(KEY_R) ~= 0 then
+       create_splice_file("R")
+       input.setKey(KEY_R, 0)
+    elseif input.getKey(KEY_l) ~= 0 then
+       create_splice_file("l")
+       input.setKey(KEY_l, 0)
+    elseif input.getKey(KEY_L) ~= 0 then
+       create_splice_file("L")
+       input.setKey(KEY_L, 0)
+    elseif input.getKey(KEY_u) ~= 0 then
+       create_splice_file("u")
+       input.setKey(KEY_u, 0)
+    elseif input.getKey(KEY_U) ~= 0 then
+       create_splice_file("U")
+       input.setKey(KEY_U, 0)
+    elseif input.getKey(KEY_d) ~= 0 then
+       create_splice_file("d")
+       input.setKey(KEY_d, 0)
+    elseif input.getKey(KEY_D) ~= 0 then
+       create_splice_file("D")
+       input.setKey(KEY_D, 0)
     end
 
 end

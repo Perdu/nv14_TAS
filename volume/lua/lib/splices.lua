@@ -233,7 +233,26 @@ function display_splices()
 end
 
 
-function create_splice_file()
+local splice_modes = {
+   s = {},
+
+   r = {objective = "max-x",  arrow = ">"},
+   R = {objective = "max-vx", arrow = ">>"},
+
+   l = {objective = "min-x",  arrow = "<"},
+   L = {objective = "min-vx", arrow = "<<"},
+
+   u = {objective = "min-y",  arrow = "^"},
+   U = {objective = "min-vy", arrow = "^^"},
+
+   d = {objective = "max-y",  arrow = "v"},
+   D = {objective = "max-vy", arrow = "vv"}
+}
+
+function create_splice_file(key)
+   local mode = splice_modes[key]
+   assert(mode, "Unknown splice key: " .. tostring(key))
+
    local f_ig = movie.currentFrame() - space_frame
    local level_path = splice_files_path .. "/" .. level
    os.execute('mkdir -p "' .. level_path .. '"')
@@ -255,8 +274,18 @@ function create_splice_file()
       target_prev = 0
    end
 
+   -- Uncomment and set the secondary objective according to the key.
+   local secondary_objective = "# secondary_objective = \"max-vx\""
+
+   if mode.objective then
+      secondary_objective = string.format(
+         'secondary_objective = "%s"',
+         mode.objective
+      )
+   end
+
    if file == nil then
-      file = io.open(filename, "w")
+      file = assert(io.open(filename, "w"))
 
       file:write(string.format([[
 [local]
@@ -266,12 +295,13 @@ range = "%d:%d"
 target_region = "%d:%d,%d:%d"
 simulate-enemies = false
 objective = "earliest-arrival"
-# secondary_objective = "max-vx"
+%s
 # require-interaction = ["testdoor:0"]
 ]],
-f_ig,
-target_prev, f_ig,
-x1, x2, y1, y2
+         f_ig,
+         target_prev, f_ig,
+         x1, x2, y1, y2,
+         secondary_objective
       ))
 
       print("Created splice file ", f_ig)
@@ -285,12 +315,13 @@ x1, x2, y1, y2
 
    if splice_regions[f_ig] == nil then
       splice_regions[f_ig] = {
+         name = tostring(f_ig),
          x1 = x1,
          x2 = x2,
          y1 = y1,
          y2 = y2,
-         search = "P",
-         direction = nil,
+         search = "population",
+         direction = mode.arrow,
          interaction = nil
       }
    end
