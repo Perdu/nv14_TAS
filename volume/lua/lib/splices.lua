@@ -249,6 +249,23 @@ local splice_modes = {
    D = {objective = "max-vy", arrow = "vv"}
 }
 
+
+local function find_previous_splice(current_frame)
+   local previous = 0
+
+   for key, region in pairs(splice_regions) do
+      -- Support both frame-number and filename-based table keys.
+      local frame = region.frame or tonumber(key)
+
+      if frame and frame < current_frame and frame > previous then
+         previous = frame
+      end
+   end
+
+   return previous
+end
+
+
 function create_splice_file(key)
    local mode = splice_modes[key]
    assert(mode, "Unknown splice key: " .. tostring(key))
@@ -269,10 +286,12 @@ function create_splice_file(key)
    local y1 = y_int - splice_region_size
    local y2 = y_int + splice_region_size
 
-   local target_prev = prev_splice - splice_prev_range_prior_frames
-   if target_prev < 0 then
-      target_prev = 0
-   end
+   local previous_frame = find_previous_splice(f_ig)
+
+   local target_prev = math.max(
+      0,
+      previous_frame - splice_prev_range_prior_frames
+   )
 
    -- Uncomment and set the secondary objective according to the key.
    local secondary_objective = "# secondary_objective = \"max-vx\""
