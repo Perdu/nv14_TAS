@@ -1,0 +1,9 @@
+[local]
+search = "population"
+target_frame = 163
+range = ":163"
+target_region = "48:68,550:576"
+simulate-enemies = true
+objective = "earliest-arrival"
+# secondary_objective = "max-vx"
+# require-interaction = ["testdoor:0"]
