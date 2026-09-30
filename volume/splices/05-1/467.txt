@@ -7,3 +7,6 @@ simulate-enemies = true
 objective = "earliest-arrival"
 secondary_objective = "min-y"
 # require-interaction = ["testdoor:0"]
+require-jump-frames = "435:440"
+require-jump-region = "500:550,360:400"
+#require-jump-region = "481:521,426:466"
