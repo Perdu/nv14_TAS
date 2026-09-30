@@ -327,6 +327,9 @@ objective = "earliest-arrival"
    end
 
    file:close()
+   -- It would be better to run the container with a regular user (if
+   -- possible for libTAS) but for now we use this easy solution
+   os.execute('chown 1000:1000 -- "' .. level_path .. "/" .. tostring(f_ig) .. ".txt" .. '"')
 
    if f_ig > prev_splice then
       prev_splice = f_ig
