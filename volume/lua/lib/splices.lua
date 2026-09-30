@@ -281,10 +281,19 @@ function create_splice_file(key)
    local x_int = math.floor(x + 0.5)
    local y_int = math.floor(y + 0.5)
 
-   local x1 = x_int - splice_region_size
-   local x2 = x_int + splice_region_size
-   local y1 = y_int - splice_region_size
-   local y2 = y_int + splice_region_size
+   local x1 = x_int - splice_region_size_big
+   local x2 = x_int + splice_region_size_big
+   local y1 = y_int - splice_region_size_big
+   local y2 = y_int + splice_region_size_big
+
+   if key == 'r' or key == 'R' or key == 'l' or key == 'L' then
+      x1 = x_int - splice_region_size_small
+      x2 = x_int + splice_region_size_small
+   elseif key == 'u' or key == 'U' or key == 'd' or key == 'D' then
+      y1 = y_int - splice_region_size_small
+      y2 = y_int + splice_region_size_small
+   end
+
 
    local previous_frame = find_previous_splice(f_ig)
 
