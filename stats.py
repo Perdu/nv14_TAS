@@ -82,7 +82,7 @@ def get_total_rta_time_no_loadtimes(rta_data, score_type="Speedrun"):
 
 
 # AI-generated
-def display_time_difference(score_type="Speedrun", sort=True, use_color=True, display_totals=True):
+def display_time_difference(score_type="Speedrun", sort=True, use_color=True, display_totals=True, number=None):
     """
     Compare TAS vs RTA scores and display total difference with bar charts.
     - Speedrun: display frames
@@ -202,6 +202,8 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True, di
     
     if sort:
         levels = sorted(results, key=lambda x: x[3], reverse=True)
+        if number is not None:
+            levels = levels[:number]
     else:
         levels = results
 
@@ -230,7 +232,10 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True, di
         print(f"\n⚠ Missing RTA entries for: {', '.join(missing)}")
     
     print("\n" + "─" * 60)
-    print(f"\nTime differences ({score_type}) — RTA vs TAS (sorted by {sort_type_text}):\n")
+    number_print = ""
+    if number is not None:
+        number_print = f" (top {number} levels)"
+    print(f"\nTime differences ({score_type}) — RTA vs TAS (sorted by {sort_type_text}){number_print}:\n")
     for key, tas, rta, diff, perc_diff in levels:
         bar = create_bar(diff, max_diff, use_color=use_color)
         
@@ -408,16 +413,16 @@ if __name__ == "__main__":
     else:
         use_color = True
     print()
-    display_episode_grid(filename, "Speedrun", min_opt_level=0, use_gradient=True, github=github, display_legend=True)
-    print()
+    # display_episode_grid(filename, "Speedrun", min_opt_level=0, use_gradient=True, github=github, display_legend=True)
+    # print()
     display_episode_grid(filename, "Speedrun", min_opt_level=4, use_gradient=True, github=github, display_legend=False)
     print()
     display_episode_grid(filename, "Speedrun", min_opt_level=5, use_gradient=True, github=github, display_legend=False)
     print()
     display_episode_grid(filename, "Speedrun", min_opt_level=6, use_gradient=True, github=github, display_legend=False)
     print()
+    display_time_difference("Speedrun", sort=True, use_color=use_color, display_totals=False, number=20)
     display_time_difference("Speedrun", sort=False, use_color=use_color, display_totals=True)
-    display_time_difference("Speedrun", sort=True, use_color=use_color, display_totals=False)
     print()
     display_episode_grid(filename, "Highscore", min_opt_level=0, use_gradient=True, github=github, display_legend=True)
     print()
