@@ -1,0 +1,9 @@
+[local]
+search = "population"
+target_frame = 250
+range = "150:250"
+target_region = "137:157,256:340"
+simulate-enemies = false
+objective = "earliest-arrival"
+secondary_objective = "min-y"
+# require-interaction = ["testdoor:0"]
