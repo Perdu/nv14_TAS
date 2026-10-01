@@ -7,3 +7,5 @@ simulate-enemies = false
 objective = "earliest-arrival"
 secondary_objective = "min-x"
 require-interaction = ["switch"]
+#require-jump-frames = "695:705"
+#require-jump-region = "640:700,190:300"
