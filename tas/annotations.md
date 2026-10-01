@@ -222,7 +222,7 @@ It does not seem possible to go between the last drone and the slope in the very
 Potential tile bwj to do in the lower section. Not sure it would actually save time as we wait for a drone later on
 
 # 05-1
-rerecords: 1944
+rerecords: 2155
 
 Branch 9: skip the second thwump (slower)
 
@@ -2583,7 +2583,7 @@ rerecords: 152
 
 
 # 84-3
-rerecords: 1055
+rerecords: 1344
 
 Branch 8: going back up on the left section using bb and wall
 Branch 7: going back up on the left section using triple bbj
@@ -2985,4 +2985,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 254878
+# Total rerecords: 255378
