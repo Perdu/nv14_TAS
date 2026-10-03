@@ -1,9 +1,11 @@
 [local]
 search = "population"
-target_frame = 210
-range = ":210"
+target_frame = 250
+range = ":250"
 simulate-enemies = true
 objective = "earliest-interaction"
 target-object = "switch"
 # secondary_objective = "min-y"
-require-interaction = ["testdoor:3", "testdoor:5", "testdoor:2"]
+# require-interaction = ["testdoor:3", "testdoor:5", "testdoor:2"]
+# require-interaction = ["testdoor:3", "testdoor:5", "testdoor:2", "testdoor:1"]
+require-interaction = ["testdoor:3", "testdoor:5", "testdoor:1"]
