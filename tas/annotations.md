@@ -2974,7 +2974,7 @@ Reverse jump on the last jump is slower
 Corner jump + reverse corner jump in the end is slower
 
 # 99-1
-rerecords: 0
+rerecords: 129
 
 
 
@@ -2999,4 +2999,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 257001
+# Total rerecords: 257130
