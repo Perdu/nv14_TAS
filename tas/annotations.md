@@ -1512,9 +1512,10 @@ rerecords: 0
 
 
 # 47-0
-rerecords: 187
+rerecords: 402
 
 Branch 9: optimized rta route (3f slower)
+Branch 8: bounceblocks are a suggestion
 
 Can't get a triple to work on the first slope, I always get a stumble for the 3rd jump
 
@@ -1758,7 +1759,7 @@ rerecords: 425
 
 
 # 55-0
-rerecords: 1403
+rerecords: 1541
 
 
 
@@ -2227,7 +2228,12 @@ rerecords: 169
 Jumping earlier around 238 does not allow to save a frame over rta. The jump is slightly lower, but not enough to save a frame
 
 # 71-1
-rerecords: 712
+rerecords: 980
+
+Branch 9: taking switch 1 last
+Branch 8: taking switch 1 first
+Branch 7: not taking switch 2 first
+Branch 6: attempt at getting a bump or a cj directly to the switch
 
 Can't find a path that gets a good corner jump around 210 without slowing a lot
 Can't get a corner jump around 160
@@ -2568,9 +2574,11 @@ rerecords: 386
 
 
 # 84-0
-rerecords: 175
+rerecords: 332
 
+Branch 9: attempt at starting with a wj
 Branch 8: launch into orbit
+Branches 4-7: more attempts at starting with a wj to get a direct path back to the door
 
 # 84-1
 rerecords: 0
@@ -2595,9 +2603,9 @@ rerecords: 0
 
 
 # 85-0
-rerecords: 0
+rerecords: 116
 
-
+Branch 9: auto-optimiser route, jumping on all steps except step 2
 
 # 85-1
 rerecords: 0
@@ -2985,4 +2993,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 255553
+# Total rerecords: 256447
