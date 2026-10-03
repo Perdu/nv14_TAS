@@ -1,0 +1,9 @@
+[local]
+search = "population"
+target_frame = 350
+range = "235:350"
+simulate-enemies = true
+objective = "earliest-interaction"
+target-object = "testdoor:1"
+secondary_objective = "max-y"
+# require-interaction = ["testdoor:3"]
