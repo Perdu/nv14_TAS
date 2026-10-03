@@ -2603,7 +2603,7 @@ rerecords: 0
 
 
 # 85-0
-rerecords: 116
+rerecords: 136
 
 Branch 9: auto-optimiser route, jumping on all steps except step 2
 
@@ -2979,9 +2979,15 @@ rerecords: 0
 
 
 # 99-2
-rerecords: 0
+rerecords: 534
 
+Branch 9: rcj to the switch
+Branch 8: turnaround then bwj
+Branch 7: attempt at double jump using the slope
+Branch 6: using the ceiling to go down
+Branch 5: taking switch0 before the drone
 
+I lost the "taking switch 0 after the drone" branch, which might still be faster but massively deoptimized. Current route is ~5f faster than that branch, which was not optimized
 
 # 99-3
 rerecords: 0
@@ -2993,4 +2999,4 @@ rerecords: 0
 
 
 
-# Total rerecords: 256447
+# Total rerecords: 257001
