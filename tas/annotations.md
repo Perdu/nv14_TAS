@@ -2995,8 +2995,12 @@ rerecords: 0
 
 
 # 99-4
-rerecords: 0
+rerecords: 1021
 
+Branch 9: going right to the switch, jumping over the mine
+Branch 8: wj on the left
+Branch 7: attempt at clip directly to the door
+Branch 6: wj on thwump on the way down
+Branch 5: thwump wj to the switch
 
-
-# Total rerecords: 257130
+# Total rerecords: 258151
