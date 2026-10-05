@@ -142,7 +142,7 @@ i="$1"
 
 if ! tar xOzf "$i" editor.ini | grep -F '34\name=y' >/dev/null; then
     echo "Fixing $i"
-    rm extract/*
+    rm -f extract/*
     tar xzf "$i" -C extract/
     replace_editor_inputs
     tar czf "$i" -C extract . --transform='s|^\./||'
