@@ -313,7 +313,7 @@ def save_demo(
 
     print()
     if score_type == "Speedrun":
-        print(f"Difference with 0th: {difference} f ({diff_s:.3f})")
+        print(f"Difference with 0th: {difference} f ({diff_s:.3f}), distance to door: {distance_to_door}")
     else:
         print(f"Highscore: {score_decimal:.3f}")
         print(f"Lead over 0th: {lead:.3f}")
