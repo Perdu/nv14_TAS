@@ -140,7 +140,7 @@ in_section && /^\[/ {
 
 i="$1"
 
-if $(tar xOzf "$i" editor.ini | grep -vqF "12\name=D"); then
+if ! tar xOzf "$i" editor.ini | grep -F '34\name=y' >/dev/null; then
     echo "Fixing $i"
     rm extract/*
     tar xzf "$i" -C extract/
