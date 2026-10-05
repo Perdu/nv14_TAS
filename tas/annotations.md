@@ -2778,9 +2778,11 @@ rerecords: 0
 
 
 # 91-3
-rerecords: 0
+rerecords: 98
 
-
+Branch 9: autorun route with double jump on the right wall
+Branch 8: end with an rcj
+Branch 7: end with a cj
 
 # 91-4
 rerecords: 0
@@ -2990,9 +2992,9 @@ Branch 5: taking switch0 before the drone
 I lost the "taking switch 0 after the drone" branch, which might still be faster but massively deoptimized. Current route is ~5f faster than that branch, which was not optimized
 
 # 99-3
-rerecords: 0
+rerecords: 170
 
-
+I have no idea how to properly route or splice the lower 2 sections. @todo
 
 # 99-4
 rerecords: 1021
@@ -3003,4 +3005,6 @@ Branch 7: attempt at clip directly to the door
 Branch 6: wj on thwump on the way down
 Branch 5: thwump wj to the switch
 
-# Total rerecords: 258151
+It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
+
+# Total rerecords: 258419
