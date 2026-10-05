@@ -312,6 +312,13 @@ function create_splice_file(key)
       )
    end
 
+   local simulate_enemies = "false"
+   if input.getKey(KEY_e) ~= 0 then
+      simulate_enemies = "true"
+      input.setKey(KEY_e, 0)
+   end
+
+
    if file == nil then
       file = assert(io.open(filename, "w"))
 
@@ -321,7 +328,7 @@ search = "population"
 target_frame = %d
 range = "%d:%d"
 target_region = "%d:%d,%d:%d"
-simulate-enemies = false
+simulate-enemies = %s
 objective = "earliest-arrival"
 %s
 # require-interaction = ["testdoor:0"]
@@ -329,6 +336,7 @@ objective = "earliest-arrival"
          f_ig,
          target_prev, f_ig,
          x1, x2, y1, y2,
+         simulate_enemies,
          secondary_objective
       ))
 
