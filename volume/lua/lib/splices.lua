@@ -294,7 +294,6 @@ function create_splice_file(key)
       y2 = y_int + splice_region_size_small
    end
 
-
    local previous_frame = find_previous_splice(f_ig)
 
    local target_prev = math.max(
@@ -323,6 +322,12 @@ function create_splice_file(key)
    if input.getKey(KEY_W) ~= 0 then
       table.insert(interactions, '"switch"')
       input.setKey(KEY_W, 0)
+   end
+
+   local require_jump = ""
+   if input.getKey(KEY_t) ~= 0 then
+      require_jump = require_jump_string
+      input.setKey(KEY_t, 0)
    end
 
    local interaction_keys = {
@@ -367,13 +372,15 @@ simulate-enemies = %s
 objective = "earliest-arrival"
 %s
 %s
+%s
 ]],
          f_ig,
          target_prev, f_ig,
          x1, x2, y1, y2,
          simulate_enemies,
          secondary_objective,
-         require_interaction
+         require_interaction,
+         require_jump
       ))
 
       print("Created splice file ", f_ig)

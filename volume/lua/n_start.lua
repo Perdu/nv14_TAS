@@ -65,6 +65,7 @@ bestPath = {}
 drones_candidates = {}
 prev_splice = 0
 splice_regions = {}
+require_jump_string = ""
 
 ---- Callbacks
 
@@ -244,6 +245,7 @@ function onStartup()
     drones_memx = {}
     drones_target_memx = {}
     drones_candidates = {}
+    require_jump_string = ""
 
 end
 
@@ -301,13 +303,14 @@ function onInput()
        local y1 = y_int - 10
        local y2 = y_int + 10
 
-       print(string.format([[
+       require_jump_string = string.format([[
 require-jump-frames = "%d,%d"
 require-jump-region = "%d:%d,%d:%d"
 ]],
           f - 5, f + 5,
           x1, x2, y1, y2
-       ))
+       )
+       print(require_jump_string)
 
        input.setKey(KEY_T, 0)
     end
