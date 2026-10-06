@@ -290,6 +290,28 @@ function onInput()
        end
     end
 
+    if input.getKey(KEY_T) ~= 0 then
+       local f = movie.currentFrame()
+       local x, y = get_player_position()
+       local x_int = math.floor(x + 0.5)
+       local y_int = math.floor(y + 0.5)
+
+       local x1 = x_int - 10
+       local x2 = x_int + 10
+       local y1 = y_int - 10
+       local y2 = y_int + 10
+
+       print(string.format([[
+require-jump-frames = "%d,%d"
+require-jump-region = "%d:%d,%d:%d"
+]],
+          f - 5, f + 5,
+          x1, x2, y1, y2
+       ))
+
+       input.setKey(KEY_T, 0)
+    end
+
     if input.getKey(KEY_s) ~= 0 then
        create_splice_file("s")
        input.setKey(KEY_s, 0)
