@@ -304,7 +304,7 @@ function onInput()
        local y2 = y_int + 10
 
        require_jump_string = string.format([[
-require-jump-frames = "%d,%d"
+require-jump-frames = "%d:%d"
 require-jump-region = "%d:%d,%d:%d"
 ]],
           f - 5, f + 5,
