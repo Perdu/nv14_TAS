@@ -1545,9 +1545,13 @@ rerecords: 0
 
 
 # 48-1
-rerecords: 0
+rerecords: 647
 
-
+Branch 9: angled jump on the way up
+Branch 8: clipping through the trapdoor
+Branch 7: attempt at clipping through the other trapdoor
+Branch 6: taking the switch from the top
+Branch 5: triple bbbwj
 
 # 48-2
 rerecords: 0
@@ -2865,7 +2869,7 @@ rerecords: 0
 
 
 # 94-4
-rerecords: 0
+rerecords: 168
 
 
 
@@ -2895,9 +2899,9 @@ rerecords: 0
 
 
 # 96-0
-rerecords: 0
+rerecords: 73
 
-
+Branch 9: slightly better beginning that does not lead to a faster ending
 
 # 96-1
 rerecords: 0
@@ -2997,14 +3001,15 @@ rerecords: 170
 I have no idea how to properly route or splice the lower 2 sections. @todo
 
 # 99-4
-rerecords: 1021
+rerecords: 1022
 
 Branch 9: going right to the switch, jumping over the mine
 Branch 8: wj on the left
 Branch 7: attempt at clip directly to the door
 Branch 6: wj on thwump on the way down
 Branch 5: thwump wj to the switch
+Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 258419
+# Total rerecords: 259308
