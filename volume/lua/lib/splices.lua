@@ -318,6 +318,41 @@ function create_splice_file(key)
       input.setKey(KEY_e, 0)
    end
 
+   local interactions = {}
+
+   if input.getKey(KEY_W) ~= 0 then
+      table.insert(interactions, '"switch"')
+      input.setKey(KEY_W, 0)
+   end
+
+   local interaction_keys = {
+      { KEY_0, "testdoor:0" },
+      { KEY_1, "testdoor:1" },
+      { KEY_2, "testdoor:2" },
+      { KEY_3, "testdoor:3" },
+      { KEY_4, "testdoor:4" },
+      { KEY_5, "testdoor:5" },
+      { KEY_6, "testdoor:6" },
+   }
+
+   for _, interaction in ipairs(interaction_keys) do
+      local key = interaction[1]
+      local value = interaction[2]
+
+      if input.getKey(key) ~= 0 then
+         table.insert(interactions, '"' .. value .. '"')
+         input.setKey(key, 0)
+      end
+   end
+
+   local require_interaction
+
+   if #interactions > 0 then
+      require_interaction =
+         "require-interaction = [" .. table.concat(interactions, ", ") .. "]"
+   else
+      require_interaction = '# require-interaction = ["testdoor:0"]'
+   end
 
    if file == nil then
       file = assert(io.open(filename, "w"))
@@ -331,13 +366,14 @@ target_region = "%d:%d,%d:%d"
 simulate-enemies = %s
 objective = "earliest-arrival"
 %s
-# require-interaction = ["testdoor:0"]
+%s
 ]],
          f_ig,
          target_prev, f_ig,
          x1, x2, y1, y2,
          simulate_enemies,
-         secondary_objective
+         secondary_objective,
+         require_interaction
       ))
 
       print("Created splice file ", f_ig)
