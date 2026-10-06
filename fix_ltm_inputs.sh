@@ -7,7 +7,7 @@ cd "$SCRIPT_DIR"
 FILE="extract/editor.ini"
 
 function usage() {
-    echo "Usage: $0 LTM_FILE"
+    echo "Usage: $0 LTM_FILE [--force]"
     exit $1
 }
 
@@ -144,7 +144,7 @@ in_section && /^\[/ {
 
 i="$1"
 
-if ! tar xOzf "$i" editor.ini | grep -F '36\name=y' >/dev/null; then
+if [[ "${2:-}" == "--force" ]] || ! tar xOzf "$i" editor.ini | grep -F '36\name=y' >/dev/null; then
     echo "Fixing $i"
     rm -f extract/*
     tar xzf "$i" -C extract/
