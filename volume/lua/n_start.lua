@@ -293,7 +293,7 @@ function onInput()
     end
 
     if input.getKey(KEY_T) ~= 0 then
-       local f = movie.currentFrame()
+       local f_ig = movie.currentFrame() - space_frame
        local x, y = get_player_position()
        local x_int = math.floor(x + 0.5)
        local y_int = math.floor(y + 0.5)
@@ -307,7 +307,7 @@ function onInput()
 require-jump-frames = "%d:%d"
 require-jump-region = "%d:%d,%d:%d"
 ]],
-          f - 5, f + 5,
+          f_ig - 5, f_ig + 5,
           x1, x2, y1, y2
        )
        print(require_jump_string)
