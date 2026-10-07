@@ -368,7 +368,7 @@ function create_splice_file(key)
    end
 
    local objective_string = string.format([[
-'objective = "earliest-arrival"'
+objective = "earliest-arrival"
 target_region = "%d:%d,%d:%d"]],
          x1, x2, y1, y2
 )
