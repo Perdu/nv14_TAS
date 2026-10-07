@@ -1414,9 +1414,10 @@ A very clean one, with a corner jump on the way up (which is slower)
 431:139810|17895680|17895697|97587473|89478485|17896789|17895697|89548397|89478485|18175317|22876433|17895697|17895697|17895697|35791393|35791394|35791394|35791394|35791394|35791394|35790848|35791394|35791394|35791394|35791394|107880994|35808870|35791394|107374306|107374182|107374182|35791394|89478494|22369621|17895697|17895697|17895697|17895697|17895697|235999505|89548390|89478485|89478485|18175317|17895697|107374289|89478485|89478485|17896789|17895697|219222289|90596966|89478485|89478485|17895697|17895697|17895697|17895697|17895697|17898769|17895697|4369
 
 # 43-2
-rerecords: 0
+rerecords: 170
 
-
+Branch 9: attempt at starting within the bb
+Branch 8: attempt at starting further within the bb
 
 # 43-3
 rerecords: 0
@@ -2733,9 +2734,10 @@ rerecords: 0
 
 
 # 89-4
-rerecords: 0
+rerecords: 435
 
-
+Branch 9: attempt at going for the right switch first
+Branch 8: arriving a bit earlier to the wall next to the switch, but I couldn't get a faster ending
 
 # 90-0
 rerecords: 802
@@ -3012,4 +3014,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 259308
+# Total rerecords: 259913
