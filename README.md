@@ -322,4 +322,5 @@ Jumping gives slightly more speed than running. As I was not aware that this kin
 - 4: TAS by the auto optimizer, starting from the RTA run
 - 4.5: TAS fed to an LLM to find innovations
 - 5: manual TAS optimized by the optimizer
+- 5.5: manually run optimizer that still requires more work
 - 6: manually run optimizer (cross-splice etc.)
