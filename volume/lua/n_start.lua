@@ -342,6 +342,30 @@ require-jump-region = "%d:%d,%d:%d"
     elseif input.getKey(KEY_D) ~= 0 then
        create_splice_file("D")
        input.setKey(KEY_D, 0)
+    elseif input.getKey(KEY_w) ~= 0 then
+       create_splice_file("w")
+       input.setKey(KEY_w, 0)
+    elseif input.getKey(KEY_KP_0) ~= 0 then
+       create_splice_file("s0")
+       input.setKey(KEY_KP_0, 0)
+    elseif input.getKey(KEY_KP_1) ~= 0 then
+       create_splice_file("s1")
+       input.setKey(KEY_KP_1, 0)
+    elseif input.getKey(KEY_KP_2) ~= 0 then
+       create_splice_file("s2")
+       input.setKey(KEY_KP_2, 0)
+    elseif input.getKey(KEY_KP_3) ~= 0 then
+       create_splice_file("s3")
+       input.setKey(KEY_KP_3, 0)
+    elseif input.getKey(KEY_KP_4) ~= 0 then
+       create_splice_file("s4")
+       input.setKey(KEY_KP_4, 0)
+    elseif input.getKey(KEY_KP_5) ~= 0 then
+       create_splice_file("s5")
+       input.setKey(KEY_KP_5, 0)
+    elseif input.getKey(KEY_KP_6) ~= 0 then
+       create_splice_file("s6")
+       input.setKey(KEY_KP_6, 0)
     end
 
 end

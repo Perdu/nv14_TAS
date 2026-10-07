@@ -235,6 +235,14 @@ end
 
 local splice_modes = {
    s = {},
+   w = {},
+   s0 = {},
+   s1 = {},
+   s2 = {},
+   s3 = {},
+   s4 = {},
+   s5 = {},
+   s6 = {},
 
    r = {objective = "max-x",  arrow = ">"},
    R = {objective = "max-vx", arrow = ">>"},
@@ -359,6 +367,44 @@ function create_splice_file(key)
       require_interaction = '# require-interaction = ["testdoor:0"]'
    end
 
+   local objective_string = string.format([[
+'objective = "earliest-arrival"'
+target_region = "%d:%d,%d:%d"]],
+         x1, x2, y1, y2
+)
+   if key == "w"
+      or key == "s0"
+      or key == "s1"
+      or key == "s2"
+      or key == "s3"
+      or key == "s4"
+      or key == "s5"
+      or key == "s6"
+   then
+      local target_object = "switch"
+      if key == "w" then
+         target_object = "switch"
+      elseif key == "s0" then
+         target_object = "testdoor:0"
+      elseif key == "s1" then
+         target_object = "testdoor:1"
+      elseif key == "s2" then
+         target_object = "testdoor:2"
+      elseif key == "s3" then
+         target_object = "testdoor:3"
+      elseif key == "s4" then
+         target_object = "testdoor:4"
+      elseif key == "s5" then
+         target_object = "testdoor:5"
+      elseif key == "s6" then
+         target_object = "testdoor:6"
+      end
+      objective_string = string.format([[
+objective = "earliest-interaction"
+target-object = "%s"]], target_object
+      )
+   end
+
    if file == nil then
       file = assert(io.open(filename, "w"))
 
@@ -367,17 +413,16 @@ function create_splice_file(key)
 search = "population"
 target_frame = %d
 range = "%d:%d"
-target_region = "%d:%d,%d:%d"
 simulate-enemies = %s
-objective = "earliest-arrival"
+%s
 %s
 %s
 %s
 ]],
          f_ig,
          target_prev, f_ig,
-         x1, x2, y1, y2,
          simulate_enemies,
+         objective_string,
          secondary_objective,
          require_interaction,
          require_jump
