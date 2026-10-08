@@ -193,9 +193,12 @@ rerecords: 710
 With the right angle, you can jump on the top thwump. This is absolutely completely useless as it speeds you downwards
 
 # 04-3
-rerecords: 1836
+rerecords: 1982
 
 I initially had a slightly better way past the drone after the switch (2 pixels), which I had to redo because of earlier drone detection. But it doesn't actually lose a frame on the way to the pipe up, and we're actually faster there. We avoid jumping in the corridor as the better positioning gives us too much speed in the pipe and kills us.
+
+Branch 9: attempt at using a ceiling push to pass the central drone a bit faster
+Branch 8: attempt at doing a bwj on the way up in the third ring
 
 # 04-4
 rerecords: 1579
@@ -1403,7 +1406,7 @@ rerecords: 0
 
 
 # 43-0
-rerecords: 0
+rerecords: 98
 
 
 
@@ -1425,9 +1428,9 @@ rerecords: 0
 
 
 # 43-4
-rerecords: 0
+rerecords: 95
 
-
+Branch 8: going dump using supercharged bumps
 
 # 44-0
 rerecords: 154
@@ -3014,4 +3017,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 259913
+# Total rerecords: 260252
