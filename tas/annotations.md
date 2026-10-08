@@ -663,9 +663,12 @@ rerecords: 209
 0th is maxed, I could barely get a few subpixel (0.something)
 
 # 16-4
-rerecords: 1178
+rerecords: 1319
 
 Branch 9: jumping earlier, then jumping to get the switch and fall directly. Slower.
+Branch 8: attempt at doing a bwj on the next bb
+
+The horizontal corner kick save some pixels compared to the previous method, but advance is eventually lost on the lpwj
 
 # 17-0
 rerecords: 1254
@@ -3017,4 +3020,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 260252
+# Total rerecords: 260393
