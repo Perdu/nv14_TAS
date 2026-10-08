@@ -704,7 +704,7 @@ rerecords: 460
 
 
 # 18-0
-rerecords: 778
+rerecords: 881
 
 Walljump after the switch is faster than turnaround
 
@@ -3020,4 +3020,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 260393
+# Total rerecords: 260496
