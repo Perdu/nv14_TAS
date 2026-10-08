@@ -821,9 +821,9 @@ rerecords: 988
 
 
 # 21-2
-rerecords: 304
+rerecords: 314
 
-
+Branch 9: double thwump bwj
 
 # 21-3
 rerecords: 324
@@ -3020,4 +3020,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 260496
+# Total rerecords: 260506
