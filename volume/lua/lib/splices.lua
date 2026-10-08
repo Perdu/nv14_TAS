@@ -49,6 +49,85 @@ local function splice_direction(objective)
 end
 
 
+-- Parse one spatial region written as XMIN:XMAX,YMIN:YMAX.
+local function parse_spatial_region(value)
+   if not value or value == "" then
+      return nil
+   end
+
+   local x1, x2, y1, y2 = value:match(
+      "^%s*([%-%d%.]+)%s*:%s*([%-%d%.]+)%s*,%s*" ..
+      "([%-%d%.]+)%s*:%s*([%-%d%.]+)%s*$"
+   )
+
+   x1 = tonumber(x1)
+   x2 = tonumber(x2)
+   y1 = tonumber(y1)
+   y2 = tonumber(y2)
+
+   if not x1 or not x2 or not y1 or not y2 then
+      return nil
+   end
+
+   return {
+      x1 = x1,
+      x2 = x2,
+      y1 = y1,
+      y2 = y2
+   }
+end
+
+
+-- `require_jump_string` contains complete TOML lines when a splice is created
+-- interactively, e.g.:
+-- require-jump-region = "500:550,210:250"
+-- require-jump-frames = "420:428"
+local function parse_require_jump_text(value)
+   if not value or value == "" then
+      return nil, nil
+   end
+
+   local region_value =
+      value:match('require[-_]jump[-_]region%s*=%s*"([^"]+)"') or
+      value:match("require[-_]jump[-_]region%s*=%s*'([^']+)'")
+
+   local frames =
+      value:match('require[-_]jump[-_]frames%s*=%s*"([^"]+)"') or
+      value:match("require[-_]jump[-_]frames%s*=%s*'([^']+)'")
+
+   return parse_spatial_region(region_value), frames
+end
+
+
+-- Return the point where a line from the rectangle centre toward (tx, ty)
+-- meets the rectangle edge. Used to keep connector lines short and outside
+-- the interiors of the two rectangles.
+local function rectangle_edge_towards(rect, tx, ty)
+   local cx = (rect.x1 + rect.x2) / 2
+   local cy = (rect.y1 + rect.y2) / 2
+   local dx = tx - cx
+   local dy = ty - cy
+
+   if dx == 0 and dy == 0 then
+      return cx, cy
+   end
+
+   local scale_x = math.huge
+   local scale_y = math.huge
+
+   if dx ~= 0 then
+      scale_x = ((rect.x2 - rect.x1) / 2) / math.abs(dx)
+   end
+
+   if dy ~= 0 then
+      scale_y = ((rect.y2 - rect.y1) / 2) / math.abs(dy)
+   end
+
+   local scale = math.min(scale_x, scale_y)
+   return cx + dx * scale, cy + dy * scale
+end
+
+
 function read_splice_files()
    splice_regions = {}
    print("reading splices file")
@@ -121,13 +200,16 @@ function read_splice_files()
 
                local region = {
                   name = splice_name,
+                  frame = splice_frame,
                   x1 = x1,
                   x2 = x2,
                   y1 = y1,
                   y2 = y2,
                   search = search,
                   direction = splice_direction(direction_objective),
-                  interaction = splice_interaction_marker(config.require_interaction)
+                  interaction = splice_interaction_marker(config.require_interaction),
+                  jump_region = parse_spatial_region(config.require_jump_region),
+                  jump_frames = config.require_jump_frames
                }
 
                -- Preserve numeric frame keys where possible, so a newly
@@ -210,6 +292,52 @@ function display_splices()
          -- Horizontal arrows and single vertical position arrows.
          if text_x and text_y then
             gui.text(text_x, text_y, direction, color, 0, 0, 12)
+         end
+      end
+
+      -- Draw the require-jump region in orange and link it to the
+      -- target region belonging to the same splice.
+      if region.jump_region then
+         local jump_color = rgb(255, 165, 0)
+         local jump_region = region.jump_region
+
+         local target_center_x = (region.x1 + region.x2) / 2
+         local target_center_y = (region.y1 + region.y2) / 2
+         local jump_center_x = (jump_region.x1 + jump_region.x2) / 2
+         local jump_center_y = (jump_region.y1 + jump_region.y2) / 2
+
+         -- Connect edge-to-edge rather than centre-to-centre.
+         local target_link_x, target_link_y = rectangle_edge_towards(
+            region, jump_center_x, jump_center_y
+         )
+         local jump_link_x, jump_link_y = rectangle_edge_towards(
+            jump_region, target_center_x, target_center_y
+         )
+
+         gui.line(
+            target_link_x, target_link_y,
+            jump_link_x, jump_link_y,
+            jump_color
+         )
+
+         gui.rectangle(
+            jump_region.x1,
+            jump_region.y1,
+            jump_region.x2 - jump_region.x1,
+            jump_region.y2 - jump_region.y1,
+            1,
+            jump_color
+         )
+
+         -- Show the frame range associated with the jump requirement.
+         if region.jump_frames then
+            gui.text(
+               jump_region.x1 + 1,
+               jump_region.y1 - 12,
+               region.jump_frames,
+               jump_color,
+               0, 0, 12
+            )
          end
       end
 
@@ -441,15 +569,20 @@ simulate-enemies = %s
    end
 
    if splice_regions[f_ig] == nil then
+      local jump_region, jump_frames = parse_require_jump_text(require_jump)
+
       splice_regions[f_ig] = {
          name = tostring(f_ig),
+         frame = f_ig,
          x1 = x1,
          x2 = x2,
          y1 = y1,
          y2 = y2,
          search = "population",
          direction = mode.arrow,
-         interaction = nil
+         interaction = nil,
+         jump_region = jump_region,
+         jump_frames = jump_frames
       }
    end
 end
