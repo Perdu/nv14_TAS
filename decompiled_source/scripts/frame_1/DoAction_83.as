@@ -254,6 +254,7 @@ PlayerObject.prototype.TickNormal = function()
 };
 PlayerObject.prototype.TickRagdoll = function()
 {
+   trace("FRAME: " + game.tickCounter + " (dead)");
    this.raggy.Tick();
 };
 PlayerObject.prototype.PrepareToCollide = function()
