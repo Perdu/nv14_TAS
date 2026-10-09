@@ -4,15 +4,15 @@ Speedruns: 500
 
 Levels already TASed (optimization level >= 4):
 Highscores: 499
-Speedruns: 486
+Speedruns: 487
 
 Levels already TASed (optimization level >= 5):
 Highscores: 162
-Speedruns: 350
+Speedruns: 351
 
 Levels already TASed (optimization level >= 6):
 Highscores: 3
-Speedruns: 46
+Speedruns: 47
 
 
 Episode Speedrun Grid (optimization level >= 4):
@@ -24,7 +24,7 @@ Episode Speedrun Grid (optimization level >= 4):
 🟢04 🟢14 🟢24 🟢34 🟢44 🟢54 🟢64 🟢74 🟢84 🟡94
 🟢05 🟢15 🟢25 🟢35 🟡45 🟢55 🟢65 🟡75 🟢85 🟢95
 🟢06 🟢16 🟢26 🟢36 🟢46 🟡56 🟢66 🟢76 🟢86 🟢96
-🟢07 🟢17 🟡27 🟢37 🟢47 🟢57 🟢67 🟢77 🟢87 🟢97
+🟢07 🟢17 🟢27 🟢37 🟢47 🟢57 🟢67 🟢77 🟢87 🟢97
 🟢08 🟢18 🟢28 🟢38 🟢48 🟢58 🟢68 🟢78 🟢88 🟢98
 🟢09 🟢19 🟢29 🟢39 🟢49 🟢59 🟢69 🟢79 🟢89 🟢99
 
@@ -37,7 +37,7 @@ Episode Speedrun Grid (optimization level >= 5):
 🟢04 🟢14 🟢24 🟢34 🟠44 🟡54 🟢64 🟢74 🟠84 🟠94
 🟢05 🟢15 🟢25 🟢35 🟠45 🟠55 🟠65 🔴75 🟠85 🟠95
 🟢06 🟢16 🟢26 🟢36 🟠46 🟠56 🟠66 🟠76 🟠86 🟠96
-🟢07 🟢17 🟡27 🟡37 🟠47 🟠57 🟠67 🟠77 🟠87 🟠97
+🟢07 🟢17 🟢27 🟡37 🟠47 🟠57 🟠67 🟠77 🟠87 🟠97
 🟢08 🟢18 🟢28 🟢38 🟠48 🟡58 🟠68 🟠78 🟢88 🟠98
 🟢09 🟢19 🟢29 🟡39 🟠49 🟡59 🟠69 🟠79 🟢89 🟢99
 
@@ -50,7 +50,7 @@ Episode Speedrun Grid (optimization level >= 6):
 🟠04 🔴14 🔴24 🔴34 🟠44 🟠54 🔴64 🔴74 🟠84 🟠94
 🟠05 🔴15 🔴25 🔴35 🔴45 🟠55 🔴65 🔴75 🟠85 🟠95
 🔴06 🟠16 🔴26 🔴36 🔴46 🔴56 🔴66 🔴76 🔴86 🟠96
-🔴07 🔴17 🔴27 🔴37 🟠47 🟠57 🔴67 🟠77 🔴87 🔴97
+🔴07 🔴17 🟠27 🔴37 🟠47 🟠57 🔴67 🟠77 🔴87 🔴97
 🟠08 🟠18 🔴28 🔴38 🟠48 🟠58 🔴68 🔴78 🟠88 🔴98
 🔴09 🔴19 🔴29 🔴39 🟠49 🔴59 🟠69 🔴79 🟠89 🟠99
 

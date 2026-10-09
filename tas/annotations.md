@@ -970,11 +970,14 @@ rerecords: 1476
 F8: Alternate route, slower, incomplete
 
 # 27-0
-rerecords: 806
+rerecords: 923
 
 Branch 9: going down directly in the 3rd pipe. Barely slower.
 Branch 8: same but without the last two jumps
 Branch 7: using push at the end (2f slower)
+Branch 6: going left on the last ascent
+Branch 5: using angled wj and cj at the end
+Branch 4: using angled wj but no cj
 
 Perhaps a bwj in the end could save 1 or 2 frames
 
@@ -3020,4 +3023,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 260506
+# Total rerecords: 260623
