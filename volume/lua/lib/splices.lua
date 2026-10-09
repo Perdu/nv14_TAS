@@ -410,9 +410,6 @@ function create_splice_file(key)
    local level_path = splice_files_path .. "/" .. level
    os.execute('mkdir -p "' .. level_path .. '"')
 
-   local filename = level_path .. "/" .. tostring(f_ig) .. ".txt"
-   local file = io.open(filename, "r")
-
    local x, y = get_player_position()
    local x_int = math.floor(x + 0.5)
    local y_int = math.floor(y + 0.5)
@@ -495,6 +492,7 @@ function create_splice_file(key)
       require_interaction = '# require-interaction = ["testdoor:0"]'
    end
 
+   local objective = tostring(f_ig)
    local objective_string = string.format([[
 objective = "earliest-arrival"
 target_region = "%d:%d,%d:%d"]],
@@ -512,26 +510,38 @@ target_region = "%d:%d,%d:%d"]],
       local target_object = "switch"
       if key == "w" then
          target_object = "switch"
+         objective = "switch"
       elseif key == "s0" then
          target_object = "testdoor:0"
+         objective = "switch0"
       elseif key == "s1" then
          target_object = "testdoor:1"
+         objective = "switch1"
       elseif key == "s2" then
          target_object = "testdoor:2"
+         objective = "switch2"
       elseif key == "s3" then
          target_object = "testdoor:3"
+         objective = "switch3"
       elseif key == "s4" then
          target_object = "testdoor:4"
+         objective = "switch4"
       elseif key == "s5" then
          target_object = "testdoor:5"
+         objective = "switch5"
       elseif key == "s6" then
          target_object = "testdoor:6"
+         objective = "switch6"
       end
       objective_string = string.format([[
 objective = "earliest-interaction"
 target-object = "%s"]], target_object
       )
    end
+
+   -- here
+   local filename = level_path .. "/" .. tostring(objective) .. ".txt"
+   local file = io.open(filename, "r")
 
    if file == nil then
       file = assert(io.open(filename, "w"))
@@ -562,7 +572,7 @@ simulate-enemies = %s
    file:close()
    -- It would be better to run the container with a regular user (if
    -- possible for libTAS) but for now we use this easy solution
-   os.execute('chown 1000:1000 -- "' .. level_path .. "/" .. tostring(f_ig) .. ".txt" .. '"')
+   os.execute('chown 1000:1000 -- "' .. level_path .. "/" .. objective .. ".txt" .. '"')
 
    if f_ig > prev_splice then
       prev_splice = f_ig
