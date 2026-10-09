@@ -201,18 +201,18 @@ First, you may need to run `./fix_ltm_inputs.sh volume/n_levels/LEVEL.ltm` to up
 
 ![Input editor with splice file commands](img/input_editor.png)
 
-Place an input on a given frame, then have libTAS run that frame to create a splice file using that command. If that worked, the input should be removed automatically from the editor. The splice file will be created with the name `volume/splices/LEVEL/FRAME_NUMBER.txt` (except for switches commands).
+Place an input on a given frame, then have libTAS run that frame to create a splice file using that command. If that worked, the input should be removed automatically from the editor. The splice file will be created with the name `volume/splices/LEVEL/FRAME_NUMBER.txt` (except for switches commands, which will be called `switchN.txt` under that directory).
 
 The different commands are:
 - `s`: create a normal, square splice with no more indication.
-- arrows: create a splice with a region oriented towards the direction, with secondary-objective set to the target (e.g. a splice to the right will have `secondary_objective = "max-x"`, maximizing position to the right.
-- double arrows: same but sets secondary objective to vx/vy, maximizing speed.
+- arrows: create a splice with a region oriented towards the perpendicular of the direction, with secondary-objective set to the target (e.g. a splice to the right will have `secondary_objective = "max-x"`, maximizing position to the right.
+- double arrows: same but sets secondary objective to `vx`/`vy`, maximizing speed.
 - `e`: adds `simulate-enemies = true` to the created splice file.
 - `rt`: adds `require-jump-region` and `require-jump-frames` to the created splice file. If `T` was run prior to this option, frame range and region obtained at that moment will be reused.
 - `T`: displays `require-jump-region` and `require-jump-frames` in the lua console (Tools > Lua Console) based on current position and frame. Remembered for next splice file created with `rt`.
-- `rw`: add `require-interaction = ["switch"]` to the created splice file.
-- `r0` to `r6`: add `require-interaction = ["testdoor:0-6"]` to the created splice file. If multiple of them (or `rw`) are selected, the array is created with all of them.
-- `w`: create the `switch.txt` splice at the current frame, using the switch as target object.
+- `rw`: adds `require-interaction = ["switch"]` to the created splice file.
+- `r0` to `r6`: adds `require-interaction = ["testdoor:0-6"]` to the created splice file. If multiple of them (or `rw`) are selected, the array is created with all of them.
+- `w`: creates the `switch.txt` splice at the current frame, using the switch as target object.
 - `0` to `6`: create the `switchN.txt` splice at the current frame, using the related locked door switch as target object.
 
 
