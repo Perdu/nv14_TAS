@@ -20,6 +20,7 @@ Links:
 - [2-frames depenetration](https://discord.com/channels/197765375503368192/199460839252688896/1486849823285051565)
 - [Locked-door walljump](https://discord.com/channels/197765375503368192/199460839252688896/1488577463406690394)
 - [Triple jump on 4-tile/8-tile sections](https://discord.com/channels/197765375503368192/199460839252688896/1510699050075164835)
+- [Laser drone targeting errors](https://discord.com/channels/197765375503368192/199460839252688896/1552616000401186877)
 
 ## Depenetration
 
@@ -91,6 +92,20 @@ bwj are also possible on thwumps. Since thwumps are also moving, the possible di
 A thwump push is the same as a thwump bwj, but without jump. The player just benefits from the depenetration displacement, without jumping. Even without jumping, this can give large speed boosts.
 
 ![Thwump push](gifs/thumpw_push_17-1.gif)
+
+## Thwump upwards push
+
+When arriving towards the side of a thwump (either facing the player or not), precise positioning can get the player to be ejected upwards. This is a good way to quickly get vertical speed.
+
+Example facing the player: 99-4 sr
+
+Example not facing the player: 84-3 sr
+
+## Thwump downwards push
+
+Arriving at a high speed at the lower corner of a thwump can get the player depenetrated at a high speed, since the thwump itself is moving. This can give the player a large vertical downwards speed boost.
+
+Example: end of 99-4 sr
 
 ## Clipping through oneways
 
@@ -181,7 +196,7 @@ While less common, that can also be done on non-horizontal launchpads
 ![launchpad + wall on a 45 degree lp](gifs/45angled_lpwj_29-1.gif)
 
 ## 1f wallslide
-Wallslides only start decreasing the player's speed if they are held for at least 2 frames. Holding a wallslide for a single frame can be useful to correct the position of a downards corner push (ledge grab), or to push a bounceblock away without losing speed.
+Wallslides only start decreasing the player's speed if they are held for at least 2 frames. Holding a wallslide for a single frame can be useful to correct the position of a downwards corner push (ledge grab), or to push a bounceblock away without losing speed.
 
 
 ## Taking only 1 stacked object
@@ -263,8 +278,16 @@ A turnaround is simply the process of slowing down near the edge of a surface in
 ## Stuttering to stay grounded
 @todo
 
-## Angled cj on downards-facing corners
+## Angled cj on downwards-facing corners
 @todo, found by the optimiser
+
+## Single-frame jump on bb
+
+In an extremely rare setup, it is possible to exploit the collision with 2 bounceblocks to jump where a bounce should be happening, allowing the player to jump immediately while getting a vertical speed boost. Visually, this looks a bit like the player was doing a corner jump on the bounceblock (which is impossible).
+
+See [slow-motion video](single_frame_bb_jump.mp4)
+
+Example: 43-2 sr
 
 ## Using 1f-wallslides to push bbs without slowing down
 @todo, found by the optimiser
@@ -351,6 +374,20 @@ Only works on the right side of exposed horizontal half-tiles
 
 ```
 $Half-tile airjump - normal start#OpenAI##000000000000000000000010000000000000000000000100000000000000000000001000000000000000000000010000000000000000000000100000000000000000000001000000000000000000000010000000000000000000000100000000000000000000001000000000000000000000010000000000000000000000100000000000000000000001000000000000000000000010000000000000000000000100000000000000000000001000000000000000000000N1000000000000000000000010000000000000000000000100000000000000000000001000000000000000000000010000000000000000000000100000000000000000000001000000000000000000000010000000000000000000000100000000000000000000001000000000000000000000010000000000000000000000100000000000000000000001000000000000000000000010000000000000000000000100000000000000000000001|5^486.22300650983,46.82412288866287!7^486.22300650983,68.82412288866287,3#300:35791394|35791394|35791394|17895970|17895697|17895697|17895697|17895697|17895697|17895697|17895697|17895697|17895697|17895697|17895697|47255825|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|35791394|34|0|0|0|0|0|0|0|0|0|0|0|0|0#
+```
+
+## Laser drone targeting errors
+
+Due to a floating point error, laser drone can under very specific conditions fire at 0;0 instead of the player position.
+
+Discussed [here](https://discord.com/channels/197765375503368192/199460839252688896/1552616000401186877)
+
+Raif:
+> According to ChatGPT's analysis the ray from the gauss fails to intersect with one of the sloped tiles on the left due to a floating point error. The next tile join afterwards is an internal join where collision is not checked allowing the ray to pass out of the map. Since the ray has no valid endpoint, when the ray is drawn it's just drawn to (0, 0). So for the gauss case it's just a visual error because the actual collision checks are along the path of the original ray and if the player intersected with that path it would result in a killing shot.
+> But for laser drones it can result in the actual lethal beam being fired towards (0, 0)
+
+```
+$Laser stale endpoint - lethal demonstration#test case##0000000000000000000I000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000|5^138,390!6^252,300,2,0,1,2!2^138,426,0,-1#90:0|0|0|0|0|0|0|0|0|0|0|0|0#
 ```
 
 # Unused glitches
