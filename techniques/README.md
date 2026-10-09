@@ -281,6 +281,10 @@ A turnaround is simply the process of slowing down near the edge of a surface in
 ## Angled cj on downwards-facing corners
 @todo, found by the optimiser
 
+## Using bb stumbles to get height
+
+Arriving from the side of a bb at a precise position can lead the player to stumble on the bb, possibly giving them a bit of height in the process.
+
 ## Single-frame jump on bb
 
 In an extremely rare setup, it is possible to exploit the collision with 2 bounceblocks to jump where a bounce should be happening, allowing the player to jump immediately while getting a vertical speed boost. Visually, this looks a bit like the player was doing a corner jump on the bounceblock (which is impossible).
