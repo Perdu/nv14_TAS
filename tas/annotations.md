@@ -1108,9 +1108,11 @@ rerecords: 676
 
 
 # 32-1
-rerecords: 339
+rerecords: 520
 
-
+Branch 9: route taking switch 7
+Branch 8: slightly faster beginning that resync on landing
+Branch 7: attempt at taking no switch at all
 
 # 32-2
 rerecords: 546
@@ -1350,7 +1352,7 @@ rerecords: 758
 
 
 # 40-3
-rerecords: 485
+rerecords: 486
 
 Branch 9: left bb path
 Branch 8: using right wall to the way up to the switch
@@ -1376,7 +1378,7 @@ rerecords: 0
 
 
 # 41-2
-rerecords: 0
+rerecords: 5
 
 
 
@@ -3027,4 +3029,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 261226
+# Total rerecords: 261413
