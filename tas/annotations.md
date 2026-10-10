@@ -1350,9 +1350,13 @@ rerecords: 758
 
 
 # 40-3
-rerecords: 0
+rerecords: 485
 
-
+Branch 9: left bb path
+Branch 8: using right wall to the way up to the switch
+Branch 7: descent using a jump around the switch, then supercharged bump at the right side of the thwump
+Branch 6: descent using a jump around the switch, then push from the left of the left thwump
+Branch 5: cj below the thwump
 
 # 40-4
 rerecords: 293
@@ -3023,4 +3027,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 260741
+# Total rerecords: 261226
