@@ -1482,9 +1482,13 @@ rerecords: 322
 
 
 # 45-1
-rerecords: 114
+rerecords: 151
 
-Branch 7: stuff
+Branch 8: double jump on stairs on the left
+Branch 7: double jump on stairs on the left the wj
+Branch 6: same but higher
+Branch 5: cj on lower stair on the right
+Branch 4: attempt at going left and a bit higher, to fall directly
 
 # 45-2
 rerecords: 0
@@ -3029,4 +3033,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 261527
+# Total rerecords: 261564
