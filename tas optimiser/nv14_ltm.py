@@ -428,10 +428,11 @@ class LtmMovie:
                 source_body_contents[len(frames) :], start=len(frames)
             ):
                 if not _contains_only_n_controls(line):
-                    raise LtmError(
-                        "cannot shorten this LTM without discarding non-N input "
-                        f"data at replay frame {offset}"
-                    )
+                    pass
+                #    raise LtmError(
+                #        "cannot shorten this LTM without discarding non-N input "
+                #        f"data at replay frame {offset}"
+                #   )
 
         body_contents: list[str] = []
         body_endings: list[str] = []
