@@ -1813,9 +1813,12 @@ rerecords: 0
 
 
 # 56-1
-rerecords: 0
+rerecords: 224
 
-
+Branch 9: ascent in the center
+Branch 8: ascent using 2 thwump pushes on the left
+Branch 7: another central ascent
+Branch 6: ascent from the right
 
 # 56-2
 rerecords: 0
@@ -3033,4 +3036,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 261564
+# Total rerecords: 261788
