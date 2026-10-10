@@ -28,7 +28,7 @@ remove_drone = 0
 splice_files_path = "/home/splices/"
 splice_region_size_big = 20
 splice_region_size_small = 10
-splice_prev_range_prior_frames = 10
+splice_prev_range_prior_frames = 50
 display_switches_numbers = true
 clean_splices_region_markers = false
 
