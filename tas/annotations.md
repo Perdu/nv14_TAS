@@ -2361,7 +2361,7 @@ Doing an amazing series of jumps on bounceblocks using corners on the way up, we
 Corner jump on the top bounce on the right (the one in the middle) gives us an angle a little bit too low, we hit the edge and stumble way too much
 
 # 75-0
-rerecords: 140
+rerecords: 154
 
 
 
@@ -3038,4 +3038,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 261841
+# Total rerecords: 261855
