@@ -1120,7 +1120,7 @@ rerecords: 546
 
 
 # 32-3
-rerecords: 0
+rerecords: 5
 
 
 
@@ -1691,7 +1691,7 @@ Rcj at the end couldn't get high enough to avoid the double wj.
 Cwj can be cleaned but when you have only 0.1 px in both x and y to work with it's ridiculously hard
 
 # 51-2
-rerecords: 207
+rerecords: 228
 
 
 
@@ -2535,9 +2535,11 @@ rerecords: 1183
 
 
 # 81-2
-rerecords: 0
+rerecords: 62
 
-
+Branch 9: left route by auto optimiser
+Branch 8: attempt at bumping directly right
+Branch 7: bumping right
 
 # 81-3
 rerecords: 0
@@ -2874,9 +2876,13 @@ rerecords: 0
 
 
 # 94-0
-rerecords: 279
+rerecords: 352
 
-
+Branch 9: jumping on frame 132
+Branch 7: best try at going through the drones
+Branch 6: could almost pass, but too early
+Branch 5: a good call
+Branch 4: an even better call
 
 # 94-1
 rerecords: 154
@@ -3038,4 +3044,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 261855
+# Total rerecords: 262016
