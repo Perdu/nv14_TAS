@@ -1408,7 +1408,9 @@ static int nv14_search_validate_spec(
          (isnan(spec->vy_minimum) || isnan(spec->vy_maximum) ||
           spec->vy_minimum > spec->vy_maximum ||
           spec->vy_minimum == INFINITY || spec->vy_maximum == -INFINITY)) ||
-        isnan(spec->incumbent_score)) {
+        isnan(spec->incumbent_score) ||
+        spec->beam_width > 4096u ||
+        !isfinite(spec->beam_edit_penalty) || spec->beam_edit_penalty < 0.0) {
         nv14_search_set_error(
             error_out, NV14_STATUS_INVALID_ARGUMENT,
             "invalid native search objective or axis window"
@@ -1585,6 +1587,377 @@ static int nv14_search_allocate_result(
     return 1;
 }
 
+/* Bounded, reward-guided search.  Unlike DFS, the beam keeps only the best
+   distinct exact states at each mutable-frame boundary.  The full state key
+   (including dynamic objects and required-jump history) is compared, never
+   an approximate player-coordinate key.  Dropped states are NOT inserted in
+   the transposition set: a better path to one must remain admissible. */
+typedef struct nv14_beam_node {
+    nv14_state *state;
+    nv14_input *path;
+    uint8_t *missing;
+    unsigned char *key;
+    size_t key_size;
+    double rank;
+    size_t edits;
+    uint64_t ordinal;
+    uint8_t changed;
+} nv14_beam_node;
+
+static void nv14_beam_dispose(nv14_beam_node *node)
+{
+    nv14_state_destroy(node->state);
+    free(node->path);
+    free(node->missing);
+    free(node->key);
+    memset(node, 0, sizeof(*node));
+}
+
+static int nv14_beam_compare(const nv14_beam_node *a,
+                             const nv14_beam_node *b)
+{
+    if (a->rank > b->rank) return -1;
+    if (a->rank < b->rank) return 1;
+    if (a->edits < b->edits) return -1;
+    if (a->edits > b->edits) return 1;
+    if (a->ordinal < b->ordinal) return -1;
+    if (a->ordinal > b->ordinal) return 1;
+    return 0;
+}
+
+static int nv14_beam_qsort_compare(const void *a, const void *b)
+{
+    return nv14_beam_compare((const nv14_beam_node *)a,
+                             (const nv14_beam_node *)b);
+}
+
+static int nv14_beam_key(nv14_beam_node *node, size_t jump_count)
+{
+    size_t state_size = nv14_state_key_size(node->state, -1);
+    size_t written = 0;
+    if (state_size == 0 || jump_count >= SIZE_MAX - 1u ||
+        state_size > SIZE_MAX - jump_count - 1u)
+        return 0;
+    node->key_size = state_size + jump_count + 1u;
+    node->key = (unsigned char *)malloc(node->key_size);
+    if (node->key == NULL) return 0;
+    if (nv14_state_write_key(node->state, -1, node->key,
+                             state_size, &written) != NV14_STATUS_OK ||
+        written != state_size) return 0;
+    if (jump_count != 0)
+        memcpy(node->key + state_size, node->missing, jump_count);
+    node->key[state_size + jump_count] = node->changed;
+    return 1;
+}
+
+static void nv14_beam_offer(nv14_search_context *context,
+                            nv14_beam_node *slots, size_t *count,
+                            nv14_beam_node *candidate)
+{
+    size_t index, worst = 0;
+    const size_t width = context->spec->beam_width;
+    for (index = 0; index < *count; ++index) {
+        nv14_beam_node *other = &slots[index];
+        if (candidate->key_size == other->key_size &&
+            memcmp(candidate->key, other->key, candidate->key_size) == 0) {
+            ++context->result->stats.deduplicated_prunes;
+            if (nv14_beam_compare(candidate, other) < 0) {
+                nv14_beam_dispose(other);
+                *other = *candidate;
+                memset(candidate, 0, sizeof(*candidate));
+            }
+            return;
+        }
+        if (nv14_beam_compare(other, &slots[worst]) > 0)
+            worst = index;
+    }
+    if (*count < width) {
+        slots[(*count)++] = *candidate;
+        memset(candidate, 0, sizeof(*candidate));
+        return;
+    }
+    ++context->result->stats.beam_width_prunes;
+    if (nv14_beam_compare(candidate, &slots[worst]) < 0) {
+        nv14_beam_dispose(&slots[worst]);
+        slots[worst] = *candidate;
+        memset(candidate, 0, sizeof(*candidate));
+    }
+}
+
+static double nv14_beam_rank(const nv14_search_context *context,
+                             const nv14_beam_node *node,
+                             nv14_input choice)
+{
+    const nv14_search_spec *spec = context->spec;
+    size_t index;
+    double rank = nv14_search_score(spec, node->state) -
+        spec->beam_edit_penalty * (double)node->edits;
+    /* Positive progress rewards; only ordering, never acceptance criteria. */
+    for (index = 0; index < spec->required_group_count; ++index) {
+        if (nv14_search_group_satisfied(node->state, spec->required_atoms,
+                                        &spec->required_groups[index]))
+            rank += 8.0;
+    }
+    if (spec->required_jump_any) {
+        if (spec->required_jump_count != 0 && !node->missing[0])
+            rank += 16.0;
+    } else {
+        for (index = 0; index < spec->required_jump_count; ++index)
+            if (!node->missing[index]) rank += 16.0;
+    }
+    if (spec->beam_adaptive_inputs) {
+        double goal_x = node->state->player.pos.x;
+        if (spec->objective == NV14_SEARCH_MAX_X) goal_x += 1.0;
+        else if (spec->objective == NV14_SEARCH_MIN_X) goal_x -= 1.0;
+        else if (spec->objective == NV14_SEARCH_TRACE_DISTANCE)
+            goal_x = spec->trace_target->x;
+        else if (spec->objective == NV14_SEARCH_MIN_DISTANCE &&
+                 spec->target_count != 0) goal_x = spec->targets[0].x;
+        /* A very small tie preference, never a hard exclusion. */
+        if (goal_x > node->state->player.pos.x && choice.right && !choice.left)
+            rank += 0.0001;
+        if (goal_x < node->state->player.pos.x && choice.left && !choice.right)
+            rank += 0.0001;
+    }
+    return rank;
+}
+
+/* Reorder, but never exclude, inputs for a budget-limited beam.  This
+   determines which children receive a simulation when the tick allowance
+   expires mid-frontier; terminal acceptance still uses the exact evaluator.
+   Insertion sorting at most 32 choices avoids per-parent allocations. */
+static double nv14_beam_input_priority(const nv14_search_spec *spec,
+                                       const nv14_state *state, size_t frame,
+                                       nv14_input choice)
+{
+    const double vx = state->player.pos.x - state->player.oldpos.x;
+    double goal_x = state->player.pos.x;
+    double priority = 0.0;
+    int have_goal = 0;
+    const int direction = (choice.right != 0) - (choice.left != 0);
+    if (nv14_search_input_equal(choice, spec->replay[frame]))
+        priority += 0.5; /* replay-first bias, not a restriction */
+    if (spec->objective == NV14_SEARCH_MAX_X) {
+        goal_x += 10.0; have_goal = 1;
+    } else if (spec->objective == NV14_SEARCH_MIN_X) {
+        goal_x -= 10.0; have_goal = 1;
+    } else if (spec->objective == NV14_SEARCH_TRACE_DISTANCE) {
+        goal_x = spec->trace_target->x; have_goal = 1;
+    } else if (spec->objective == NV14_SEARCH_MIN_DISTANCE &&
+               spec->target_count != 0) {
+        goal_x = spec->targets[0].x; have_goal = 1;
+    }
+    if (have_goal) {
+        const double dx = goal_x - state->player.pos.x;
+        if (dx > 1.0 && direction > 0) priority += 1.0;
+        if (dx < -1.0 && direction < 0) priority += 1.0;
+        /* Close to the checkpoint, braking an overshoot matters more
+           than blindly accelerating toward the checkpoint's x value. */
+        if (fabs(dx) <= 1.0 && fabs(vx) > 0.1 &&
+            ((vx > 0.0 && direction < 0) ||
+             (vx < 0.0 && direction > 0))) priority += 0.6;
+    }
+    if (state->player.previous_jump_held == (choice.jump != 0))
+        priority += 0.05;
+    if (!state->player.in_air && choice.jump &&
+        spec->objective == NV14_SEARCH_TRACE_DISTANCE &&
+        spec->trace_target->y < state->player.pos.y - 1.0)
+        priority += 0.3;
+    return priority;
+}
+
+static void nv14_search_beam(nv14_search_context *context,
+                              const uint8_t *root_missing)
+{
+    const nv14_search_spec *spec = context->spec;
+    nv14_beam_node *current, *next, node;
+    size_t count = 0, next_count = 0, depth, index, choice_index;
+    uint64_t ordinal = 0;
+    size_t width = spec->beam_width;
+    current = (nv14_beam_node *)calloc(width, sizeof(*current));
+    next = (nv14_beam_node *)calloc(width, sizeof(*next));
+    if (current == NULL || next == NULL) {
+        context->status = NV14_SEARCH_OUT_OF_MEMORY;
+        goto cleanup;
+    }
+    current[0].state = nv14_search_clone(context, spec->prefix_state);
+    current[0].path = (nv14_input *)calloc(spec->mutable_count,
+                                           sizeof(nv14_input));
+    current[0].missing = (uint8_t *)malloc(
+        spec->required_jump_count ? spec->required_jump_count : 1u);
+    if (current[0].state == NULL || current[0].path == NULL ||
+        current[0].missing == NULL) {
+        if (context->status == NV14_SEARCH_OK)
+            context->status = NV14_SEARCH_OUT_OF_MEMORY;
+        count = 1;
+        goto cleanup;
+    }
+    if (spec->required_jump_count != 0)
+        memcpy(current[0].missing, root_missing, spec->required_jump_count);
+    count = 1;
+    for (depth = 0; depth < spec->mutable_count && count != 0 &&
+                    context->status == NV14_SEARCH_OK &&
+                    !context->budget_exhausted; ++depth) {
+        const size_t frame = spec->mutable_frames[depth];
+        const int last = depth + 1u == spec->mutable_count;
+        const size_t next_frame = last ? 0 : spec->mutable_frames[depth + 1u];
+        next_count = 0;
+        qsort(current, count, sizeof(*current), nv14_beam_qsort_compare);
+        for (index = 0; index < count && context->status == NV14_SEARCH_OK &&
+                        !context->budget_exhausted; ++index) {
+            nv14_beam_node *parent = &current[index];
+            if (!nv14_search_node_allows(context, parent->state, frame,
+                                         parent->missing)) continue;
+            /* Stable order for ties and duplicate inputs.  For large custom
+               alphabets preserve the supplied ordering unchanged. */
+            size_t order[32];
+            size_t choice_count = spec->choices_begin[depth + 1u] -
+                                  spec->choices_begin[depth];
+            int reordered = spec->beam_adaptive_inputs &&
+                            choice_count > 1u && choice_count <= 32u;
+            if (reordered) {
+                size_t c;
+                for (c = 0; c < choice_count; ++c) {
+                    size_t insert = c;
+                    size_t id = spec->choices_begin[depth] + c;
+                    const double priority = nv14_beam_input_priority(
+                        spec, parent->state, frame, spec->choices[id]);
+                    while (insert > 0) {
+                        size_t previous = spec->choices_begin[depth] +
+                                          order[insert - 1u];
+                        if (nv14_beam_input_priority(spec, parent->state,
+                                frame, spec->choices[previous]) >= priority)
+                            break;
+                        order[insert] = order[insert - 1u];
+                        --insert;
+                    }
+                    order[insert] = c;
+                }
+            }
+            for (choice_index = 0;
+                 choice_index < choice_count &&
+                 context->status == NV14_SEARCH_OK &&
+                 !context->budget_exhausted; ++choice_index) {
+                nv14_step_result step_result;
+                size_t input_index = spec->choices_begin[depth] +
+                    (reordered ? order[choice_index] : choice_index);
+                nv14_input choice = spec->choices[input_index];
+                size_t fixed;
+                int alive = 1;
+                memset(&node, 0, sizeof(node));
+                node.changed = parent->changed ||
+                    !nv14_search_input_equal(choice, spec->replay[frame]);
+                if (last && spec->skip_unchanged_final_step && !node.changed) {
+                    ++context->result->stats.evaluated_leaves;
+                    continue;
+                }
+                node.edits = parent->edits +
+                    !nv14_search_input_equal(choice, spec->replay[frame]);
+                node.ordinal = ++ordinal;
+                node.state = nv14_search_clone(context, parent->state);
+                node.path = (nv14_input *)malloc(spec->mutable_count *
+                                                  sizeof(nv14_input));
+                node.missing = (uint8_t *)malloc(
+                    spec->required_jump_count ? spec->required_jump_count : 1u);
+                if (node.state == NULL || node.path == NULL ||
+                    node.missing == NULL) {
+                    if (context->status == NV14_SEARCH_OK)
+                        context->status = NV14_SEARCH_OUT_OF_MEMORY;
+                    nv14_beam_dispose(&node);
+                    break;
+                }
+                if (depth != 0)
+                    memcpy(node.path, parent->path,
+                           depth * sizeof(nv14_input));
+                node.path[depth] = choice;
+                if (spec->required_jump_count != 0)
+                    memcpy(node.missing, parent->missing,
+                           spec->required_jump_count);
+                if (!nv14_search_step(context, node.state, choice, &step_result)) {
+                    nv14_beam_dispose(&node);
+                    break;
+                }
+                if (step_result.dead) {
+                    ++context->result->stats.dead_prunes;
+                    alive = 0;
+                }
+                if (alive && !nv14_search_update_required_jump(
+                        context, frame, &step_result, node.missing)) alive = 0;
+                if (alive && spec->prune_inactive_jump && choice.jump &&
+                    choice.jump_trigger < 0 &&
+                    !parent->state->player.previous_jump_held &&
+                    !step_result.jumped &&
+                    parent->state->player.state != NV14_PLAYER_JUMPING &&
+                    !nv14_search_preserve_failed_press(spec, frame)) {
+                    ++context->result->stats.inactive_jump_prunes;
+                    alive = 0;
+                }
+                if (!alive) {
+                    nv14_beam_dispose(&node);
+                    continue;
+                }
+                if (last) {
+                    memcpy(context->chosen, node.path,
+                           spec->mutable_count * sizeof(nv14_input));
+                    nv14_search_evaluate_leaf(context, node.state,
+                                              node.missing, node.changed);
+                    nv14_beam_dispose(&node);
+                    continue;
+                }
+                for (fixed = frame + 1u; fixed < next_frame; ++fixed) {
+                    if (!nv14_search_node_allows(context, node.state,
+                                                 fixed, node.missing) ||
+                        !nv14_search_step(context, node.state,
+                                           spec->replay[fixed], &step_result)) {
+                        alive = 0;
+                        break;
+                    }
+                    if (step_result.dead) {
+                        ++context->result->stats.dead_prunes;
+                        alive = 0;
+                        break;
+                    }
+                    if (!nv14_search_update_required_jump(
+                            context, fixed, &step_result, node.missing)) {
+                        alive = 0;
+                        break;
+                    }
+                }
+                if (!alive || !nv14_search_node_allows(
+                        context, node.state, next_frame, node.missing)) {
+                    nv14_beam_dispose(&node);
+                    continue;
+                }
+                node.rank = nv14_beam_rank(context, &node, choice);
+                if (!isfinite(node.rank)) {
+                    nv14_beam_dispose(&node);
+                    continue;
+                }
+                if (!nv14_beam_key(&node, spec->required_jump_count)) {
+                    context->status = NV14_SEARCH_OUT_OF_MEMORY;
+                    nv14_beam_dispose(&node);
+                    break;
+                }
+                nv14_beam_offer(context, next, &next_count, &node);
+                nv14_beam_dispose(&node);
+            }
+        }
+        for (index = 0; index < count; ++index) nv14_beam_dispose(&current[index]);
+        count = next_count;
+        next_count = 0;
+        { nv14_beam_node *swap = current; current = next; next = swap; }
+    }
+cleanup:
+    if (current != NULL) {
+        for (index = 0; index < count; ++index) nv14_beam_dispose(&current[index]);
+        free(current);
+    }
+    if (next != NULL) {
+        for (index = 0; index < next_count; ++index) nv14_beam_dispose(&next[index]);
+        free(next);
+    }
+}
+
 nv14_search_status nv14_search_run(
     const nv14_level *level,
     const nv14_search_spec *spec,
@@ -1694,8 +2067,12 @@ nv14_search_status nv14_search_run(
            copies performed by the actual traversal. */
         result_out->stats.cloned_states = 0;
     }
-    if (context.status == NV14_SEARCH_OK && root != NULL)
-        nv14_search_recurse(&context, root, 0, root_missing, 0);
+    if (context.status == NV14_SEARCH_OK && root != NULL) {
+        if (spec->beam_width != 0)
+            nv14_search_beam(&context, root_missing);
+        else
+            nv14_search_recurse(&context, root, 0, root_missing, 0);
+    }
 
     if (context.state_pool != NULL) {
         for (index = 0; index < context.state_pool_count; ++index)

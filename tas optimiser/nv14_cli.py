@@ -1902,6 +1902,24 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     command.add_argument(
+        "--auto-repair-beam-width",
+        modes=auto_modes,
+        type=int,
+        default=0,
+        metavar="N",
+        help="use native reward-guided repair beam of width N; 0 keeps DFS (default: 0)",
+    )
+    command.add_argument(
+        "--auto-repair-cache-entries", modes=auto_modes,
+        type=int, default=0, metavar="N",
+        help="memoize up to N completed identical native repairs per worker (0 disables; max 64)",
+    )
+    command.add_argument(
+        "--auto-adaptive-repair-windows", modes=auto_modes,
+        action="store_true",
+        help="try short local repair horizons before longer ones with one shared tick budget",
+    )
+    command.add_argument(
         "--auto-repair-search-order",
         modes=auto_modes,
         choices=AUTO_REPAIR_SEARCH_ORDERS,
@@ -3001,6 +3019,9 @@ def main() -> None:
                 max_alignment=args.auto_max_alignment,
                 deterministic_phase=args.auto_deterministic,
                 repair_local_limit=args.auto_repair_local_steps,
+                repair_beam_width=args.auto_repair_beam_width,
+                repair_cache_entries=args.auto_repair_cache_entries,
+                repair_adaptive_windows=args.auto_adaptive_repair_windows,
                 repair_search_order=args.auto_repair_search_order,
                 frame_ahead_repair_multiplier=(
                     args.auto_frame_ahead_repair_multiplier

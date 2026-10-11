@@ -1,0 +1,10 @@
+[local]
+search = "population"
+target_frame = 159
+range = "50:159"
+simulate-enemies = true
+objective = "earliest-interaction"
+target-object = "switch"
+# secondary_objective = "max-vx"
+# require-interaction = ["testdoor:0"]
+

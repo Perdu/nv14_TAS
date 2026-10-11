@@ -21,9 +21,9 @@ def native():
 
 
 def test_vector_import_does_not_load_pillow_or_native_renderer():
-    subprocess.run([sys.executable, "-c", "import sys, nv14_vector; "
+    subprocess.run([sys.executable, "-c", "import sys; before = set(sys.modules); import nv14_vector; "
                     "assert '_nv14_render_native' not in sys.modules; "
-                    "assert 'PIL' not in sys.modules"], check=True)
+                    "assert 'PIL' not in (set(sys.modules) - before)"], check=True)
 
 
 def test_native_masks_match_fallback_including_holes_round_caps_and_grid_fit(native):

@@ -98,7 +98,11 @@ def test_real_encodes_and_reused_session_do_not_leak_credits(tmp_path, real_ffmp
             assert result.video_frames == 3
             actual = pixels(out)
             assert actual == pixels(fresh)
-            footer = actual[580*792*3:592*792*3]
+            # The video API defaults to scale=2. Index the decoded RGB rows
+            # using the *encoded* width and scale, not the 792px base map width.
+            scale = result.height // 600
+            row_stride = result.width * 3
+            footer = actual[580*scale*row_stride:592*scale*row_stride]
             assert result.timings["renderer_reused"] == bool(index)
             if index < 2:
                 assert min(footer) < 50
