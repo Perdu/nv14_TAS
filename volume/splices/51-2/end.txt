@@ -1,7 +1,7 @@
 [local]
 search = "population"
 target_frame = 550
-range = "450:550"
+range = "500:550"
 simulate-enemies = false
 objective = "earliest-interaction"
 target-object = "exit:0"
