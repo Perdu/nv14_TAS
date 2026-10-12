@@ -1120,9 +1120,12 @@ rerecords: 546
 
 
 # 32-3
-rerecords: 5
+rerecords: 648
 
-
+Branch 9: best attempt at skipping first drone
+Branch 8: landing faster in the beginning
+Branch 7: earlier at 1100
+Branch 6: first finish
 
 # 32-4
 rerecords: 1112
@@ -1373,9 +1376,17 @@ rerecords: 291
 
 
 # 41-1
-rerecords: 0
+rerecords: 370
 
+Branch 9: jumping as soon as possible on the right wall in the descent
+Branch 8: attempt at doing a bb bwj on the second bb instead of the third
+Branch 7: bbbwj on the third upper bb
+Branch 6: bbcd on first bb
+Branch 5: bbcd on 4th bb
+Branch 4: closest to drone 4 skip
+Branch 3: slower branch getting detected one drone cycle latercxcv
 
+What's unclear is whether losing a bit of time to avoid being detected by the top drone (drone 1) would save more time in the end. But that would prevent us from being detected by left drone (drone 4) a cycle earlier, which would probably be worst
 
 # 41-2
 rerecords: 5
@@ -3044,4 +3055,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 262016
+# Total rerecords: 263029
