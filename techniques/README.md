@@ -278,8 +278,12 @@ A turnaround is simply the process of slowing down near the edge of a surface in
 ## Stuttering to stay grounded
 @todo
 
+Mostly found by the bruteforcer
+
 ## Angled cj on downwards-facing corners
-@todo, found by the optimiser
+
+A precisely angled walljump on a downwards-facing corner can lead the player to be propelled with more horizontal speed than a regular walljump due the depenetration around the corner, which can occasionally be used to reach a target on the side faster while keeping most of the vertical speed.
+Mostly found by the bruteforcer.
 
 ## Using bb stumbles to get height
 
@@ -294,7 +298,8 @@ See [slow-motion video](single_frame_bb_jump.mp4)
 Example: 43-2 sr
 
 ## Using 1f-wallslides to push bbs without slowing down
-@todo, found by the optimiser
+
+Since wallslides only decrease vertical speed when held for at least 2 frames, alternating left and right for one frame can be used to push a bounceblock in the way with losing speed, at the cost of losing horizontal speed. This can also be used to push a bb a bit further to setup a quad bbbwj.
 
 73-1
 
