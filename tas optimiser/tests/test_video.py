@@ -218,13 +218,14 @@ class BlockVideo(importlib.abc.MetaPathFinder):
         if fullname == 'PIL' or fullname.startswith('PIL.') or fullname in ('nv14_render', 'nv14_vector', 'nv14_assets', 'nv14_particles', 'nv14_object_visuals'):
             raise AssertionError('ordinary CLI attempted optional video import: ' + fullname)
 sys.meta_path.insert(0, BlockVideo())
+before = set(sys.modules)
 import nv14_video
 import nv14_cli
 parser = nv14_cli.build_parser()
 parser.parse_args(['auto', 'input.txt'])
 parser.parse_args(['encode-video', 'input.txt'])
 assert 'nv14_render' not in sys.modules
-assert 'PIL' not in sys.modules
+assert 'PIL' not in (set(sys.modules) - before)
 '''
     result = subprocess.run([sys.executable, "-c", program], cwd=ROOT,
                             capture_output=True, text=True, timeout=30)

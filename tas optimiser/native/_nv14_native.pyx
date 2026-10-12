@@ -1471,6 +1471,9 @@ cdef extern from "nv14_search.h":
         nv14_search_cancel_fn cancel
         void *cancel_userdata
         uint64_t cancel_poll_interval
+        size_t beam_width
+        double beam_edit_penalty
+        uint8_t beam_adaptive_inputs
 
     ctypedef struct nv14_search_stats:
         uint64_t visited_nodes
@@ -1483,6 +1486,7 @@ cdef extern from "nv14_search.h":
         uint64_t deduplicated_prunes
         uint64_t physics_prunes
         uint64_t avoided_interaction_prunes
+        uint64_t beam_width_prunes
 
     ctypedef struct nv14_search_result:
         uint8_t improved
@@ -2612,6 +2616,11 @@ cdef class _SearchMarshal:
             &self.spec.minimum_jump_events,
             "minimum_jump_events",
         )
+        _as_size(payload.get("beam_width", 0), &self.spec.beam_width, "beam_width")
+        self.spec.beam_edit_penalty = float(payload.get("beam_edit_penalty", 0.0))
+        self.spec.beam_adaptive_inputs = <uint8_t>bool(
+            payload.get("beam_adaptive_inputs", False)
+        )
         self.spec.incumbent_score = float(_required(payload, "incumbent_score"))
         self.spec.incumbent_feasible = <uint8_t>bool(
             _required(payload, "incumbent_feasible")
@@ -3594,6 +3603,7 @@ cdef dict _search_stats_dict(const nv14_search_stats *stats):
         "deduplicated_prunes": stats.deduplicated_prunes,
         "physics_prunes": stats.physics_prunes,
         "avoided_interaction_prunes": stats.avoided_interaction_prunes,
+        "beam_width_prunes": stats.beam_width_prunes,
     }
 
 

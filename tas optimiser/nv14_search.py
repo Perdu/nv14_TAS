@@ -8,7 +8,8 @@ candidate ranking.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from collections import OrderedDict
 from functools import lru_cache
 import math
 from typing import Any
@@ -53,7 +54,7 @@ OBJECTIVE_TRACE_DISTANCE = 5
 OBJECTIVE_CONSTANT = 6
 
 SEARCH_WRAPPER_API = 8
-SEARCH_ABI_VERSION = 4
+SEARCH_ABI_VERSION = 5
 SEARCH_CORE_ABI_VERSION = 3
 PATCH_ABI_VERSION = 2
 TRACE_ABI_VERSION = 2
@@ -561,6 +562,9 @@ class SearchSpec:
     max_simulated_ticks: int = 0
     vx_window: tuple[float, float] | None = None
     vy_window: tuple[float, float] | None = None
+    beam_width: int = 0
+    beam_edit_penalty: float = 0.0
+    beam_adaptive_inputs: bool = False
 
     def __post_init__(self) -> None:
         if not self.mutable_frames:
@@ -630,6 +634,10 @@ class SearchSpec:
             raise ValueError("ignored native jump frame is outside the search target")
         if self.required_jump_any and not self.required_jump_frames:
             raise ValueError("required-jump-any needs at least one accepted frame")
+        if not 0 <= self.beam_width <= 4096:
+            raise ValueError("native beam width must be between 0 and 4096")
+        if not math.isfinite(self.beam_edit_penalty) or self.beam_edit_penalty < 0:
+            raise ValueError("native beam edit penalty must be finite and non-negative")
         if self.max_simulated_ticks < 0:
             raise ValueError("native simulation limit must be non-negative")
         if self.minimum_jump_events < 0:
@@ -678,6 +686,9 @@ class SearchSpec:
             "require_all_constraints": self.require_all_constraints,
             "required_jump_any": self.required_jump_any,
             "tie_break_low_edit_lex": self.tie_break_low_edit_lex,
+            "beam_width": self.beam_width,
+            "beam_edit_penalty": self.beam_edit_penalty,
+            "beam_adaptive_inputs": self.beam_adaptive_inputs,
             "max_simulated_ticks": self.max_simulated_ticks,
         }
 
@@ -694,6 +705,8 @@ class SearchStats:
     deduplicated_prunes: int = 0
     physics_prunes: int = 0
     avoided_interaction_prunes: int = 0
+    beam_width_prunes: int = 0
+    cache_hits: int = 0
 
     @classmethod
     def from_mapping(cls, values: object) -> "SearchStats":
@@ -1066,6 +1079,25 @@ class NativeSearchSession:
             _serialise_level(level),
             simulate_enemies=level.simulate_enemies,
         )
+        # Exact-query memoisation belongs to this level-bound owner. Unlike
+        # approximate transposition merging, it cannot conflate different
+        # dynamic game states, input prefixes or repair objectives.
+        self._search_cache_capacity = 0
+        self._search_cache: OrderedDict[tuple[tuple[InputFrame, ...], SearchSpec], SearchResult] = OrderedDict()
+        self.search_cache_hits = 0
+
+    def configure_result_cache(self, capacity: int) -> None:
+        """Opt in to a bounded cache of *completed* identical native searches.
+
+        The key retains the complete replay through the target frame and the
+        entire immutable search specification. The level is fixed by this
+        session. Calls stopped at the tick budget are never cached.
+        """
+        if not 0 <= capacity <= 64:
+            raise ValueError("native search cache capacity must be between 0 and 64")
+        self._search_cache_capacity = capacity
+        while len(self._search_cache) > capacity:
+            self._search_cache.popitem(last=False)
 
     def evaluate_replay(
         self,
@@ -1095,6 +1127,17 @@ class NativeSearchSession:
         frames: Sequence[InputFrame],
         spec: SearchSpec,
     ) -> SearchResult:
+        cache_key = None
+        if self._search_cache_capacity:
+            cache_key = (tuple(frames[:spec.target_frame + 1]), spec)
+            cached = self._search_cache.get(cache_key)
+            if cached is not None:
+                self._search_cache.move_to_end(cache_key)
+                self.search_cache_hits += 1
+                # Cached work must not be charged a second time to the Auto
+                # campaign's simulation budget or branch counters.
+                return replace(cached, stats=SearchStats(cache_hits=1),
+                               player=dict(cached.player) if cached.player is not None else None)
         raw: Any = self._session.search(frames, spec.payload())
         if not isinstance(raw, dict):
             raise RuntimeError("native search wrapper returned an invalid result")
@@ -1109,7 +1152,7 @@ class NativeSearchSession:
             )
             for item in raw.get("best_inputs", ())
         )
-        return SearchResult(
+        result = SearchResult(
             improved=bool(raw.get("improved", False)),
             budget_exhausted=bool(raw.get("budget_exhausted", False)),
             best_inputs=best_inputs,
@@ -1133,6 +1176,17 @@ class NativeSearchSession:
             ),
             stats=SearchStats.from_mapping(raw.get("stats")),
         )
+        if cache_key is not None and not result.budget_exhausted:
+            # SearchResult is frozen, but its player snapshot is a mutable
+            # dict. Do not let callers accidentally mutate future cache hits.
+            self._search_cache[cache_key] = replace(
+                result,
+                player=dict(result.player) if result.player is not None else None,
+            )
+            self._search_cache.move_to_end(cache_key)
+            while len(self._search_cache) > self._search_cache_capacity:
+                self._search_cache.popitem(last=False)
+        return result
 
     def evaluate_patches(
         self,

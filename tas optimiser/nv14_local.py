@@ -520,6 +520,17 @@ def _ordered_local_windows(
     raise ValueError("window order must be forward, reverse or random")
 
 
+def _local_hybrid_horizons(frame_count: int, adaptive: bool) -> tuple[int, ...]:
+    """Try short trailing frame sets then the complete original window.
+
+    For sparse search the trailing set is a subset of the *chosen frame set*,
+    never a widened interval that could mutate excluded frames.
+    """
+    if not adaptive:
+        return (frame_count,)
+    return tuple(sorted({min(2, frame_count), min(4, frame_count), frame_count}))
+
+
 def _local_window_description(window: LocalWindow, *, sparse: bool) -> str:
     """Compact progress label for a local frame set."""
     if not sparse:
@@ -668,6 +679,10 @@ class _LocalRunContext:
     vy_window: AxisWindow | None
     local_inputs: str
     physics_prune: bool
+    local_beam_width: int
+    local_search_cache_entries: int
+    local_adaptive_windows: bool
+    local_search_ticks: int
     window_shape: str
     window_span: int | None
     windows_per_pass: int | None
@@ -826,6 +841,10 @@ def _execute_local_run(
         vy_window=context.vy_window,
         local_inputs=context.local_inputs,
         physics_prune=context.physics_prune,
+        local_beam_width=context.local_beam_width,
+        local_search_cache_entries=context.local_search_cache_entries,
+        local_adaptive_windows=context.local_adaptive_windows,
+        local_search_ticks=context.local_search_ticks,
         required_jump_frames=run_required_jump_frames,
         required_interactions=context.required_interactions,
         avoided_interactions=context.avoided_interactions,
@@ -1121,6 +1140,10 @@ def _optimise_local_single_run(
     vy_window: AxisWindow | None,
     local_inputs: str,
     physics_prune: bool,
+    local_beam_width: int = 0,
+    local_search_cache_entries: int = 0,
+    local_adaptive_windows: bool = False,
+    local_search_ticks: int = 0,
     required_jump_frames: frozenset[int],
     required_interactions: Sequence[InteractionRequirement],
     avoided_interactions: Sequence[InteractionAvoidance],
@@ -1173,7 +1196,15 @@ def _optimise_local_single_run(
     native_y_window = compile_axis_window(y_window)
     native_vx_window = compile_axis_window(vx_window)
     native_vy_window = compile_axis_window(vy_window)
+    if not 0 <= local_beam_width <= 4096:
+        raise ValueError("local_beam_width must be between 0 and 4096")
+    if not 0 <= local_search_cache_entries <= 64:
+        raise ValueError("local_search_cache_entries must be between 0 and 64")
+    if local_search_ticks < 0:
+        raise ValueError("local_search_ticks must be non-negative")
     search_session = NativeSearchSession(level)
+    if local_search_cache_entries:
+        search_session.configure_result_cache(local_search_cache_entries)
 
     def interaction_indices(
         constraints: Sequence[InteractionRequirement | InteractionAvoidance],
@@ -1323,285 +1354,319 @@ def _optimise_local_single_run(
                     f"{run_label}, pass {pass_index + 1}: {window_order} window order"
                 )
 
-        for window in ordered_windows:
-            incumbent_slice = tuple(current[index] for index in window.frames)
-            description = _local_window_description(
-                window, sparse=pass_window_shape == "sparse"
+        for selected_window in ordered_windows:
+            horizons = _local_hybrid_horizons(
+                len(selected_window.frames), local_adaptive_windows
             )
-            direction_search = local_inputs == "direction"
-            choices = (
-                build_direction_choices(current, window.frames, objective_name)
-                if direction_search
-                else tuple(ALL_INPUT_CHOICES for _ in window.frames)
+            window_tick_limit = (
+                local_search_ticks or (20_000 if local_adaptive_windows else 0)
             )
-            incumbent_missing_requirements = interaction_indices(
-                required_interactions, current_eval.missing_interactions
-            )
-            incumbent_violated_avoidances = interaction_indices(
-                avoided_interactions, current_eval.violated_interactions
-            )
-            search_result = search_session.search(
-                current,
-                SearchSpec(
-                    mutable_frames=window.frames,
-                    choices=choices,
-                    target_frame=target_frame,
-                    objective=native_objective,
-                    targets=native_targets,
-                    x_window=native_x_window,
-                    y_window=native_y_window,
-                    vx_window=native_vx_window,
-                    vy_window=native_vy_window,
-                    required_groups=native_required_groups,
-                    avoided_groups=native_avoided_groups,
-                    incumbent_missing_requirements=incumbent_missing_requirements,
-                    incumbent_violated_avoidances=incumbent_violated_avoidances,
-                    required_jump_frames=(
-                        tuple(sorted(required_jump_frames))
-                        if direction_search
-                        else ()
-                    ),
-                    incumbent_missing_jump_frames=(
-                        current_missing_jump_frames
-                        if direction_search
-                        else frozenset()
-                    ),
-                    incumbent_score=current_eval.score,
-                    incumbent_feasible=current_eval.feasible,
-                    prune_inactive_jump=not direction_search,
-                    physics_prune=physics_prune and direction_search,
-                    skip_unchanged_final_step=direction_search,
-                ),
-            )
-            stats = search_result.stats
-            best_slice = list(incumbent_slice)
-            best_eval = current_eval
-            best_missing_jump_frames = current_missing_jump_frames
-
-            if search_result.improved:
-                if len(search_result.best_inputs) != len(window.frames):
-                    raise RuntimeError(
-                        "native search returned the wrong number of replacement inputs"
-                    )
-                best_slice = list(search_result.best_inputs)
-                candidate = list(current)
-                for frame_index, replacement_input in zip(
-                    window.frames, best_slice, strict=True
-                ):
-                    candidate[frame_index] = replacement_input
-                best_eval = _native_local_evaluation(
-                    search_result,
-                    target_frame=target_frame,
-                    required_interactions=required_interactions,
-                    avoided_interactions=avoided_interactions,
-                )
-                best_missing_jump_frames = search_result.missing_jump_frames
-                if python_resimulate:
-                    successful_jumps: set[int] | None = (
-                        set() if direction_search else None
-                    )
-                    python_evaluation = evaluate(
-                        level,
-                        candidate,
-                        target_frame,
-                        objective,
-                        x_window=x_window,
-                        y_window=y_window,
-                        vx_window=vx_window,
-                        vy_window=vy_window,
-                        required_interactions=required_interactions,
-                        avoided_interactions=avoided_interactions,
-                        successful_jump_frames_out=successful_jumps,
-                    )
-                    python_missing_jump_frames = (
-                        required_jump_frames - frozenset(successful_jumps)
-                        if successful_jumps is not None
-                        else frozenset()
-                    )
-                    verified_missing = interaction_indices(
-                        required_interactions,
-                        python_evaluation.missing_interactions,
-                    )
-                    verified_violated = interaction_indices(
-                        avoided_interactions,
-                        python_evaluation.violated_interactions,
-                    )
-                    if (
-                        python_evaluation.score != search_result.score
-                        or python_evaluation.feasible != search_result.feasible
-                        or verified_missing
-                        != search_result.missing_requirement_indices
-                        or verified_violated
-                        != search_result.violated_avoidance_indices
-                        or python_missing_jump_frames
-                        != search_result.missing_jump_frames
-                        or search_result.player is None
-                        or not native_player_matches(
-                            search_result.player,
-                            python_evaluation.state.player,
-                        )
-                    ):
-                        raise RuntimeError(
-                            "native search result disagrees with Python replay "
-                            "resimulation"
-                        )
-                    best_eval = python_evaluation
-                    best_missing_jump_frames = python_missing_jump_frames
-
-            if progress is not None:
-                search_prefix = "" if run_label == "forward" else f"{run_label}, "
-                if direction_search:
-                    progress(
-                        f"{search_prefix}{description} search: "
-                        f"nodes={stats.visited_nodes}, "
-                        f"leaves={stats.evaluated_leaves}, "
-                        f"missed-jump={stats.missed_jump_prunes}, "
-                        f"dedup={stats.deduplicated_prunes}, "
-                        f"physics={stats.physics_prunes}, "
-                        f"dead={stats.dead_prunes}, "
-                        f"avoided={stats.avoided_interaction_prunes}"
+            window_ticks_used = 0
+            for horizon_index, horizon in enumerate(horizons):
+                if window_tick_limit and window_ticks_used >= window_tick_limit:
+                    break
+                # Each stage receives a share, reserving budget for the
+                # final full-window stage even if an early stage exhausts it.
+                if window_tick_limit:
+                    stage_budget = max(
+                        1,
+                        (window_tick_limit - window_ticks_used)
+                        // (len(horizons) - horizon_index),
                     )
                 else:
+                    stage_budget = 0
+                window = LocalWindow(selected_window.frames[-horizon:])
+                incumbent_slice = tuple(current[index] for index in window.frames)
+                description = _local_window_description(
+                    window, sparse=pass_window_shape == "sparse"
+                )
+                direction_search = local_inputs == "direction"
+                choices = (
+                    build_direction_choices(current, window.frames, objective_name)
+                    if direction_search
+                    else tuple(ALL_INPUT_CHOICES for _ in window.frames)
+                )
+                incumbent_missing_requirements = interaction_indices(
+                    required_interactions, current_eval.missing_interactions
+                )
+                incumbent_violated_avoidances = interaction_indices(
+                    avoided_interactions, current_eval.violated_interactions
+                )
+                search_result = search_session.search(
+                    current,
+                    SearchSpec(
+                        mutable_frames=window.frames,
+                        choices=choices,
+                        target_frame=target_frame,
+                        objective=native_objective,
+                        targets=native_targets,
+                        x_window=native_x_window,
+                        y_window=native_y_window,
+                        vx_window=native_vx_window,
+                        vy_window=native_vy_window,
+                        required_groups=native_required_groups,
+                        avoided_groups=native_avoided_groups,
+                        incumbent_missing_requirements=incumbent_missing_requirements,
+                        incumbent_violated_avoidances=incumbent_violated_avoidances,
+                        required_jump_frames=(
+                            tuple(sorted(required_jump_frames))
+                            if direction_search
+                            else ()
+                        ),
+                        incumbent_missing_jump_frames=(
+                            current_missing_jump_frames
+                            if direction_search
+                            else frozenset()
+                        ),
+                        incumbent_score=current_eval.score,
+                        incumbent_feasible=current_eval.feasible,
+                        prune_inactive_jump=not direction_search,
+                        physics_prune=physics_prune and direction_search,
+                        skip_unchanged_final_step=direction_search,
+                        beam_width=local_beam_width,
+                        beam_adaptive_inputs=local_beam_width > 0,
+                        max_simulated_ticks=stage_budget,
+                    ),
+                )
+                stats = search_result.stats
+                window_ticks_used += stats.simulated_ticks
+                if progress is not None and (local_beam_width or local_adaptive_windows or local_search_cache_entries):
                     progress(
-                        f"{search_prefix}{description} search: "
-                        f"nodes={stats.visited_nodes}, "
-                        f"leaves={stats.evaluated_leaves}, "
-                        f"inactive-jump={stats.inactive_jump_prunes}, "
-                        f"dedup={stats.deduplicated_prunes}, "
-                        f"dead={stats.dead_prunes}, "
-                        f"avoided={stats.avoided_interaction_prunes}"
+                        f"{run_label}, pass {pass_index + 1}, {description}: "
+                        f"hybrid beam={local_beam_width}, "
+                        f"horizon={horizon_index + 1}/{len(horizons)}, "
+                        f"ticks={stats.simulated_ticks}, "
+                        f"cache-hits={stats.cache_hits}, "
+                        f"budget-exhausted={search_result.budget_exhausted}"
                     )
+                best_slice = list(incumbent_slice)
+                best_eval = current_eval
+                best_missing_jump_frames = current_missing_jump_frames
 
-            hard_improves = _hard_requirements_improved(
-                best_eval,
-                best_missing_jump_frames,
-                current_eval,
-                current_missing_jump_frames,
-            )
-            hard_unchanged = (
-                best_eval.missing_interactions == current_eval.missing_interactions
-                and best_eval.violated_interactions
-                == current_eval.violated_interactions
-                and best_missing_jump_frames == current_missing_jump_frames
-            )
-            objective_improves = (
-                hard_unchanged
-                and best_eval.score > current_eval.score + minimum_improvement
-            )
-            accept_window = best_eval.feasible and (
-                hard_improves or objective_improves
-            )
-
-            if accept_window:
-                old_eval = current_eval
-                old_score = current_eval.score
-                old_missing_jump_frames = current_missing_jump_frames
-                for frame_index, replacement in zip(
-                    window.frames, best_slice, strict=True
-                ):
-                    current[frame_index] = replacement
-                current_eval = best_eval
-                if local_inputs == "direction":
-                    current_missing_jump_frames = best_missing_jump_frames
-                changed_this_pass = True
-                if progress is not None or improvement_progress is not None:
-                    if pass_window_shape == "sparse":
-                        symbols = " ".join(
-                            f"{frame_index}:{input_symbol(frame)}"
-                            for frame_index, frame in zip(
-                                window.frames, best_slice, strict=True
+                if search_result.improved:
+                    if len(search_result.best_inputs) != len(window.frames):
+                        raise RuntimeError(
+                            "native search returned the wrong number of replacement inputs"
+                        )
+                    best_slice = list(search_result.best_inputs)
+                    candidate = list(current)
+                    for frame_index, replacement_input in zip(
+                        window.frames, best_slice, strict=True
+                    ):
+                        candidate[frame_index] = replacement_input
+                    best_eval = _native_local_evaluation(
+                        search_result,
+                        target_frame=target_frame,
+                        required_interactions=required_interactions,
+                        avoided_interactions=avoided_interactions,
+                    )
+                    best_missing_jump_frames = search_result.missing_jump_frames
+                    if python_resimulate:
+                        successful_jumps: set[int] | None = (
+                            set() if direction_search else None
+                        )
+                        python_evaluation = evaluate(
+                            level,
+                            candidate,
+                            target_frame,
+                            objective,
+                            x_window=x_window,
+                            y_window=y_window,
+                            vx_window=vx_window,
+                            vy_window=vy_window,
+                            required_interactions=required_interactions,
+                            avoided_interactions=avoided_interactions,
+                            successful_jump_frames_out=successful_jumps,
+                        )
+                        python_missing_jump_frames = (
+                            required_jump_frames - frozenset(successful_jumps)
+                            if successful_jumps is not None
+                            else frozenset()
+                        )
+                        verified_missing = interaction_indices(
+                            required_interactions,
+                            python_evaluation.missing_interactions,
+                        )
+                        verified_violated = interaction_indices(
+                            avoided_interactions,
+                            python_evaluation.violated_interactions,
+                        )
+                        if (
+                            python_evaluation.score != search_result.score
+                            or python_evaluation.feasible != search_result.feasible
+                            or verified_missing
+                            != search_result.missing_requirement_indices
+                            or verified_violated
+                            != search_result.violated_avoidance_indices
+                            or python_missing_jump_frames
+                            != search_result.missing_jump_frames
+                            or search_result.player is None
+                            or not native_player_matches(
+                                search_result.player,
+                                python_evaluation.state.player,
                             )
+                        ):
+                            raise RuntimeError(
+                                "native search result disagrees with Python replay "
+                                "resimulation"
+                            )
+                        best_eval = python_evaluation
+                        best_missing_jump_frames = python_missing_jump_frames
+
+                if progress is not None:
+                    search_prefix = "" if run_label == "forward" else f"{run_label}, "
+                    if direction_search:
+                        progress(
+                            f"{search_prefix}{description} search: "
+                            f"nodes={stats.visited_nodes}, "
+                            f"leaves={stats.evaluated_leaves}, "
+                            f"missed-jump={stats.missed_jump_prunes}, "
+                            f"dedup={stats.deduplicated_prunes}, "
+                            f"physics={stats.physics_prunes}, "
+                            f"dead={stats.dead_prunes}, "
+                            f"avoided={stats.avoided_interaction_prunes}"
                         )
                     else:
-                        symbols = " ".join(input_symbol(frame) for frame in best_slice)
-                    p = best_eval.state.player
-                    repaired_interactions = (
-                        old_eval.missing_interactions
-                        - current_eval.missing_interactions
-                    )
-                    cleared_avoidances = (
-                        old_eval.violated_interactions
-                        - current_eval.violated_interactions
-                    )
-                    repaired_jumps = sorted(
-                        old_missing_jump_frames - current_missing_jump_frames
-                    )
-                    if repaired_interactions or cleared_avoidances or repaired_jumps:
-                        repairs: list[str] = []
-                        if repaired_interactions:
-                            repairs.append(
-                                "satisfied required interaction(s) "
-                                + format_interaction_requirements(
-                                    tuple(repaired_interactions)
+                        progress(
+                            f"{search_prefix}{description} search: "
+                            f"nodes={stats.visited_nodes}, "
+                            f"leaves={stats.evaluated_leaves}, "
+                            f"inactive-jump={stats.inactive_jump_prunes}, "
+                            f"dedup={stats.deduplicated_prunes}, "
+                            f"dead={stats.dead_prunes}, "
+                            f"avoided={stats.avoided_interaction_prunes}"
+                        )
+
+                hard_improves = _hard_requirements_improved(
+                    best_eval,
+                    best_missing_jump_frames,
+                    current_eval,
+                    current_missing_jump_frames,
+                )
+                hard_unchanged = (
+                    best_eval.missing_interactions == current_eval.missing_interactions
+                    and best_eval.violated_interactions
+                    == current_eval.violated_interactions
+                    and best_missing_jump_frames == current_missing_jump_frames
+                )
+                objective_improves = (
+                    hard_unchanged
+                    and best_eval.score > current_eval.score + minimum_improvement
+                )
+                accept_window = best_eval.feasible and (
+                    hard_improves or objective_improves
+                )
+
+                if accept_window:
+                    old_eval = current_eval
+                    old_score = current_eval.score
+                    old_missing_jump_frames = current_missing_jump_frames
+                    for frame_index, replacement in zip(
+                        window.frames, best_slice, strict=True
+                    ):
+                        current[frame_index] = replacement
+                    current_eval = best_eval
+                    if local_inputs == "direction":
+                        current_missing_jump_frames = best_missing_jump_frames
+                    changed_this_pass = True
+                    if progress is not None or improvement_progress is not None:
+                        if pass_window_shape == "sparse":
+                            symbols = " ".join(
+                                f"{frame_index}:{input_symbol(frame)}"
+                                for frame_index, frame in zip(
+                                    window.frames, best_slice, strict=True
                                 )
                             )
-                        if cleared_avoidances:
-                            repairs.append(
-                                "avoided forbidden interaction(s) "
-                                + format_interaction_avoidances(
-                                    tuple(cleared_avoidances)
+                        else:
+                            symbols = " ".join(input_symbol(frame) for frame in best_slice)
+                        p = best_eval.state.player
+                        repaired_interactions = (
+                            old_eval.missing_interactions
+                            - current_eval.missing_interactions
+                        )
+                        cleared_avoidances = (
+                            old_eval.violated_interactions
+                            - current_eval.violated_interactions
+                        )
+                        repaired_jumps = sorted(
+                            old_missing_jump_frames - current_missing_jump_frames
+                        )
+                        if repaired_interactions or cleared_avoidances or repaired_jumps:
+                            repairs: list[str] = []
+                            if repaired_interactions:
+                                repairs.append(
+                                    "satisfied required interaction(s) "
+                                    + format_interaction_requirements(
+                                        tuple(repaired_interactions)
+                                    )
+                                )
+                            if cleared_avoidances:
+                                repairs.append(
+                                    "avoided forbidden interaction(s) "
+                                    + format_interaction_avoidances(
+                                        tuple(cleared_avoidances)
+                                    )
+                                )
+                            if repaired_jumps:
+                                repairs.append(
+                                    "repaired required jump press(es) "
+                                    + ", ".join(map(str, repaired_jumps))
+                                )
+                            remaining_interactions = format_interaction_requirements(
+                                tuple(current_eval.missing_interactions)
+                            )
+                            remaining_avoidances = format_interaction_avoidances(
+                                tuple(current_eval.violated_interactions)
+                            )
+                            remaining_jumps = (
+                                ", ".join(
+                                    map(str, sorted(current_missing_jump_frames))
+                                )
+                                or "none"
+                            )
+                            message = (
+                                f"{run_label}, pass {pass_index + 1}, "
+                                f"{description}: {'; '.join(repairs)}; "
+                                f"missing required interactions={remaining_interactions}; "
+                                f"triggered forbidden interactions={remaining_avoidances}; "
+                                f"remaining jumps={remaining_jumps}; "
+                                f"score {old_score:.15g} -> {best_eval.score:.15g}; "
+                                f"position=({p.pos.x:.15g}, {p.pos.y:.15g}); {symbols}"
+                            )
+                        else:
+                            message = (
+                                f"{run_label}, pass {pass_index + 1}, "
+                                f"{description}: "
+                                f"{old_score:.15g} -> {best_eval.score:.15g}; "
+                                f"position=({p.pos.x:.15g}, {p.pos.y:.15g}); {symbols}"
+                            )
+                        if progress is not None:
+                            progress(message)
+                        if improvement_progress is not None:
+                            # ``current`` continues to mutate as later windows are
+                            # accepted.  Snapshot it now so a parent-side durable
+                            # checkpoint always represents the exact evaluation
+                            # carried by this event, even if the trajectory runs
+                            # ahead before the event is consumed.
+                            checkpoint_run = LocalSearchRunResult(
+                                list(current),
+                                current_eval,
+                                run_label,
+                                current_missing_jump_frames,
+                                required_jump_frames,
+                            )
+                            improvement_progress(
+                                _LocalImprovementEvent(
+                                    run_label=run_label,
+                                    message=message,
+                                    rank=_local_rank_from_evaluation(
+                                        current_eval,
+                                        current_missing_jump_frames,
+                                        required_jump_frames,
+                                    ),
+                                    run=checkpoint_run,
                                 )
                             )
-                        if repaired_jumps:
-                            repairs.append(
-                                "repaired required jump press(es) "
-                                + ", ".join(map(str, repaired_jumps))
-                            )
-                        remaining_interactions = format_interaction_requirements(
-                            tuple(current_eval.missing_interactions)
-                        )
-                        remaining_avoidances = format_interaction_avoidances(
-                            tuple(current_eval.violated_interactions)
-                        )
-                        remaining_jumps = (
-                            ", ".join(
-                                map(str, sorted(current_missing_jump_frames))
-                            )
-                            or "none"
-                        )
-                        message = (
-                            f"{run_label}, pass {pass_index + 1}, "
-                            f"{description}: {'; '.join(repairs)}; "
-                            f"missing required interactions={remaining_interactions}; "
-                            f"triggered forbidden interactions={remaining_avoidances}; "
-                            f"remaining jumps={remaining_jumps}; "
-                            f"score {old_score:.15g} -> {best_eval.score:.15g}; "
-                            f"position=({p.pos.x:.15g}, {p.pos.y:.15g}); {symbols}"
-                        )
-                    else:
-                        message = (
-                            f"{run_label}, pass {pass_index + 1}, "
-                            f"{description}: "
-                            f"{old_score:.15g} -> {best_eval.score:.15g}; "
-                            f"position=({p.pos.x:.15g}, {p.pos.y:.15g}); {symbols}"
-                        )
-                    if progress is not None:
-                        progress(message)
-                    if improvement_progress is not None:
-                        # ``current`` continues to mutate as later windows are
-                        # accepted.  Snapshot it now so a parent-side durable
-                        # checkpoint always represents the exact evaluation
-                        # carried by this event, even if the trajectory runs
-                        # ahead before the event is consumed.
-                        checkpoint_run = LocalSearchRunResult(
-                            list(current),
-                            current_eval,
-                            run_label,
-                            current_missing_jump_frames,
-                            required_jump_frames,
-                        )
-                        improvement_progress(
-                            _LocalImprovementEvent(
-                                run_label=run_label,
-                                message=message,
-                                rank=_local_rank_from_evaluation(
-                                    current_eval,
-                                    current_missing_jump_frames,
-                                    required_jump_frames,
-                                ),
-                                run=checkpoint_run,
-                            )
-                        )
 
         if not changed_this_pass:
             if progress is not None:
@@ -1665,6 +1730,10 @@ def optimise_local_windows(
     vy_window: AxisWindow | None = None,
     local_inputs: str = "all",
     physics_prune: bool = False,
+    local_beam_width: int = 0,
+    local_search_cache_entries: int = 0,
+    local_adaptive_windows: bool = False,
+    local_search_ticks: int = 0,
     window_order: str = "forward",
     window_shape: str = "contiguous",
     window_span: int | None = None,
@@ -1793,6 +1862,12 @@ def optimise_local_windows(
         raise ValueError("restarts must be at least 1")
     if workers < 0:
         raise ValueError("workers must be zero (auto) or a positive integer")
+    if not 0 <= local_beam_width <= 4096:
+        raise ValueError("local_beam_width must be between 0 and 4096")
+    if not 0 <= local_search_cache_entries <= 64:
+        raise ValueError("local_search_cache_entries must be between 0 and 64")
+    if local_search_ticks < 0:
+        raise ValueError("local_search_ticks must be non-negative")
     if jump_start_mutation < 0 or jump_length_mutation < 0:
         raise ValueError("jump mutation values must be non-negative")
     jump_mutation_enabled = jump_start_mutation > 0 or jump_length_mutation > 0
@@ -2165,6 +2240,10 @@ def optimise_local_windows(
         vy_window=vy_window,
         local_inputs=local_inputs,
         physics_prune=physics_prune,
+        local_beam_width=local_beam_width,
+        local_search_cache_entries=local_search_cache_entries,
+        local_adaptive_windows=local_adaptive_windows,
+        local_search_ticks=local_search_ticks,
         window_shape=window_shape,
         window_span=window_span,
         windows_per_pass=windows_per_pass,

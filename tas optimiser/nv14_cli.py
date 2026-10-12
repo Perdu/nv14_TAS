@@ -170,6 +170,10 @@ class LocalConfig:
     x_window: AxisWindow | None = None
     y_window: AxisWindow | None = None
     window_size: int = 4
+    local_beam_width: int = 0
+    local_search_cache_entries: int = 0
+    local_adaptive_windows: bool = False
+    local_search_ticks: int = 0
     window_shape: str = "contiguous"
     window_span: int | None = None
     windows_per_pass: int | None = None
@@ -193,6 +197,18 @@ class LocalConfig:
     def __post_init__(self) -> None:
         if self.search not in ("windows", "population"):
             raise ValueError("local search must be windows or population")
+        if not 0 <= self.local_beam_width <= 4096:
+            raise ValueError("local-beam-width must be between 0 and 4096")
+        if not 0 <= self.local_search_cache_entries <= 64:
+            raise ValueError("local-search-cache-entries must be between 0 and 64")
+        if self.local_search_ticks < 0:
+            raise ValueError("local-search-ticks must be non-negative")
+        if self.search == "population" and (
+            self.local_beam_width or self.local_search_cache_entries
+            or self.local_adaptive_windows or self.local_search_ticks
+        ):
+            raise ValueError("local hybrid search options require --search windows; "
+                             "population uses a separate proposal engine")
         if self.search == "windows" and (
             self.objective in EARLIEST_OBJECTIVES or self.target_region is not None
             or self.arrival_start is not None or self.top_results != 1
@@ -355,6 +371,10 @@ class LocalConfig:
             x_window=args.x_window,
             y_window=args.y_window,
             window_size=args.window,
+            local_beam_width=args.local_beam_width,
+            local_search_cache_entries=args.local_search_cache_entries,
+            local_adaptive_windows=args.local_adaptive_windows,
+            local_search_ticks=args.local_search_ticks,
             window_shape=args.window_shape,
             window_span=args.window_span,
             windows_per_pass=args.windows_per_pass,
@@ -1902,6 +1922,24 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     command.add_argument(
+        "--auto-repair-beam-width",
+        modes=auto_modes,
+        type=int,
+        default=0,
+        metavar="N",
+        help="use native reward-guided repair beam of width N; 0 keeps DFS (default: 0)",
+    )
+    command.add_argument(
+        "--auto-repair-cache-entries", modes=auto_modes,
+        type=int, default=0, metavar="N",
+        help="memoize up to N completed identical native repairs per worker (0 disables; max 64)",
+    )
+    command.add_argument(
+        "--auto-adaptive-repair-windows", modes=auto_modes,
+        action="store_true",
+        help="try short local repair horizons before longer ones with one shared tick budget",
+    )
+    command.add_argument(
         "--auto-repair-search-order",
         modes=auto_modes,
         choices=AUTO_REPAIR_SEARCH_ORDERS,
@@ -2087,6 +2125,25 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument(
         "--search", modes=local_modes, choices=("windows", "population"),
         default="windows", help="local search strategy (default: windows)",
+    )
+    command.add_argument(
+        "--local-beam-width", "--beam-width", modes=local_modes,
+        dest="local_beam_width", type=int, default=0, metavar="N",
+        help="windows only: native reward-guided beam width; 0 uses original DFS (default: 0)",
+    )
+    command.add_argument(
+        "--local-search-cache-entries", "--search-cache-entries", modes=local_modes,
+        dest="local_search_cache_entries", type=int, default=0, metavar="N",
+        help="windows only: cache up to N identical complete native searches per run (0 disables, max 64)",
+    )
+    command.add_argument(
+        "--local-adaptive-windows", "--adaptive-windows", modes=local_modes,
+        dest="local_adaptive_windows", action="store_true",
+        help="windows only: search short trailing subsets before each full window with a shared tick budget",
+    )
+    command.add_argument(
+        "--local-search-ticks", modes=local_modes, type=int, default=0, metavar="N",
+        help="windows only: native simulation ceiling per window; 0 is unlimited unless adaptive (default: 20000)",
     )
     for option, default, help_text in (
         ("iterations", 10000, "proposal budget per worker per population round"),
@@ -3001,6 +3058,9 @@ def main() -> None:
                 max_alignment=args.auto_max_alignment,
                 deterministic_phase=args.auto_deterministic,
                 repair_local_limit=args.auto_repair_local_steps,
+                repair_beam_width=args.auto_repair_beam_width,
+                repair_cache_entries=args.auto_repair_cache_entries,
+                repair_adaptive_windows=args.auto_adaptive_repair_windows,
                 repair_search_order=args.auto_repair_search_order,
                 frame_ahead_repair_multiplier=(
                     args.auto_frame_ahead_repair_multiplier
@@ -3653,6 +3713,10 @@ def main() -> None:
                 objective_name=objective_name,
                 objective_target=objective_target,
                 window_size=window_size,
+                local_beam_width=mode_config.local_beam_width,
+                local_search_cache_entries=mode_config.local_search_cache_entries,
+                local_adaptive_windows=mode_config.local_adaptive_windows,
+                local_search_ticks=mode_config.local_search_ticks,
                 passes=passes,
                 minimum_improvement=minimum_improvement,
                 x_window=x_window,

@@ -396,6 +396,40 @@ begin one-generation-ahead speculative work.
 - `--workers 1` uses the serial campaign path and restarts each round from the
   current winner.
 
+The experimental `--auto-repair-beam-width 32` mode applies only to native
+Cartesian direction/all-input repairs. Sparse patch evaluation, splicing,
+evolutionary selection and full replay verification continue unchanged. It
+ranks partial exact simulated states against the existing repair endpoint
+objective, rewards already-satisfied interactions/jumps, softly prioritises
+input directions toward the target, and retains at most N distinct frontier
+states per mutable frame. State keys include the full native dynamic state,
+required-jump flags, and whether the sequence differs from the source; there
+is no approximate merge. Both modes respect `--auto-repair-local-steps`.
+
+Additional opt-in repair controls:
+
+- `--auto-repair-cache-entries 16` enables a bounded, worker-local exact-query
+  memo. The complete replay prefix through the target frame, all search
+  constraints and the level-bound session must agree before a result is
+  reused. Interrupted searches are never cached, and a hit costs zero
+  additional simulated ticks. This is result memoisation, **not** unsafe
+  approximate state merging or a global cross-worker transposition table.
+- `--auto-adaptive-repair-windows` tries successively longer input suffix
+  windows (2, 4, then the configured maximum), sharing the existing per-repair
+  tick budget across horizons. Both direction-only and all-input repair paths
+  use this policy; a full zero-distance endpoint can terminate early.
+
+Neither option changes ordinary repairs unless enabled. The adaptive beam
+also orders available inputs by replay similarity, target direction, braking
+and jump state before simulation, **without excluding any legal input**.
+The heuristic beam is **not exhaustive** and can perform worse than DFS;
+compare both using identical seeds and simulation budgets. Increasing width
+increases the memory used for saved native states.
+
+Rebuild the native module after switching versions (`python build_native.py`).
+The generated `native/_nv14_native.c` is committed alongside its `.pyx`
+source so a build does not require Cython.
+
 The total nominal macro budget for a bounded campaign is
 `iterations * workers * auto-runs`. Local repair simulations are reported
 separately and can dominate runtime.
@@ -455,6 +489,53 @@ repair attempts. Alignment tolerances guide proposals only: candidates still
 receive complete simulation and final verification.
 
 ## Local mode
+
+## Local hybrid search (opt-in)
+
+Local **sliding-window** search (`--search windows`, the default) can now use
+JaffarPlus-inspired native search improvements. For example:
+
+```bash
+python optimize_replay.py local run.txt \
+  --target-frame 161 --range 100:161 --window 6 --passes 2 \
+  --local-beam-width 32 \
+  --local-search-cache-entries 16 \
+  --local-adaptive-windows --local-search-ticks 20000 \
+  --output run_hybrid.txt
+```
+
+- `--local-beam-width N` (alias `--beam-width`; range 0..4096) switches the
+  native search from exhaustive DFS (0, the default) to a reward-guided beam
+  (N). This automatically enables **state-aware ordering of all legal inputs**;
+  it does *not* exclude unusual inputs.
+- `--local-search-cache-entries N` (alias `--search-cache-entries`, range 0..64)
+  memoizes exact completed queries within each independent local run, including
+  their original input prefix and all constraints. Budget-exhausted searches
+  are not cached. A cache does *not* approximate or merge different states.
+- `--local-adaptive-windows` (alias `--adaptive-windows`) tries trailing
+  subsets containing 2, 4, then the full number of mutable frames in a selected
+  window (duplicate sizes are skipped). With sparse windows, subsets select
+  only originally permitted mutable frames; fixed intervening frames stay fixed.
+- `--local-search-ticks N` caps **native simulated ticks per selected window**.
+  Adaptive horizons split this total budget, reserving a share for the final
+  full-window attempt. Without adaptive windows, 0 means unlimited (the old
+  behavior); with adaptive windows, 0 automatically selects 20,000 ticks per
+  window to prevent accidental runaway exploration. This budget is **per
+  window**, not a global campaign limit.
+
+All changes are disabled by default, so commands without these options retain
+original local DFS behavior and results. The endpoint objective, hard
+constraints, jump-preservation rules, multi-worker semantics and final replay
+verification are unchanged. Enable `--python-resimulate` for an extra Python
+simulation parity check during local search. Match seeds, input replay and
+simulation budgets for A/B comparisons; reward-guided beam does not prove
+optimality.
+
+**Scope:** these switches apply to `--search windows` (contiguous, sparse or
+mixed), **not** `--search population`, which uses a different candidate
+proposal/evaluation engine. Using any hybrid option with population raises a
+configuration error instead of silently ignoring it. The existing `--beam`
+option is unrelated: it controls the population's number of survivors.
 
 Local search is a greedy overlapping-window optimiser, not a global exhaustive
 proof over the whole range. It exhaustively searches each small frame set,
@@ -1135,6 +1216,9 @@ The tables below include every v2.70 optimiser option and its default.
 | `--auto-max-alignment N`, `--auto-alignment N` | `3` | Maximum future reference offset used for trajectory matching. Must be non-negative. |
 | `--auto-no-deterministic` | off | Skip structured retime/pulse/jump bootstrap and start with the stochastic beam. |
 | `--auto-repair-local-steps N` | `1000` | Fresh local-simulation limit per admitted repair. `0` is unlimited. |
+| `--auto-repair-beam-width N` | `0` | Experimental bounded reward-guided native repair frontier. `0` preserves the original DFS; try `16`, `32`, or `64`. Max `4096`. |
+| `--auto-repair-cache-entries N` | `0` | Worker-local LRU memo of exactly identical completed native repairs; max `64`. |
+| `--auto-adaptive-repair-windows` | off | Try short repair windows before the full configured window with one shared simulation budget. |
 | `--auto-repair-search-order random|fixed` | `random` | Seeded random repair traversal or the fixed legacy order; primary jump/direction ordering remains seed-derived. |
 | `--auto-frame-ahead-repair-multiplier N` | `10` | Multiplies repair and campaign allowances after a measured positive trajectory offset. Must be at least 1. |
 | `--auto-campaign-local-steps N` | `10000` | Soft local-simulation ceiling per repair campaign. `0` disables the ceiling. |
