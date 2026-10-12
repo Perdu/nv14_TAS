@@ -1448,9 +1448,9 @@ Branch 9: attempt at starting within the bb
 Branch 8: attempt at starting further within the bb
 
 # 43-3
-rerecords: 0
+rerecords: 82
 
-
+Branch 9: bbct (useless)
 
 # 43-4
 rerecords: 95
@@ -3057,4 +3057,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 263096
+# Total rerecords: 263178
