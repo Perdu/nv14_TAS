@@ -29,6 +29,8 @@ from nv14_auto import (
     verify_trimmed_replay,
 )
 from nv14_auto_parallel import optimise_autonomous_campaign
+from nv14_auto_endpoint import AutoEndpointConfig, optimise_auto_endpoint_campaign
+from nv14_endpoint import EndpointGoal, verify_endpoint
 from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
 from nv14_endpoint import EARLIEST_OBJECTIVES, SECONDARY_OBJECTIVES
 from nv14_engine import InputFrame, Level, SimulationState, parse_level_string
@@ -1203,34 +1205,41 @@ def parse_immutable_jumps(text: str) -> tuple[ImmutableJumpSpec, ...]:
 
 
 _CONFIG_TABLE_NAMES = frozenset(
-    {"common", "auto", "local", "jump-pattern", "jump_pattern", "dump-player", "dump_player", "encode-video", "encode_video"}
+    {"common", "goal", "auto", "local", "jump-pattern", "jump_pattern", "dump-player", "dump_player", "encode-video", "encode_video"}
 )
 _CONFIG_APPEND_DESTS = frozenset(
     {"retime", "auto_parents", "require_interaction", "avoid_interaction",
+     "auto_require_interaction", "auto_avoid_interaction",
      "secondary_replays", "secondary_colors", "secondary_labels"}
 )
-_CONFIG_RESERVED_DESTS = frozenset({"config", "input", "mode"})
+_CONFIG_RESERVED_DESTS = frozenset({"config", "goal_config", "input", "mode"})
 
 
-def _find_config_path(argv: Sequence[str]) -> Path | None:
-    """Return the last --config path in an argument vector."""
-    config_path: Path | None = None
+def _find_option_paths(argv: Sequence[str], option: str) -> tuple[Path, ...]:
+    """Collect repeated CLI file options in their original left-to-right order."""
+    paths: list[Path] = []
     index = 0
     while index < len(argv):
         token = str(argv[index])
-        if token == "--config":
-            if index + 1 >= len(argv):
-                raise SystemExit("argument --config: expected one argument")
-            config_path = Path(str(argv[index + 1]))
+        if token == option:
+            if index + 1 >= len(argv) or str(argv[index + 1]).startswith("--"):
+                raise SystemExit(f"argument {option}: expected one argument")
+            paths.append(Path(str(argv[index + 1])))
             index += 2
             continue
-        if token.startswith("--config="):
+        if token.startswith(option + "="):
             value = token.partition("=")[2]
             if not value:
-                raise SystemExit("argument --config: expected one argument")
-            config_path = Path(value)
+                raise SystemExit(f"argument {option}: expected one argument")
+            paths.append(Path(value))
         index += 1
-    return config_path
+    return tuple(paths)
+
+
+def _find_config_path(argv: Sequence[str]) -> Path | None:
+    """Preserve the historical effective config path (last configured file)."""
+    paths = _find_option_paths(argv, "--config")
+    return paths[-1] if paths else None
 
 
 def _config_mode_section(
@@ -1468,7 +1477,7 @@ def _load_config_defaults(
         if isinstance(section, Mapping) and section_name not in _CONFIG_TABLE_NAMES:
             raise ValueError(
                 f"unknown TOML section [{section_name}] in {config_path}; "
-                "use [common], [auto], [local], [jump-pattern], [dump-player], or [encode-video]"
+                "use [common], [goal], [auto], [local], [jump-pattern], [dump-player], or [encode-video]"
             )
         if section_name in _CONFIG_TABLE_NAMES and not isinstance(section, Mapping):
             raise ValueError(
@@ -1488,6 +1497,13 @@ def _load_config_defaults(
     raw_values.extend(
         (str(key), value, False) for key, value in common.items()
     )
+    goal_values = data.get("goal", {})
+    if not isinstance(goal_values, Mapping):
+        raise ValueError(f"TOML [goal] must be a table: {config_path}")
+    # Shared endpoint objective definitions may be consumed by either mode.
+    # [auto] and [local] can override any shared goal setting independently.
+    if mode in ("auto", "local"):
+        raw_values.extend((str(key), value, True) for key, value in goal_values.items())
     raw_values.extend(
         (str(key), value, True) for key, value in mode_values.items()
     )
@@ -1513,6 +1529,47 @@ def _load_config_defaults(
             action, value, key=key, mode=mode
         )
     return defaults
+
+
+# Only goal-related Local values are imported by --goal-config; Local's
+# population/window search settings must never alter Auto's search algorithm.
+_LOCAL_GOAL_TO_AUTO = {
+    "objective": "auto_objective",
+    "target_frame": "auto_target_frame",
+    "frame_range": "frame_range",
+    "target_region": "auto_target_region",
+    "target_object": "auto_target_object",
+    "target_point": "auto_target_point",
+    "arrival_start": "auto_arrival_start",
+    "secondary_objective": "auto_secondary_objective",
+    "x_window": "auto_x_window",
+    "y_window": "auto_y_window",
+    "vx_window": "auto_vx_window",
+    "vy_window": "auto_vy_window",
+    "require_interaction": "auto_require_interaction",
+    "avoid_interaction": "auto_avoid_interaction",
+    "require_reference_interactions": "auto_require_reference_interactions",
+    "require_jump_region": "auto_require_jump_region",
+    "require_jump_frames": "auto_require_jump_frames",
+    "simulate_enemies": "simulate_enemies",
+}
+
+
+def _load_local_goal_defaults(
+    config_path: Path, local_parser: argparse.ArgumentParser
+) -> dict[str, object]:
+    """Adapt an unchanged Local splice TOML to Auto endpoint options.
+
+    Parsing through Local's existing loader preserves aliases and TOML value
+    conversion, including interaction arrays and rectangle string syntax.
+    Unknown or invalid Local configuration still gets a useful error.
+    """
+    local_values = _load_config_defaults(config_path, local_parser, "local")
+    return {
+        auto_key: local_values[local_key]
+        for local_key, auto_key in _LOCAL_GOAL_TO_AUTO.items()
+        if local_key in local_values
+    }
 
 
 _LOCAL_WINDOWS_OPTIONS = frozenset({
@@ -1544,19 +1601,51 @@ def _validate_local_strategy(args: argparse.Namespace, explicit: set[str]) -> No
         raise SystemExit(f"--objective {args.objective} requires --search population")
 
 
+_AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
+    "auto_target_frame", "auto_target_region", "auto_target_object", "auto_target_point",
+    "auto_arrival_start", "auto_secondary_objective", "auto_x_window", "auto_y_window",
+    "auto_vx_window", "auto_vy_window", "auto_require_interaction", "auto_avoid_interaction",
+    "auto_require_reference_interactions", "auto_require_jump_region",
+    "auto_require_jump_frames", "auto_completion_policy", "auto_mutation_span",
+})
+
+
+def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -> None:
+    """Keep old complete-route Auto strict about unused endpoint-only switches."""
+    if args.mode != "auto" or args.auto_objective not in AUTO_OBJECTIVES:
+        return
+    incompatible = sorted(_AUTO_ENDPOINT_ONLY_OPTIONS & explicit)
+    if incompatible:
+        options = ", ".join("--" + name.replace("_", "-") for name in incompatible)
+        raise SystemExit(
+            f"{options} require an Auto endpoint objective "
+            "(max-x, min-x, max-y, min-y, min-distance, earliest-arrival or earliest-interaction)"
+        )
+
+
 class _ConfigArgumentParser(argparse.ArgumentParser):
     """ArgumentParser that applies TOML defaults before parsing the CLI."""
 
     def parse_args(self, args=None, namespace=None) -> argparse.Namespace:
         actual_args = list(sys.argv[1:] if args is None else args)
-        config_path = _find_config_path(actual_args)
+        config_paths = _find_option_paths(actual_args, "--config")
+        goal_config_paths = _find_option_paths(actual_args, "--goal-config")
         command_parsers = getattr(self, "_command_parsers", {})
         mode = actual_args[0] if actual_args else None
         command_parser = command_parsers.get(mode)
         defaults = {}
-        if config_path is not None and command_parser is not None:
+        if command_parser is not None:
             try:
-                defaults = _load_config_defaults(config_path, command_parser, mode)
+                for config_path in config_paths:
+                    # Each file is validated independently; later files win
+                    # for the same destination, while other keys are retained.
+                    defaults.update(_load_config_defaults(config_path, command_parser, mode))
+                if goal_config_paths:
+                    if mode != "auto":
+                        raise ValueError("--goal-config is only supported in auto mode")
+                    for goal_config_path in goal_config_paths:
+                        defaults.update(_load_local_goal_defaults(
+                            goal_config_path, command_parsers["local"]))
             except ValueError as exc:
                 raise SystemExit(str(exc)) from exc
         explicit = set(defaults)
@@ -1594,6 +1683,7 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
                     if len(matches) == 1:
                         explicit.update(matches)
         _validate_local_strategy(result, explicit)
+        _validate_auto_goal_strategy(result, explicit)
         result._explicit_options = frozenset(explicit)
         return result
 
@@ -1827,9 +1917,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="auto mode maximum suffix shift in frames, from 1 to 3 (default: 3)",
     )
     command.add_argument(
-        "--auto-objective",
-        modes=auto_modes,
-        choices=AUTO_OBJECTIVES,
+        "--auto-objective", "--objective",
+        modes=auto_modes, dest="auto_objective",
+        choices=(*AUTO_OBJECTIVES, "max-x", "min-x", "max-y", "min-y", "min-distance", "earliest-arrival", "earliest-interaction"),
         default=AUTO_OBJECTIVE_SPEEDRUN,
         help=(
             "auto mode objective: speedrun minimises raw completion tick; "
@@ -1837,6 +1927,43 @@ def build_parser() -> argparse.ArgumentParser:
             "(default: speedrun)"
         ),
     )
+    # Endpoint objectives share Local's native EndpointGoal and [goal] TOML.
+    # Keep the existing completed-route speedrun/highscore CLI untouched.
+    command.add_argument("--auto-target-frame", "--target-frame", modes=auto_modes, type=parse_nonnegative_int,
+                         metavar="FRAME", help="endpoint objective deadline/frame (defaults to replay's last input)")
+    command.add_argument("--auto-target-region", "--target-region", modes=auto_modes, type=parse_target_region,
+                         metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival goal rectangle")
+    command.add_argument("--auto-target-object", "--target-object", modes=auto_modes,
+                         metavar="SELECTOR", help="min-distance or earliest-interaction object selector")
+    command.add_argument("--auto-target-point", "--target-point", modes=auto_modes, type=parse_target_point,
+                         metavar="X,Y", help="min-distance point")
+    command.add_argument("--auto-arrival-start", "--arrival-start", modes=auto_modes, type=parse_nonnegative_int,
+                         metavar="FRAME", help="first eligible earliest-goal frame")
+    command.add_argument("--auto-secondary-objective", "--secondary-objective", modes=auto_modes,
+                         choices=SECONDARY_OBJECTIVES, help="earliest goal velocity/position tie break")
+    for _axis in ("x", "y", "vx", "vy"):
+        command.add_argument("--auto-" + _axis + "-window", "--" + _axis + "-window", modes=auto_modes,
+                             type=parse_axis_window, metavar="MIN:MAX",
+                             help="inclusive endpoint constraint on " + _axis)
+    command.add_argument("--auto-require-interaction", "--require-interaction", modes=auto_modes,
+                         action="append", default=[], metavar="SELECTOR",
+                         help="required persistent interaction at the endpoint")
+    command.add_argument("--auto-require-reference-interactions", "--require-reference-interactions", modes=auto_modes,
+                         action="store_true", help="require the source's persistent interactions at target-frame")
+    command.add_argument("--auto-avoid-interaction", "--avoid-interaction", modes=auto_modes,
+                         action="append", default=[], metavar="SELECTOR",
+                         help="forbidden persistent interaction at the endpoint")
+    command.add_argument("--auto-require-jump-region", "--require-jump-region", modes=auto_modes,
+                         type=parse_target_region, metavar="XMIN:XMAX,YMIN:YMAX",
+                         help="require a jump originating within this region")
+    command.add_argument("--auto-require-jump-frames", "--require-jump-frames", modes=auto_modes,
+                         type=parse_required_jump_frames, metavar="START:END",
+                         help="eligible actual jump frames")
+    command.add_argument("--auto-completion-policy", modes=auto_modes,
+                         choices=("checkpoint", "complete"), default="checkpoint",
+                         help="endpoint search: allow a partial route or require a full verified finish")
+    command.add_argument("--auto-mutation-span", modes=auto_modes, type=int,
+                         default=24, help="maximum endpoint macro edit span")
     command.add_argument(
         "--auto-require-reference-gold",
         modes=auto_modes,
@@ -2485,8 +2612,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--config",
         type=Path,
         help=(
-            "TOML file supplying defaults; explicit command-line options "
-            "override its values"
+            "TOML defaults file; repeat --config to layer files left-to-right "
+            "(later values win); command-line options override all files"
+        ),
+    )
+    command.add_argument(
+        "--goal-config",
+        modes=auto_modes,
+        type=Path,
+        metavar="LOCAL_SPLICE.toml",
+        help=(
+            "Auto endpoint goal from an unchanged [local] splice TOML; "
+            "only goal, range and enemy-simulation keys are imported, "
+            "overriding --config defaults but not explicit CLI switches"
         ),
     )
     command.add_argument(
@@ -2978,6 +3116,121 @@ def main() -> None:
                     f"#{parent_number}: {exc}"
                 ) from exc
         auto_parent_frames.append(tuple(parent_retimed_frames))
+
+    if args.mode == "auto" and args.auto_objective not in AUTO_OBJECTIVES:
+        # Endpoint Auto uses Local's *exact* evaluator, but its own structural
+        # mutation beam. Incomplete routes cannot enter Auto's completed-route
+        # repair/splice campaign, so reject options that belong to that engine.
+        unsupported = []
+        if args.auto_checkpoint is not None or args.auto_resume:
+            unsupported.append("--auto-checkpoint/--auto-resume")
+        if args.auto_parents:
+            unsupported.append("--auto-parent")
+        if args.auto_runs == 0:
+            unsupported.append("--auto-runs 0 (endpoint Auto needs a finite round count)")
+        if args.auto_max_extra_ticks is not None or args.auto_require_reference_gold:
+            unsupported.append("highscore-only settings")
+        if args.auto_postroll != 1:
+            unsupported.append("--auto-postroll other than 1")
+        if unsupported:
+            raise SystemExit("endpoint Auto does not support " + ", ".join(unsupported))
+        try:
+            frame = (len(replay.frames) - 1 if args.auto_target_frame is None
+                     else args.auto_target_frame)
+            if not 0 <= frame < len(replay.frames):
+                raise ValueError("auto target-frame must lie inside the replay")
+            start, end = parse_auto_frame_range(args.frame_range, target_frame=frame)
+            if end is not None and end > frame:
+                raise ValueError("auto endpoint range must not extend beyond target-frame")
+            if args.auto_objective == "min-distance":
+                if (args.auto_target_object is None) == (args.auto_target_point is None):
+                    raise ValueError("min-distance requires exactly one of target-object or target-point")
+                target = (resolve_target_object(level, args.auto_target_object)
+                          if args.auto_target_object is not None else target_from_point(args.auto_target_point))
+            else:
+                if args.auto_target_point is not None or (args.auto_target_object is not None
+                        and args.auto_objective != "earliest-interaction"):
+                    raise ValueError("target-point/object requires min-distance or earliest-interaction")
+                target = None
+            if args.auto_objective == "earliest-interaction" and args.auto_target_object is None:
+                raise ValueError("earliest-interaction requires target-object")
+            if args.auto_arrival_start is not None and args.auto_objective not in EARLIEST_OBJECTIVES:
+                raise ValueError("arrival-start requires earliest-arrival or earliest-interaction")
+            if args.auto_require_jump_frames is not None and args.auto_require_jump_region is None:
+                raise ValueError("require-jump-frames requires require-jump-region")
+            interaction_target = (resolve_interaction_target(level, args.auto_target_object)
+                                  if args.auto_objective == "earliest-interaction" else None)
+            required = tuple(resolve_interaction_requirement(level, name)
+                             for name in args.auto_require_interaction)
+            if args.auto_require_reference_interactions:
+                from nv14_replay import simulate_through_frame
+                reference_state = simulate_through_frame(level, replay.frames, frame)
+                required = merge_interaction_requirements(required,
+                    reference_interaction_requirements(level, reference_state))
+            avoided = tuple(resolve_interaction_avoidance(level, name)
+                            for name in args.auto_avoid_interaction)
+            goal = EndpointGoal(
+                target_frame=frame, objective=args.auto_objective, target=target,
+                target_region=args.auto_target_region,
+                arrival_start=(start if args.auto_arrival_start is None else args.auto_arrival_start)
+                if args.auto_objective in EARLIEST_OBJECTIVES else 0,
+                secondary_objective=args.auto_secondary_objective,
+                interaction_target=interaction_target,
+                x_window=args.auto_x_window, y_window=args.auto_y_window,
+                vx_window=args.auto_vx_window, vy_window=args.auto_vy_window,
+                required_interactions=required, avoided_interactions=avoided,
+                require_jump_region=args.auto_require_jump_region,
+                require_jump_frames=(args.auto_require_jump_frames or (start, frame))
+                if args.auto_require_jump_region is not None else None,
+            )
+            endpoint_config = AutoEndpointConfig(
+                iterations=args.iterations, beam_width=args.beam,
+                max_retime=args.max_retime,
+                seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
+                      else 0 if args.seed is None else int(args.seed)),
+                range_start=start, range_end=end,
+                mutation_span=args.auto_mutation_span,
+                completion_policy=args.auto_completion_policy,
+            )
+        except (ValueError, RuntimeError) as exc:
+            raise SystemExit(str(exc)) from exc
+
+        print(f"[auto:goal] seed {endpoint_config.seed}; "
+              f"workers {max(1, args.workers)}; rounds {args.auto_runs}", flush=True)
+
+        def save_endpoint_best(candidate):
+            replay_text = encode_complex_replay(candidate.frames)
+            _write_result(source, output_path, replay_output_path, replay_text)
+            e = candidate.evaluation
+            print(f"[auto:goal] new verified best; frame {e.frame}; "
+                  f"score {e.score:.12g}; position ({e.x:.12g}, {e.y:.12g}); "
+                  f"velocity ({e.vx:.12g}, {e.vy:.12g})", flush=True)
+
+        try:
+            baseline, winner, count = optimise_auto_endpoint_campaign(
+                level, replay.frames, goal, endpoint_config,
+                workers=max(1, args.workers), runs=args.auto_runs,
+                best_callback=save_endpoint_best,
+                progress=lambda message: print(f"[auto:goal] {message}", flush=True),
+            )
+            if winner is None:
+                raise ValueError("no feasible endpoint found; no output was written")
+            packed = tuple(editable_frames(decode_complex_replay(
+                encode_complex_replay(winner.frames)).frames))
+            verified = verify_endpoint(level, packed, goal, expected=winner.evaluation)
+            if not verified.feasible:
+                raise ValueError("packed replay does not satisfy endpoint goal")
+            if endpoint_config.completion_policy == "complete":
+                completed = evaluate_replay_with_sentinel(level, packed)
+                if not completed.valid or completed.finish_tick != len(packed):
+                    raise ValueError("packed endpoint replay does not complete on its neutral sentinel")
+            _write_result(source, output_path, replay_output_path, encode_complex_replay(packed))
+        except (ValueError, RuntimeError) as exc:
+            raise SystemExit(str(exc)) from exc
+        print(f"auto endpoint objective: {goal.objective}; policy: {endpoint_config.completion_policy}; "
+              f"evaluations: {count}; score: {verified.score:.12g}; "
+              f"frame: {verified.frame}; baseline score: {baseline.evaluation.score:.12g}")
+        return
 
     if args.mode == "auto":
         if args.auto_postroll != 1:

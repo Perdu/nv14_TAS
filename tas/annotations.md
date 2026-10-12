@@ -1480,9 +1480,10 @@ Branch 7: other ending
 You can add an additional bwj in the ascent on the left but you get so much speed that I couldn't find a path that doesn't crash on left wall or ceiling while keeping the same path
 
 # 44-3
-rerecords: 0
+rerecords: 220
 
-
+Branch 9: attempt at getting switch1 and switch in one jump
+Branch 8: attempt at bbcd on first bb
 
 # 44-4
 rerecords: 0
@@ -3057,4 +3058,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 263230
+# Total rerecords: 263450

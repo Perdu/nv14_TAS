@@ -259,7 +259,10 @@ def test_secondary_default_scope_and_help():
             cli.parse_arguments([mode, "source.txt", "--secondary-objective", "max-x"])
     parsers = cli.build_parser()._command_parsers
     assert "--secondary-objective" in parsers["local"].format_help()
-    assert all("--secondary-objective" not in parsers[mode].format_help() for mode in ("auto", "jump-pattern"))
+    # Endpoint Auto now intentionally supports the same secondary objective;
+    # jump-pattern still does not. Complete-run Auto rejects it at parse time.
+    assert "--secondary-objective" in parsers["auto"].format_help()
+    assert "--secondary-objective" not in parsers["jump-pattern"].format_help()
 
 
 @pytest.mark.parametrize("workers", (1, 2))

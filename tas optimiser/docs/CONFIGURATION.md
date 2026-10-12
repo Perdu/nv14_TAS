@@ -1,7 +1,7 @@
 # TOML configuration
 
-`optimize_replay.py` accepts defaults from a TOML file selected with
-`--config`. The mode and `INPUT` remain positional:
+`optimize_replay.py` accepts defaults from TOML files selected with
+`--config` (repeatable). The mode and `INPUT` remain positional:
 
 ```bash
 python optimize_replay.py auto run.txt \
@@ -9,13 +9,52 @@ python optimize_replay.py auto run.txt \
   --output run_next.txt
 ```
 
-The effective order is built-in defaults, legacy top-level TOML keys,
-`[common]`, the selected mode table, then explicit scalar command-line options.
-Repeatable command-line options append as described below.
+The effective order is built-in defaults, then each `--config` file in
+command-line order (within each file: legacy top-level keys, `[common]`,
+`[goal]`, selected mode table), then explicit command-line options.
+A later file replaces overlapping settings from an earlier file, while preserving
+unrelated keys. Repeatable command-line options append as described below.
+For compatibility, the parsed `config` path refers to the last regular file.
+
+## Reusing existing Local splice files in endpoint Auto
+
+There is no need to edit a collection of old `[local]` splice TOMLs. Pass your
+Auto defaults via `--config` and the desired Local splice via `--goal-config`:
+
+```bash
+python optimize_replay.py auto run.txt \
+  --config auto-default.toml \
+  --goal-config splice-167.toml \
+  --auto-runs 1 \
+  --output splice-167-auto.txt
+```
+
+`--goal-config` is supported in Auto mode only, and may be repeated. It reads
+and validates the splice file using Local's original TOML parser, then imports
+only the endpoint goal keys: objective, target frame, edit range, target object,
+point or rectangle, arrival start, secondary objective, axis constraints,
+interaction and jump requirements, and enemy simulation. The independent
+Local-only `search`, `iterations`, `beam`, `window`, `passes`, and population
+settings are ignored. Goal imports override *all* `--config` defaults even when
+a `--config` follows `--goal-config` on the command line. Explicit CLI options
+still win over both. For instance, your old Auto `[auto] objective="speedrun"`
+is replaced by the imported `[local] objective="earliest-arrival"`.
+
+`--goal-config` deliberately does **not** automatically import the `[local]`
+table from ordinary `--config` files. This prevents accidentally changing the
+Auto objective when one shared TOML contains both `[auto]` and `[local]`.
+
+**Important:** endpoint Auto requires a finite positive round count. If the
+Auto defaults contain `runs = 0`, specify `--auto-runs 1` (or another positive
+value) on the CLI. The full-run Auto repair/splicing knobs in your defaults
+remain configured but are *not* used by the endpoint mutation-beam search.
+Use Local normally with `local --config splice-167.toml` (without the goal
+import flag). To combine normal TOML files instead, repeat `--config`.
+
 
 ## Tables and key names
 
-The supported tables are `[common]`, `[auto]`, `[local]`, `[jump-pattern]`,
+The supported tables are `[common]`, `[goal]`, `[auto]`, `[local]`, `[jump-pattern]`,
 `[dump-player]` and `[encode-video]`. Underscores may replace hyphens in those
 table names, but the two spellings cannot both appear. Non-selected known mode tables may
 coexist in one file and are ignored until their mode is selected.
@@ -52,7 +91,7 @@ current working directory, as with other configured paths. See
 [video encoding](VIDEO_ENCODING.md#comparing-multiple-replays-v408) for primary
 world ownership, mixed input formats, timing and validation.
 
-`input`, `mode` and `config` are reserved for the command line. The main output,
+`input`, `mode`, `config` and `goal_config` are reserved for the command line. The main output,
 optional packed replay output and v2.70 LTM source options may be configured:
 
 ```toml

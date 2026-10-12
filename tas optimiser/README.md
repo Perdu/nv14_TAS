@@ -64,6 +64,22 @@ Example bruteforcing of all 2 and 3 jump combinations on top of a bounceblock:
 python3 optimize_replay.py jump-pattern 'examples/bbjump.txt' --config 'examples/config.toml' --output 'examples/bbjump_optimised.txt'
 ```
 
+### Reusing Local splice files with Auto objectives
+
+You can now layer normal TOMLs with repeated `--config` flags, and apply an
+unchanged `[local]` splice objective using `--goal-config`:
+
+```bash
+python optimize_replay.py auto run.txt \
+  --config default.toml --goal-config splice-167.toml \
+  --auto-runs 1 --output result.txt
+```
+
+Local's search strategy is ignored by this goal-only import; it preserves the
+Auto search budget from `default.toml`. The `--auto-runs 1` override is needed
+when the default config has `runs = 0` because endpoint Auto requires finite
+campaigns. See `docs/CONFIGURATION.md`.
+
 ## Requirements and setup
 
 - Python **3.11 or newer**.
@@ -1316,3 +1332,14 @@ The regression suite covers replay packing, player and object physics, every
 search mode, multiprocessing, TOML validation, clean output verification,
 checkpoints, LTM import/export and metadata, route interactions and supplied
 trace/corpus comparisons.
+
+### Auto with Local-compatible endpoint goals
+
+`auto` now accepts the same position, distance, earliest-arrival, and
+interaction endpoint goals as `local --search population` through a shared
+`[goal]` TOML section. Both modes can use **one** config file, with independent
+`[auto]` and `[local]` search budgets. Auto endpoint searches allow partial
+replays by default; set `completion-policy = "complete"` under `[auto]` to
+require a verified level finish. The existing speedrun/highscore Auto engine
+is unchanged. See [Auto endpoint objectives](docs/AUTO_ENDPOINT_OBJECTIVES.md)
+and [shared example config](examples/config/shared-endpoint.toml).
