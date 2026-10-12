@@ -1467,7 +1467,7 @@ Branch 9: jumping earlier in the beginning (gives less height)
 Branch 8: jumping for one more frame to the switch to avoid sliding before the drone: a few subpixels slower
 
 # 44-1
-rerecords: 0
+rerecords: 52
 
 
 
@@ -3057,4 +3057,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 263178
+# Total rerecords: 263230
