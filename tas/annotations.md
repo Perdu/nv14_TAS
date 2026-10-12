@@ -1401,9 +1401,9 @@ Branch 8: going right, then taking a longer fall
 Branch 7: some save lost right before the end
 
 # 41-4
-rerecords: 0
+rerecords: 21
 
-
+Branch 9: slightly faster arrival at last section, lost to a poorer push
 
 # 42-0
 rerecords: 323
@@ -3057,4 +3057,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 263075
+# Total rerecords: 263096
