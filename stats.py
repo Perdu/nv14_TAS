@@ -218,9 +218,10 @@ def display_time_difference(score_type="Speedrun", sort=True, use_color=True, di
             formatted_rta = format_seconds(total_rta * 0.025)
             formatted_rta_all_levels = format_seconds(total_rta_all_levels * 0.025)
             percentage_rta = total_rta / total_rta_all_levels * 100
+            avg_diff_per_level = total_diff / 500
             print(f"Total TAS: {total_tas} {unit} ({formatted_tas})")
             print(f"Total RTA: {total_rta} {unit} ({formatted_rta}) / {total_rta_all_levels} f ({formatted_rta_all_levels}) ({percentage_rta:.2f} %)")
-            print(f"Total Δ   = +{total_diff} {unit} ({formatted_diff})")
+            print(f"Total Δ   = -{total_diff} {unit} ({formatted_diff}) ({avg_diff_per_level:.2f}f per level)")
         else:
             total_diff = total_tas - total_rta
             formatted = format_seconds(total_diff)

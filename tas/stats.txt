@@ -56,7 +56,7 @@ Episode Speedrun Grid (optimization level >= 6):
 
 Total TAS: 258328 f (1h47m38.200s)
 Total RTA: 280575 f (1h56m54.375s) / 280575 f (1h56m54.375s) (100.00 %)
-Total Δ   = +22247 f (9m16.175s)
+Total Δ   = -22247 f (9m16.175s) (44.49f per level)
 
 ────────────────────────────────────────────────────────────
 
