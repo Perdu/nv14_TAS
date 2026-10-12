@@ -33,8 +33,8 @@ def _scene(index):
 
 def test_parallel_module_import_keeps_rendering_optional():
     result = subprocess.run([sys.executable, "-c",
-        "import sys; before = set(sys.modules); import nv14_video_parallel; "
-        "assert 'PIL' not in (set(sys.modules) - before); assert 'nv14_render' not in sys.modules; "
+        "import sys; import nv14_video_parallel; "
+        "assert 'PIL' not in sys.modules; assert 'nv14_render' not in sys.modules; "
         "assert 'nv14_native' not in sys.modules"],
         capture_output=True, text=True)
     assert result.returncode == 0, result.stderr

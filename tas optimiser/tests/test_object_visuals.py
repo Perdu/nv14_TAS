@@ -42,9 +42,9 @@ def next_scene(tracker, initial, **changes):
 
 
 def test_no_engine_import_or_optional_dependency_on_import():
-    result = subprocess.run([sys.executable, "-c", "import sys; before = set(sys.modules); import nv14_object_visuals; "
+    result = subprocess.run([sys.executable, "-c", "import sys; import nv14_object_visuals; "
         "assert 'nv14_engine' not in sys.modules; assert '_nv14_native' not in sys.modules; "
-        "assert 'PIL' not in (set(sys.modules) - before)"], capture_output=True, text=True)
+        "assert 'PIL' not in sys.modules"], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
 

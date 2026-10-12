@@ -121,22 +121,15 @@ _ACTIVE_NATIVE_SESSION: ContextVar[
 ] = ContextVar("nv14_auto_native_session", default=None)
 
 
-def _native_session(level: Level, *, cache_entries: int = 0) -> NativeSearchSession:
+def _native_session(level: Level) -> NativeSearchSession:
     active = _ACTIVE_NATIVE_SESSION.get()
     if active is not None and active[0] is level:
         if active[1] is not None:
-            if cache_entries:
-                active[1].configure_result_cache(cache_entries)
             return active[1]
         session = NativeSearchSession(level)
-        if cache_entries:
-            session.configure_result_cache(cache_entries)
         _ACTIVE_NATIVE_SESSION.set((level, session))
         return session
-    session = NativeSearchSession(level)
-    if cache_entries:
-        session.configure_result_cache(cache_entries)
-    return session
+    return NativeSearchSession(level)
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,9 +145,6 @@ class AutoConfig:
     max_alignment: int = 3
     deterministic_phase: bool = True
     repair_local_limit: int = 1_000
-    repair_beam_width: int = 0  # 0 keeps the existing exact DFS repair
-    repair_cache_entries: int = 0  # level-bound memo of complete identical searches
-    repair_adaptive_windows: bool = False  # short horizon, then expand
     repair_search_order: str = AUTO_REPAIR_SEARCH_ORDER_RANDOM
     frame_ahead_repair_multiplier: int = 10
     repair_campaign_local_limit: int = 10_000
@@ -190,10 +180,6 @@ class AutoConfig:
             raise ValueError("repair_lookback must be at least repair_window")
         if self.max_alignment < 0:
             raise ValueError("max_alignment must be non-negative")
-        if not 0 <= self.repair_beam_width <= 4096:
-            raise ValueError("repair_beam_width must be between 0 and 4096")
-        if not 0 <= self.repair_cache_entries <= 64:
-            raise ValueError("repair_cache_entries must be between 0 and 64")
         if self.repair_local_limit < 0:
             raise ValueError("repair_local_limit must be non-negative")
         if self.repair_search_order not in AUTO_REPAIR_SEARCH_ORDERS:
@@ -6196,8 +6182,6 @@ def _native_repair_search(
     skip_unchanged_final_step: bool = False,
     randomized_ties: bool = False,
     max_simulated_ticks: int = 0,
-    beam_width: int = 0,
-    cache_entries: int = 0,
 ) -> SearchResult:
     required_groups, avoided_groups = _native_repair_groups(
         required_gold_mask=required_gold_mask,
@@ -6205,7 +6189,7 @@ def _native_repair_search(
         required_locked_door_mask=required_locked_door_mask,
         forbidden_trapdoor_mask=forbidden_trapdoor_mask,
     )
-    return _native_session(level, cache_entries=cache_entries).search(
+    return _native_session(level).search(
         replay,
         SearchSpec(
             mutable_frames=mutable_frames,
@@ -6251,34 +6235,12 @@ def _native_repair_search(
             required_jump_any=required_jump_any,
             tie_break_low_edit_lex=randomized_ties,
             max_simulated_ticks=max_simulated_ticks,
-            beam_width=beam_width,
-            beam_adaptive_inputs=beam_width > 0,
         ),
     )
 
 
 def _native_repair_score(result: SearchResult) -> float:
     return -result.score if result.improved and result.feasible else math.inf
-
-
-def _repair_horizons(frame_count: int, adaptive: bool) -> tuple[int, ...]:
-    """Small-to-large exact suffix windows, without changing the final horizon.
-
-    Starting from the frames nearest the failed interaction reduces cost for
-    easy repairs.  No input is discarded within any selected horizon.
-    """
-    if frame_count <= 0:
-        return ()
-    if not adaptive:
-        return (frame_count,)
-    return tuple(sorted({min(2, frame_count), min(4, frame_count), frame_count}))
-
-
-def _repair_horizon_budget(limit: int, used: int, remaining_horizons: int) -> int:
-    """Reserve a nonzero fraction for later horizons; 0 is unlimited."""
-    if limit == 0:
-        return 0
-    return max(1, (limit - used) // remaining_horizons)
 
 
 def _native_apply_search_result(
@@ -7710,69 +7672,57 @@ def repair_direction_window(
     window_start = min(max(nominal_start, config.range_start), range_end)
     window_end = min(failure_tick, window_start + config.repair_window - 1)
     if window_start <= window_end and not budget_exhausted:
-        full_mutable_frames = tuple(range(window_start, window_end + 1))
-        horizons = _repair_horizons(
-            len(full_mutable_frames), config.repair_adaptive_windows
-        )
-        for horizon_index, horizon in enumerate(horizons):
-            if config.repair_local_limit and simulations >= config.repair_local_limit:
-                break
-            mutable_frames = full_mutable_frames[-horizon:]
-            choices = tuple(
-                tuple(
-                    InputFrame(
-                        direction < 0,
-                        direction > 0,
-                        best_seed[tick].jump,
-                        None,
-                    )
-                    for direction in _direction_search_order(
-                        best_seed[tick].horizontal,
-                        search_rng,
-                        source_first=True,
-                    )
+        mutable_frames = tuple(range(window_start, window_end + 1))
+        choices = tuple(
+            tuple(
+                InputFrame(
+                    direction < 0,
+                    direction > 0,
+                    best_seed[tick].jump,
+                    None,
                 )
-                for tick in mutable_frames
+                for direction in _direction_search_order(
+                    best_seed[tick].horizontal,
+                    search_rng,
+                    source_first=True,
+                )
             )
-            result = _native_repair_search(
-                level,
+            for tick in mutable_frames
+        )
+        result = _native_repair_search(
+            level,
+            best_seed,
+            mutable_frames=mutable_frames,
+            choices=choices,
+            target_tick=target_tick,
+            reference_point=reference_point,
+            required_jump_frames=required_jump_frames,
+            required_gold_mask=required_gold_mask,
+            required_exit_mask=required_exit_mask,
+            required_locked_door_mask=required_locked_door_mask,
+            forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+            incumbent_score=best_seed_score,
+            incumbent_feasible=math.isfinite(best_seed_score),
+            randomized_ties=randomized,
+            max_simulated_ticks=_native_remaining_budget(config, simulations),
+        )
+        branches += result.stats.visited_nodes
+        simulations += result.stats.simulated_ticks
+        proposal = _native_apply_search_result(
+            best_seed, mutable_frames, result
+        )
+        if proposal is not None:
+            score = _native_repair_score(result)
+            if _repair_proposal_is_better(
+                seed,
+                proposal,
+                score,
                 best_seed,
-                mutable_frames=mutable_frames,
-                choices=choices,
-                target_tick=target_tick,
-                reference_point=reference_point,
-                required_jump_frames=required_jump_frames,
-                required_gold_mask=required_gold_mask,
-                required_exit_mask=required_exit_mask,
-                required_locked_door_mask=required_locked_door_mask,
-                forbidden_trapdoor_mask=forbidden_trapdoor_mask,
-                incumbent_score=best_seed_score,
-                incumbent_feasible=math.isfinite(best_seed_score),
-                randomized_ties=randomized,
-                max_simulated_ticks=_repair_horizon_budget(
-                    config.repair_local_limit, simulations,
-                    len(horizons) - horizon_index,
-                ),
-                beam_width=config.repair_beam_width,
-                cache_entries=config.repair_cache_entries,
-            )
-            branches += result.stats.visited_nodes
-            simulations += result.stats.simulated_ticks
-            proposal = _native_apply_search_result(best_seed, mutable_frames, result)
-            if proposal is not None:
-                score = _native_repair_score(result)
-                if _repair_proposal_is_better(
-                    seed,
-                    proposal,
-                    score,
-                    best_seed,
-                    best_seed_score,
-                    randomized=randomized,
-                ):
-                    best_seed = proposal
-                    best_seed_score = score
-            if math.isfinite(best_seed_score) and best_seed_score <= 1e-18:
-                break
+                best_seed_score,
+                randomized=randomized,
+            ):
+                best_seed = proposal
+                best_seed_score = score
 
     if progress is not None:
         progress(branches, simulations)
@@ -7877,62 +7827,47 @@ def repair_all_input_window(
         required_locked_door_mask=required_locked_door_mask,
         forbidden_trapdoor_mask=forbidden_trapdoor_mask,
     )
-    full_mutable_frames = tuple(range(window_start, window_end + 1))
-    horizons = _repair_horizons(len(full_mutable_frames), config.repair_adaptive_windows)
-    best_proposal: tuple[InputFrame, ...] | None = None
-    best_score = base_score
-    branches = simulations = 0
-    for horizon_index, horizon in enumerate(horizons):
-        if config.repair_local_limit and simulations >= config.repair_local_limit:
-            break
-        mutable_frames = full_mutable_frames[-horizon:]
-        choices = tuple(
-            tuple(
-                InputFrame(direction < 0, direction > 0, jump, None)
-                for direction, jump in _all_input_search_order(
-                    (seed[tick].horizontal, seed[tick].jump), search_rng
-                )
+    mutable_frames = tuple(range(window_start, window_end + 1))
+    choices = tuple(
+        tuple(
+            InputFrame(direction < 0, direction > 0, jump, None)
+            for direction, jump in _all_input_search_order(
+                (seed[tick].horizontal, seed[tick].jump), search_rng
             )
-            for tick in mutable_frames
         )
-        result = _native_repair_search(
-            level,
-            seed,
-            mutable_frames=mutable_frames,
-            choices=choices,
-            target_tick=target_tick,
-            reference_point=reference_point,
-            required_jump_frames=required_jump_frames,
-            ignored_jump_frames=ignored_jump_frames,
-            required_jump_any=bool(required_jump_frames),
-            minimum_jump_events=minimum_jump_events,
-            required_gold_mask=required_gold_mask,
-            required_exit_mask=required_exit_mask,
-            required_locked_door_mask=required_locked_door_mask,
-            forbidden_trapdoor_mask=forbidden_trapdoor_mask,
-            incumbent_score=best_score,
-            incumbent_feasible=math.isfinite(best_score),
-            prune_inactive_jump=True,
-            randomized_ties=randomized,
-            max_simulated_ticks=_repair_horizon_budget(
-                config.repair_local_limit, simulations, len(horizons) - horizon_index
-            ),
-            beam_width=config.repair_beam_width,
-            cache_entries=config.repair_cache_entries,
-        )
-        branches += result.stats.visited_nodes
-        simulations += result.stats.simulated_ticks
-        proposal = _native_apply_search_result(seed, mutable_frames, result)
-        score = _native_repair_score(result) if proposal is not None else math.inf
-        if proposal is not None and (best_proposal is None or score < best_score):
-            best_proposal, best_score = proposal, score
-        if best_proposal is not None and best_score <= 1e-18:
-            break
+        for tick in mutable_frames
+    )
+    result = _native_repair_search(
+        level,
+        seed,
+        mutable_frames=mutable_frames,
+        choices=choices,
+        target_tick=target_tick,
+        reference_point=reference_point,
+        required_jump_frames=required_jump_frames,
+        ignored_jump_frames=ignored_jump_frames,
+        required_jump_any=bool(required_jump_frames),
+        minimum_jump_events=minimum_jump_events,
+        required_gold_mask=required_gold_mask,
+        required_exit_mask=required_exit_mask,
+        required_locked_door_mask=required_locked_door_mask,
+        forbidden_trapdoor_mask=forbidden_trapdoor_mask,
+        incumbent_score=base_score,
+        incumbent_feasible=math.isfinite(base_score),
+        prune_inactive_jump=True,
+        randomized_ties=randomized,
+        max_simulated_ticks=config.repair_local_limit,
+    )
+    branches = result.stats.visited_nodes
+    simulations = result.stats.simulated_ticks
     if progress is not None:
         progress(branches, simulations)
+    proposal = _native_apply_search_result(seed, mutable_frames, result)
     if score_observer is not None:
-        score_observer(best_score)
-    return best_proposal, branches, simulations
+        score_observer(
+            _native_repair_score(result) if proposal is not None else base_score
+        )
+    return proposal, branches, simulations
 
 
 class _RepairController:

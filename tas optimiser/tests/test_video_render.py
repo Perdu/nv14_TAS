@@ -38,8 +38,8 @@ def scene(**visual):
 
 def test_module_import_does_not_import_optional_dependencies():
     result = subprocess.run([sys.executable, "-c",
-        "import sys; before = set(sys.modules); import nv14_render; "
-        "assert 'PIL' not in (set(sys.modules) - before); assert 'nv14_engine' not in sys.modules"],
+        "import sys; import nv14_render; "
+        "assert 'PIL' not in sys.modules; assert 'nv14_engine' not in sys.modules"],
         check=False, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 

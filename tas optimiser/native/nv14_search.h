@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-#define NV14_SEARCH_ABI_VERSION 5u
+#define NV14_SEARCH_ABI_VERSION 4u
 
 typedef enum nv14_search_status {
     NV14_SEARCH_OK = 0,
@@ -206,12 +206,6 @@ typedef struct nv14_search_spec {
     nv14_search_cancel_fn cancel;
     void *cancel_userdata;
     uint64_t cancel_poll_interval;
-
-    /* Optional bounded best-first exploration at mutable-frame boundaries.
-       0 retains the original exhaustive Cartesian DFS. */
-    size_t beam_width;
-    double beam_edit_penalty;
-    uint8_t beam_adaptive_inputs;
 } nv14_search_spec;
 
 typedef struct nv14_search_stats {
@@ -225,7 +219,6 @@ typedef struct nv14_search_stats {
     uint64_t deduplicated_prunes;
     uint64_t physics_prunes;
     uint64_t avoided_interaction_prunes;
-    uint64_t beam_width_prunes;
 } nv14_search_stats;
 
 typedef struct nv14_search_result {

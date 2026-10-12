@@ -23,7 +23,7 @@ def test_v277_auto_hot_mechanics_exist_only_in_native_kernels() -> None:
     ):
         assert not hasattr(auto, legacy_python_loop)
     info = nv14_search.backend_info()
-    assert info["search_abi"] == nv14_search.SEARCH_ABI_VERSION
+    assert info["search_abi"] == 3
     assert info["patch_abi"] == 2
 
 
