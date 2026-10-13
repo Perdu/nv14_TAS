@@ -51,6 +51,14 @@ remain configured but are *not* used by the endpoint mutation-beam search.
 Use Local normally with `local --config splice-167.toml` (without the goal
 import flag). To combine normal TOML files instead, repeat `--config`.
 
+If a Local splice's `target_frame` is past the end of a trimmed or cut replay,
+Local now treats the missing frames as neutral inputs (no buttons held).
+Both `search = "windows"` and `search = "population"` can edit this new tail,
+and saved replays include neutral frames through the **inclusive** target frame.
+No change to the splice TOML is needed. Auto and jump-pattern keep their
+existing source-length behavior; extending the replay does not prevent the
+player from dying before the target or waive any required interactions.
+
 
 ## Tables and key names
 
