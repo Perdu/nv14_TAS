@@ -1517,9 +1517,13 @@ rerecords: 0
 
 
 # 45-4
-rerecords: 33
+rerecords: 175
 
-
+Branch 9: Route with a rcj
+Branch 8: rcj + cj
+Branch 7: rcj on first corner
+Branch 6: route on the left
+Branch 5: original auto route (without initial jump)
 
 # 46-0
 rerecords: 0
@@ -3060,4 +3064,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 263823
+# Total rerecords: 263965
