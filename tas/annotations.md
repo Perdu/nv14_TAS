@@ -1488,7 +1488,7 @@ Branch 8: attempt at bbcd on first bb
 # 44-4
 rerecords: 159
 
-
+A bit hell to optimize because of the successions weird angles, steering and going back. A better bruteforcer may find better solutions
 
 # 45-0
 rerecords: 322
@@ -1505,9 +1505,11 @@ Branch 5: cj on lower stair on the right
 Branch 4: attempt at going left and a bit higher, to fall directly
 
 # 45-2
-rerecords: 0
+rerecords: 181
 
-
+Branch 9: simple wj around switch
+Branch 8: last cj not going to the top
+Branch 7: normal wj for switch 2
 
 # 45-3
 rerecords: 0
@@ -1515,7 +1517,7 @@ rerecords: 0
 
 
 # 45-4
-rerecords: 0
+rerecords: 33
 
 
 
@@ -3058,4 +3060,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 263609
+# Total rerecords: 263823
