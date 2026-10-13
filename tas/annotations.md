@@ -1486,7 +1486,7 @@ Branch 9: attempt at getting switch1 and switch in one jump
 Branch 8: attempt at bbcd on first bb
 
 # 44-4
-rerecords: 0
+rerecords: 159
 
 
 
@@ -3058,4 +3058,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 263450
+# Total rerecords: 263609
