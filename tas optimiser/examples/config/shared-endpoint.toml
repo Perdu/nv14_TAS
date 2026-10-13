@@ -1,0 +1,40 @@
+# One endpoint goal shared by either CLI mode:
+#   python optimize_replay.py auto run.txt --config examples/config/shared-endpoint.toml --output auto.txt
+#   python optimize_replay.py local run.txt --config examples/config/shared-endpoint.toml --output local.txt
+# Adjust the coordinates and target-frame for your level/replay.
+
+[common]
+simulate-enemies = true
+workers = 4
+
+[goal]
+objective = "earliest-arrival"        # Or earliest-interaction, max-x, min-x,
+                                      # max-y, min-y, or min-distance
+range = "100:250"                    # Shared editable input interval
+target-frame = 250                    # Inclusive endpoint deadline
+arrival-start = 100
+# Both quoted and array coordinates are supported.
+target-region = [700, 740, 90, 130]
+secondary-objective = "max-vx"        # Only earliest goals
+# target-object = "switch:0"           # Required for earliest-interaction
+# target-object = "exit"               # One min-distance target option
+# target-point = [470, 432]           # Another min-distance option
+# vx-window = "1:"
+# require-interaction = ["gold:0"]
+# avoid-interaction = ["trapdoor:any"]
+
+[auto]
+iterations = 10000
+beam = 32
+runs = 1
+max-retime = 3
+seed = 42
+completion-policy = "checkpoint"     # Accept partial routes; use "complete" to require a finished replay
+mutation-span = 24
+
+[local]
+search = "population"                 # Earliest goals require population
+iterations = 10000
+beam = 32
+rounds = 1
+seed = 42
