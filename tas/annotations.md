@@ -1321,7 +1321,12 @@ rerecords: 419
 
 
 # 39-4
-rerecords: 1874
+rerecords: 1981
+
+Branch 9: former TAS going just around the top
+Branch 8: attempt at doing a ceiling push at the top right
+Branch 7: very old TAS
+Branch 6: optimized left path (204f)
 
 Doesn't work:
 - starting on the left slope
@@ -3064,4 +3069,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 263990
+# Total rerecords: 264097
