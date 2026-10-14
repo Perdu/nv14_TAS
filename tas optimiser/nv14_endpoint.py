@@ -46,6 +46,13 @@ def _validate_window(name: str, window: AxisWindow | None) -> None:
 
 
 @dataclass(frozen=True, slots=True)
+class RequiredJump:
+    """An actual jump must begin in region during the inclusive frame interval."""
+    region: tuple[float, float, float, float]
+    frames: tuple[int, int]
+
+
+@dataclass(frozen=True, slots=True)
 class EndpointGoal:
     target_frame: int
     objective: str = "max-x"
@@ -62,6 +69,7 @@ class EndpointGoal:
     interaction_target: InteractionTarget | None = None
     require_jump_region: tuple[float, float, float, float] | None = None
     require_jump_frames: tuple[int, int] | None = None
+    required_jumps: tuple[RequiredJump, ...] = ()
 
     def __post_init__(self) -> None:
         if isinstance(self.target_frame, bool) or not isinstance(self.target_frame, int) or self.target_frame < 0:
@@ -115,6 +123,20 @@ class EndpointGoal:
                     or not 0 <= interval[0] <= interval[1] <= self.target_frame):
                 raise ValueError("require_jump_frames must be ordered non-negative integers within target_frame")
             object.__setattr__(self, "require_jump_frames", interval)
+        if self.required_jumps and self.require_jump_region is not None:
+            raise ValueError("use either require-jumps or the legacy single require-jump-region")
+        normalised = []
+        for requirement in self.required_jumps:
+            if not isinstance(requirement, RequiredJump):
+                raise ValueError("required_jumps entries must be RequiredJump instances")
+            region = tuple(float(v) for v in requirement.region)
+            interval = tuple(requirement.frames)
+            if len(region) != 4 or not all(math.isfinite(v) for v in region) or region[0] > region[1] or region[2] > region[3]:
+                raise ValueError("each require-jumps region needs four finite ordered bounds")
+            if len(interval) != 2 or any(type(v) is not int for v in interval) or not 0 <= interval[0] <= interval[1] <= self.target_frame:
+                raise ValueError("each require-jumps frames interval must be within target-frame")
+            normalised.append(RequiredJump(region, interval))
+        object.__setattr__(self, "required_jumps", tuple(normalised))
         object.__setattr__(self, "required_interactions", tuple(self.required_interactions))
         object.__setattr__(self, "avoided_interactions", tuple(self.avoided_interactions))
 
@@ -155,6 +177,8 @@ class EndpointEvaluation:
     jump_event: tuple[int, float, float] | None = None
     missing_jump: bool = False
     jump_distance: float = 0.0
+    jump_events: tuple[tuple[int, float, float] | None, ...] = ()
+    missing_jump_indices: tuple[int, ...] = ()
 
     @property
     def objective_key(self) -> tuple[float, float]:
@@ -234,6 +258,7 @@ class EndpointEvaluator:
         if prefix_frame > len(self.source_frames):
             raise ValueError("cached prefix lies outside source_frames")
         self.prefix_frame = prefix_frame
+        self._multiple_jumps = bool(goal.required_jumps)
         self._prefix = self.level.initial_state()
         native = require_native()
         if native.backend_info().get("population_endpoint_api", 0) < 2:
@@ -252,7 +277,7 @@ class EndpointEvaluator:
                 self._target_positions[atom] = position
         self._native_plan = self._compile_native_plan()
         self._prefix_jump = None
-        if prefix_frame:
+        if prefix_frame and not self._multiple_jumps:
             if goal.require_jump_region is None:
                 self._prefix.step_many(self.source_frames[:prefix_frame], stop_on_dead=True, stop_on_complete=False)
             else:
@@ -265,7 +290,7 @@ class EndpointEvaluator:
         kinds = {INTERACTION_GOLD: 0, INTERACTION_EXIT_SWITCH: 1,
                  INTERACTION_LOCKED_DOOR: 2, INTERACTION_TRAPDOOR: 3,
                  INTERACTION_EXIT_DOOR: 4}
-        self._reference_required = False
+        self._reference_required = self._multiple_jumps
 
         def atom_spec(atom: InteractionAtom) -> tuple:
             index = (atom.load_index if atom.kind in (INTERACTION_LOCKED_DOOR, INTERACTION_TRAPDOOR)
@@ -327,6 +352,7 @@ class EndpointEvaluator:
                         previous_interactions: tuple[tuple[int, int, int, int], int] | None = None,
                         interaction_events: tuple[InteractionAtom, ...] | None = None,
                         jump_event: tuple[int, float, float] | None = None,
+                        jump_events: tuple[tuple[int, float, float] | None, ...] = (),
                         ) -> EndpointEvaluation:
         player = state.player_snapshot()
         masks, completed = self._interaction_snapshot(state)
@@ -376,9 +402,14 @@ class EndpointEvaluator:
                 score = -float(frame)
         else:
             error, region_distance, score = math.inf, math.inf, -math.inf
-        missing_jump = goal.require_jump_region is not None and jump_event is None
+        missing_indices = tuple(index for index, event in enumerate(jump_events) if event is None)
+        missing_jump = bool(missing_indices) if self._multiple_jumps else (goal.require_jump_region is not None and jump_event is None)
         jump_distance = 0.0
-        if missing_jump:
+        if self._multiple_jumps and finite:
+            jump_distance = sum(math.hypot(max(spec.region[0]-x, x-spec.region[1], 0.0),
+                                           max(spec.region[2]-y, y-spec.region[3], 0.0))
+                                for index, spec in enumerate(goal.required_jumps) if index in missing_indices)
+        if missing_jump and not self._multiple_jumps:
             xmin, xmax, ymin, ymax = goal.require_jump_region
             jump_distance = (math.hypot(max(xmin-x, x-xmax, 0.0), max(ymin-y, y-ymax, 0.0))
                              if finite else math.inf)
@@ -400,17 +431,19 @@ class EndpointEvaluator:
             # Keep requirements/avoidances discrete, then offer useful movement
             # gradients toward satisfying the remaining exact goals. Earlier
             # surviving near-misses remain useful even if the later run dies.
-            progress_key = (1, len(violated), len(missing) + int(missing_jump), int(dead),
+            progress_key = (1, len(violated), len(missing) + (len(missing_indices) if self._multiple_jumps else int(missing_jump)), int(dead),
                             error + region_distance**2 + missing_distance**2 + target_distance**2
                             + (jump_distance**2 if missing_jump else 0.0),
                             max(goal.arrival_start-frame, 0) if goal.is_earliest
                             else max(goal.target_frame-frame, 0), -score)
-            if goal.interaction_target is not None or goal.require_jump_region is not None:
+            if goal.interaction_target is not None or goal.require_jump_region is not None or self._multiple_jumps:
                 # States after the final possible interaction cannot repair the
                 # event's failed constraints. Keep its actual tick or an earlier
                 # viable approach, even if requirements become true later.
                 exhausted = ((goal.interaction_target is not None and not events and not pending)
-                             or (missing_jump and frame >= (goal.require_jump_frames or (0, goal.target_frame))[1]))
+                             or (missing_jump and (any(frame >= goal.required_jumps[index].frames[1]
+                                                     for index in missing_indices) if self._multiple_jumps
+                                            else frame >= (goal.require_jump_frames or (0, goal.target_frame))[1])))
                 progress_key = (progress_key[0], int(exhausted), *progress_key[1:])
         contact = (player["state"], player["in_air"], player["near_wall"],
                    player["floor_n"], player["wall_n"], player["previous_jump_held"])
@@ -419,14 +452,15 @@ class EndpointEvaluator:
         niche = (*quantised, *contact, masks)
         if goal.interaction_target is not None:
             niche = (*niche, events, completed)
-        if goal.require_jump_region is not None:
-            niche = (*niche, not missing_jump)
+        if goal.require_jump_region is not None or self._multiple_jumps:
+            niche = (*niche, tuple(event is not None for event in jump_events) if self._multiple_jumps else not missing_jump)
         return EndpointEvaluation(feasible, score, frame, x, y, vx, vy, missing, violated,
                                   dead, progress_key,
                                   state.state_key() if capture_state_key else b"", niche, masks, contact,
                                   error, region_distance, frame, dead,
                                   tuple(player.items()), secondary_score, secondary_value,
-                                  events, completed, target_distance, jump_event, missing_jump, jump_distance)
+                                  events, completed, target_distance, jump_event, missing_jump, jump_distance,
+                                  jump_events, missing_indices)
 
     def _qualifying_jump(self, frame: int, jumped: bool, origin: tuple | None) -> bool:
         """Independent reference event predicate; never called by the C tick loop."""
@@ -464,6 +498,57 @@ class EndpointEvaluator:
             result = replace(result, terminal_frame=terminal_frame, terminal_dead=terminal_dead)
         return result
 
+    def _evaluate_multiple_jumps(self, frames: tuple[InputFrame, ...]) -> EndpointEvaluation:
+        """Exact native-physics reference scorer for several independent jump predicates.
+
+        Uses the native state stepping interface, not Python physics. This is a
+        fallback to avoid changing the checked-in native/Cython ABI for this feature.
+        Each requirement needs an actual qualifying jump; overlapping conditions
+        may be satisfied by the same physical jump.
+        """
+        state = self.level.initial_state()
+        recorded: list[tuple[int, float, float] | None] = [None] * len(self.goal.required_jumps)
+        previous = self._interaction_snapshot(state) if self.goal.interaction_target is not None else None
+        best = None
+        dead = False
+        for frame in range(self.goal.target_frame + 1):
+            if dead:
+                break
+            step = state.step(frames[frame])
+            dead = bool(step["dead"])
+            if step["jumped"] and step["jump_origin"] is not None:
+                x, y = step["jump_origin"]
+                if math.isfinite(x) and math.isfinite(y):
+                    for index, requirement in enumerate(self.goal.required_jumps):
+                        lo, hi = requirement.frames
+                        xmin, xmax, ymin, ymax = requirement.region
+                        if (recorded[index] is None and lo <= frame <= hi
+                                and xmin <= x <= xmax and ymin <= y <= ymax):
+                            recorded[index] = (frame, x, y)
+            if not self.goal.is_earliest:
+                continue
+            if frame < self.goal.arrival_start:
+                if previous is not None:
+                    previous = self._interaction_snapshot(state)
+                continue
+            candidate = self._evaluate_state(state, capture_state_key=False,
+                                             previous_interactions=previous,
+                                             jump_event=recorded[0], jump_events=tuple(recorded))
+            if previous is not None:
+                previous = (candidate.interaction_state, candidate.completed_exit_index)
+            if candidate.feasible:
+                return replace(candidate, state_key=state.state_key(),
+                               terminal_frame=frame, terminal_dead=dead)
+            if best is None or candidate.progress_key < best.progress_key:
+                best = replace(candidate, state_key=state.state_key())
+        terminal = self._evaluate_state(state, arrival_eligible=False,
+                                        jump_event=recorded[0], jump_events=tuple(recorded))
+        if not self.goal.is_earliest:
+            return terminal
+        if best is None:
+            best = terminal
+        return replace(best, terminal_frame=terminal.frame, terminal_dead=terminal.dead)
+
     def evaluate_reference(self, frames: Sequence[InputFrame]) -> EndpointEvaluation:
         """Original per-tick scorer, retained for verification and numeric ties."""
         frames = tuple(frames)
@@ -471,6 +556,8 @@ class EndpointEvaluator:
             raise ValueError(f"target frame {self.goal.target_frame} is outside a {len(frames)}-frame replay")
         if frames[:self.prefix_frame] != self.source_frames[:self.prefix_frame]:
             raise ValueError("candidate changed the immutable cached prefix")
+        if self._multiple_jumps:
+            return self._evaluate_multiple_jumps(frames)
         state = self._prefix.clone()
         if not self.goal.is_earliest and self.goal.require_jump_region is None:
             if not self._prefix_dead:
@@ -522,7 +609,7 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
     evaluator = EndpointEvaluator(level, goal)
     result = evaluator.evaluate_reference(frames)
     if expected is not None:
-        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index", "jump_event", "missing_jump")
+        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index", "jump_event", "missing_jump", "jump_events", "missing_jump_indices")
         mismatch = [name for name in comparable if getattr(result, name) != getattr(expected, name)]
         if mismatch:
             raise ValueError("endpoint verification mismatch: " + ", ".join(mismatch))
@@ -534,9 +621,10 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
         else:
             reference_level = parse_level_string(level.source_level_string, simulate_enemies=level.simulate_enemies)
         previous_atoms: set[InteractionAtom] = set()
-        if goal.require_jump_region is not None:
+        if goal.require_jump_region is not None or goal.required_jumps:
             state = reference_level.initial_state()
             python_jump = None
+            python_jumps = [None] * len(goal.required_jumps)
             for frame in range(result.frame + 1):
                 if frame == result.frame and goal.interaction_target is not None:
                     previous_atoms = {atom for atom in goal.interaction_target.alternatives if atom.is_satisfied(state)}
@@ -545,7 +633,17 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
                 if python_jump is None and evaluator._qualifying_jump(
                         frame, state.player.jump_events > before, state.player.last_jump_origin):
                     python_jump = (frame, *state.player.last_jump_origin)
-            if python_jump != result.jump_event:
+                if state.player.jump_events > before and state.player.last_jump_origin is not None:
+                    x, y = state.player.last_jump_origin
+                    for index, requirement in enumerate(goal.required_jumps):
+                        lo, hi = requirement.frames
+                        xmin, xmax, ymin, ymax = requirement.region
+                        if (python_jumps[index] is None and lo <= frame <= hi
+                                and xmin <= x <= xmax and ymin <= y <= ymax):
+                            python_jumps[index] = (frame, x, y)
+            if tuple(python_jumps) != result.jump_events:
+                raise ValueError("endpoint required jumps disagree with Python reference physics")
+            if python_jump != result.jump_event and not goal.required_jumps:
                 raise ValueError("endpoint jump event disagrees with Python reference physics")
         elif goal.interaction_target is not None and result.frame >= 0:
             state = (simulate_through_frame(reference_level, frames, result.frame - 1)

@@ -1,0 +1,16 @@
+# Reuse as a Local --config or Auto --goal-config splice target.
+[local]
+search = "population"
+target-frame = 167
+range = ":167"
+objective = "earliest-arrival"
+target-region = "382:422,377:397"
+secondary-objective = "max-y"
+
+[[local.require-jumps]]
+region = "375:410,340:385"
+frames = "30:95"
+
+[[local.require-jumps]]
+region = "382:422,377:397"
+frames = "96:167"

@@ -403,3 +403,22 @@ Local and jump-pattern retain the optional keyword-only
 `python_resimulate=False` diagnostic control.
 
 See the README's complete option reference for every supported key and default.
+
+### Multiple actual-jump requirements for one endpoint
+
+`[local]` splice targets and `[goal]` shared targets accept an array of tables:
+
+```toml
+[[local.require-jumps]]
+region = "375:410,340:385"
+frames = "30:95"
+
+[[local.require-jumps]]
+region = [382, 422, 377, 397]
+frames = [96, 167]
+```
+
+All listed conditions must be satisfied by actual successful jumps.
+The same file can be imported into Auto with `--goal-config`.
+Legacy `require-jump-region`/`require-jump-frames` remains supported.
+Do not combine the legacy singular option with `require-jumps`.

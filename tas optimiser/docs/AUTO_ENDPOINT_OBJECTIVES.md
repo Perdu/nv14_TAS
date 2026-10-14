@@ -46,7 +46,7 @@ Both modes share `max-x`, `min-x`, `max-y`, `min-y`, `min-distance`,
 `target-object`, `target-region`, `arrival-start`, `secondary-objective`,
 `x-window`, `y-window`, `vx-window`, `vy-window`, `require-interaction`,
 `avoid-interaction`, `require-reference-interactions`, `require-jump-region`
-and `require-jump-frames`. Fixed-frame objectives are evaluated at the given
+and `require-jump-frames`, plus repeatable `require-jumps` requirements. Fixed-frame objectives are evaluated at the given
 input frame. Earliest goals score the *first feasible* event up to that frame.
 If omitted, Auto's `target-frame` defaults to the last serialized input.
 
@@ -97,3 +97,43 @@ of physical simulation ticks. Auto may skip duplicate proposed replays;
 compare its printed distinct evaluation count to Local's evaluation count.
 For a full-run TAS, continue verifying completion separately before adopting a
 checkpoint-only output as a replacement.
+
+## Requiring multiple real jumps in one splice
+
+`require-jumps` is a list of independent, **AND**-combined predicates. Each
+needs at least one *executed* jump originating inside its rectangle and during
+its inclusive input-frame interval. Inputs merely holding Jump do not count.
+A single actual jump may satisfy overlapping requirements; to require distinct
+jumps use disjoint frame intervals. The old `require-jump-region` and
+`require-jump-frames` options still work unchanged. Do not mix the old single
+requirement with the list in the same goal.
+
+Existing Local-style splice files can now contain:
+
+```toml
+[local]
+search = "population"
+target-frame = 167
+range = ":167"
+objective = "earliest-arrival"
+target-region = "382:422,377:397"
+
+[[local.require-jumps]]
+region = "375:410,340:385"
+frames = "30:95"
+
+[[local.require-jumps]]
+region = "382:422,377:397"
+frames = "96:167"
+```
+
+Both `region = [xmin, xmax, ymin, ymax]` and `frames = [start, end]`
+arrays are accepted. Use the splice TOML unchanged with `local --config`
+or `auto --goal-config`. A shared `[goal]` file can similarly use
+`[[goal.require-jumps]]`. On the CLI, repeat
+`--require-jumps '375:410,340:385@30:95'` as needed.
+
+For multiple requirements, evaluation performs an exact per-frame native-state
+scan with Python orchestration to track all successful jumps and enforce
+correct earliest-goal ordering. This **does not change game physics or the
+Cython/native ABI**, but is slower than the single-jump compiled endpoint scan.

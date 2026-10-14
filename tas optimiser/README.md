@@ -1343,3 +1343,8 @@ replays by default; set `completion-policy = "complete"` under `[auto]` to
 require a verified level finish. The existing speedrun/highscore Auto engine
 is unchanged. See [Auto endpoint objectives](docs/AUTO_ENDPOINT_OBJECTIVES.md)
 and [shared example config](examples/config/shared-endpoint.toml).
+
+**Multiple required jumps in a Local/Auto splice objective:** see
+`examples/config/local-multiple-jumps.toml` and
+`docs/AUTO_ENDPOINT_OBJECTIVES.md`. Both `local --config` and Auto
+`--goal-config` can use the same `[[local.require-jumps]]` TOML entries.

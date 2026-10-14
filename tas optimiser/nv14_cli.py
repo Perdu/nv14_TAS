@@ -30,7 +30,7 @@ from nv14_auto import (
 )
 from nv14_auto_parallel import optimise_autonomous_campaign
 from nv14_auto_endpoint import AutoEndpointConfig, optimise_auto_endpoint_campaign
-from nv14_endpoint import EndpointGoal, verify_endpoint
+from nv14_endpoint import EndpointGoal, RequiredJump, verify_endpoint
 from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
 from nv14_endpoint import EARLIEST_OBJECTIVES, SECONDARY_OBJECTIVES
 from nv14_engine import InputFrame, Level, SimulationState, parse_level_string
@@ -154,6 +154,7 @@ class LocalConfig:
     arrival_start: int | None = None
     require_jump_region: tuple[float, float, float, float] | None = None
     require_jump_frames: tuple[int, int] | None = None
+    required_jumps: tuple[RequiredJump, ...] = ()
     top_results: int = 1
     iterations: int = 10000
     beam: int = 32
@@ -215,11 +216,14 @@ class LocalConfig:
             self.objective in EARLIEST_OBJECTIVES or self.target_region is not None
             or self.arrival_start is not None or self.top_results != 1
             or self.require_jump_region is not None or self.require_jump_frames is not None
+            or self.required_jumps
             or self.checkpoint_path is not None or self.resume
             or self.secondary_objective is not None
         ):
             raise ValueError("endpoint extensions require --search population")
         if self.search == "population":
+            if self.required_jumps and self.require_jump_region is not None:
+                raise ValueError("require-jumps cannot be combined with require-jump-region")
             if self.require_jump_frames is not None:
                 if self.require_jump_region is None:
                     raise ValueError("--require-jump-frames requires --require-jump-region")
@@ -354,6 +358,7 @@ class LocalConfig:
             arrival_start=args.arrival_start,
             require_jump_region=args.require_jump_region,
             require_jump_frames=args.require_jump_frames,
+            required_jumps=tuple(args.require_jumps),
             top_results=args.top_results,
             iterations=args.iterations,
             beam=args.beam,
@@ -1101,6 +1106,29 @@ def parse_required_jump_frames(text: str) -> tuple[int, int]:
     return start, end
 
 
+def parse_required_jump_spec(value: object) -> RequiredJump:
+    """Parse CLI REGION@FRAMES or a TOML {region=...,frames=...} table."""
+    if isinstance(value, Mapping):
+        if set(value) != {"region", "frames"}:
+            raise ValueError("each require-jumps entry needs exactly region and frames")
+        region, interval = value["region"], value["frames"]
+        if isinstance(region, (list, tuple)):
+            if len(region) != 4:
+                raise ValueError("require-jumps region needs four bounds")
+            region = f"{region[0]}:{region[1]},{region[2]}:{region[3]}"
+        if isinstance(interval, (list, tuple)):
+            if len(interval) != 2 or any(type(v) is not int for v in interval):
+                raise ValueError("require-jumps frames need two integers")
+            interval = f"{interval[0]}:{interval[1]}"
+        if not isinstance(region, str) or not isinstance(interval, str):
+            raise ValueError("require-jumps region and frames must be strings or arrays")
+    elif isinstance(value, str) and "@" in value:
+        region, interval = value.split("@", 1)
+    else:
+        raise ValueError("require-jumps must be REGION@START:END or {region, frames}")
+    return RequiredJump(parse_target_region(region), parse_required_jump_frames(interval))
+
+
 def parse_jump_count_range(text: str) -> tuple[int, int]:
     """Parse ``N`` or inclusive ``MIN:MAX`` successful-jump counts."""
     if ":" not in text:
@@ -1210,6 +1238,7 @@ _CONFIG_TABLE_NAMES = frozenset(
 _CONFIG_APPEND_DESTS = frozenset(
     {"retime", "auto_parents", "require_interaction", "avoid_interaction",
      "auto_require_interaction", "auto_avoid_interaction",
+     "require_jumps", "auto_require_jumps",
      "secondary_replays", "secondary_colors", "secondary_labels"}
 )
 _CONFIG_RESERVED_DESTS = frozenset({"config", "goal_config", "input", "mode"})
@@ -1406,6 +1435,10 @@ def _coerce_config_value(
                 return not value
         return value
 
+    if action.dest in ("require_jumps", "auto_require_jumps"):
+        if not isinstance(value, (list, tuple)):
+            raise ValueError(f"TOML key {key!r} must be an array of jump requirement tables")
+        return [parse_required_jump_spec(item) for item in value]
     if action.dest in _CONFIG_APPEND_DESTS:
         values = value if isinstance(value, (list, tuple)) else [value]
         return [
@@ -1551,6 +1584,7 @@ _LOCAL_GOAL_TO_AUTO = {
     "require_reference_interactions": "auto_require_reference_interactions",
     "require_jump_region": "auto_require_jump_region",
     "require_jump_frames": "auto_require_jump_frames",
+    "require_jumps": "auto_require_jumps",
     "simulate_enemies": "simulate_enemies",
 }
 
@@ -1581,7 +1615,7 @@ _LOCAL_POPULATION_OPTIONS = frozenset({
     "iterations", "beam", "rounds", "stagnation_rounds", "repair_steps",
     "repair_lookback", "mutation_span", "checkpoint", "resume", "top_results",
     "target_region", "arrival_start",
-    "require_jump_region", "require_jump_frames",
+    "require_jump_region", "require_jump_frames", "require_jumps",
     "secondary_objective",
 })
 
@@ -1606,7 +1640,7 @@ _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
     "auto_arrival_start", "auto_secondary_objective", "auto_x_window", "auto_y_window",
     "auto_vx_window", "auto_vy_window", "auto_require_interaction", "auto_avoid_interaction",
     "auto_require_reference_interactions", "auto_require_jump_region",
-    "auto_require_jump_frames", "auto_completion_policy", "auto_mutation_span",
+    "auto_require_jump_frames", "auto_require_jumps", "auto_completion_policy", "auto_mutation_span",
 })
 
 
@@ -1959,6 +1993,9 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-require-jump-frames", "--require-jump-frames", modes=auto_modes,
                          type=parse_required_jump_frames, metavar="START:END",
                          help="eligible actual jump frames")
+    command.add_argument("--auto-require-jumps", "--require-jumps", modes=auto_modes,
+                         action="append", type=parse_required_jump_spec, default=[],
+                         metavar="REGION@START:END", help="repeatable required actual jump (also TOML require-jumps list)")
     command.add_argument("--auto-completion-policy", modes=auto_modes,
                          choices=("checkpoint", "complete"), default="checkpoint",
                          help="endpoint search: allow a partial route or require a full verified finish")
@@ -2300,6 +2337,9 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--require-jump-frames", modes=local_modes, type=parse_required_jump_frames,
                          metavar="START:END",
                          help="population only: inclusive jump interval (default: first editable frame through target-frame)")
+    command.add_argument("--require-jumps", modes=local_modes, action="append",
+                         type=parse_required_jump_spec, default=[], metavar="REGION@START:END",
+                         help="population only: repeatable actual jump constraints (also TOML require-jumps list)")
     command.add_argument("--arrival-start", modes=local_modes, type=parse_nonnegative_int,
                          metavar="FRAME", help="first eligible arrival or interaction frame (default: first editable frame)")
     command.add_argument("--secondary-objective", modes=local_modes,
@@ -2719,7 +2759,7 @@ def _run_local_population(
     config_path: Path | None = None,
 ) -> None:
     """Dispatch bounded population search independently of Local's window loop."""
-    from nv14_endpoint import EndpointGoal, verify_endpoint
+    from nv14_endpoint import EndpointGoal, RequiredJump, verify_endpoint
     from nv14_population import PopulationConfig, optimise_local_population
     from nv14_replay import simulate_through_frame
 
@@ -2761,6 +2801,7 @@ def _run_local_population(
             required_interactions=required, avoided_interactions=avoided,
             secondary_objective=config.secondary_objective,
             interaction_target=interaction_target,
+            required_jumps=config.required_jumps,
             require_jump_region=config.require_jump_region,
             require_jump_frames=(config.require_jump_frames or (ranges[0][0], target_frame))
             if config.require_jump_region is not None else None,
@@ -2804,6 +2845,10 @@ def _run_local_population(
     def interaction_summary(evaluation) -> str:
         summary = ("; interaction=" + ",".join(atom.label for atom in evaluation.interaction_events)
                    if evaluation.interaction_events else "")
+        if goal.required_jumps:
+            for index, event in enumerate(evaluation.jump_events, 1):
+                summary += (f"; required jump {index} missing" if event is None else
+                            f"; required jump {index} at frame {event[0]}")
         if goal.require_jump_region is not None:
             if evaluation.jump_event is None:
                 summary += "; required jump missing"
@@ -2857,6 +2902,9 @@ def _run_local_population(
     if config.objective in EARLIEST_OBJECTIVES and config.secondary_objective is not None:
         label = "interaction" if interaction_target is not None else "arrival"
         print(f"{label} tie-break: {config.secondary_objective}, then fewer changed frames, then encoded inputs")
+    for index, requirement in enumerate(goal.required_jumps, 1):
+        print(f"required jump {index}: region={requirement.region}; eligible frames "
+              f"{requirement.frames[0]}:{requirement.frames[1]}")
     if goal.require_jump_region is not None:
         print(f"required jump region: {goal.require_jump_region}; eligible frames "
               f"{goal.require_jump_frames[0]}:{goal.require_jump_frames[1]} (jump origin, inclusive)")
@@ -3169,6 +3217,8 @@ def main() -> None:
                 raise ValueError("earliest-interaction requires target-object")
             if args.auto_arrival_start is not None and args.auto_objective not in EARLIEST_OBJECTIVES:
                 raise ValueError("arrival-start requires earliest-arrival or earliest-interaction")
+            if args.auto_require_jumps and args.auto_require_jump_region is not None:
+                raise ValueError("require-jumps cannot be combined with require-jump-region")
             if args.auto_require_jump_frames is not None and args.auto_require_jump_region is None:
                 raise ValueError("require-jump-frames requires require-jump-region")
             interaction_target = (resolve_interaction_target(level, args.auto_target_object)
@@ -3192,6 +3242,7 @@ def main() -> None:
                 x_window=args.auto_x_window, y_window=args.auto_y_window,
                 vx_window=args.auto_vx_window, vy_window=args.auto_vy_window,
                 required_interactions=required, avoided_interactions=avoided,
+                required_jumps=tuple(args.auto_require_jumps),
                 require_jump_region=args.auto_require_jump_region,
                 require_jump_frames=(args.auto_require_jump_frames or (start, frame))
                 if args.auto_require_jump_region is not None else None,
