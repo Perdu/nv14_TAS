@@ -13,3 +13,5 @@ splice-repair-iterations = 250
 splice-repair-rounds = 3
 splice-repair-anchors = 3
 splice-repair-searches = 2
+
+seed = "random"
