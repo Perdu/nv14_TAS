@@ -245,7 +245,7 @@ def test_actual_searches_edit_full_inter_anchor_intervals(monkeypatch):
         level, source, RandomSpliceConfig(points=3, lookback=3, rounds=1),
         progress=logs.append,
     )
-    assert searches == [(0, 5, 0), (6, 20, 6), (21, 26, 21)]
+    assert searches == [(0, 5, 0), (6, 20, 6), (21, 26, 21), (27, 29, 27)]
     assert any("FULL segment [6:20] (15 editable frames)" in line for line in logs)
     assert result.frames == source
 
@@ -291,7 +291,7 @@ def test_control_waypoint_pins_next_segment_without_altering_prefix(monkeypatch)
 
     monkeypatch.setattr(splice, "_local_search", local_search)
     optimise_random_splices(level, source, RandomSpliceConfig(points=2, lookback=2, rounds=1))
-    assert searches == [(0, 10), (11, 24)]
+    assert searches == [(0, 10), (11, 24), (25, 29)]
 
 
 @pytest.mark.parametrize("dead_tick, suggested, immutable_end, expected", [
@@ -396,7 +396,7 @@ def test_random_splice_stagnation_stops_unbounded_campaign(monkeypatch):
         level, source, RandomSpliceConfig(rounds=0, stagnation_rounds=2),
         progress=messages.append,
     )
-    assert result.attempts == 0 and result.frames == source
+    assert result.attempts == 2 and result.frames == source
     assert sum("round " in m and "completed in" in m for m in messages) == 2
     assert any("stopping after 2 rounds" in m for m in messages)
 
@@ -418,7 +418,7 @@ def test_random_splice_anchor_progress_and_population_forwarding(monkeypatch):
         level, source, RandomSpliceConfig(rounds=1, workers=3),
         progress=messages.append,
     )
-    assert result.evaluations == 12
+    assert result.evaluations == 24
     assert any("anchor 1/1 frame 10: searching" in m and "3 workers" in m for m in messages)
     assert any("anchor 1/1 frame 10: seed 13; 3 worker(s)" in m for m in messages)
     assert any("anchor 1/1 frame 10: search finished" in m for m in messages)
@@ -449,7 +449,7 @@ def test_random_splice_repair_searches_capped_per_waypoint(monkeypatch):
         progress=messages.append,
     )
     assert calls.count(18) <= 1
-    assert len(calls) == 3  # One initial search per anchor, one continuation repair total.
+    assert len(calls) == 4  # Two waypoints, one continuation repair, one exit segment.
     assert any("repair limit reached (1 searches)" in m for m in messages)
     assert result.improvements == 0
 
@@ -536,8 +536,8 @@ def test_global_rounds_do_not_reduce_per_anchor_rounds(monkeypatch):
                                      RandomSpliceConfig(rounds=2, splice_rounds=10,
                                                         iterations=12, workers=1),
                                      progress=logs.append)
-    assert calls == [(10, 12), (10, 12)]
-    assert result.attempts == 2
+    assert calls == [(10, 12), (10, 12), (10, 12), (10, 12)]
+    assert result.attempts == 4
     assert any("x 10 Local rounds" in msg for msg in logs)
 
 
@@ -576,9 +576,59 @@ def test_real_anchor_runs_multiple_local_population_generations(monkeypatch):
                            repair_iterations=5, workers=1, seed=6),
         progress=messages.append,
     )
-    assert result.attempts == 1
+    assert result.attempts == 2
     assert any("round 1;" in line and "anchor 1/1" in line for line in messages)
     assert any("round 2;" in line and "anchor 1/1" in line for line in messages)
     assert any("round 3;" in line and "anchor 1/1" in line for line in messages)
     checked = evaluate_replay_with_sentinel(level, result.frames)
     assert checked.valid and checked.finish_tick == len(result.frames)
+
+
+def test_exit_segment_is_complete_and_immutable_neutral_sentinel(monkeypatch):
+    import nv14_random_splice as splice
+    level, source, reference = _baseline()
+    anchor = Waypoint(9, reference.point(9).x, reference.point(9).y)
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: (anchor,))
+    searches = []
+
+    def fake_search(level, frames, goal, *, start, editable_end=None, **kwargs):
+        searches.append((start, editable_end, goal.target_frame, goal.objective,
+                         goal.interaction_target.selector if goal.interaction_target else None,
+                         len(frames), frames[-1]))
+        return (), 1
+
+    monkeypatch.setattr(splice, "_local_search", fake_search)
+    optimize = splice.optimise_random_splices
+    optimize(level, source, RandomSpliceConfig(points=1, rounds=1))
+    assert searches[0][:4] == (0, None, 9, "earliest-arrival")
+    assert searches[1] == (10, 28, 29, "earliest-interaction", "exit:0", 30, InputFrame())
+
+
+def test_exit_segment_can_remove_wasted_frames_after_last_anchor(monkeypatch):
+    import nv14_random_splice as splice
+    level = _running_exit_level()
+    slow = tuple([InputFrame(right=True)] * 10 + [InputFrame()] * 6
+                 + [InputFrame(right=True)] * 20)
+    reference = evaluate_replay_with_sentinel(level, slow)
+    assert reference.valid and reference.finish_tick == len(slow)
+    anchor = Waypoint(8, reference.point(8).x, reference.point(8).y)
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: (anchor,))
+    calls = []
+    real_search = splice._local_search
+
+    def search(level, frames, goal, *, start, **kwargs):
+        calls.append((start, goal.target_frame, goal.objective))
+        if goal.objective == "earliest-arrival":
+            return (), 0
+        return real_search(level, frames, goal, start=start, **kwargs)
+
+    monkeypatch.setattr(splice, "_local_search", search)
+    updated = optimize_result = optimise_random_splices(
+        level, slow, RandomSpliceConfig(points=1, lookback=32, radius=6,
+                                       iterations=2500, beam=24, seed=2, rounds=1))
+    assert calls == [(0, 8, "earliest-arrival"), (9, len(slow), "earliest-interaction")]
+    assert updated.improvements >= 1
+    checked = evaluate_replay_with_sentinel(level, updated.frames)
+    assert checked.valid and checked.finish_tick == len(updated.frames)
+    assert len(updated.frames) < len(slow)
+    assert _control_preserved(reference, checked)

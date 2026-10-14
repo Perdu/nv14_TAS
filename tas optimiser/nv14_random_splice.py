@@ -17,7 +17,8 @@ from collections.abc import Callable, Sequence
 from nv14_auto import AutoEvaluation, CompactTracePoint, evaluate_replay_with_sentinel, verify_trimmed_replay
 from nv14_endpoint import EndpointGoal
 from nv14_engine import InputFrame, Level
-from nv14_objectives import INTERACTION_GOLD, reference_interaction_requirements
+from nv14_objectives import (INTERACTION_GOLD, reference_interaction_requirements,
+                             resolve_interaction_target)
 from nv14_population import PopulationConfig, optimise_local_population
 from nv14_replay import decode_complex_replay, editable_frames, encode_complex_replay, simulate_through_frame
 
@@ -170,11 +171,13 @@ def _goal(level: Level, reference_frames: Sequence[InputFrame], waypoint: Waypoi
 
 def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGoal,
                   *, start: int, config: RandomSpliceConfig, iterations: int,
-                  rounds: int, seed: int, progress: Callable[[str], None] | None = None):
-    if start > goal.target_frame or goal.target_frame >= len(frames):
+                  rounds: int, seed: int, progress: Callable[[str], None] | None = None,
+                  editable_end: int | None = None):
+    if start > (goal.target_frame if editable_end is None else editable_end) or goal.target_frame >= len(frames):
         return (), 0
     result = optimise_local_population(
-        level, frames, goal=goal, frame_ranges=((start, goal.target_frame),),
+        level, frames, goal=goal, frame_ranges=((start,
+            goal.target_frame if editable_end is None else editable_end),),
         config=PopulationConfig(
             iterations=iterations, beam=config.beam, rounds=rounds,
             top_results=min(3, config.beam), workers=config.workers,
@@ -450,6 +453,64 @@ def optimise_random_splices(
             if improved:
                 # Never use the previous trace's anchors on a changed route.
                 break
+        # The last sampled waypoint is never the actual exit. Search the entire
+        # remaining interval as a final Local segment, targeting the *fresh exit
+        # completion interaction*, not merely a position near the exit door.
+        # Keep the game's implicit neutral completion step immutable: the search
+        # input is one frame longer than the serialized TAS, and the final
+        # sentinel is not editable. Only a canonically verified shorter run is
+        # eligible for publication.
+        if not round_improved:
+            exit_start = waypoints[-1].frame + 1 if waypoints else 0
+            exit_deadline = len(current)
+            if exit_start < exit_deadline:
+                attempts += 1
+                exit_goal = EndpointGoal(
+                    target_frame=exit_deadline, objective="earliest-interaction",
+                    interaction_target=resolve_interaction_target(
+                        level, f"exit:{reference.completed_exit_index}"),
+                    arrival_start=exit_start,
+                    required_interactions=_requirements_at(level, current, exit_deadline - 1),
+                )
+                if progress:
+                    progress(f"[auto:random-splice] EXIT segment [{exit_start}:{exit_deadline - 1}] "
+                             f"({exit_deadline-exit_start} editable frames); "
+                             f"{config.workers} workers x {config.iterations} proposals "
+                             f"x {config.splice_rounds} Local rounds")
+                stage_start = time.monotonic()
+                exit_progress = {} if progress is None else {
+                    "progress": lambda text: progress(
+                        "[auto:random-splice] EXIT: "
+                        + text.removeprefix("[local:population] "))
+                }
+                found, used = _local_search(
+                    level, current + (InputFrame(),), exit_goal,
+                    start=exit_start, editable_end=exit_deadline - 1,
+                    config=config, iterations=config.iterations,
+                    rounds=config.splice_rounds, seed=rng.getrandbits(63),
+                    **exit_progress,
+                )
+                evaluations += used
+                if progress:
+                    progress(f"[auto:random-splice] EXIT search finished in "
+                             f"{time.monotonic()-stage_start:.1f}s, "
+                             f"{used} evaluations, {len(found)} feasible candidates")
+                for proposal, _event_tick in found:
+                    shorter = _validated_improvement(level, proposal, reference, len(current))
+                    if shorter is None:
+                        continue
+                    verified_exit = evaluate_replay_with_sentinel(level, shorter)
+                    if not _control_preserved(first_reference, verified_exit):
+                        continue
+                    current = shorter
+                    improvements += 1
+                    round_improved = True
+                    if best_callback:
+                        best_callback(current)
+                    if progress:
+                        progress(f"[auto:random-splice] improved to {len(current)} "
+                                 f"frames via EXIT segment")
+                    break
         stagnant = 0 if round_improved else stagnant + 1
         if progress:
             progress(f"[auto:random-splice] round {round_no+1} completed in "
