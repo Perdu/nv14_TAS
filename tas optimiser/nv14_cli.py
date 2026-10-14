@@ -3266,7 +3266,10 @@ def main() -> None:
             raise SystemExit(str(exc)) from exc
         except KeyboardInterrupt:
             # Best improvements were atomically published through the callback.
+            # Use the conventional interrupt exit status rather than claiming
+            # normal campaign completion (and never start another anchor).
             print("\n[auto:random-splice] interrupted; last verified best retained", flush=True)
+            raise SystemExit(130) from None
         return
 
     if args.mode == "auto" and args.auto_objective not in AUTO_OBJECTIVES:

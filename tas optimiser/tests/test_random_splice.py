@@ -632,3 +632,70 @@ def test_exit_segment_can_remove_wasted_frames_after_last_anchor(monkeypatch):
     assert checked.valid and checked.finish_tick == len(updated.frames)
     assert len(updated.frames) < len(slow)
     assert _control_preserved(reference, checked)
+
+
+def test_local_population_interrupt_stops_random_splice_instead_of_continuing(monkeypatch):
+    import nv14_random_splice as splice
+    from nv14_endpoint import EndpointGoal
+    from types import SimpleNamespace
+    level, source, _reference = _baseline()
+    calls = []
+
+    def interrupted_search(*args, **kwargs):
+        calls.append(kwargs["config"].rounds)
+        return SimpleNamespace(interrupted=True, candidates=(), evaluations=2)
+
+    monkeypatch.setattr(splice, "optimise_local_population", interrupted_search)
+    goal = EndpointGoal(target_frame=20, objective="earliest-arrival",
+                        target_region=(0, 1000, 0, 1000))
+    with pytest.raises(KeyboardInterrupt):
+        splice._local_search(level, source, goal, start=0,
+                             config=RandomSpliceConfig(splice_rounds=10),
+                             iterations=12, rounds=10, seed=4)
+    assert calls == [10]
+
+
+def test_interrupt_prevents_next_waypoint_and_keeps_best(monkeypatch):
+    import nv14_random_splice as splice
+    level, source, reference = _baseline()
+    anchors = tuple(Waypoint(i, reference.point(i).x, reference.point(i).y)
+                    for i in (7, 18))
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: anchors)
+    calls = []
+
+    def interrupted_search(*args, **kwargs):
+        calls.append(kwargs["start"])
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(splice, "_local_search", interrupted_search)
+    saved = []
+    with pytest.raises(KeyboardInterrupt):
+        splice.optimise_random_splices(level, source, RandomSpliceConfig(rounds=0),
+                                       best_callback=saved.append)
+    assert calls == [0]  # No next waypoint, exit segment, or outer round.
+    assert saved == []
+
+
+def test_cli_random_splice_interrupt_exits_130(monkeypatch, tmp_path, capsys):
+    import nv14_cli
+    from nv14_replay import encode_complex_replay
+    level, source, _reference = _baseline()
+    replay = tmp_path / "source.txt"
+    replay.write_text(f"$test#author#{level.source_level_string}#"
+                      f"{encode_complex_replay(source)}#\n", encoding="utf8")
+    output = tmp_path / "result.txt"
+    config = tmp_path / "config.toml"
+    config.write_text("[auto]\nobjective='speedrun'\nrandom-splice=true\nruns=0\n")
+
+    def interrupt(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(nv14_cli, "optimise_random_splices", interrupt)
+    import sys
+    monkeypatch.setattr(sys, "argv", ["optimize_replay.py", "auto", str(replay),
+                                       "--config", str(config), "--output", str(output)])
+    with pytest.raises(SystemExit) as exc:
+        nv14_cli.main()
+    assert exc.value.code == 130
+    assert "last verified best retained" in capsys.readouterr().out
+    assert not output.exists()

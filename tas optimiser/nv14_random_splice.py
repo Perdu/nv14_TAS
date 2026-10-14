@@ -187,6 +187,13 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
         ),
         progress=progress,
     )
+    # Local population deliberately converts Ctrl+C into a partial result so
+    # manual Local searches can retain their feasible endpoints. Random-splice
+    # instead owns a multi-anchor, potentially infinite outer campaign: if we
+    # ignore this flag, it starts the next anchor and appears immune to Ctrl+C.
+    # Propagate *after* Local has stopped and joined its worker pool.
+    if getattr(result, "interrupted", False):
+        raise KeyboardInterrupt
     return (tuple((item.frames, item.evaluation.frame) for item in result.candidates
                   if item.evaluation.feasible), result.evaluations)
 
