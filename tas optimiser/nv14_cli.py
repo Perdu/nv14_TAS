@@ -1989,7 +1989,7 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-radius", modes=auto_modes, type=float, default=16.0,
                          metavar="PIXELS", help="half-width/height of each waypoint rectangle (default 16)")
     command.add_argument("--auto-splice-lookback", modes=auto_modes, type=int, default=32,
-                         metavar="N", help="editable frames before a waypoint (default 32)")
+                         metavar="N", help="seam matching and local mutation span; entire preceding waypoint interval is editable (default 32)")
     command.add_argument("--auto-splice-iterations", modes=auto_modes, type=int, default=400,
                          metavar="N", help="Local population evaluations per waypoint (default 400)")
     command.add_argument("--auto-splice-repair-iterations", modes=auto_modes, type=int, default=250,

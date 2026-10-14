@@ -27,7 +27,7 @@ class RandomSpliceConfig:
     points: int = 5
     distance: float | None = None  # arc-length spacing in pixels; supersedes points
     radius: float = 16.0
-    lookback: int = 32
+    lookback: int = 32  # seam matching/maximum local mutation span, NOT a segment length
     iterations: int = 400  # Local proposals per anchor
     repair_iterations: int = 250  # Local proposals per subsequent anchor
     repair_anchors: int = 2
@@ -220,6 +220,16 @@ def _candidate_seams(reference: AutoEvaluation, candidate: AutoEvaluation,
     return tuple((t, r) for _score, _lead, t, r in candidates[:12])
 
 
+def _segment_start(waypoints: Sequence[Waypoint], index: int) -> int:
+    """Optimise the *entire* interval since the previous waypoint.
+
+    The preceding waypoint is an immutable checkpoint. Starting one frame
+    later keeps the previously verified trajectory and its switch state intact.
+    The first interval starts at frame zero.
+    """
+    return 0 if index == 0 else waypoints[index - 1].frame + 1
+
+
 def _repair_window_start(
     provisional: AutoEvaluation, *, suggested: int, immutable_end: int,
 ) -> int | None:
@@ -294,14 +304,15 @@ def optimise_random_splices(
             if anchor.frame >= len(current) - 1:
                 continue
             attempts += 1
-            start = max(0, anchor.frame - config.lookback)
+            start = _segment_start(waypoints, i)
             label = f"anchor {i+1}/{len(waypoints)} frame {anchor.frame}"
             if progress:
                 progress(f"[auto:random-splice] {label}: preparing checkpoint "
                          f"and reference interaction requirements")
             goal = _goal(level, current, anchor, config, deadline=anchor.frame, start=start)
             if progress:
-                progress(f"[auto:random-splice] {label}: searching [{start}:{anchor.frame}]; "
+                progress(f"[auto:random-splice] {label}: searching FULL segment "
+                         f"[{start}:{anchor.frame}] ({anchor.frame-start+1} editable frames); "
                          f"{config.workers} workers x {config.iterations} proposals")
             stage_start = time.monotonic()
             search_kw = {} if progress is None else {
@@ -340,6 +351,10 @@ def optimise_random_splices(
                     provisional = joined
                     if result is None:
                         provisional_eval = evaluate_replay_with_sentinel(level, provisional)
+                        # Each successful checkpoint freezes the preceding
+                        # segment, while the next repair may edit the full
+                        # remaining interval up to the next anchor.
+                        immutable_end = cut_tick
                         for next_anchor in waypoints[i + 1:i + 1 + config.repair_anchors]:
                             shift = reference_tick - cut_tick
                             deadline = next_anchor.frame - shift
@@ -347,8 +362,8 @@ def optimise_random_splices(
                                 break
                             repair_start = _repair_window_start(
                                 provisional_eval,
-                                suggested=max(cut_tick + 1, deadline - config.lookback),
-                                immutable_end=cut_tick,
+                                suggested=immutable_end + 1,
+                                immutable_end=immutable_end,
                             )
                             if repair_start is None or repair_start > deadline:
                                 # A terminal prefix cannot be fixed without
@@ -401,6 +416,7 @@ def optimise_random_splices(
                                 if before is not None and after is not None and _mask_preserved(before, after):
                                     next_provisional = trial
                                     provisional_eval = stage_eval
+                                    immutable_end = when
                                     break
                             if next_provisional is None:
                                 break

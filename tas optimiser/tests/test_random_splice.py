@@ -8,8 +8,9 @@ from nv14_auto import RouteControlEvent, evaluate_replay_with_sentinel
 from nv14_cli import parse_arguments
 from nv14_engine import InputFrame
 from nv14_random_splice import (
-    RandomSpliceConfig, _control_preserved, _mask_preserved,
-    _validated_improvement, _repair_window_start, choose_waypoints, optimise_random_splices,
+    RandomSpliceConfig, Waypoint, _control_preserved, _mask_preserved,
+    _validated_improvement, _repair_window_start, _segment_start,
+    choose_waypoints, optimise_random_splices,
 )
 from tests.test_auto import _running_exit_level
 
@@ -216,6 +217,83 @@ def test_real_two_switches_are_kept_after_six_frame_gain():
     }
 
 
+def test_full_inter_anchor_segments_start_after_previous_waypoint():
+    # A 40-frame lookback must NOT trim a 120-frame-long route segment.
+    waypoints = (
+        Waypoint(40, 0.0, 0.0),
+        Waypoint(160, 0.0, 0.0),
+        Waypoint(230, 0.0, 0.0),
+    )
+    assert [_segment_start(waypoints, i) for i in range(3)] == [0, 41, 161]
+
+
+def test_actual_searches_edit_full_inter_anchor_intervals(monkeypatch):
+    import nv14_random_splice as splice
+    level, source, baseline = _baseline()
+    anchors = tuple(splice.Waypoint(i, baseline.point(i).x, baseline.point(i).y)
+                    for i in (5, 20, 26))
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: anchors)
+    searches = []
+
+    def local_search(level, frames, goal, *, start, **kwargs):
+        searches.append((start, goal.target_frame, goal.arrival_start))
+        return (), 1
+
+    monkeypatch.setattr(splice, "_local_search", local_search)
+    logs = []
+    result = optimise_random_splices(
+        level, source, RandomSpliceConfig(points=3, lookback=3, rounds=1),
+        progress=logs.append,
+    )
+    assert searches == [(0, 5, 0), (6, 20, 6), (21, 26, 21)]
+    assert any("FULL segment [6:20] (15 editable frames)" in line for line in logs)
+    assert result.frames == source
+
+
+def test_full_segment_recovers_mid_interval_idle_time_with_short_lookback(monkeypatch):
+    """Lost frames far from both anchors must be editable and recoverable.
+
+    The old anchor-lookback search edits only [anchor-3:anchor], missing the
+    idle pulse at frames 10..15 in this deliberately slowed completed TAS.
+    """
+    import nv14_random_splice as splice
+    level = _running_exit_level()
+    slow = tuple([InputFrame(right=True)] * 10 + [InputFrame()] * 6
+                 + [InputFrame(right=True)] * 20)
+    reference = evaluate_replay_with_sentinel(level, slow)
+    assert reference.valid and reference.finish_tick == len(slow)
+    anchors = (splice.Waypoint(8, reference.point(8).x, reference.point(8).y),
+               splice.Waypoint(28, reference.point(28).x, reference.point(28).y))
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: anchors)
+    result = optimise_random_splices(
+        level, slow, RandomSpliceConfig(points=2, lookback=3, radius=6,
+                                       iterations=100, repair_iterations=100,
+                                       repair_anchors=1, rounds=1, seed=3),
+    )
+    assert len(result.frames) == len(slow) - 6
+    checked = evaluate_replay_with_sentinel(level, result.frames)
+    assert checked.valid and checked.finish_tick == len(result.frames)
+    assert _control_preserved(reference, checked)
+
+
+def test_control_waypoint_pins_next_segment_without_altering_prefix(monkeypatch):
+    import nv14_random_splice as splice
+    level, source, baseline = _baseline()
+    # Force a mandatory switch checkpoint; all later edits must begin after it.
+    anchors = (splice.Waypoint(10, baseline.point(10).x, baseline.point(10).y, True),
+               splice.Waypoint(24, baseline.point(24).x, baseline.point(24).y))
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: anchors)
+    searches = []
+
+    def local_search(level, frames, goal, *, start, **kwargs):
+        searches.append((start, goal.target_frame))
+        return (), 0
+
+    monkeypatch.setattr(splice, "_local_search", local_search)
+    optimise_random_splices(level, source, RandomSpliceConfig(points=2, lookback=2, rounds=1))
+    assert searches == [(0, 10), (11, 24)]
+
+
 @pytest.mark.parametrize("dead_tick, suggested, immutable_end, expected", [
     (None, 35, 10, 35),
     (22, 35, 10, 22),  # Rewind before the dying frame was frozen.
@@ -239,7 +317,7 @@ def test_continuation_cannot_repair_already_finished_prefix():
     ) is None
 
 @pytest.mark.parametrize("death_frame, repair_start", [
-    (8, 8),   # The splice has a repairable death before the normal window.
+    (8, 5),   # Repair may edit the entire interval after the frozen seam.
     (4, None),  # The new route died at the frozen seam; skip it.
 ])
 def test_random_splice_does_not_abort_on_fatal_continuation_prefix(
