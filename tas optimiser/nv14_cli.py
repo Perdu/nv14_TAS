@@ -2923,6 +2923,12 @@ def _run_local_population(
             best_callback=save_best, progress=lambda message: print(message, flush=True),
         )
         if not result.candidates:
+            if result.interrupted:
+                # Ctrl+C before a feasible result exists is still an interrupt,
+                # not a failed optimisation. Do not touch any prior output.
+                print("population search interrupted; no feasible endpoint found; "
+                      "existing output retained", flush=True)
+                raise SystemExit(130)
             raise ValueError("no feasible endpoint candidate was found")
         # Verify every ranked replay before publishing the final result set.
         verified = [(candidate, *verified_candidate(candidate)) for candidate in result.candidates[:config.top_results]]

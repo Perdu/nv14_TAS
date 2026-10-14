@@ -5,6 +5,7 @@ import math
 import multiprocessing
 import random
 import signal
+import time
 from bisect import bisect_right
 from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
@@ -84,9 +85,22 @@ def _stop_local_executor(
     for process in processes:
         if process.is_alive():
             process.terminate()
+    # Use one deadline for the entire pool. A timeout per worker makes Ctrl+C
+    # appear unresponsive on machines running many optimisation workers.
+    deadline = time.monotonic() + 2.0
     for process in processes:
-        process.join(timeout=2.0)
-    executor.shutdown(wait=True, cancel_futures=True)
+        process.join(timeout=max(0.0, deadline - time.monotonic()))
+    # Some workers may be stuck in native code or process startup; escalate
+    # after the shared grace period rather than blocking indefinitely.
+    for process in processes:
+        if process.is_alive():
+            process.kill()
+    for process in processes:
+        process.join(timeout=0.1)
+    # shutdown(wait=True) may block on executor management threads after a
+    # forcibly interrupted pool. Detached shutdown plus explicit reaping avoids
+    # holding the main process after the interrupt has been acknowledged.
+    executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _stop_local_executor_for_exception(
