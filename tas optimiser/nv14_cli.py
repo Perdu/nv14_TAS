@@ -1647,7 +1647,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_lookback", "auto_splice_iterations",
     "auto_splice_repair_iterations", "auto_splice_repair_anchors",
     "auto_splice_repair_searches", "auto_splice_rounds",
-    "auto_splice_repair_rounds",
+    "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_exit_lookback",
 })
 
 
@@ -2007,6 +2007,12 @@ def build_parser() -> argparse.ArgumentParser:
                          metavar="N", help="Local population rounds PER continuation repair (default 1)")
     command.add_argument("--auto-splice-repair-anchors", modes=auto_modes, type=int, default=2,
                          metavar="N", help="subsequent waypoints to repair after a splice (default 2)")
+    command.add_argument("--auto-splice-frontier", modes=auto_modes, type=int,
+                         default=3, metavar="N",
+                         help="max partial routes carried across waypoint segments (default 3, 0 disables)")
+    command.add_argument("--auto-splice-exit-lookback", modes=auto_modes, type=int,
+                         default=96, metavar="FRAMES",
+                         help="minimum editable exit-approach horizon; overlaps nearby waypoints (default 96)")
     command.add_argument("--auto-splice-repair-searches", modes=auto_modes, type=int,
                          default=8, metavar="N",
                          help="maximum Local continuation repair searches per waypoint (default 8; 0 disables)")
@@ -3250,6 +3256,8 @@ def main() -> None:
                 beam=args.beam, workers=max(1, args.workers), rounds=args.auto_runs,
                 stagnation_rounds=args.auto_stagnation_runs,
                 max_repair_searches=args.auto_splice_repair_searches,
+                frontier=args.auto_splice_frontier,
+                exit_lookback=args.auto_splice_exit_lookback,
                 seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
                       else 0 if args.seed is None else int(args.seed)),
             )

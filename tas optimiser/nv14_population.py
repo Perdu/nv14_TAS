@@ -69,6 +69,7 @@ class PopulationResult:
     worker_count: int
     seed: int
     interrupted: bool = False
+    frontier: tuple[PopulationCandidate, ...] = ()
 
 
 def _input_key(frames: Sequence[InputFrame]) -> bytes:
@@ -748,4 +749,19 @@ def optimise_local_population(
             events.close()
             events.join_thread()
     results = _diverse_results((*population, *((best,) if best else ())), config.top_results)
-    return PopulationResult(results, baseline, rounds, evaluations, stagnant, worker_count, seed, interrupted)
+    # Expose a small diverse set of nearest non-feasible survivors for callers
+    # building multi-stage routes. Normal Local result candidates remain strictly
+    # feasible, preserving existing CLI and output semantics.
+    near = sorted((candidate for candidate in population
+                   if not candidate.evaluation.feasible and not candidate.evaluation.dead),
+                  key=_rank)
+    frontier = []
+    niches = set()
+    for candidate in near:
+        if candidate.evaluation.niche_key not in niches:
+            frontier.append(candidate)
+            niches.add(candidate.evaluation.niche_key)
+            if len(frontier) >= config.top_results:
+                break
+    return PopulationResult(results, baseline, rounds, evaluations, stagnant,
+                            worker_count, seed, interrupted, tuple(frontier))

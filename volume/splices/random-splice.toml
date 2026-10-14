@@ -2,16 +2,21 @@
 objective = "speedrun"
 random-splice = true
 runs = 0
-rounds = 10
+rounds = 4
 
 splice-points = 4
 splice-radius = 30.0
 splice-lookback = 40
-splice-iterations = 10000
+splice-iterations = 3000
 
-splice-repair-iterations = 250
-splice-repair-rounds = 3
+splice-repair-iterations = 1500
+splice-repair-rounds = 4
 splice-repair-anchors = 3
-splice-repair-searches = 2
+splice-repair-searches = 4
+
+splice-frontier = 3
+
+splice-exit-lookback = 120
+
 
 seed = "random"

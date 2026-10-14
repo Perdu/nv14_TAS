@@ -13,9 +13,10 @@ import itertools
 import random
 import time
 from collections.abc import Callable, Sequence
+from collections import Counter
 
 from nv14_auto import AutoEvaluation, CompactTracePoint, evaluate_replay_with_sentinel, verify_trimmed_replay
-from nv14_endpoint import EndpointGoal
+from nv14_endpoint import EndpointGoal, EndpointEvaluator
 from nv14_engine import InputFrame, Level
 from nv14_objectives import (INTERACTION_GOLD, reference_interaction_requirements,
                              resolve_interaction_target)
@@ -39,6 +40,8 @@ class RandomSpliceConfig:
     rounds: int = 1
     stagnation_rounds: int = 0
     max_repair_searches: int = 8
+    frontier: int = 0  # additional cross-waypoint partial beam; CLI defaults to 3
+    exit_lookback: int = 96  # minimum editable horizon of the exit approach
     seed: int = 0
 
     def __post_init__(self) -> None:
@@ -58,6 +61,10 @@ class RandomSpliceConfig:
             raise ValueError("random splice rounds must be nonnegative (0 means continuous)")
         if type(self.stagnation_rounds) is not int or self.stagnation_rounds < 0:
             raise ValueError("random splice stagnation_rounds must be nonnegative")
+        if type(self.exit_lookback) is not int or self.exit_lookback < 1:
+            raise ValueError("random splice exit_lookback must be positive")
+        if type(self.frontier) is not int or self.frontier < 0:
+            raise ValueError("random splice frontier must be nonnegative")
         if type(self.max_repair_searches) is not int or self.max_repair_searches < 0:
             raise ValueError("random splice max_repair_searches must be nonnegative")
         if type(self.repair_anchors) is not int or self.repair_anchors < 0:
@@ -172,7 +179,7 @@ def _goal(level: Level, reference_frames: Sequence[InputFrame], waypoint: Waypoi
 def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGoal,
                   *, start: int, config: RandomSpliceConfig, iterations: int,
                   rounds: int, seed: int, progress: Callable[[str], None] | None = None,
-                  editable_end: int | None = None):
+                  editable_end: int | None = None, include_partial: bool = False):
     if start > (goal.target_frame if editable_end is None else editable_end) or goal.target_frame >= len(frames):
         return (), 0
     result = optimise_local_population(
@@ -180,7 +187,7 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             goal.target_frame if editable_end is None else editable_end),),
         config=PopulationConfig(
             iterations=iterations, beam=config.beam, rounds=rounds,
-            top_results=min(3, config.beam), workers=config.workers,
+            top_results=min(max(6, config.frontier * 3), config.beam), workers=config.workers,
             mutation_span=min(config.lookback, 32), seed=seed,
             repair_steps=min(64, iterations // 4),
             repair_lookback=min(config.lookback, 32),
@@ -194,8 +201,19 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
     # Propagate *after* Local has stopped and joined its worker pool.
     if getattr(result, "interrupted", False):
         raise KeyboardInterrupt
-    return (tuple((item.frames, item.evaluation.frame) for item in result.candidates
-                  if item.evaluation.feasible), result.evaluations)
+    candidates = list(result.candidates)
+    if include_partial:
+        # Local already ranks non-feasible states using required interactions,
+        # survival, and squared distance to the target. Expose the population's
+        # diverse near-miss frontier rather than silently discarding it.
+        candidates.extend(getattr(result, "frontier", ()))
+    seen: set[tuple[InputFrame, ...]] = set()
+    selected: list[tuple[tuple[InputFrame, ...], int]] = []
+    for item in candidates:
+        if (item.evaluation.feasible or include_partial) and item.frames not in seen:
+            selected.append((item.frames, item.evaluation.frame))
+            seen.add(item.frames)
+    return tuple(selected), result.evaluations
 
 
 def _candidate_seams(reference: AutoEvaluation, candidate: AutoEvaluation,
@@ -283,6 +301,173 @@ def _validated_improvement(level: Level, proposal: Sequence[InputFrame],
     except ValueError:
         return None
     return body if _control_preserved(reference, verified) else None
+
+
+def _exit_segment_start(finish: int, previous_end: int, lookback: int) -> int:
+    """Allow the exit objective to repair a useful approach, not 2-5 final frames.
+
+    Optional/mandatory path checkpoints help exploration, but do not constrain
+    the last speedrun improvement: it is safe to revisit earlier checkpoints
+    because the endpoint goal and final canonical replay must preserve every
+    required control interaction. This overlap is essential after an earlier
+    waypoint produced a slightly mismatched velocity or contact state.
+    """
+    return min(previous_end + 1, max(0, finish - lookback))
+
+
+def _progressive_frontier(
+    level: Level, current: tuple[InputFrame, ...], reference: AutoEvaluation,
+    waypoints: tuple[Waypoint, ...], config: RandomSpliceConfig, rng: random.Random,
+    progress: Callable[[str], None] | None,
+) -> tuple[tuple[InputFrame, ...] | None, int, int, Counter]:
+    """Carry surviving, interaction-safe *partial* routes across waypoint boundaries.
+
+    The normal splice path requires immediate suffix compatibility. This path
+    deliberately does not: each candidate's edited prefix is frozen at the
+    previous waypoint while another complete interval is optimised. Near-misses
+    are ranked using EndpointEvaluator.progress_key (including exit distance)
+    and are never published unless full canonical completion is later proven.
+    """
+    counters: Counter = Counter()
+    if not config.frontier:
+        return None, 0, 0, counters
+    branches: list[tuple[InputFrame, ...]] = [current]
+    evaluations = attempts = 0
+    previous_end = -1
+    for index, waypoint in enumerate(waypoints):
+        start = previous_end + 1
+        goal = _goal(level, current, waypoint, config, deadline=waypoint.frame, start=start)
+        reference_point = reference.point(waypoint.frame)
+        if reference_point is None:
+            break
+        proposals: list[tuple[tuple, tuple[InputFrame, ...], bool]] = []
+        for branch_index, branch in enumerate(branches):
+            attempts += 1
+            if progress:
+                progress(f"[auto:random-splice] frontier {index+1}/{len(waypoints)} "
+                         f"branch {branch_index+1}/{len(branches)}: "
+                         f"searching [{start}:{waypoint.frame}]")
+            try:
+                found, used = _local_search(
+                    level, branch, goal, start=start, config=config,
+                    iterations=max(20, config.iterations // 2),
+                    rounds=config.splice_rounds, seed=rng.getrandbits(63),
+                    include_partial=True,
+                )
+            except ValueError as exc:
+                if str(exc).startswith("the immutable prefix dies before the editable ranges"):
+                    counters["dead_immutable_prefix"] += 1
+                    continue
+                raise
+            evaluations += used
+            # Retain the parent alongside mutations; it might still be the
+            # optimal starting point when the next anchor is considered.
+            for trial, _tick in (*found, (branch, waypoint.frame)):
+                simulation = evaluate_replay_with_sentinel(level, trial)
+                point = simulation.point(waypoint.frame)
+                if point is None or (point.dead and not point.complete):
+                    counters["dead_before_waypoint"] += 1
+                    continue
+                if not _mask_preserved(reference_point, point):
+                    counters["missing_control_at_waypoint"] += 1
+                    continue
+                endpoint = EndpointEvaluator(level, goal).evaluate(trial)
+                if endpoint.violated_interactions:
+                    counters["forbidden_interaction"] += 1
+                    continue
+                if not endpoint.feasible:
+                    counters["near_miss_carried"] += 1
+                proposals.append((endpoint.progress_key, trial, endpoint.feasible))
+        if not proposals:
+            if progress:
+                progress(f"[auto:random-splice] frontier stopped at waypoint {waypoint.frame}: "
+                         "no surviving interaction-safe candidates")
+            return None, attempts, evaluations, counters
+        # Keep a feasible majority if available and at least one near miss.
+        # Niche diversity is based on physical state at the checkpoint.
+        ranked = sorted(proposals, key=lambda c: c[0])
+        selected: list[tuple[InputFrame, ...]] = []
+        state_niches: set[tuple] = set()
+        def offer(trial: tuple[InputFrame, ...]) -> None:
+            if trial in selected:
+                return
+            point = evaluate_replay_with_sentinel(level, trial).point(waypoint.frame)
+            if point is None:
+                return
+            niche = (round(point.x / 4), round(point.y / 4),
+                     round(point.vx * 2), round(point.vy * 2),
+                     point.open_exit_mask, point.opened_locked_door_mask,
+                     point.triggered_trapdoor_mask)
+            if niche not in state_niches:
+                selected.append(trial)
+                state_niches.add(niche)
+        for _rank, trial, _feasible in ranked:
+            if len(selected) >= config.frontier:
+                break
+            offer(trial)
+        # Preserve one distinct incomplete approach even if feasible candidates
+        # filled the beam: it may catch up at a later waypoint.
+        if config.frontier > 1 and all(feasible for _key, trial, feasible in ranked if trial in selected):
+            for _key, trial, feasible in ranked:
+                if not feasible and trial not in selected:
+                    if len(selected) >= config.frontier:
+                        selected.pop()
+                    offer(trial)
+                    break
+        branches = selected or [ranked[0][1]]
+        previous_end = waypoint.frame
+        counters["retained_branches"] += len(branches)
+        if progress:
+            progress(f"[auto:random-splice] frontier waypoint {waypoint.frame}: "
+                     f"retained {len(branches)} branches, "
+                     f"{counters['near_miss_carried']} near-miss candidates seen")
+
+    # Search the entire last interval from each retained prefix to the exit.
+    finish = len(current)
+    start = _exit_segment_start(finish, previous_end, config.exit_lookback)
+    if start >= finish:
+        return None, attempts, evaluations, counters
+    exit_target = resolve_interaction_target(level, f"exit:{reference.completed_exit_index}")
+    goal = EndpointGoal(target_frame=finish, objective="earliest-interaction",
+                        interaction_target=exit_target, arrival_start=start,
+                        required_interactions=_requirements_at(level, current, finish - 1))
+    shortest: tuple[InputFrame, ...] | None = None
+    min_exit_gap = math.inf
+    door = level.static_world.entry_for_ref(
+        level.static_world.exit_door_ref(reference.completed_exit_index))
+    edge_sum = (level.player.r + door.r) if door is not None else 0.0
+    for branch_index, branch in enumerate(branches):
+        attempts += 1
+        if progress:
+            progress(f"[auto:random-splice] frontier EXIT branch {branch_index+1}/{len(branches)} "
+                     f"searching [{start}:{finish-1}]")
+        found, used = _local_search(
+            level, branch + (InputFrame(),), goal, start=start,
+            editable_end=finish-1, config=config, iterations=config.iterations,
+            rounds=config.splice_rounds, seed=rng.getrandbits(63),
+            include_partial=True,
+        )
+        evaluations += used
+        for trial, _tick in found:
+            endpoint = EndpointEvaluator(level, goal).evaluate(trial)
+            if not endpoint.feasible:
+                counters["exit_near_misses"] += 1
+                if math.isfinite(endpoint.target_distance):
+                    min_exit_gap = min(min_exit_gap, endpoint.target_distance - edge_sum)
+                continue
+            validated = _validated_improvement(level, trial, reference, len(current))
+            if validated is None:
+                counters["exit_unverified"] += 1
+            elif shortest is None or len(validated) < len(shortest):
+                shortest = validated
+    if progress:
+        distance = (f"{min_exit_gap:.2f}px edge gap" if math.isfinite(min_exit_gap)
+                    else "no measurable near miss")
+        progress(f"[auto:random-splice] frontier EXIT: "
+                 f"{counters['exit_near_misses']} near misses; closest {distance}; "
+                 f"{counters['exit_unverified']} unverified completions; "
+                 f"{'best '+str(len(shortest))+' frames' if shortest else 'no shorter completion'}")
+    return shortest, attempts, evaluations, counters
 
 
 def optimise_random_splices(
@@ -468,8 +653,11 @@ def optimise_random_splices(
         # sentinel is not editable. Only a canonically verified shorter run is
         # eligible for publication.
         if not round_improved:
-            exit_start = waypoints[-1].frame + 1 if waypoints else 0
             exit_deadline = len(current)
+            exit_start = _exit_segment_start(
+                exit_deadline, waypoints[-1].frame if waypoints else -1,
+                config.exit_lookback,
+            )
             if exit_start < exit_deadline:
                 attempts += 1
                 exit_goal = EndpointGoal(
@@ -518,6 +706,27 @@ def optimise_random_splices(
                         progress(f"[auto:random-splice] improved to {len(current)} "
                                  f"frames via EXIT segment")
                     break
+        # Full-route multi-splice fallback: preserve useful partial edits across
+        # waypoint boundaries even when no single splice fits the old suffix.
+        if not round_improved and config.frontier:
+            proposal, extra_attempts, extra_evaluations, diagnostic = _progressive_frontier(
+                level, current, reference, waypoints, config, rng, progress)
+            attempts += extra_attempts
+            evaluations += extra_evaluations
+            if proposal is not None:
+                final_eval = evaluate_replay_with_sentinel(level, proposal)
+                if len(proposal) < len(current) and _control_preserved(first_reference, final_eval):
+                    current = proposal
+                    improvements += 1
+                    round_improved = True
+                    if best_callback:
+                        best_callback(current)
+                    if progress:
+                        progress(f"[auto:random-splice] improved to {len(current)} "
+                                 f"frames via progressive multi-splice")
+            if progress:
+                progress(f"[auto:random-splice] frontier diagnostics: "
+                         + ", ".join(f"{name}={count}" for name, count in sorted(diagnostic.items())))
         stagnant = 0 if round_improved else stagnant + 1
         if progress:
             progress(f"[auto:random-splice] round {round_no+1} completed in "

@@ -245,7 +245,7 @@ def test_actual_searches_edit_full_inter_anchor_intervals(monkeypatch):
         level, source, RandomSpliceConfig(points=3, lookback=3, rounds=1),
         progress=logs.append,
     )
-    assert searches == [(0, 5, 0), (6, 20, 6), (21, 26, 21), (27, 29, 27)]
+    assert searches == [(0, 5, 0), (6, 20, 6), (21, 26, 21), (0, 29, 0)]
     assert any("FULL segment [6:20] (15 editable frames)" in line for line in logs)
     assert result.frames == source
 
@@ -291,7 +291,7 @@ def test_control_waypoint_pins_next_segment_without_altering_prefix(monkeypatch)
 
     monkeypatch.setattr(splice, "_local_search", local_search)
     optimise_random_splices(level, source, RandomSpliceConfig(points=2, lookback=2, rounds=1))
-    assert searches == [(0, 10), (11, 24), (25, 29)]
+    assert searches == [(0, 10), (11, 24), (0, 29)]
 
 
 @pytest.mark.parametrize("dead_tick, suggested, immutable_end, expected", [
@@ -601,7 +601,7 @@ def test_exit_segment_is_complete_and_immutable_neutral_sentinel(monkeypatch):
     optimize = splice.optimise_random_splices
     optimize(level, source, RandomSpliceConfig(points=1, rounds=1))
     assert searches[0][:4] == (0, None, 9, "earliest-arrival")
-    assert searches[1] == (10, 28, 29, "earliest-interaction", "exit:0", 30, InputFrame())
+    assert searches[1] == (0, 28, 29, "earliest-interaction", "exit:0", 30, InputFrame())
 
 
 def test_exit_segment_can_remove_wasted_frames_after_last_anchor(monkeypatch):
@@ -626,7 +626,7 @@ def test_exit_segment_can_remove_wasted_frames_after_last_anchor(monkeypatch):
     updated = optimize_result = optimise_random_splices(
         level, slow, RandomSpliceConfig(points=1, lookback=32, radius=6,
                                        iterations=2500, beam=24, seed=2, rounds=1))
-    assert calls == [(0, 8, "earliest-arrival"), (9, len(slow), "earliest-interaction")]
+    assert calls == [(0, 8, "earliest-arrival"), (0, len(slow), "earliest-interaction")]
     assert updated.improvements >= 1
     checked = evaluate_replay_with_sentinel(level, updated.frames)
     assert checked.valid and checked.finish_tick == len(updated.frames)
