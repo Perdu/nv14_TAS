@@ -30,6 +30,7 @@ from nv14_auto import (
 )
 from nv14_auto_parallel import optimise_autonomous_campaign
 from nv14_auto_endpoint import AutoEndpointConfig, optimise_auto_endpoint_campaign
+from nv14_random_splice import RandomSpliceConfig, optimise_random_splices
 from nv14_endpoint import EndpointGoal, RequiredJump, verify_endpoint
 from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
 from nv14_endpoint import EARLIEST_OBJECTIVES, SECONDARY_OBJECTIVES
@@ -1635,6 +1636,14 @@ def _validate_local_strategy(args: argparse.Namespace, explicit: set[str]) -> No
         raise SystemExit(f"--objective {args.objective} requires --search population")
 
 
+_AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
+    "auto_splice_points", "auto_splice_distance", "auto_splice_radius",
+    "auto_splice_lookback", "auto_splice_iterations",
+    "auto_splice_repair_iterations", "auto_splice_repair_anchors",
+    "auto_splice_repair_searches",
+})
+
+
 _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
     "auto_target_frame", "auto_target_region", "auto_target_object", "auto_target_point",
     "auto_arrival_start", "auto_secondary_objective", "auto_x_window", "auto_y_window",
@@ -1646,7 +1655,15 @@ _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
 
 def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -> None:
     """Keep old complete-route Auto strict about unused endpoint-only switches."""
-    if args.mode != "auto" or args.auto_objective not in AUTO_OBJECTIVES:
+    if args.mode != "auto":
+        return
+    unused = sorted(_AUTO_RANDOM_SPLICE_OPTIONS & explicit)
+    if unused and not args.auto_random_splice:
+        raise SystemExit("--" + ", --".join(n.replace("_", "-") for n in unused)
+                         + " require --auto-random-splice")
+    if args.auto_random_splice and args.auto_objective != AUTO_OBJECTIVE_SPEEDRUN:
+        raise SystemExit("--auto-random-splice requires --objective speedrun")
+    if args.auto_objective not in AUTO_OBJECTIVES:
         return
     incompatible = sorted(_AUTO_ENDPOINT_ONLY_OPTIONS & explicit)
     if incompatible:
@@ -1961,6 +1978,27 @@ def build_parser() -> argparse.ArgumentParser:
             "(default: speedrun)"
         ),
     )
+    command.add_argument(
+        "--auto-random-splice", modes=auto_modes, action="store_true",
+        help="switch-safe stochastic route waypoint splicing; requires completed speedrun",
+    )
+    command.add_argument("--auto-splice-points", modes=auto_modes, type=int, default=5,
+                         metavar="N", help="number of random path waypoints per round (default 5)")
+    command.add_argument("--auto-splice-distance", modes=auto_modes, type=float,
+                         metavar="PIXELS", help="sample every N pixels of travel instead of by count")
+    command.add_argument("--auto-splice-radius", modes=auto_modes, type=float, default=16.0,
+                         metavar="PIXELS", help="half-width/height of each waypoint rectangle (default 16)")
+    command.add_argument("--auto-splice-lookback", modes=auto_modes, type=int, default=32,
+                         metavar="N", help="editable frames before a waypoint (default 32)")
+    command.add_argument("--auto-splice-iterations", modes=auto_modes, type=int, default=400,
+                         metavar="N", help="Local population evaluations per waypoint (default 400)")
+    command.add_argument("--auto-splice-repair-iterations", modes=auto_modes, type=int, default=250,
+                         metavar="N", help="Local evaluations per continuation repair (default 250)")
+    command.add_argument("--auto-splice-repair-anchors", modes=auto_modes, type=int, default=2,
+                         metavar="N", help="subsequent waypoints to repair after a splice (default 2)")
+    command.add_argument("--auto-splice-repair-searches", modes=auto_modes, type=int,
+                         default=8, metavar="N",
+                         help="maximum Local continuation repair searches per waypoint (default 8; 0 disables)")
     # Endpoint objectives share Local's native EndpointGoal and [goal] TOML.
     # Keep the existing completed-route speedrun/highscore CLI untouched.
     command.add_argument("--auto-target-frame", "--target-frame", modes=auto_modes, type=parse_nonnegative_int,
@@ -3177,6 +3215,46 @@ def main() -> None:
                     f"#{parent_number}: {exc}"
                 ) from exc
         auto_parent_frames.append(tuple(parent_retimed_frames))
+
+    if args.mode == "auto" and args.auto_random_splice:
+        if args.auto_objective != AUTO_OBJECTIVE_SPEEDRUN:
+            raise SystemExit("--auto-random-splice requires --objective speedrun")
+        if args.auto_parents or args.auto_checkpoint or args.auto_resume:
+            raise SystemExit("random splice does not support auto parents or checkpoint/resume")
+        try:
+            splice_config = RandomSpliceConfig(
+                points=args.auto_splice_points, distance=args.auto_splice_distance,
+                radius=args.auto_splice_radius, lookback=args.auto_splice_lookback,
+                iterations=args.auto_splice_iterations,
+                repair_iterations=args.auto_splice_repair_iterations,
+                repair_anchors=args.auto_splice_repair_anchors,
+                beam=args.beam, workers=max(1, args.workers), rounds=args.auto_runs,
+                stagnation_rounds=args.auto_stagnation_runs,
+                max_repair_searches=args.auto_splice_repair_searches,
+                seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
+                      else 0 if args.seed is None else int(args.seed)),
+            )
+            # Publishing is restricted to complete, canonical shorter replays.
+            result = optimise_random_splices(
+                level, replay.frames, splice_config,
+                best_callback=lambda frames: _write_result(
+                    source, output_path, replay_output_path, encode_complex_replay(frames)),
+                progress=lambda message: print(message, flush=True),
+            )
+            if not result.improvements:
+                # Do not overwrite the previous best with an unverified partial route.
+                print("[auto:random-splice] no shorter switch-safe completed replay found")
+            else:
+                _write_result(source, output_path, replay_output_path,
+                              encode_complex_replay(result.frames))
+            print(f"[auto:random-splice] {result.attempts} anchors tried; "
+                  f"{result.improvements} improvements; {len(result.frames)} frames")
+        except (ValueError, RuntimeError) as exc:
+            raise SystemExit(str(exc)) from exc
+        except KeyboardInterrupt:
+            # Best improvements were atomically published through the callback.
+            print("\n[auto:random-splice] interrupted; last verified best retained", flush=True)
+        return
 
     if args.mode == "auto" and args.auto_objective not in AUTO_OBJECTIVES:
         # Endpoint Auto uses Local's *exact* evaluator, but its own structural

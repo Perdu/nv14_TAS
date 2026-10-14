@@ -1,0 +1,776 @@
+diff --git "a/tas optimiser/README.md" "b/tas optimiser/README.md"
+index 22c68d8..672bc34 100644
+--- "a/tas optimiser/README.md"
++++ "b/tas optimiser/README.md"
+@@ -1348,3 +1348,13 @@ and [shared example config](examples/config/shared-endpoint.toml).
+ `examples/config/local-multiple-jumps.toml` and
+ `docs/AUTO_ENDPOINT_OBJECTIVES.md`. Both `local --config` and Auto
+ `--goal-config` can use the same `[[local.require-jumps]]` TOML entries.
++
++### Switch-safe random waypoint splicing
++
++For micro-optimising a **completed** Auto speedrun, `auto --auto-random-splice`
++creates random spatial waypoints along the best replay and reuses Local
++population search for earlier arrivals and progressive seam repairs. It
++hard-preserves reference switch/door/trapdoor interactions and verifies
++complete shorter replays before saving. Waypoint count or distance, region
++radius, lookback, Local budget and repair depth are configurable under `[auto]`
++or as CLI arguments. See [docs/RANDOM_SPLICE.md](docs/RANDOM_SPLICE.md).
+diff --git "a/tas optimiser/docs/RANDOM_SPLICE.md" "b/tas optimiser/docs/RANDOM_SPLICE.md"
+new file mode 100644
+index 0000000..7c68700
+--- /dev/null
++++ "b/tas optimiser/docs/RANDOM_SPLICE.md"
+@@ -0,0 +1,76 @@
++# Switch-safe random path splicing (Auto)
++
++`auto --auto-random-splice` is an **opt-in micro-optimisation strategy** for an
++existing *completed* TAS. It requires `--objective speedrun`, and it will never
++write an incomplete or non-improving run.
++
++The optimiser samples a configurable number of waypoints along the current
++best simulated path, either by randomised travelled-distance partitions or by
++pixel spacing. Each waypoint becomes an earliest-arrival rectangular Local
++population goal. After identifying an earlier local arrival, it searches for a
++physically compatible join (position **and** velocity/contact state) to the
++reference suffix. If direct completion fails, it can run successive Local
++population searches toward later waypoints to repair the continuation.
++
++**Switch and object safety are hard constraints:** mandatory waypoints are added
++after route-control interactions; every waypoint requires previously activated
++switches/locked doors; each proposed seam preserves the reference's exit,
++locked-door and trapdoor masks; and a final, repacked replay must complete
++with every original exact `(interaction kind, object index)` route-control event
++still present. A candidate that skips a necessary switch is discarded, even
++if it arrives earlier. Dynamic physics differences are also checked by a full
++replay from frame zero. Gold is not hard-required for a speedrun unless its
++loss prevents completion.
++
++## TOML example
++
++Add this to your ordinary default Auto TOML (no splice files required):
++
++```toml
++[auto]
++objective = "speedrun"
++random-splice = true
++runs = 3                  # 0 repeats continuously until Ctrl+C
++beam = 16
++seed = "random"         # integer seeds reproduce waypoint selection/search
++splice-points = 8        # alternatively: splice-distance = 80.0 (pixels travelled)
++splice-radius = 14.0     # +/- in x and y, in pixels
++splice-lookback = 40     # editable frames before an anchor
++splice-iterations = 1000 # proposals per anchor and worker
++splice-repair-iterations = 500
++splice-repair-anchors = 3 # subsequent anchors to attempt repair through
++```
++
++Then run:
++
++```sh
++python optimize_replay.py auto completed.txt --config auto-default.toml --output improved.txt
++```
++
++Or invoke directly:
++
++```sh
++python optimize_replay.py auto completed.txt --output improved.txt \
++  --auto-random-splice --auto-runs 2 --auto-splice-points 8 \
++  --auto-splice-radius 14 --auto-splice-iterations 1000
++```
++
++Use `--auto-splice-distance 80` instead of `--auto-splice-points` to sample
++by travel distance. In either case switch/door events add *mandatory* anchors,
++which can increase the total above the requested count.
++
++`--workers` controls the Local population search at each waypoint. The
++iterations settings are **per worker**, not a global shared limit.
++The optimiser outputs a replay only after independently verifying a shorter,
++completed run with the same required route-control events. If none is found,
++no output file is written and the original source remains untouched.
++
++## Scope and limits
++
++This strategy uses Local's population endpoint evaluator/search, plus state-aware
++suffix joining and bounded continuation repairs. It is *not* the full completed
++Auto campaign's global multi-parent/splice planner, and it does not currently
++support Auto checkpoints/resume or extra
++`--auto-parent` replays. Randomising anchors cannot guarantee improvement;
++try different fixed seeds and radii, and measure actual finish frames. The
++physics and native search kernels are unchanged.
+diff --git "a/tas optimiser/nv14_cli.py" "b/tas optimiser/nv14_cli.py"
+index f3379ce..64277a4 100644
+--- "a/tas optimiser/nv14_cli.py"
++++ "b/tas optimiser/nv14_cli.py"
+@@ -30,6 +30,7 @@ from nv14_auto import (
+ )
+ from nv14_auto_parallel import optimise_autonomous_campaign
+ from nv14_auto_endpoint import AutoEndpointConfig, optimise_auto_endpoint_campaign
++from nv14_random_splice import RandomSpliceConfig, optimise_random_splices
+ from nv14_endpoint import EndpointGoal, RequiredJump, verify_endpoint
+ from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
+ from nv14_endpoint import EARLIEST_OBJECTIVES, SECONDARY_OBJECTIVES
+@@ -1635,6 +1636,13 @@ def _validate_local_strategy(args: argparse.Namespace, explicit: set[str]) -> No
+         raise SystemExit(f"--objective {args.objective} requires --search population")
+ 
+ 
++_AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
++    "auto_splice_points", "auto_splice_distance", "auto_splice_radius",
++    "auto_splice_lookback", "auto_splice_iterations",
++    "auto_splice_repair_iterations", "auto_splice_repair_anchors",
++})
++
++
+ _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
+     "auto_target_frame", "auto_target_region", "auto_target_object", "auto_target_point",
+     "auto_arrival_start", "auto_secondary_objective", "auto_x_window", "auto_y_window",
+@@ -1646,7 +1654,15 @@ _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
+ 
+ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -> None:
+     """Keep old complete-route Auto strict about unused endpoint-only switches."""
+-    if args.mode != "auto" or args.auto_objective not in AUTO_OBJECTIVES:
++    if args.mode != "auto":
++        return
++    unused = sorted(_AUTO_RANDOM_SPLICE_OPTIONS & explicit)
++    if unused and not args.auto_random_splice:
++        raise SystemExit("--" + ", --".join(n.replace("_", "-") for n in unused)
++                         + " require --auto-random-splice")
++    if args.auto_random_splice and args.auto_objective != AUTO_OBJECTIVE_SPEEDRUN:
++        raise SystemExit("--auto-random-splice requires --objective speedrun")
++    if args.auto_objective not in AUTO_OBJECTIVES:
+         return
+     incompatible = sorted(_AUTO_ENDPOINT_ONLY_OPTIONS & explicit)
+     if incompatible:
+@@ -1961,6 +1977,24 @@ def build_parser() -> argparse.ArgumentParser:
+             "(default: speedrun)"
+         ),
+     )
++    command.add_argument(
++        "--auto-random-splice", modes=auto_modes, action="store_true",
++        help="switch-safe stochastic route waypoint splicing; requires completed speedrun",
++    )
++    command.add_argument("--auto-splice-points", modes=auto_modes, type=int, default=5,
++                         metavar="N", help="number of random path waypoints per round (default 5)")
++    command.add_argument("--auto-splice-distance", modes=auto_modes, type=float,
++                         metavar="PIXELS", help="sample every N pixels of travel instead of by count")
++    command.add_argument("--auto-splice-radius", modes=auto_modes, type=float, default=16.0,
++                         metavar="PIXELS", help="half-width/height of each waypoint rectangle (default 16)")
++    command.add_argument("--auto-splice-lookback", modes=auto_modes, type=int, default=32,
++                         metavar="N", help="editable frames before a waypoint (default 32)")
++    command.add_argument("--auto-splice-iterations", modes=auto_modes, type=int, default=400,
++                         metavar="N", help="Local population evaluations per waypoint (default 400)")
++    command.add_argument("--auto-splice-repair-iterations", modes=auto_modes, type=int, default=250,
++                         metavar="N", help="Local evaluations per continuation repair (default 250)")
++    command.add_argument("--auto-splice-repair-anchors", modes=auto_modes, type=int, default=2,
++                         metavar="N", help="subsequent waypoints to repair after a splice (default 2)")
+     # Endpoint objectives share Local's native EndpointGoal and [goal] TOML.
+     # Keep the existing completed-route speedrun/highscore CLI untouched.
+     command.add_argument("--auto-target-frame", "--target-frame", modes=auto_modes, type=parse_nonnegative_int,
+@@ -3178,6 +3212,44 @@ def main() -> None:
+                 ) from exc
+         auto_parent_frames.append(tuple(parent_retimed_frames))
+ 
++    if args.mode == "auto" and args.auto_random_splice:
++        if args.auto_objective != AUTO_OBJECTIVE_SPEEDRUN:
++            raise SystemExit("--auto-random-splice requires --objective speedrun")
++        if args.auto_parents or args.auto_checkpoint or args.auto_resume:
++            raise SystemExit("random splice does not support auto parents or checkpoint/resume")
++        try:
++            splice_config = RandomSpliceConfig(
++                points=args.auto_splice_points, distance=args.auto_splice_distance,
++                radius=args.auto_splice_radius, lookback=args.auto_splice_lookback,
++                iterations=args.auto_splice_iterations,
++                repair_iterations=args.auto_splice_repair_iterations,
++                repair_anchors=args.auto_splice_repair_anchors,
++                beam=args.beam, workers=max(1, args.workers), rounds=args.auto_runs,
++                seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
++                      else 0 if args.seed is None else int(args.seed)),
++            )
++            # Publishing is restricted to complete, canonical shorter replays.
++            result = optimise_random_splices(
++                level, replay.frames, splice_config,
++                best_callback=lambda frames: _write_result(
++                    source, output_path, replay_output_path, encode_complex_replay(frames)),
++                progress=lambda message: print(message, flush=True),
++            )
++            if not result.improvements:
++                # Do not overwrite the previous best with an unverified partial route.
++                print("[auto:random-splice] no shorter switch-safe completed replay found")
++            else:
++                _write_result(source, output_path, replay_output_path,
++                              encode_complex_replay(result.frames))
++            print(f"[auto:random-splice] {result.attempts} anchors tried; "
++                  f"{result.improvements} improvements; {len(result.frames)} frames")
++        except (ValueError, RuntimeError) as exc:
++            raise SystemExit(str(exc)) from exc
++        except KeyboardInterrupt:
++            # Best improvements were atomically published through the callback.
++            print("\n[auto:random-splice] interrupted; last verified best retained", flush=True)
++        return
++
+     if args.mode == "auto" and args.auto_objective not in AUTO_OBJECTIVES:
+         # Endpoint Auto uses Local's *exact* evaluator, but its own structural
+         # mutation beam. Incomplete routes cannot enter Auto's completed-route
+diff --git "a/tas optimiser/nv14_random_splice.py" "b/tas optimiser/nv14_random_splice.py"
+new file mode 100644
+index 0000000..ccba9b5
+--- /dev/null
++++ "b/tas optimiser/nv14_random_splice.py"
+@@ -0,0 +1,335 @@
++"""Switch-safe stochastic waypoint splicing of an existing completed N TAS.
++
++A waypoint is a spatial *goal*, not permission to ignore the reference's
++persistent interactions. Only canonically verified shorter *completed* replays
++are published. Intermediate splices can be incomplete and are repaired through
++later mandatory waypoints with Local's population search.
++"""
++from __future__ import annotations
++
++from dataclasses import dataclass, replace
++import math
++import itertools
++import random
++from collections.abc import Callable, Sequence
++
++from nv14_auto import AutoEvaluation, CompactTracePoint, evaluate_replay_with_sentinel, verify_trimmed_replay
++from nv14_endpoint import EndpointGoal
++from nv14_engine import InputFrame, Level
++from nv14_objectives import INTERACTION_GOLD, reference_interaction_requirements
++from nv14_population import PopulationConfig, optimise_local_population
++from nv14_replay import decode_complex_replay, editable_frames, encode_complex_replay, simulate_through_frame
++
++
++@dataclass(frozen=True, slots=True)
++class RandomSpliceConfig:
++    points: int = 5
++    distance: float | None = None  # arc-length spacing in pixels; supersedes points
++    radius: float = 16.0
++    lookback: int = 32
++    iterations: int = 400  # Local proposals per anchor
++    repair_iterations: int = 250  # Local proposals per subsequent anchor
++    repair_anchors: int = 2
++    beam: int = 16
++    workers: int = 1
++    rounds: int = 1
++    seed: int = 0
++
++    def __post_init__(self) -> None:
++        if type(self.points) is not int or self.points < 1:
++            raise ValueError("random splice points must be positive")
++        if self.distance is not None and (not math.isfinite(self.distance) or self.distance <= 0):
++            raise ValueError("random splice distance must be positive and finite")
++        if not math.isfinite(self.radius) or self.radius <= 0:
++            raise ValueError("random splice radius must be positive and finite")
++        for field in ("lookback", "iterations", "repair_iterations", "beam", "workers"):
++            if type(getattr(self, field)) is not int or getattr(self, field) < 1:
++                raise ValueError(f"random splice {field} must be positive")
++        if type(self.rounds) is not int or self.rounds < 0:
++            raise ValueError("random splice rounds must be nonnegative (0 means continuous)")
++        if type(self.repair_anchors) is not int or self.repair_anchors < 0:
++            raise ValueError("random splice repair_anchors must be nonnegative")
++        if type(self.seed) is not int or self.seed < 0:
++            raise ValueError("random splice seed must be nonnegative")
++
++
++@dataclass(frozen=True, slots=True)
++class Waypoint:
++    frame: int
++    x: float
++    y: float
++    mandatory: bool = False
++
++    def region(self, radius: float) -> tuple[float, float, float, float]:
++        return (self.x - radius, self.x + radius, self.y - radius, self.y + radius)
++
++
++@dataclass(frozen=True, slots=True)
++class RandomSpliceResult:
++    frames: tuple[InputFrame, ...]
++    waypoints: tuple[Waypoint, ...]
++    improvements: int
++    attempts: int
++    evaluations: int
++
++
++def _reference_events(evaluation: AutoEvaluation) -> frozenset[tuple[str, int]]:
++    """Persistent exact IDs; trapdoor activations are protected as well."""
++    return frozenset((event.kind, event.index) for event in evaluation.route_control_events)
++
++
++def _mask_preserved(reference: CompactTracePoint, candidate: CompactTracePoint) -> bool:
++    """No reference interaction already performed by this anchor may vanish."""
++    for name in ("open_exit_mask", "opened_locked_door_mask", "triggered_trapdoor_mask"):
++        required = getattr(reference, name)
++        if getattr(candidate, name) & required != required:
++            return False
++    return True
++
++
++def _control_preserved(reference: AutoEvaluation, candidate: AutoEvaluation) -> bool:
++    if not _reference_events(reference) <= _reference_events(candidate):
++        return False
++    if not reference.trace or not candidate.trace:
++        return False
++    return _mask_preserved(reference.trace[-1], candidate.trace[-1])
++
++
++def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
++                     rng: random.Random) -> tuple[Waypoint, ...]:
++    """Sample arc length, not screen coordinates; pin every control event."""
++    trace = reference.materialize_trace()
++    if len(trace) < 4:
++        return ()
++    # No first/last-frame goal; these cannot save a meaningful segment.
++    limit = min(len(trace) - 2, (reference.finish_tick or len(trace)) - 2)
++    if limit < 2:
++        return ()
++    path = [0.0]
++    for i in range(1, limit + 1):
++        path.append(path[-1] + math.hypot(trace[i].x - trace[i-1].x,
++                                          trace[i].y - trace[i-1].y))
++    total = path[-1]
++    candidates = list(range(2, limit + 1))
++    selected: set[int] = set()
++    if config.distance is None:
++        # Jitter a uniform arc-length partition; frame sampling is a fallback
++        # for stationary/slow paths where many arc-length positions coincide.
++        for k in range(1, config.points + 1):
++            if total > 1e-9:
++                target = total * (k - 0.5 + rng.random()) / config.points
++                selected.add(min(candidates, key=lambda i: abs(path[i] - target)))
++            else:
++                selected.add(rng.choice(candidates))
++    elif total > 0:
++        for k in range(1, math.ceil(total / config.distance)):
++            target = k * config.distance
++            if target >= total:
++                break
++            selected.add(min(candidates, key=lambda i: abs(path[i] - target)))
++    # When a switch/locked-door/trapdoor fires, protect its state by placing an
++    # anchor directly *after* the event, even if no random anchor fell there.
++    mandatory = set()
++    for event in reference.route_control_events:
++        tick = min(limit, event.tick + 1)
++        if tick >= 2:
++            selected.add(tick)
++            mandatory.add(tick)
++    return tuple(Waypoint(i, trace[i].x, trace[i].y, i in mandatory)
++                 for i in sorted(selected))
++
++
++def _requirements_at(level: Level, frames: Sequence[InputFrame], frame: int):
++    state = simulate_through_frame(level, frames, frame)
++    # Switch/locked-door requirements, not optional gold for speedrun.
++    return tuple(item for item in reference_interaction_requirements(level, state)
++                 if all(atom.kind != INTERACTION_GOLD for atom in item.alternatives))
++
++
++def _goal(level: Level, reference_frames: Sequence[InputFrame], waypoint: Waypoint,
++          config: RandomSpliceConfig, *, deadline: int, start: int) -> EndpointGoal:
++    return EndpointGoal(
++        target_frame=deadline, objective="earliest-arrival",
++        target_region=waypoint.region(config.radius),
++        arrival_start=max(0, start),
++        required_interactions=_requirements_at(level, reference_frames, waypoint.frame),
++    )
++
++
++def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGoal,
++                  *, start: int, config: RandomSpliceConfig, iterations: int,
++                  seed: int):
++    if start > goal.target_frame or goal.target_frame >= len(frames):
++        return (), 0
++    result = optimise_local_population(
++        level, frames, goal=goal, frame_ranges=((start, goal.target_frame),),
++        config=PopulationConfig(
++            iterations=iterations, beam=config.beam, rounds=1,
++            top_results=min(3, config.beam), workers=config.workers,
++            mutation_span=min(config.lookback, 32), seed=seed,
++            repair_steps=min(64, iterations // 4),
++            repair_lookback=min(config.lookback, 32),
++        ),
++    )
++    return (tuple((item.frames, item.evaluation.frame) for item in result.candidates
++                  if item.evaluation.feasible), result.evaluations)
++
++
++def _candidate_seams(reference: AutoEvaluation, candidate: AutoEvaluation,
++                     anchor: Waypoint, earliest: int, config: RandomSpliceConfig
++                     ) -> tuple[tuple[int, int], ...]:
++    """Find nearby post-step states to splice, using velocity/contact as well.
++
++    Reaching a broad rectangle early is insufficient: arrival velocity may be
++    wrong for the reference suffix. Search for a compatible *state* near the
++    waypoint, not simply the first position inside the rectangle.
++    """
++    candidates: list[tuple[float, int, int, int]] = []
++    low_r = max(1, anchor.frame - config.lookback // 2)
++    high_r = min((reference.finish_tick or anchor.frame) - 2,
++                 anchor.frame + config.lookback // 2)
++    for r in range(low_r, high_r + 1):
++        ref = reference.point(r)
++        if ref is None or ref.dead or ref.complete:
++            continue
++        for t in range(max(1, earliest - config.lookback // 2),
++                       min(r - 1, len(candidate.trace) - 2,
++                           earliest + config.lookback) + 1):
++            state = candidate.point(t)
++            if (state is None or state.dead or state.complete
++                    or not _mask_preserved(ref, state)):
++                continue
++            dx = math.hypot(state.x - ref.x, state.y - ref.y)
++            dv = math.hypot(state.vx - ref.vx, state.vy - ref.vy)
++            if dx > config.radius or dv > 1.25:
++                continue
++            # Contact mismatches often invalidate seemingly perfect x/y seams.
++            contact = 0.0 if state.contact_key == ref.contact_key else 8.0
++            score = dx + 5.0 * dv + contact
++            candidates.append((score, -(r - t), t, r))
++    candidates.sort()
++    # Keep some diversity while never attempting an unlimited number of seams.
++    return tuple((t, r) for _score, _lead, t, r in candidates[:12])
++
++
++def _validated_improvement(level: Level, proposal: Sequence[InputFrame],
++                           reference: AutoEvaluation, original_length: int
++                           ) -> tuple[InputFrame, ...] | None:
++    """Repack, replay independently, require completion and every reference control."""
++    packed = tuple(editable_frames(decode_complex_replay(encode_complex_replay(proposal)).frames))
++    evaluation = evaluate_replay_with_sentinel(level, packed)
++    if not evaluation.valid or evaluation.finish_tick is None:
++        return None
++    if evaluation.finish_tick >= original_length:
++        return None
++    # A shorter output has to finish *on its new implicit neutral sentinel*.
++    body = packed[:evaluation.finish_tick]
++    try:
++        verified = verify_trimmed_replay(level, body)
++    except ValueError:
++        return None
++    return body if _control_preserved(reference, verified) else None
++
++
++def optimise_random_splices(
++    level: Level, source_frames: Sequence[InputFrame], config: RandomSpliceConfig,
++    *, best_callback: Callable[[tuple[InputFrame, ...]], None] | None = None,
++    progress: Callable[[str], None] | None = None,
++) -> RandomSpliceResult:
++    """Try earlier local arrivals, shift reference suffix, repair subsequent anchors.
++
++    No partial replay is committed. After a splice, each reachable later
++    waypoint becomes a *required* state-repair target with the reference's
++    switch/door history; failure abandons that splice, not its constraints.
++    """
++    current = tuple(editable_frames(source_frames))
++    verified = evaluate_replay_with_sentinel(level, current)
++    if not verified.valid or verified.finish_tick != len(current):
++        raise ValueError("random splicing needs a replay finishing on its neutral sentinel")
++    first_reference = verified
++    rng = random.Random(config.seed)
++    improvements = attempts = evaluations = 0
++    last_waypoints: tuple[Waypoint, ...] = ()
++    for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
++        # Re-sample against the *current best* route after each round.
++        reference = evaluate_replay_with_sentinel(level, current)
++        waypoints = choose_waypoints(reference, config, rng)
++        last_waypoints = waypoints
++        if progress:
++            progress(f"[auto:random-splice] round {round_no+1}/{config.rounds or chr(8734)}: "
++                     f"{len(waypoints)} waypoints ({sum(w.mandatory for w in waypoints)} control anchors)")
++        for i, anchor in enumerate(waypoints):
++            if anchor.frame >= len(current) - 1:
++                continue
++            attempts += 1
++            start = max(0, anchor.frame - config.lookback)
++            goal = _goal(level, current, anchor, config, deadline=anchor.frame, start=start)
++            found, used = _local_search(level, current, goal, start=start, config=config,
++                                        iterations=config.iterations, seed=rng.getrandbits(63))
++            evaluations += used
++            improved = False
++            for frames, arrival in found:
++                if arrival >= anchor.frame:
++                    continue
++                candidate_eval = evaluate_replay_with_sentinel(level, frames)
++                seams = _candidate_seams(reference, candidate_eval, anchor,
++                                         arrival, config)
++                # Broad-region arrival remains a fallback when no aligned seam
++                # exists. Every attempt still requires full replay validation.
++                if not seams:
++                    seams = ((arrival, anchor.frame),)
++                for cut_tick, reference_tick in seams:
++                    must = reference.point(reference_tick)
++                    seen = candidate_eval.point(cut_tick)
++                    if seen is None or must is None or not _mask_preserved(must, seen):
++                        continue
++                    joined = tuple(frames[:cut_tick + 1]) + tuple(current[reference_tick + 1:])
++                    result = _validated_improvement(level, joined, reference, len(current))
++                    provisional = joined
++                    if result is None:
++                        for next_anchor in waypoints[i + 1:i + 1 + config.repair_anchors]:
++                            shift = reference_tick - cut_tick
++                            deadline = next_anchor.frame - shift
++                            if not 1 <= deadline < len(provisional):
++                                break
++                            repair_start = max(cut_tick + 1, deadline - config.lookback)
++                            repair_goal = _goal(level, current, next_anchor, config,
++                                                deadline=deadline, start=repair_start)
++                            repaired, used = _local_search(
++                                level, provisional, repair_goal,
++                                start=repair_start, config=config,
++                                iterations=config.repair_iterations,
++                                seed=rng.getrandbits(63))
++                            evaluations += used
++                            next_provisional = None
++                            for trial, when in repaired:
++                                stage_eval = evaluate_replay_with_sentinel(level, trial)
++                                before = reference.point(next_anchor.frame)
++                                after = stage_eval.point(when)
++                                if before is not None and after is not None and _mask_preserved(before, after):
++                                    next_provisional = trial
++                                    break
++                            if next_provisional is None:
++                                break
++                            provisional = next_provisional
++                            result = _validated_improvement(level, provisional, reference, len(current))
++                            if result is not None:
++                                break
++                    if result is not None:
++                        final_eval = evaluate_replay_with_sentinel(level, result)
++                        if len(result) < len(current) and _control_preserved(first_reference, final_eval):
++                            current = result
++                            improvements += 1
++                            improved = True
++                            if best_callback:
++                                best_callback(current)
++                            if progress:
++                                progress(f"[auto:random-splice] improved to {len(current)} frames "
++                                         f"at anchor {anchor.frame} (lead {reference_tick-cut_tick})")
++                        break
++                if improved:
++                    break
++            if improved:
++                # Never use the previous trace's anchors on a changed route.
++                break
++    return RandomSpliceResult(current, last_waypoints, improvements, attempts, evaluations)
+diff --git "a/tas optimiser/tests/test_random_splice.py" "b/tas optimiser/tests/test_random_splice.py"
+new file mode 100644
+index 0000000..557ad52
+--- /dev/null
++++ "b/tas optimiser/tests/test_random_splice.py"
+@@ -0,0 +1,216 @@
++"""Random splice route-control safety, configuration and native integration."""
++from dataclasses import replace
++import random
++
++import pytest
++
++from nv14_auto import RouteControlEvent, evaluate_replay_with_sentinel
++from nv14_cli import parse_arguments
++from nv14_engine import InputFrame
++from nv14_random_splice import (
++    RandomSpliceConfig, _control_preserved, _mask_preserved,
++    _validated_improvement, choose_waypoints, optimise_random_splices,
++)
++from tests.test_auto import _running_exit_level
++
++
++def _baseline():
++    level = _running_exit_level()
++    frames = tuple(InputFrame(right=True) for _ in range(29))
++    check = evaluate_replay_with_sentinel(level, frames)
++    assert check.finish_tick == len(frames)
++    assert check.route_control_events[0].kind == "exit"
++    return level, frames, check
++
++
++def test_switch_event_cannot_disappear_even_when_endpoint_is_completed():
++    _level, _frames, base = _baseline()
++    # A candidate completing some other exit must not omit an original switch.
++    missing = replace(base, route_control_events=())
++    assert not _control_preserved(base, missing)
++    assert _control_preserved(base, base)
++
++
++def test_locked_door_and_trapdoor_must_not_disappear_at_waypoint():
++    _level, _frames, base = _baseline()
++    point = base.point(20)
++    assert point is not None
++    required = replace(point, open_exit_mask=1, opened_locked_door_mask=0b100,
++                       triggered_trapdoor_mask=0b10)
++    assert not _mask_preserved(required, point)
++    restored = replace(point, open_exit_mask=3, opened_locked_door_mask=0b101,
++                       triggered_trapdoor_mask=0b10)
++    assert _mask_preserved(required, restored)
++
++
++def test_control_event_inserts_mandatory_waypoint():
++    _level, _frames, base = _baseline()
++    # An event outside the random waypoints must still get an anchor.
++    with_mid_switch = replace(base, route_control_events=(
++        RouteControlEvent("exit", 0, 8), RouteControlEvent("locked-door", 3, 17),
++    ))
++    points = choose_waypoints(with_mid_switch,
++                              RandomSpliceConfig(points=1, seed=9), random.Random(9))
++    assert any(point.mandatory and point.frame == 9 for point in points)
++    assert any(point.mandatory and point.frame == 18 for point in points)
++    assert tuple(sorted(p.frame for p in points)) == tuple(p.frame for p in points)
++
++
++def test_shorter_replay_rejected_if_it_does_not_finish_and_preserve_switch():
++    level, source, baseline = _baseline()
++    assert _validated_improvement(level, source[:13], baseline, len(source)) is None
++    assert _validated_improvement(level, source, baseline, len(source)) is None
++
++
++def test_random_splice_defaults_keep_verified_completed_replay():
++    level, source, baseline = _baseline()
++    result = optimise_random_splices(level, source, RandomSpliceConfig(
++        points=2, iterations=12, repair_iterations=8, lookback=8, rounds=1, seed=7))
++    assert result.attempts >= 1
++    assert result.evaluations > 0
++    checked = evaluate_replay_with_sentinel(level, result.frames)
++    assert checked.valid and checked.finish_tick == len(result.frames)
++    assert _control_preserved(baseline, checked)
++    assert len(result.frames) <= len(source)
++
++
++def test_cli_random_splice_accepts_native_options_from_toml(tmp_path):
++    config = tmp_path / "base.toml"
++    config.write_text("""[auto]
++objective = "speedrun"
++random-splice = true
++splice-points = 3
++splice-radius = 18
++splice-repair-anchors = 4
++runs = 1
++""", encoding="utf8")
++    args = parse_arguments(["auto", "source.txt", "--config", str(config),
++                            "--output", str(tmp_path / "result.txt")])
++    assert args.auto_random_splice
++    assert args.auto_splice_points == 3
++    assert args.auto_splice_radius == 18
++    assert args.auto_splice_repair_anchors == 4
++
++
++def test_cli_splice_parameters_without_mode_rejected():
++    with pytest.raises(SystemExit, match="require --auto-random-splice"):
++        parse_arguments(["auto", "source.txt", "--auto-splice-radius", "12"])
++    with pytest.raises(SystemExit, match="requires --objective speedrun"):
++        parse_arguments(["auto", "source.txt", "--auto-random-splice", "--objective", "highscore"])
++
++
++@pytest.mark.parametrize("updates", [
++    {"radius": 0.0}, {"distance": -2}, {"points": 0}, {"workers": 0},
++    {"repair_anchors": -1}, {"rounds": -1},
++])
++def test_bad_random_splice_configuration_rejected(updates):
++    with pytest.raises(ValueError):
++        RandomSpliceConfig(**updates)
++
++
++def test_random_splice_saves_frames_on_delayed_reference_without_losing_switch():
++    level, _source, _base = _baseline()
++    delayed = tuple([InputFrame()] * 6 + [InputFrame(right=True)] * 29)
++    original = evaluate_replay_with_sentinel(level, delayed)
++    assert original.valid and original.finish_tick == len(delayed)
++    result = optimise_random_splices(level, delayed, RandomSpliceConfig(
++        points=4, iterations=2500, repair_iterations=100,
++        repair_anchors=1, radius=6, lookback=34, seed=2))
++    assert result.improvements >= 1
++    assert len(result.frames) == 29
++    updated = evaluate_replay_with_sentinel(level, result.frames)
++    assert updated.valid and updated.finish_tick == len(result.frames)
++    assert _control_preserved(original, updated)
++
++
++def test_splice_spacing_and_count_both_select_path_positions():
++    _level, _source, base = _baseline()
++    by_count = choose_waypoints(base, RandomSpliceConfig(points=3), random.Random(5))
++    by_spacing = choose_waypoints(base, RandomSpliceConfig(distance=15), random.Random(5))
++    assert by_count and by_spacing
++    assert all(1 < p.frame < base.finish_tick - 1 for p in by_count + by_spacing)
++    assert tuple(p.frame for p in by_spacing) == tuple(sorted(p.frame for p in by_spacing))
++
++
++def test_cli_toml_random_splice_writes_verified_faster_tas(tmp_path, monkeypatch):
++    from nv14_cli import main
++    from nv14_replay import (parse_combined_level_replay, decode_complex_replay,
++                            encode_complex_replay)
++    import sys
++
++    level, _, _ = _baseline()
++    delayed = tuple([InputFrame()] * 6 + [InputFrame(right=True)] * 29)
++    source = tmp_path / "slow.txt"
++    output = tmp_path / "fast.txt"
++    config = tmp_path / "settings.toml"
++    source.write_text(f"$test#author#{level.source_level_string}#{encode_complex_replay(delayed)}#\n")
++    config.write_text("""[common]
++workers = 1
++simulate-enemies = false
++[auto]
++objective = "speedrun"
++random-splice = true
++runs = 1
++seed = 2
++splice-points = 4
++splice-radius = 6
++splice-lookback = 34
++splice-iterations = 2500
++splice-repair-iterations = 100
++splice-repair-anchors = 1
++""")
++    monkeypatch.setattr(sys, "argv", ["optimize_replay.py", "auto", str(source),
++                                    "--config", str(config), "--output", str(output)])
++    main()
++    assert output.exists()
++    loaded = parse_combined_level_replay(output.read_text())
++    frames = decode_complex_replay(loaded.replay_string).frames
++    checked = evaluate_replay_with_sentinel(level, frames)
++    assert len(frames) == checked.finish_tick == 29
++    assert checked.valid
++    assert checked.route_control_events[0].kind == "exit"
++
++
++def test_actual_later_exit_switch_becomes_mandatory_checkpoint():
++    from nv14_engine import APP_NUM_GRIDCOLS, APP_NUM_GRIDROWS, parse_level_string
++    cells = ["0"] * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
++    for x in range(APP_NUM_GRIDCOLS):
++        cells[x * APP_NUM_GRIDROWS + 5] = "1"
++    level = parse_level_string("".join(cells) +
++                               "|5^60,134!11^140,134,60,134!11^180,134,95,134")
++    frames = [InputFrame(right=True)] * 29
++    baseline = evaluate_replay_with_sentinel(level, frames)
++    assert baseline.valid
++    assert len([e for e in baseline.route_control_events if e.kind == "exit"]) == 2
++    later_event = baseline.route_control_events[1]
++    checkpoints = choose_waypoints(baseline, RandomSpliceConfig(points=1), random.Random(0))
++    assert any(w.frame == later_event.tick + 1 and w.mandatory for w in checkpoints)
++    without_later = replace(baseline, route_control_events=baseline.route_control_events[:1])
++    assert not _control_preserved(baseline, without_later)
++
++
++def test_continuous_campaign_configuration_is_supported():
++    assert RandomSpliceConfig(rounds=0).rounds == 0
++
++
++def test_real_two_switches_are_kept_after_six_frame_gain():
++    from nv14_engine import APP_NUM_GRIDCOLS, APP_NUM_GRIDROWS, parse_level_string
++    cells = ["0"] * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
++    for x in range(APP_NUM_GRIDCOLS):
++        cells[x * APP_NUM_GRIDROWS + 5] = "1"
++    level = parse_level_string("".join(cells) +
++                               "|5^60,134!11^140,134,60,134!11^180,134,95,134")
++    frames = tuple([InputFrame()] * 6 + [InputFrame(right=True)] * 29)
++    reference = evaluate_replay_with_sentinel(level, frames)
++    assert len([e for e in reference.route_control_events if e.kind == "exit"]) == 2
++    result = optimise_random_splices(level, frames, RandomSpliceConfig(
++        points=4, iterations=2500, repair_iterations=100,
++        repair_anchors=2, radius=6, lookback=34, seed=2))
++    improved = evaluate_replay_with_sentinel(level, result.frames)
++    assert improved.valid
++    assert len(result.frames) == 29
++    assert improved.finish_tick == 29
++    assert _control_preserved(reference, improved)
++    assert {(e.kind, e.index) for e in improved.route_control_events} == {
++        ("exit", 0), ("exit", 1)
++    }

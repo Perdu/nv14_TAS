@@ -1,0 +1,13 @@
+[auto]
+objective = "speedrun"
+random-splice = true
+runs = 10
+
+splice-points = 4
+splice-radius = 30.0
+splice-lookback = 40
+
+splice-iterations = 10000
+splice-repair-iterations = 250
+splice-repair-anchors = 3
+splice-repair-searches = 2

@@ -13,6 +13,12 @@ libTAS `.ltm` movie. It writes the result in the same format as its input, so an
 LTM can be optimised and opened directly in libTAS without a separate conversion
 step. The source file is never overwritten.
 
+**Random-splice Auto:** waypoint searches run sequentially, but each uses
+Local population multiprocessing (`--workers`). Per-waypoint and continuation
+repair progress is shown. `--auto-stagnation-runs` stops after that many rounds
+without a verified full-run improvement; `--auto-splice-repair-searches` bounds
+continuation searches per waypoint. See `docs/RANDOM_SPLICE.md`.
+
 ## Contents
 
 - [Examples](#requirements-and-setup)_
@@ -1348,3 +1354,13 @@ and [shared example config](examples/config/shared-endpoint.toml).
 `examples/config/local-multiple-jumps.toml` and
 `docs/AUTO_ENDPOINT_OBJECTIVES.md`. Both `local --config` and Auto
 `--goal-config` can use the same `[[local.require-jumps]]` TOML entries.
+
+### Switch-safe random waypoint splicing
+
+For micro-optimising a **completed** Auto speedrun, `auto --auto-random-splice`
+creates random spatial waypoints along the best replay and reuses Local
+population search for earlier arrivals and progressive seam repairs. It
+hard-preserves reference switch/door/trapdoor interactions and verifies
+complete shorter replays before saving. Waypoint count or distance, region
+radius, lookback, Local budget and repair depth are configurable under `[auto]`
+or as CLI arguments. See [docs/RANDOM_SPLICE.md](docs/RANDOM_SPLICE.md).
