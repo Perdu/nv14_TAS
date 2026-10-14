@@ -29,7 +29,9 @@ class RandomSpliceConfig:
     radius: float = 16.0
     lookback: int = 32  # seam matching/maximum local mutation span, NOT a segment length
     iterations: int = 400  # Local proposals per anchor
-    repair_iterations: int = 250  # Local proposals per subsequent anchor
+    repair_iterations: int = 250  # Local proposals per subsequent anchor and worker per round
+    splice_rounds: int = 1  # Local population rounds PER waypoint, not global Auto runs
+    repair_rounds: int = 1  # Local population rounds PER continuation repair
     repair_anchors: int = 2
     beam: int = 16
     workers: int = 1
@@ -48,6 +50,9 @@ class RandomSpliceConfig:
         for field in ("lookback", "iterations", "repair_iterations", "beam", "workers"):
             if type(getattr(self, field)) is not int or getattr(self, field) < 1:
                 raise ValueError(f"random splice {field} must be positive")
+        for field in ("splice_rounds", "repair_rounds"):
+            if type(getattr(self, field)) is not int or getattr(self, field) < 1:
+                raise ValueError(f"random splice {field} must be a positive integer")
         if type(self.rounds) is not int or self.rounds < 0:
             raise ValueError("random splice rounds must be nonnegative (0 means continuous)")
         if type(self.stagnation_rounds) is not int or self.stagnation_rounds < 0:
@@ -165,13 +170,13 @@ def _goal(level: Level, reference_frames: Sequence[InputFrame], waypoint: Waypoi
 
 def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGoal,
                   *, start: int, config: RandomSpliceConfig, iterations: int,
-                  seed: int, progress: Callable[[str], None] | None = None):
+                  rounds: int, seed: int, progress: Callable[[str], None] | None = None):
     if start > goal.target_frame or goal.target_frame >= len(frames):
         return (), 0
     result = optimise_local_population(
         level, frames, goal=goal, frame_ranges=((start, goal.target_frame),),
         config=PopulationConfig(
-            iterations=iterations, beam=config.beam, rounds=1,
+            iterations=iterations, beam=config.beam, rounds=rounds,
             top_results=min(3, config.beam), workers=config.workers,
             mutation_span=min(config.lookback, 32), seed=seed,
             repair_steps=min(64, iterations // 4),
@@ -313,7 +318,8 @@ def optimise_random_splices(
             if progress:
                 progress(f"[auto:random-splice] {label}: searching FULL segment "
                          f"[{start}:{anchor.frame}] ({anchor.frame-start+1} editable frames); "
-                         f"{config.workers} workers x {config.iterations} proposals")
+                         f"{config.workers} workers x {config.iterations} proposals "
+                         f"x {config.splice_rounds} Local rounds")
             stage_start = time.monotonic()
             search_kw = {} if progress is None else {
                 "progress": lambda text, label=label: progress(
@@ -321,7 +327,8 @@ def optimise_random_splices(
                     + text.removeprefix("[local:population] "))
             }
             found, used = _local_search(level, current, goal, start=start, config=config,
-                                        iterations=config.iterations, seed=rng.getrandbits(63),
+                                        iterations=config.iterations, rounds=config.splice_rounds,
+                                        seed=rng.getrandbits(63),
                                         **search_kw)
             evaluations += used
             if progress:
@@ -382,7 +389,8 @@ def optimise_random_splices(
                                 progress(f"[auto:random-splice] {label}: continuation repair "
                                          f"{repair_searches}/{config.max_repair_searches}, "
                                          f"range [{repair_start}:{deadline}], "
-                                         f"{config.workers} workers x {config.repair_iterations} proposals")
+                                         f"{config.workers} workers x {config.repair_iterations} proposals "
+                                         f"x {config.repair_rounds} Local rounds")
                             repair_start_time = time.monotonic()
                             repair_progress_kw = {} if progress is None else {
                                 "progress": lambda text, label=label: progress(
@@ -394,7 +402,7 @@ def optimise_random_splices(
                                     level, provisional, repair_goal,
                                     start=repair_start, config=config,
                                     iterations=config.repair_iterations,
-                                    seed=rng.getrandbits(63),
+                                    rounds=config.repair_rounds, seed=rng.getrandbits(63),
                                     **repair_progress_kw)
                             except ValueError as exc:
                                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):

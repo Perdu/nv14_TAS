@@ -461,3 +461,124 @@ def test_cli_random_splice_new_limits_load_from_toml(tmp_path):
     args = parse_arguments(["auto", "input.txt", "--config", str(config)])
     assert args.auto_splice_repair_searches == 2
     assert args.auto_stagnation_runs == 3
+
+
+def test_cli_auto_rounds_alias_controls_local_rounds_not_global_runs(tmp_path):
+    config = tmp_path / "anchor-rounds.toml"
+    config.write_text("""[auto]
+objective = "speedrun"
+random-splice = true
+runs = 0
+rounds = 10
+splice-repair-rounds = 3
+splice-iterations = 100
+""", encoding="utf8")
+    args = parse_arguments(["auto", "source.txt", "--config", str(config)])
+    assert args.auto_runs == 0
+    assert args.auto_splice_rounds == 10
+    assert args.auto_splice_repair_rounds == 3
+    assert args.auto_splice_iterations == 100
+    explicit = parse_arguments(["auto", "source.txt", "--config", str(config),
+                                "--auto-splice-rounds", "4"])
+    assert explicit.auto_splice_rounds == 4
+    assert explicit.auto_runs == 0
+
+
+def test_auto_splice_rounds_rejected_without_random_splice(tmp_path):
+    config = tmp_path / "bad.toml"
+    config.write_text("[auto]\nrounds = 10\n", encoding="utf8")
+    with pytest.raises(SystemExit, match="require --auto-random-splice"):
+        parse_arguments(["auto", "source.txt", "--config", str(config)])
+
+
+@pytest.mark.parametrize("field", ["splice_rounds", "repair_rounds"])
+@pytest.mark.parametrize("bad", [0, -1, 1.5, True])
+def test_nested_rounds_must_be_positive_integers(field, bad):
+    with pytest.raises(ValueError, match="must be a positive integer"):
+        RandomSpliceConfig(**{field: bad})
+
+
+def test_local_population_receives_nested_round_count(monkeypatch):
+    import nv14_random_splice as splice
+    from nv14_endpoint import EndpointGoal
+    from types import SimpleNamespace
+    level, source, _reference = _baseline()
+    calls = []
+
+    def fake_population(level, frames, *, goal, frame_ranges, config, progress=None):
+        calls.append((config.rounds, config.iterations, frame_ranges))
+        return SimpleNamespace(candidates=(), evaluations=5)
+
+    monkeypatch.setattr(splice, "optimise_local_population", fake_population)
+    goal = EndpointGoal(target_frame=20, objective="earliest-arrival",
+                        target_region=(0, 100, 0, 100))
+    found, used = splice._local_search(level, source, goal, start=3,
+                                       config=RandomSpliceConfig(splice_rounds=10),
+                                       iterations=18, rounds=10, seed=7)
+    assert found == () and used == 5
+    assert calls == [(10, 18, ((3, 20),))]
+
+
+def test_global_rounds_do_not_reduce_per_anchor_rounds(monkeypatch):
+    import nv14_random_splice as splice
+    level, source, baseline = _baseline()
+    anchor = Waypoint(10, baseline.point(10).x, baseline.point(10).y)
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: (anchor,))
+    calls = []
+
+    def fake_search(level, frames, goal, *, rounds, iterations, **kwargs):
+        calls.append((rounds, iterations))
+        return (), 1
+
+    monkeypatch.setattr(splice, "_local_search", fake_search)
+    logs = []
+    result = optimise_random_splices(level, source,
+                                     RandomSpliceConfig(rounds=2, splice_rounds=10,
+                                                        iterations=12, workers=1),
+                                     progress=logs.append)
+    assert calls == [(10, 12), (10, 12)]
+    assert result.attempts == 2
+    assert any("x 10 Local rounds" in msg for msg in logs)
+
+
+def test_continuation_repair_uses_its_own_nested_round_count(monkeypatch):
+    import nv14_random_splice as splice
+    level, source, baseline = _baseline()
+    anchors = (Waypoint(5, baseline.point(5).x, baseline.point(5).y),
+               Waypoint(21, baseline.point(21).x, baseline.point(21).y))
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: anchors)
+    monkeypatch.setattr(splice, "_candidate_seams", lambda *_: ((4, 5),))
+    monkeypatch.setattr(splice, "_validated_improvement", lambda *_: None)
+    calls = []
+
+    def fake_search(level, frames, goal, *, rounds, iterations, **kwargs):
+        calls.append((rounds, iterations))
+        return (((source, 4),), 1) if len(calls) == 1 else ((), 1)
+
+    monkeypatch.setattr(splice, "_local_search", fake_search)
+    optimise_random_splices(level, source,
+                            RandomSpliceConfig(rounds=1, splice_rounds=10,
+                                               repair_rounds=3, iterations=18,
+                                               repair_iterations=9))
+    assert calls[0] == (10, 18)
+    assert (3, 9) in calls[1:]
+
+
+def test_real_anchor_runs_multiple_local_population_generations(monkeypatch):
+    import nv14_random_splice as splice
+    level, source, baseline = _baseline()
+    waypoint = Waypoint(13, baseline.point(13).x, baseline.point(13).y)
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: (waypoint,))
+    messages = []
+    result = optimise_random_splices(
+        level, source,
+        RandomSpliceConfig(rounds=1, splice_rounds=3, points=1, iterations=7,
+                           repair_iterations=5, workers=1, seed=6),
+        progress=messages.append,
+    )
+    assert result.attempts == 1
+    assert any("round 1;" in line and "anchor 1/1" in line for line in messages)
+    assert any("round 2;" in line and "anchor 1/1" in line for line in messages)
+    assert any("round 3;" in line and "anchor 1/1" in line for line in messages)
+    checked = evaluate_replay_with_sentinel(level, result.frames)
+    assert checked.valid and checked.finish_tick == len(result.frames)

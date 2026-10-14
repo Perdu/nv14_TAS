@@ -1344,6 +1344,12 @@ def _config_destination_maps(
                     overwrite=True,
                 )
 
+    # Splice TOMLs use `runs` for global Auto rounds. Allow `rounds` in
+    # [auto] to mean Local population rounds PER randomly selected anchor.
+    # This alias is deliberately mode-section-only.
+    if mode == "auto":
+        _add_config_alias(mode_specific, "rounds", "auto_splice_rounds", overwrite=True)
+
     return general, mode_specific
 
 
@@ -1640,7 +1646,8 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_points", "auto_splice_distance", "auto_splice_radius",
     "auto_splice_lookback", "auto_splice_iterations",
     "auto_splice_repair_iterations", "auto_splice_repair_anchors",
-    "auto_splice_repair_searches",
+    "auto_splice_repair_searches", "auto_splice_rounds",
+    "auto_splice_repair_rounds",
 })
 
 
@@ -1994,6 +2001,10 @@ def build_parser() -> argparse.ArgumentParser:
                          metavar="N", help="Local population evaluations per waypoint (default 400)")
     command.add_argument("--auto-splice-repair-iterations", modes=auto_modes, type=int, default=250,
                          metavar="N", help="Local evaluations per continuation repair (default 250)")
+    command.add_argument("--auto-splice-rounds", modes=auto_modes, type=int, default=1,
+                         metavar="N", help="Local population rounds PER waypoint (default 1); [auto] rounds alias")
+    command.add_argument("--auto-splice-repair-rounds", modes=auto_modes, type=int, default=1,
+                         metavar="N", help="Local population rounds PER continuation repair (default 1)")
     command.add_argument("--auto-splice-repair-anchors", modes=auto_modes, type=int, default=2,
                          metavar="N", help="subsequent waypoints to repair after a splice (default 2)")
     command.add_argument("--auto-splice-repair-searches", modes=auto_modes, type=int,
@@ -3227,6 +3238,8 @@ def main() -> None:
                 radius=args.auto_splice_radius, lookback=args.auto_splice_lookback,
                 iterations=args.auto_splice_iterations,
                 repair_iterations=args.auto_splice_repair_iterations,
+                splice_rounds=args.auto_splice_rounds,
+                repair_rounds=args.auto_splice_repair_rounds,
                 repair_anchors=args.auto_splice_repair_anchors,
                 beam=args.beam, workers=max(1, args.workers), rounds=args.auto_runs,
                 stagnation_rounds=args.auto_stagnation_runs,
