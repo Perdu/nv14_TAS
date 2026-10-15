@@ -1,7 +1,7 @@
 [auto]
 objective = "speedrun"
 random-splice = true
-runs = 0
+runs = 5
 rounds = 4
 
 splice-points = 4
