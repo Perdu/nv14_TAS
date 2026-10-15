@@ -18,7 +18,7 @@ from collections import Counter
 
 from nv14_auto import (AutoEvaluation, CompactTracePoint, evaluate_replay_with_sentinel,
                        pre_finish_exit_edge_distance, verify_trimmed_replay)
-from nv14_endpoint import EndpointGoal, EndpointEvaluator
+from nv14_endpoint import EndpointGoal, EndpointEvaluator, verify_endpoint
 from nv14_engine import InputFrame, Level
 from nv14_objectives import (INTERACTION_GOLD, reference_interaction_requirements,
                              resolve_interaction_target)
@@ -118,7 +118,8 @@ def _control_preserved(reference: AutoEvaluation, candidate: AutoEvaluation) -> 
 
 
 def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
-                     rng: random.Random) -> tuple[Waypoint, ...]:
+                     rng: random.Random, *, min_frame: int = 2,
+                     max_frame: int | None = None) -> tuple[Waypoint, ...]:
     """Sample path waypoints without adding switch/door/trapdoor anchors.
 
     `points` sets the exact number when sufficient editable frames exist.
@@ -131,14 +132,17 @@ def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
         return ()
     # No first/last-frame goal; these cannot save a meaningful segment.
     limit = min(len(trace) - 2, (reference.finish_tick or len(trace)) - 2)
-    if limit < 2:
+    if max_frame is not None:
+        limit = min(limit, max_frame)
+    first = max(2, min_frame)
+    if limit < first:
         return ()
     path = [0.0]
     for i in range(1, limit + 1):
         path.append(path[-1] + math.hypot(trace[i].x - trace[i-1].x,
                                           trace[i].y - trace[i-1].y))
     total = path[-1]
-    candidates = list(range(2, limit + 1))
+    candidates = list(range(first, limit + 1))
     selected: set[int] = set()
     if config.distance is None:
         # Always pick distinct frames. Quantised arc lengths and long stationary
@@ -149,9 +153,9 @@ def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
         count = min(config.points, len(available))
         for k in range(1, count + 1):
             jitter = k - 0.5 + rng.random()
-            frame_target = 2 + (limit - 1) * jitter / count
+            frame_target = first + (limit - first) * jitter / count
             if total > 1e-9:
-                distance_target = total * jitter / count
+                distance_target = path[first] + (total - path[first]) * jitter / count
                 index = min(available, key=lambda i: (
                     abs(path[i] - distance_target), abs(i - frame_target), i))
             else:
@@ -567,10 +571,185 @@ def _progressive_frontier(
     return best_completion, attempts, evaluations, counters
 
 
+def _optimise_target_splices(
+    level: Level, source_frames: Sequence[InputFrame], config: RandomSpliceConfig,
+    goal: EndpointGoal, *, range_start: int, range_end: int | None,
+    completion_policy: str,
+    best_callback: Callable[[tuple[InputFrame, ...]], None] | None,
+    progress: Callable[[str], None] | None,
+) -> RandomSpliceResult:
+    """Optimise a specified Local endpoint through sampled splice checkpoints.
+
+    Checkpoint results may be incomplete after the specified target: they must
+    satisfy the independently verified endpoint goal, not a *different* exit
+    goal. Entire prefix-to-checkpoint intervals are editable, and near-miss
+    branches feed into the final Local goal search. A no-op source is never
+    published as an improvement.
+    """
+    if completion_policy not in ("checkpoint", "complete"):
+        raise ValueError("completion-policy must be checkpoint or complete")
+    current = tuple(editable_frames(source_frames))
+    if goal.target_frame >= len(current):
+        raise ValueError("target-frame lies beyond the supplied replay; add input frames")
+    last_editable = min(goal.target_frame, len(current) - 1,
+                        goal.target_frame if range_end is None else range_end)
+    if not 0 <= range_start <= last_editable:
+        raise ValueError("editable range is empty or lies beyond target-frame")
+    rng = random.Random(config.seed)
+    attempts = evaluations = improvements = stagnant = 0
+    last_waypoints: tuple[Waypoint, ...] = ()
+    source_reference = evaluate_replay_with_sentinel(level, current)
+    target_source_point = source_reference.point(goal.target_frame)
+
+    def validated(frames: Sequence[InputFrame]):
+        packed = tuple(editable_frames(decode_complex_replay(
+            encode_complex_replay(frames)).frames))
+        # Switch, locked door and trapdoor states already taken at the target
+        # may not be lost. The goal's own required/avoided interactions remain
+        # checked by the independent endpoint evaluator.
+        if target_source_point is not None:
+            point = evaluate_replay_with_sentinel(level, packed).point(goal.target_frame)
+            if point is None or not _mask_preserved(target_source_point, point):
+                return None
+        checked = verify_endpoint(level, packed, goal)
+        if not checked.feasible:
+            return None
+        if completion_policy == "complete":
+            complete = evaluate_replay_with_sentinel(level, packed)
+            if not complete.valid or complete.finish_tick != len(packed):
+                return None
+            # Only routes whose relevant controls are preserved are eligible.
+            if not _control_preserved(source_reference, complete):
+                return None
+        return packed, checked
+
+    best = validated(current)
+
+    def consider(frames: Sequence[InputFrame], context: str) -> bool:
+        nonlocal best, improvements, current
+        candidate = validated(frames)
+        if candidate is None:
+            return False
+        if best is not None and not candidate[1].objective_key < best[1].objective_key:
+            return False
+        best = candidate
+        current = candidate[0]
+        improvements += 1
+        if best_callback:
+            best_callback(current)
+        if progress:
+            progress(f"[auto:random-splice:goal] improved {goal.objective} "
+                     f"at frame {candidate[1].frame}, score {candidate[1].score:.12g}"
+                     f" ({context}); verified and saved")
+        return True
+
+    for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
+        round_start = time.monotonic()
+        reference = evaluate_replay_with_sentinel(level, current)
+        waypoints = choose_waypoints(
+            reference, config, rng,
+            min_frame=max(2, range_start), max_frame=last_editable - 1)
+        last_waypoints = waypoints
+        if progress:
+            progress(f"[auto:random-splice:goal] round {round_no+1}/{config.rounds or chr(8734)}: "
+                     f"{len(waypoints)} splice checkpoints, final {goal.objective} "
+                     f"at frame {goal.target_frame}, editable {range_start}:{last_editable}")
+        # Keep the reference and several physically diverse partial candidates.
+        # This is the same Local checkpoint/evaluation engine as speedrun's
+        # progressive frontier, but its final endpoint is the user goal.
+        branches: list[tuple[InputFrame, ...]] = [current]
+        previous_end = range_start - 1
+        improved_round = False
+        for index, point in enumerate(waypoints):
+            start = max(range_start, previous_end + 1)
+            if start > point.frame:
+                continue
+            stage_goal = _goal(level, current, point, config,
+                               deadline=point.frame, start=start)
+            required_point = reference.point(point.frame)
+            offerings: list[tuple[tuple, tuple[InputFrame, ...]]] = []
+            for branch in branches:
+                attempts += 1
+                if progress:
+                    progress(f"[auto:random-splice:goal] checkpoint {index+1}/{len(waypoints)} "
+                             f"frame {point.frame}; Local range [{start}:{point.frame}]")
+                try:
+                    found, used = _local_search(
+                        level, branch, stage_goal, start=start, config=config,
+                        iterations=config.iterations, rounds=config.splice_rounds,
+                        seed=rng.getrandbits(63), include_partial=True)
+                except ValueError as exc:
+                    if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
+                        raise
+                    found, used = (), 0
+                evaluations += used
+                for trial, _arrival in (*found, (branch, point.frame)):
+                    if trial == branch and any(existing == trial for _, existing in offerings):
+                        continue
+                    stage_eval = evaluate_replay_with_sentinel(level, trial)
+                    check_point = stage_eval.point(point.frame)
+                    if (required_point is not None and
+                            (check_point is None or not _mask_preserved(required_point, check_point))):
+                        continue
+                    check = EndpointEvaluator(level, stage_goal).evaluate(trial)
+                    if check.violated_interactions:
+                        continue
+                    rank = check.progress_key
+                    offerings.append((rank, trial))
+                    improved_round = consider(trial, f"checkpoint {point.frame}") or improved_round
+            if offerings:
+                offerings.sort(key=lambda item: item[0])
+                unique: list[tuple[InputFrame, ...]] = [current]
+                for _, trial in offerings:
+                    if trial not in unique:
+                        unique.append(trial)
+                    if len(unique) >= max(2, config.frontier):
+                        break
+                branches = unique
+            else:
+                branches = [current]
+            previous_end = point.frame
+        final_start = _exit_segment_start(last_editable, previous_end,
+                                          config.exit_lookback)
+        final_start = max(range_start, min(last_editable, final_start))
+        # On an incomplete source, a dead immutable prefix must be editable.
+        if reference.dead_tick is not None and reference.dead_tick < final_start:
+            final_start = range_start
+        for index, branch in enumerate(dict.fromkeys((*branches, current))):
+            attempts += 1
+            if progress:
+                progress(f"[auto:random-splice:goal] TARGET branch {index+1}, "
+                         f"Local range [{final_start}:{last_editable}]")
+            try:
+                found, used = _local_search(
+                    level, branch, goal, start=final_start, editable_end=last_editable,
+                    config=config, iterations=config.iterations,
+                    rounds=config.splice_rounds, seed=rng.getrandbits(63))
+            except ValueError as exc:
+                if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
+                    raise
+                found, used = (), 0
+            evaluations += used
+            for trial, _ in found:
+                improved_round = consider(trial, "final target") or improved_round
+        stagnant = 0 if improved_round else stagnant + 1
+        if progress:
+            status = (f"best score {best[1].score:.12g}, frame {best[1].frame}"
+                      if best is not None else "no feasible target yet")
+            progress(f"[auto:random-splice:goal] round {round_no+1} done in "
+                     f"{time.monotonic()-round_start:.1f}s; {status}; "
+                     f"{evaluations} evaluations; stagnant {stagnant}")
+        if config.stagnation_rounds and stagnant >= config.stagnation_rounds:
+            break
+    return RandomSpliceResult(current, last_waypoints, improvements, attempts, evaluations)
+
+
 def optimise_random_splices(
     level: Level, source_frames: Sequence[InputFrame], config: RandomSpliceConfig,
     *, best_callback: Callable[[tuple[InputFrame, ...]], None] | None = None,
     progress: Callable[[str], None] | None = None,
+    target_goal: EndpointGoal | None = None, range_start: int = 0,
+    range_end: int | None = None, completion_policy: str = "checkpoint",
 ) -> RandomSpliceResult:
     """Try earlier local arrivals, shift reference suffix, repair subsequent anchors.
 
@@ -578,6 +757,11 @@ def optimise_random_splices(
     waypoint becomes a *required* state-repair target with the reference's
     switch/door history; failure abandons that splice, not its constraints.
     """
+    if target_goal is not None:
+        return _optimise_target_splices(
+            level, source_frames, config, target_goal, range_start=range_start,
+            range_end=range_end, completion_policy=completion_policy,
+            best_callback=best_callback, progress=progress)
     current = tuple(editable_frames(source_frames))
     verified = evaluate_replay_with_sentinel(level, current)
     if not verified.valid or verified.finish_tick != len(current):

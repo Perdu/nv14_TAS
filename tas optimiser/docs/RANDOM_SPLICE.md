@@ -131,3 +131,29 @@ value when the closest exit near-miss is still tens of pixels from the door.
 The search still uses fixed source-length candidate replays until a completed
 run is verified; reaching an early waypoint does not itself imply that the
 following suffix was shifted earlier. This remains an architectural limitation.
+
+## Target-specific random splicing (no physics or complexity modes)
+
+With `--goal-config path/to/694.txt`, an Auto endpoint objective (such as
+`earliest-interaction`, `earliest-arrival`, `max-x` or `min-distance`) can now be
+used alongside `random-splice=true`. The target-file `[local]` objective,
+`target-frame`, constraints, and `range` determine the final goal and editable
+window. The existing random waypoint distribution and all speedrun behavior
+remain unchanged when the objective is `speedrun`.
+
+Target mode uses random intermediate checkpoints and Local's population
+search, then independently verifies every published candidate against the
+requested endpoint. Switch/locked-door/trapdoor states already reached at the
+target frame are not permitted to disappear. With the default
+`completion-policy=checkpoint`, completion *after* the checkpoint is optional;
+set `--auto-completion-policy complete` to require full replay completion.
+
+Example:
+
+```sh
+SPLICE=694 LEVEL=47-4
+python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm \
+  --config ../splices/random-splice.toml \
+  --goal-config ../splices/${LEVEL}/${SPLICE}.txt \
+  --output wip/optim.ltm --replay-output wip/${LEVEL}.txt --workers 15
+```

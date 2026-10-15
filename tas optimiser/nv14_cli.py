@@ -1672,8 +1672,8 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
     if unused and not args.auto_random_splice:
         raise SystemExit("--" + ", --".join(n.replace("_", "-") for n in unused)
                          + " require --auto-random-splice")
-    if args.auto_random_splice and args.auto_objective != AUTO_OBJECTIVE_SPEEDRUN:
-        raise SystemExit("--auto-random-splice requires --objective speedrun")
+    if args.auto_random_splice and args.auto_objective == AUTO_OBJECTIVE_HIGHSCORE:
+        raise SystemExit("--auto-random-splice requires --objective speedrun or an endpoint objective (not highscore)")
     if args.auto_objective not in AUTO_OBJECTIVES:
         return
     incompatible = sorted(_AUTO_ENDPOINT_ONLY_OPTIONS & explicit)
@@ -2992,6 +2992,63 @@ def _run_local_population(
         raise SystemExit(130)
 
 
+def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
+                            args: argparse.Namespace) -> tuple[EndpointGoal, int, int | None]:
+    """Resolve Auto/--goal-config endpoint options identically for all searches."""
+    frame = (len(replay_frames) - 1 if args.auto_target_frame is None
+             else args.auto_target_frame)
+    if not 0 <= frame < len(replay_frames):
+        raise ValueError("auto target-frame must lie inside the replay")
+    start, end = parse_auto_frame_range(args.frame_range, target_frame=frame)
+    if end is not None and end > frame:
+        raise ValueError("auto endpoint range must not extend beyond target-frame")
+    if args.auto_objective == "min-distance":
+        if (args.auto_target_object is None) == (args.auto_target_point is None):
+            raise ValueError("min-distance requires exactly one of target-object or target-point")
+        target = (resolve_target_object(level, args.auto_target_object)
+                  if args.auto_target_object is not None else target_from_point(args.auto_target_point))
+    else:
+        if args.auto_target_point is not None or (args.auto_target_object is not None
+                and args.auto_objective != "earliest-interaction"):
+            raise ValueError("target-point/object requires min-distance or earliest-interaction")
+        target = None
+    if args.auto_objective == "earliest-interaction" and args.auto_target_object is None:
+        raise ValueError("earliest-interaction requires target-object")
+    if args.auto_arrival_start is not None and args.auto_objective not in EARLIEST_OBJECTIVES:
+        raise ValueError("arrival-start requires earliest-arrival or earliest-interaction")
+    if args.auto_require_jumps and args.auto_require_jump_region is not None:
+        raise ValueError("require-jumps cannot be combined with require-jump-region")
+    if args.auto_require_jump_frames is not None and args.auto_require_jump_region is None:
+        raise ValueError("require-jump-frames requires require-jump-region")
+    interaction_target = (resolve_interaction_target(level, args.auto_target_object)
+                          if args.auto_objective == "earliest-interaction" else None)
+    required = tuple(resolve_interaction_requirement(level, name)
+                     for name in args.auto_require_interaction)
+    if args.auto_require_reference_interactions:
+        from nv14_replay import simulate_through_frame
+        reference_state = simulate_through_frame(level, replay_frames, frame)
+        required = merge_interaction_requirements(required,
+            reference_interaction_requirements(level, reference_state))
+    avoided = tuple(resolve_interaction_avoidance(level, name)
+                    for name in args.auto_avoid_interaction)
+    goal = EndpointGoal(
+        target_frame=frame, objective=args.auto_objective, target=target,
+        target_region=args.auto_target_region,
+        arrival_start=(start if args.auto_arrival_start is None else args.auto_arrival_start)
+        if args.auto_objective in EARLIEST_OBJECTIVES else 0,
+        secondary_objective=args.auto_secondary_objective,
+        interaction_target=interaction_target,
+        x_window=args.auto_x_window, y_window=args.auto_y_window,
+        vx_window=args.auto_vx_window, vy_window=args.auto_vy_window,
+        required_interactions=required, avoided_interactions=avoided,
+        required_jumps=tuple(args.auto_require_jumps),
+        require_jump_region=args.auto_require_jump_region,
+        require_jump_frames=(args.auto_require_jump_frames or (start, frame))
+        if args.auto_require_jump_region is not None else None,
+    )
+    return goal, start, end
+
+
 def main() -> None:
     args = parse_arguments()
     if args.mode == "dump-player":
@@ -3244,8 +3301,14 @@ def main() -> None:
         auto_parent_frames.append(tuple(parent_retimed_frames))
 
     if args.mode == "auto" and args.auto_random_splice:
+        target_goal = None
+        target_start, target_end = 0, None
         if args.auto_objective != AUTO_OBJECTIVE_SPEEDRUN:
-            raise SystemExit("--auto-random-splice requires --objective speedrun")
+            try:
+                target_goal, target_start, target_end = _auto_goal_from_options(
+                    level, replay.frames, args)
+            except (ValueError, RuntimeError) as exc:
+                raise SystemExit(str(exc)) from exc
         if args.auto_parents or args.auto_checkpoint or args.auto_resume:
             raise SystemExit("random splice does not support auto parents or checkpoint/resume")
         try:
@@ -3265,22 +3328,30 @@ def main() -> None:
                 seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
                       else 0 if args.seed is None else int(args.seed)),
             )
-            # Publish only canonical completed runs with fewer frames or a
-            # meaningful same-frame exit-distance improvement.
+            # Speedrun publishes only canonically completed improvements.
+            # Endpoint mode instead publishes only independently verified goal
+            # improvements (optionally requiring full completion).
             result = optimise_random_splices(
                 level, replay.frames, splice_config,
                 best_callback=lambda frames: _write_result(
                     source, output_path, replay_output_path, encode_complex_replay(frames)),
                 progress=lambda message: print(message, flush=True),
+                target_goal=target_goal, range_start=target_start,
+                range_end=target_end, completion_policy=args.auto_completion_policy,
             )
             if not result.improvements:
-                # Do not overwrite the previous best with an unverified partial route.
-                print("[auto:random-splice] no shorter or closer switch-safe completed replay found")
+                # Do not overwrite previous files without a verified improvement.
+                if target_goal is None:
+                    print("[auto:random-splice] no shorter or closer switch-safe completed replay found")
+                else:
+                    print("[auto:random-splice:goal] no verified target improvement found; no output written")
             else:
                 _write_result(source, output_path, replay_output_path,
                               encode_complex_replay(result.frames))
-            print(f"[auto:random-splice] {result.attempts} anchors tried; "
-                  f"{result.improvements} improvements; {len(result.frames)} frames")
+            print(f"[auto:random-splice] {result.attempts} searches tried; "
+                  f"{result.improvements} improvements; {len(result.frames)} frames"
+                  + (f"; target {target_goal.objective} at frame {target_goal.target_frame}"
+                     if target_goal is not None else ""))
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc
         except KeyboardInterrupt:
