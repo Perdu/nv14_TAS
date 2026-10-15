@@ -5,5 +5,5 @@ range = "146:246"
 simulate-enemies = false
 objective = "earliest-interaction"
 target-object = "exit:0"
-# secondary_objective = "max-x"
+secondary_objective = "min-exit-distance"
 # require-interaction = ["testdoor:0"]
