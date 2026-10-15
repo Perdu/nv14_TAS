@@ -14,7 +14,7 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
-from nv14_engine import InputFrame
+from nv14_engine import APP_TILE_SCALE, InputFrame
 from nv14_native import is_native_level, require_native
 from nv14_objectives import (
     AxisWindow,
@@ -33,7 +33,7 @@ from nv14_objectives import (
 EARLIEST_OBJECTIVES = frozenset(("earliest-arrival", "earliest-interaction"))
 _OBJECTIVES = frozenset(("max-x", "min-x", "max-y", "min-y", "min-distance")) | EARLIEST_OBJECTIVES
 SECONDARY_OBJECTIVES = ("max-x", "max-y", "max-vx", "max-vy",
-                        "min-x", "min-y", "min-vx", "min-vy")
+                        "min-x", "min-y", "min-vx", "min-vy", "min-exit-distance")
 
 
 def _validate_window(name: str, window: AxisWindow | None) -> None:
@@ -84,6 +84,17 @@ class EndpointGoal:
                 raise ValueError(f"unknown secondary objective {self.secondary_objective!r}")
             if not self.is_earliest:
                 raise ValueError("secondary_objective requires earliest-arrival or earliest-interaction")
+            if self.secondary_objective == "min-exit-distance":
+                if (self.objective != "earliest-interaction"
+                        or self.interaction_target is None
+                        or not any(atom.kind == INTERACTION_EXIT_DOOR
+                                   for atom in self.interaction_target.alternatives)):
+                    raise ValueError("min-exit-distance requires earliest-interaction "
+                                     "with an exit-door target (e.g. exit:0.door)")
+                # Reuse the exact pre-exit-tick measurement and proximity ranking
+                # already enabled by random-splice EXIT, including native plan
+                # and independent verification.
+                object.__setattr__(self, "exit_distance_tiebreak", True)
         if not isinstance(self.arrival_start, int) or isinstance(self.arrival_start, bool) or not 0 <= self.arrival_start <= self.target_frame:
             raise ValueError("arrival_start must be between 0 and target_frame inclusive")
         for name in ("x_window", "y_window", "vx_window", "vy_window"):
@@ -280,6 +291,9 @@ class EndpointEvaluator:
         self._descriptors = {int(item["load_index"]): item for item in self.level.object_descriptors()}
         self._has_doors = any(item["object_type"] == 9 for item in self._descriptors.values())
         self._target_positions: dict[InteractionAtom, tuple[float, float]] = {}
+        # Edge-gap secondary scores subtract the collision radii, while the
+        # separate pre_finish_exit_distance field retains Auto's centre metric.
+        self._exit_edge_radii: dict[InteractionAtom, float] = {}
         if goal.interaction_target is not None:
             for atom in goal.interaction_target.alternatives:
                 params = self._descriptors[atom.load_index]["parameters"]
@@ -288,6 +302,12 @@ class EndpointEvaluator:
                 if len(position) != 2 or not all(math.isfinite(value) for value in position):
                     raise ValueError(f"interaction target {atom.label} needs finite coordinates")
                 self._target_positions[atom] = position
+                if atom.kind == INTERACTION_EXIT_DOOR and goal.secondary_objective == "min-exit-distance":
+                    # NativeLevel has no static_world property. Exit-door
+                    # collision radius is APP_TILE_SCALE in the shared engine;
+                    # the native player snapshot provides its actual radius.
+                    self._exit_edge_radii[atom] = (
+                        float(self._prefix.player_snapshot()["r"]) + APP_TILE_SCALE)
         self._native_plan = self._compile_native_plan()
         self._prefix_jump = None
         if prefix_frame and not self._multiple_jumps:
@@ -436,15 +456,25 @@ class EndpointEvaluator:
         # physics tick in player.oldpos. This is the same pre_player position
         # used by Auto's pre_finish_exit_distance, without another full replay.
         exit_distance = None
+        exit_edge_gap = None
         if feasible and goal.exit_distance_tiebreak:
-            door_atoms = (atom for atom in events if atom.kind == INTERACTION_EXIT_DOOR)
-            distances = (math.hypot(ox - self._target_positions[atom][0],
-                                    oy - self._target_positions[atom][1])
-                         for atom in door_atoms)
-            exit_distance = min(distances, default=None)
+            door_atoms = tuple(atom for atom in events if atom.kind == INTERACTION_EXIT_DOOR)
+            distances = tuple((atom, math.hypot(ox - self._target_positions[atom][0],
+                                                oy - self._target_positions[atom][1]))
+                              for atom in door_atoms)
+            exit_distance = min((distance for _atom, distance in distances), default=None)
+            if goal.secondary_objective == "min-exit-distance":
+                exit_edge_gap = min((distance - self._exit_edge_radii[atom]
+                                     for atom, distance in distances), default=None)
         secondary_value = secondary_score = 0.0
         if feasible:
-            if goal.secondary_objective is not None:
+            if goal.secondary_objective == "min-exit-distance":
+                # Native oldpos is an approximate pre-step position; the exact
+                # edge gap is recalculated in _exact_exit_proximity below.
+                if exit_edge_gap is not None:
+                    secondary_value = exit_edge_gap
+                    secondary_score = -exit_edge_gap
+            elif goal.secondary_objective is not None:
                 direction, attribute = goal.secondary_objective.split("-", 1)
                 secondary_value = {"x": x, "y": y, "vx": vx, "vy": vy}[attribute]
                 secondary_score = -secondary_value if direction == "min" else secondary_value
@@ -514,14 +544,21 @@ class EndpointEvaluator:
         if tick:
             pre.step_many(frames[:tick], stop_on_dead=True, stop_on_complete=True)
         x, y = pre.player_snapshot()["pos"]
-        distance = min(
-            (math.hypot(x - self._target_positions[atom][0],
-                        y - self._target_positions[atom][1])
-             for atom in result.interaction_events if atom.kind == INTERACTION_EXIT_DOOR),
-            default=None,
+        distances = tuple(
+            (atom, math.hypot(x - self._target_positions[atom][0],
+                              y - self._target_positions[atom][1]))
+            for atom in result.interaction_events if atom.kind == INTERACTION_EXIT_DOOR
         )
-        if distance is None:
+        if not distances:
             return result
+        distance = min(value for _atom, value in distances)
+        if self.goal.secondary_objective == "min-exit-distance":
+            # The secondary metric shown to users is the signed gap between
+            # the two collision circles, not centre-to-centre separation.
+            gap = min(value - self._exit_edge_radii[atom] for atom, value in distances)
+            return replace(result, pre_finish_exit_distance=distance,
+                           secondary_value=gap, secondary_score=-gap,
+                           progress_key=(0, -result.score, gap))
         return replace(result, pre_finish_exit_distance=distance,
                        progress_key=(0, -result.score, -result.secondary_score, distance))
 

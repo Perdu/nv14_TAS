@@ -239,6 +239,10 @@ class LocalConfig:
                     raise ValueError("secondary-objective must be one of: " + ", ".join(SECONDARY_OBJECTIVES))
                 if self.objective not in EARLIEST_OBJECTIVES:
                     raise ValueError("--secondary-objective requires --objective earliest-arrival or earliest-interaction")
+                if (self.secondary_objective == "min-exit-distance"
+                        and self.objective != "earliest-interaction"):
+                    raise ValueError("--secondary-objective min-exit-distance requires "
+                                     "--objective earliest-interaction with an exit-door target")
             for name in ("iterations", "beam", "top_results", "mutation_span"):
                 if getattr(self, name) < 1:
                     raise ValueError(f"{name.replace('_', '-')} must be at least 1")
@@ -2399,7 +2403,7 @@ def build_parser() -> argparse.ArgumentParser:
                          metavar="FRAME", help="first eligible arrival or interaction frame (default: first editable frame)")
     command.add_argument("--secondary-objective", modes=local_modes,
                          choices=SECONDARY_OBJECTIVES, default=None,
-                         help="earliest-arrival/earliest-interaction population only: maximise or minimise this value at tied endpoint frames, before minimising changed inputs (default: none)")
+                         help="earliest-arrival/earliest-interaction population only: tie-break at equal endpoint frames; min-exit-distance requires an exit-door earliest-interaction goal (default: none)")
     command.add_argument(
         "--target-object",
         modes=fixed_frame_modes,
