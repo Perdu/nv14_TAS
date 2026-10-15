@@ -1531,7 +1531,7 @@ Branch 6: route on the left
 Branch 5: original auto route (without initial jump)
 
 # 46-0
-rerecords: 25
+rerecords: 27
 
 
 
@@ -1552,9 +1552,11 @@ rerecords: 297
 F8 Max Wait + High Speed = worse
 
 # 46-4
-rerecords: 0
+rerecords: 136
 
-
+Branch 9: surviving the fall with a bbwj
+Branch 8: just surviving the fall (wtf) and using a bbbwj
+Branch 7: faster fall (unrepaired)
 
 # 47-0
 rerecords: 402
@@ -3069,4 +3071,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 264097
+# Total rerecords: 264235
