@@ -44,17 +44,39 @@ def test_locked_door_and_trapdoor_must_not_disappear_at_waypoint():
     assert _mask_preserved(required, restored)
 
 
-def test_control_event_inserts_mandatory_waypoint():
+def test_route_control_events_do_not_increase_waypoint_count():
     _level, _frames, base = _baseline()
-    # An event outside the random waypoints must still get an anchor.
-    with_mid_switch = replace(base, route_control_events=(
-        RouteControlEvent("exit", 0, 8), RouteControlEvent("locked-door", 3, 17),
-    ))
-    points = choose_waypoints(with_mid_switch,
-                              RandomSpliceConfig(points=1, seed=9), random.Random(9))
-    assert any(point.mandatory and point.frame == 9 for point in points)
-    assert any(point.mandatory and point.frame == 18 for point in points)
-    assert tuple(sorted(p.frame for p in points)) == tuple(p.frame for p in points)
+    # Several independent switch/door/trapdoor events must NOT insert
+    # compulsory optimisation targets. Their masks and IDs remain constraints.
+    extra = tuple(RouteControlEvent(kind, index, tick)
+                  for index, (kind, tick) in enumerate(
+                      (("exit", 8), ("locked-door", 11), ("trapdoor", 13),
+                       ("locked-door", 15), ("trapdoor", 17), ("exit", 19),
+                       ("locked-door", 21), ("trapdoor", 23))))
+    with_controls = replace(base, route_control_events=extra)
+    for count in (1, 2, 4, 8):
+        points = choose_waypoints(with_controls,
+                                  RandomSpliceConfig(points=count), random.Random(9))
+        assert len(points) == count
+        assert not any(point.mandatory for point in points)
+        assert len({point.frame for point in points}) == count
+        assert tuple(p.frame for p in points) == tuple(sorted(p.frame for p in points))
+
+
+def test_configured_count_remains_exact_on_stationary_arc(monkeypatch):
+    _level, _frames, base = _baseline()
+    stationary = tuple(replace(point, x=4.0, y=5.0) for point in base.materialize_trace())
+    monkeypatch.setattr(type(base), "materialize_trace", lambda self: stationary)
+    for seed in (0, 4, 8):
+        points = choose_waypoints(base, RandomSpliceConfig(points=4), random.Random(seed))
+        assert len(points) == len({point.frame for point in points}) == 4
+        assert all(not p.mandatory for p in points)
+
+
+def test_configured_count_caps_to_available_editable_frames():
+    _level, _frames, base = _baseline()
+    points = choose_waypoints(base, RandomSpliceConfig(points=999), random.Random(3))
+    assert len(points) == base.finish_tick - 3  # eligible indices 2..finish-2
 
 
 def test_shorter_replay_rejected_if_it_does_not_finish_and_preserve_switch():
@@ -172,7 +194,7 @@ splice-repair-anchors = 1
     assert checked.route_control_events[0].kind == "exit"
 
 
-def test_actual_later_exit_switch_becomes_mandatory_checkpoint():
+def test_actual_later_exit_switch_preserved_without_mandatory_checkpoint():
     from nv14_engine import APP_NUM_GRIDCOLS, APP_NUM_GRIDROWS, parse_level_string
     cells = ["0"] * (APP_NUM_GRIDCOLS * APP_NUM_GRIDROWS)
     for x in range(APP_NUM_GRIDCOLS):
@@ -185,9 +207,13 @@ def test_actual_later_exit_switch_becomes_mandatory_checkpoint():
     assert len([e for e in baseline.route_control_events if e.kind == "exit"]) == 2
     later_event = baseline.route_control_events[1]
     checkpoints = choose_waypoints(baseline, RandomSpliceConfig(points=1), random.Random(0))
-    assert any(w.frame == later_event.tick + 1 and w.mandatory for w in checkpoints)
+    assert len(checkpoints) == 1
+    assert not checkpoints[0].mandatory
     without_later = replace(baseline, route_control_events=baseline.route_control_events[:1])
     assert not _control_preserved(baseline, without_later)
+    # A completed replay missing an event is still rejected despite the lack
+    # of a mandatory checkpoint at that event's exact frame.
+    assert _control_preserved(baseline, baseline)
 
 
 def test_continuous_campaign_configuration_is_supported():
@@ -699,3 +725,249 @@ def test_cli_random_splice_interrupt_exits_130(monkeypatch, tmp_path, capsys):
     assert exc.value.code == 130
     assert "last verified best retained" in capsys.readouterr().out
     assert not output.exists()
+
+
+def _proximity_pair():
+    """Two different completed 29-frame runs with >0.5px door-gap gain."""
+    level = _running_exit_level()
+    slower = tuple([InputFrame(right=True)] * 24 + [InputFrame()]
+                   + [InputFrame(right=True)] * 4)
+    closer = tuple([InputFrame(right=True)] * 29)
+    slow_eval = evaluate_replay_with_sentinel(level, slower)
+    close_eval = evaluate_replay_with_sentinel(level, closer)
+    assert slow_eval.valid and slow_eval.finish_tick == 29
+    assert close_eval.valid and close_eval.finish_tick == 29
+    assert slow_eval.pre_finish_exit_distance - close_eval.pre_finish_exit_distance > 0.5
+    return level, slower, closer, slow_eval, close_eval
+
+
+def test_completed_same_frame_closer_exit_is_verified_and_accepted():
+    import nv14_random_splice as splice
+    level, slower, closer, slow_eval, close_eval = _proximity_pair()
+    assert splice._completed_improvement_kind(slow_eval, 29, close_eval, 29) == "proximity"
+    assert _validated_improvement(level, closer, slow_eval, len(slower)) == closer
+    assert _validated_improvement(level, slower, slow_eval, len(slower)) is None
+    assert _validated_improvement(level, closer[:12], slow_eval, len(slower)) is None
+    assert _validated_improvement(
+        level, closer, replace(slow_eval, route_control_events=()), len(slower)
+    ) == closer  # The candidate preserves at least the baseline's event IDs.
+    assert _validated_improvement(
+        level, closer, replace(slow_eval, route_control_events=(
+            RouteControlEvent("locked-door", 99, 20),
+        )), len(slower)
+    ) is None
+
+
+def test_small_same_frame_distance_gain_is_saved_but_not_significant_for_stagnation():
+    import nv14_random_splice as splice
+    level, _slower, closer, _slow_eval, close_eval = _proximity_pair()
+    near = tuple([InputFrame(right=True)] * 27 + [InputFrame()] * 2)
+    near_eval = evaluate_replay_with_sentinel(level, near)
+    assert near_eval.valid and near_eval.finish_tick == len(near) == 29
+    assert 0 < near_eval.pre_finish_exit_distance - close_eval.pre_finish_exit_distance < 0.5
+    assert splice._completed_improvement_kind(near_eval, 29, close_eval, 29) == "proximity"
+    assert _validated_improvement(level, closer, near_eval, len(near)) == closer
+    assert not splice._significant_progress(near_eval, 29, close_eval, 29)
+    assert splice._completed_rank(close_eval, len(closer)) < splice._completed_rank(near_eval, len(near))
+
+
+def test_exit_search_same_frame_gain_published_and_resets_stagnation(monkeypatch):
+    import nv14_random_splice as splice
+    level, slower, closer, reference, better = _proximity_pair()
+    waypoint = Waypoint(8, reference.point(8).x, reference.point(8).y)
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: (waypoint,))
+    starts = []
+
+    def fake_search(level, frames, goal, **kwargs):
+        starts.append((tuple(frames), goal.objective))
+        if goal.objective == "earliest-interaction" and tuple(frames[:-1]) == slower:
+            return ((closer + (InputFrame(),), len(closer)),), 1
+        return (), 0
+
+    monkeypatch.setattr(splice, "_local_search", fake_search)
+    messages = []
+    published = []
+    result = optimise_random_splices(
+        level, slower, RandomSpliceConfig(points=1, rounds=0, stagnation_rounds=1),
+        best_callback=published.append, progress=messages.append,
+    )
+    assert result.frames == closer
+    assert result.improvements == 1
+    assert published == [closer]
+    assert sum("round " in m and "completed in" in m for m in messages) == 2
+    assert any("exit proximity improved: 29 frames" in m and "via EXIT segment" in m
+               for m in messages)
+    assert any("stagnant 0/1" in m for m in messages)
+    assert any("stopping after 1" in m for m in messages)
+    checked = evaluate_replay_with_sentinel(level, result.frames)
+    assert checked.valid and checked.finish_tick == 29
+    assert checked.pre_finish_exit_distance < reference.pre_finish_exit_distance
+
+
+def test_progressive_frontier_same_frame_exit_gain_published(monkeypatch):
+    import nv14_random_splice as splice
+    from collections import Counter
+    level, slower, closer, reference, _better = _proximity_pair()
+    waypoint = Waypoint(8, reference.point(8).x, reference.point(8).y)
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: (waypoint,))
+    monkeypatch.setattr(splice, "_local_search", lambda *args, **kwargs: ((), 0))
+    frontier_calls = []
+
+    def fake_frontier(level, current, evaluation, waypoints, config, rng, progress):
+        frontier_calls.append(current)
+        return closer, 2, 7, Counter({"near_miss_carried": 1})
+
+    monkeypatch.setattr(splice, "_progressive_frontier", fake_frontier)
+    messages, published = [], []
+    result = optimise_random_splices(
+        level, slower, RandomSpliceConfig(frontier=3, points=1, rounds=1),
+        best_callback=published.append, progress=messages.append,
+    )
+    assert result.frames == closer
+    assert result.improvements == 1
+    assert frontier_calls == [slower]
+    assert published == [closer]
+    assert any("exit proximity improved: 29 frames" in msg and "progressive multi-splice" in msg
+               for msg in messages)
+
+
+def test_completed_run_rank_always_prioritises_frames_over_exit_distance():
+    import nv14_random_splice as splice
+    _level, _slower, _closer, ref, closer_eval = _proximity_pair()
+    artificially_far_shorter = replace(closer_eval, pre_finish_exit_distance=1000.0,
+                                       finish_tick=28)
+    assert splice._completed_improvement_kind(ref, 29, artificially_far_shorter, 28) == "speedrun"
+    assert splice._completed_rank(artificially_far_shorter, 28) < splice._completed_rank(closer_eval, 29)
+    no_distance = replace(closer_eval, pre_finish_exit_distance=None)
+    assert splice._completed_improvement_kind(ref, 29, no_distance, 29) is None
+
+
+def test_cli_writes_verified_same_frame_closer_tas(tmp_path, monkeypatch, capsys):
+    import sys
+    import nv14_random_splice as splice
+    from nv14_cli import main
+    from nv14_replay import (parse_combined_level_replay, decode_complex_replay,
+                            encode_complex_replay)
+    level, slower, closer, reference, better = _proximity_pair()
+    source = tmp_path / "input.txt"
+    output = tmp_path / "improved.txt"
+    source.write_text(
+        f"$test#author#{level.source_level_string}#{encode_complex_replay(slower)}#\n",
+        encoding="utf8",
+    )
+    waypoint = Waypoint(8, reference.point(8).x, reference.point(8).y)
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: (waypoint,))
+
+    def fake_search(level, frames, goal, **kwargs):
+        if goal.objective == "earliest-interaction":
+            return ((closer + (InputFrame(),), len(closer)),), 1
+        return (), 0
+
+    monkeypatch.setattr(splice, "_local_search", fake_search)
+    monkeypatch.setattr(sys, "argv", [
+        "optimize_replay.py", "auto", str(source), "--output", str(output),
+        "--auto-random-splice", "--auto-runs", "1", "--simulate-enemies",
+    ])
+    main()
+    assert output.exists()
+    saved = tuple(decode_complex_replay(
+        parse_combined_level_replay(output.read_text()).replay_string
+    ).frames)
+    # Complex replay decoding normalises unspecified jump triggers to False.
+    assert len(saved) == len(closer)
+    assert all((a.left, a.right, a.jump) == (b.left, b.right, b.jump)
+               for a, b in zip(saved, closer))
+    checked = evaluate_replay_with_sentinel(level, saved)
+    assert checked.finish_tick == len(saved) == len(slower)
+    assert checked.pre_finish_exit_distance < reference.pre_finish_exit_distance
+    text = capsys.readouterr().out
+    assert "exit proximity improved:" in text
+    assert "29 frames" in text
+
+
+def test_insignificant_distance_gain_published_but_does_not_reset_stagnation(monkeypatch):
+    import nv14_random_splice as splice
+    level, _slower, closer, _reference, closer_eval = _proximity_pair()
+    near = tuple([InputFrame(right=True)] * 27 + [InputFrame()] * 2)
+    ref_eval = evaluate_replay_with_sentinel(level, near)
+    assert 0 < ref_eval.pre_finish_exit_distance - closer_eval.pre_finish_exit_distance < 0.5
+    waypoint = Waypoint(8, ref_eval.point(8).x, ref_eval.point(8).y)
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: (waypoint,))
+
+    def fake_search(level, frames, goal, **kwargs):
+        if goal.objective == "earliest-interaction":
+            return ((closer + (InputFrame(),), 29),), 1
+        return (), 0
+
+    monkeypatch.setattr(splice, "_local_search", fake_search)
+    progress = []
+    result = optimise_random_splices(
+        level, near, RandomSpliceConfig(rounds=0, stagnation_rounds=1),
+        progress=progress.append,
+    )
+    assert result.frames == closer
+    assert result.improvements == 1
+    assert sum("round " in m and "completed in" in m for m in progress) == 1
+    assert any("stagnant 1/1" in m for m in progress)
+
+
+def test_progress_reports_configured_count_without_extra_controls(monkeypatch):
+    import nv14_random_splice as splice
+    level, frames, baseline = _baseline()
+    fake_events = tuple(RouteControlEvent("exit", index, index + 4)
+                        for index in range(12))
+    original_choose = splice.choose_waypoints
+    def selected_with_many_controls(reference, config, rng):
+        reference = replace(reference, route_control_events=fake_events)
+        return original_choose(reference, config, rng)
+    monkeypatch.setattr(splice, "choose_waypoints", selected_with_many_controls)
+    def fake_search(*args, **kwargs):
+        return (), 0
+    monkeypatch.setattr(splice, "_local_search", fake_search)
+    messages = []
+    result = optimise_random_splices(level, frames, RandomSpliceConfig(points=4, rounds=1),
+                                     progress=messages.append)
+    assert len(result.waypoints) == 4
+    assert any("4 waypoints" in message and "no additional control anchors" in message
+               for message in messages)
+
+
+def test_random_splice_exit_goals_enable_population_distance_ranking(monkeypatch):
+    import nv14_random_splice as splice
+    level, frames, baseline = _baseline()
+    waypoint = Waypoint(5, baseline.point(5).x, baseline.point(5).y)
+    monkeypatch.setattr(splice, "choose_waypoints", lambda *_: (waypoint,))
+    choices = []
+
+    def fake_search(level, frames, goal, **kwargs):
+        if goal.objective == "earliest-interaction":
+            choices.append(goal.exit_distance_tiebreak)
+        return (), 1
+
+    monkeypatch.setattr(splice, "_local_search", fake_search)
+    splice.optimise_random_splices(level, frames, RandomSpliceConfig(rounds=1))
+    assert choices == [True]
+
+
+def test_frontier_retains_verified_reference_until_exit_when_branches_are_bad(monkeypatch):
+    import nv14_random_splice as splice
+    level, frames, baseline = _baseline()
+    waypoints = (Waypoint(8, baseline.point(8).x, baseline.point(8).y),
+                 Waypoint(22, baseline.point(22).x, baseline.point(22).y))
+    seen = []
+
+    def bad_search(level, source, goal, *, start, **kwargs):
+        seen.append((start, goal.objective, source[:4]))
+        # No mutation survives the current waypoint, but the actual original
+        # source is known to be a completed interaction-safe replay.
+        return (), 0
+
+    monkeypatch.setattr(splice, "_local_search", bad_search)
+    result, attempts, evaluations, counters = splice._progressive_frontier(
+        level, frames, baseline, waypoints,
+        RandomSpliceConfig(points=2, frontier=3, rounds=1),
+        random.Random(11), None)
+    assert result is None
+    assert counters["reference_branch_preserved"] == 2
+    assert any(objective == "earliest-interaction" for _, objective, _ in seen)
+    assert attempts >= 3

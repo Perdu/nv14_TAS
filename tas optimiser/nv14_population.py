@@ -595,7 +595,7 @@ def optimise_local_population(
         and baseline.frame < ranges[0][0]
     ):
         prefix_goal = replace(goal, target_frame=ranges[0][0] - 1, objective="max-x",
-                              target=None, interaction_target=None, target_region=None, arrival_start=0, secondary_objective=None,
+                              target=None, interaction_target=None, exit_distance_tiebreak=False, target_region=None, arrival_start=0, secondary_objective=None,
                               x_window=None, y_window=None, vx_window=None, vy_window=None,
                               required_interactions=(), require_jump_region=None, require_jump_frames=None, required_jumps=())
         prefix = EndpointEvaluator(level, prefix_goal).evaluate(source)
@@ -644,20 +644,45 @@ def optimise_local_population(
     last_progress = time.monotonic()
     task_counts: dict[int, int] = {}
 
+    exit_door = None
+    if goal.exit_distance_tiebreak:
+        # The same exit-door geometry used by Auto; cache it once per search.
+        atom = next(atom for atom in goal.interaction_target.alternatives
+                    if atom.kind == "exit-door")
+        exit_door = level.static_world.entry_for_ref(
+            level.static_world.exit_door_ref(atom.state_index))
+    edge_sum = (level.player.r + exit_door.r) if exit_door is not None else 0.0
+
     def best_summary() -> str:
         if best is None:
-            return "no feasible endpoint"
-        evaluation = best.evaluation
-        summary = f"best {evaluation.score:g} at frame {evaluation.frame}"
-        if evaluation.jump_events:
-            summary += "; required jumps=" + ",".join("missing" if event is None else str(event[0])
-                                                       for event in evaluation.jump_events)
-        elif evaluation.jump_event is not None:
-            summary += f"; required jump={evaluation.jump_event[0]}"
-        if evaluation.interaction_events:
-            summary += "; interaction=" + ",".join(atom.label for atom in evaluation.interaction_events)
-        if goal.secondary_objective is not None:
-            summary += f"; secondary {goal.secondary_objective}={evaluation.secondary_value:.15g}"
+            summary = "no feasible endpoint"
+        else:
+            evaluation = best.evaluation
+            summary = f"best {evaluation.score:g} at frame {evaluation.frame}"
+            if evaluation.jump_events:
+                summary += "; required jumps=" + ",".join("missing" if event is None else str(event[0])
+                                                         for event in evaluation.jump_events)
+            elif evaluation.jump_event is not None:
+                summary += f"; required jump={evaluation.jump_event[0]}"
+            if evaluation.interaction_events:
+                summary += "; interaction=" + ",".join(atom.label for atom in evaluation.interaction_events)
+            if evaluation.pre_finish_exit_distance is not None:
+                summary += (f"; pre-finish door gap="
+                            f"{evaluation.pre_finish_exit_distance-edge_sum:.2f}px")
+            if goal.secondary_objective is not None:
+                summary += f"; secondary {goal.secondary_objective}={evaluation.secondary_value:.15g}"
+        if goal.exit_distance_tiebreak and exit_door is not None:
+            # The minimum among retained live non-feasible states (not all
+            # evaluated proposals), independently of an interaction event.
+            gaps = (math.hypot(candidate.evaluation.x-exit_door.x,
+                               candidate.evaluation.y-exit_door.y)-edge_sum
+                    for candidate in (*population, *partial)
+                    if not candidate.evaluation.feasible and not candidate.evaluation.dead
+                    and math.isfinite(candidate.evaluation.x)
+                    and math.isfinite(candidate.evaluation.y))
+            nearest = min(gaps, default=None)
+            if nearest is not None:
+                summary += f"; closest surviving door gap={nearest:.2f}px"
         return summary
 
     def report(worker: int, candidate: PopulationCandidate | None, count: int, spent: int) -> None:

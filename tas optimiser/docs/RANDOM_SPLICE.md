@@ -22,8 +22,10 @@ interval targets the **fresh exit interaction**, with the Local endpoint's
 squared distance to the specific exit door ranking incomplete attempts.
 Incomplete frontier candidates are never saved as TAS output.
 
-**Switch and object safety are hard constraints:** mandatory waypoints are added
-after route-control interactions; every waypoint requires previously activated
+**Switch and object safety are hard constraints, not extra waypoints:**
+`splice-points = N` chooses exactly N distinct random waypoints when the replay
+has at least N eligible frames (and never inserts extra waypoints for switches,
+locked doors, or trapdoors). Each waypoint requires previously activated
 switches/locked doors; each proposed seam preserves the reference's exit,
 locked-door and trapdoor masks; and a final, repacked replay must complete
 with every original exact `(interaction kind, object index)` route-control event
@@ -41,7 +43,7 @@ Add this to your ordinary default Auto TOML (no splice files required):
 objective = "speedrun"
 random-splice = true
 runs = 3                  # 0 repeats until stagnation limit or Ctrl+C
-stagnation-runs = 10      # stop after 10 rounds with no shorter completed TAS
+stagnation-runs = 10      # stop after 10 rounds without a frame or >=0.5px distance gain
 beam = 16
 seed = "random"         # integer seeds reproduce waypoint selection/search
 splice-points = 8        # alternatively: splice-distance = 80.0 (pixels travelled)
@@ -71,8 +73,9 @@ python optimize_replay.py auto completed.txt --output improved.txt \
 ```
 
 Use `--auto-splice-distance 80` instead of `--auto-splice-points` to sample
-by travel distance. In either case switch/door events add *mandatory* anchors,
-which can increase the total above the requested count.
+by travel distance (in this alternative mode, spacing determines the waypoint
+count rather than `splice-points`). Switch/door/trapdoor events never add extra
+anchors. The final exit search is a separate phase, not an added waypoint.
 
 `--workers` controls the Local population search at each waypoint. The
 iterations settings are **per worker**, not a global shared limit. For example,
@@ -92,12 +95,17 @@ ninja must survive and preserve all control interactions already triggered in
 the reference. Progress diagnostics print near misses, discarded dead routes,
 missing switch masks, unverified completions, and the best finite
 **exit-door edge gap in pixels** (smaller is better). This distance guides
-**incomplete** candidates; verified completed speedrun frame count remains the
-only acceptance criterion. `--auto-stagnation-runs 10` also applies to random splicing;
-zero disables the stopping condition.
-The optimiser outputs a replay only after independently verifying a shorter,
-completed run with the same required route-control events. If none is found,
-no output file is written and the original source remains untouched.
+**incomplete** candidates. For completed runs, random splicing now uses the
+same ordering as completed-run Auto: finish tick is primary, and the pre-finish
+exit distance is the tie-break at equal frame counts. Every verified distance
+gain is saved and used as the reference in subsequent rounds, while only a
+gain of **at least 0.5px within a round** (or a shorter completion) resets the
+stagnation counter. A distance-only improvement keeps the exact same input
+count, and the CLI logs `exit proximity improved` rather than `speedrun improved`.
+`--auto-stagnation-runs 10` applies to random splicing; zero disables the limit.
+The optimiser outputs a replay only after independently verifying a shorter
+completed run or a completed run closer to the exit, with the same required
+route-control events. If neither is found, no output file is written.
 
 ## Scope and limits
 

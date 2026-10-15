@@ -70,6 +70,9 @@ class EndpointGoal:
     require_jump_region: tuple[float, float, float, float] | None = None
     require_jump_frames: tuple[int, int] | None = None
     required_jumps: tuple[RequiredJump, ...] = ()
+    # Opt-in Local ranking used by random-splice EXIT. Added last to preserve
+    # compatibility with existing positional EndpointGoal construction.
+    exit_distance_tiebreak: bool = False
 
     def __post_init__(self) -> None:
         if isinstance(self.target_frame, bool) or not isinstance(self.target_frame, int) or self.target_frame < 0:
@@ -109,6 +112,12 @@ class EndpointGoal:
                 raise ValueError("earliest-interaction requires a resolved interaction_target")
         elif self.interaction_target is not None:
             raise ValueError("interaction_target requires earliest-interaction")
+        if self.exit_distance_tiebreak and (
+            self.objective != "earliest-interaction"
+            or not any(atom.kind == INTERACTION_EXIT_DOOR
+                       for atom in self.interaction_target.alternatives)
+        ):
+            raise ValueError("exit_distance_tiebreak requires an exit-door interaction target")
         if self.require_jump_region is not None:
             region = tuple(float(v) for v in self.require_jump_region)
             if (len(region) != 4 or not all(math.isfinite(v) for v in region)
@@ -179,11 +188,15 @@ class EndpointEvaluation:
     jump_distance: float = 0.0
     jump_events: tuple[tuple[int, float, float] | None, ...] = ()
     missing_jump_indices: tuple[int, ...] = ()
+    pre_finish_exit_distance: float | None = None
 
     @property
-    def objective_key(self) -> tuple[float, float]:
+    def objective_key(self) -> tuple[float, ...]:
         """Lower-is-better objective order, excluding replay-edit tie-breaks."""
-        return (-self.score, -self.secondary_score)
+        key = (-self.score, -self.secondary_score)
+        if self.pre_finish_exit_distance is not None:
+            return (*key, self.pre_finish_exit_distance)
+        return key
 
     @property
     def rank_key(self) -> tuple:
@@ -419,6 +432,16 @@ class EndpointEvaluator:
         feasible = bool(at_endpoint and finite and not dead and not missing and not violated and not missing_jump
                         and error == 0.0 and region_distance == 0.0
                         and (goal.interaction_target is None or events))
+        # The native state contains the position from immediately before this
+        # physics tick in player.oldpos. This is the same pre_player position
+        # used by Auto's pre_finish_exit_distance, without another full replay.
+        exit_distance = None
+        if feasible and goal.exit_distance_tiebreak:
+            door_atoms = (atom for atom in events if atom.kind == INTERACTION_EXIT_DOOR)
+            distances = (math.hypot(ox - self._target_positions[atom][0],
+                                    oy - self._target_positions[atom][1])
+                         for atom in door_atoms)
+            exit_distance = min(distances, default=None)
         secondary_value = secondary_score = 0.0
         if feasible:
             if goal.secondary_objective is not None:
@@ -426,6 +449,8 @@ class EndpointEvaluator:
                 secondary_value = {"x": x, "y": y, "vx": vx, "vy": vy}[attribute]
                 secondary_score = -secondary_value if direction == "min" else secondary_value
             progress_key = (0, -score, -secondary_score)
+            if exit_distance is not None:
+                progress_key += (exit_distance,)
         else:
             missing_distance = self._missing_distance(missing, x, y) if finite else math.inf
             # Keep requirements/avoidances discrete, then offer useful movement
@@ -460,7 +485,7 @@ class EndpointEvaluator:
                                   error, region_distance, frame, dead,
                                   tuple(player.items()), secondary_score, secondary_value,
                                   events, completed, target_distance, jump_event, missing_jump, jump_distance,
-                                  jump_events, missing_indices)
+                                  jump_events, missing_indices, exit_distance)
 
     def _qualifying_jump(self, frame: int, jumped: bool, origin: tuple | None) -> bool:
         """Independent reference event predicate; never called by the C tick loop."""
@@ -471,6 +496,34 @@ class EndpointEvaluator:
         x, y = origin
         return (start <= frame <= end and math.isfinite(x) and math.isfinite(y)
                 and region[0] <= x <= region[1] and region[2] <= y <= region[3])
+
+    def _exact_exit_proximity(self, result: EndpointEvaluation,
+                              frames: Sequence[InputFrame]) -> EndpointEvaluation:
+        """Match Auto's *pre-step* exit distance, even after collision impulses.
+
+        The post-step player's oldpos is usually the previous position, but
+        wall/floor contacts may adjust it to preserve an implicit velocity.
+        An exit hit is comparatively rare. Replaying only to the tick before
+        that hit in the native engine gives the exact point Auto uses, while
+        leaving the hot infeasible-candidate path entirely unchanged.
+        """
+        if not self.goal.exit_distance_tiebreak or not result.feasible:
+            return result
+        tick = result.frame
+        pre = self.level.initial_state()
+        if tick:
+            pre.step_many(frames[:tick], stop_on_dead=True, stop_on_complete=True)
+        x, y = pre.player_snapshot()["pos"]
+        distance = min(
+            (math.hypot(x - self._target_positions[atom][0],
+                        y - self._target_positions[atom][1])
+             for atom in result.interaction_events if atom.kind == INTERACTION_EXIT_DOOR),
+            default=None,
+        )
+        if distance is None:
+            return result
+        return replace(result, pre_finish_exit_distance=distance,
+                       progress_key=(0, -result.score, -result.secondary_score, distance))
 
     def evaluate(self, frames: Sequence[InputFrame]) -> EndpointEvaluation:
         frames = tuple(frames)
@@ -496,7 +549,7 @@ class EndpointEvaluator:
         result = self._evaluate_state(state, arrival_eligible=eligible, interaction_events=atoms, jump_event=jump_event)
         if result.terminal_frame != terminal_frame or result.terminal_dead != terminal_dead:
             result = replace(result, terminal_frame=terminal_frame, terminal_dead=terminal_dead)
-        return result
+        return self._exact_exit_proximity(result, frames)
 
     def _evaluate_multiple_jumps(self, frames: tuple[InputFrame, ...]) -> EndpointEvaluation:
         """Exact native-physics reference scorer for several independent jump predicates.
@@ -557,13 +610,13 @@ class EndpointEvaluator:
         if frames[:self.prefix_frame] != self.source_frames[:self.prefix_frame]:
             raise ValueError("candidate changed the immutable cached prefix")
         if self._multiple_jumps:
-            return self._evaluate_multiple_jumps(frames)
+            return self._exact_exit_proximity(self._evaluate_multiple_jumps(frames), frames)
         state = self._prefix.clone()
         if not self.goal.is_earliest and self.goal.require_jump_region is None:
             if not self._prefix_dead:
                 state.step_many(frames[self.prefix_frame:self.goal.target_frame+1],
                                 stop_on_dead=True, stop_on_complete=False)
-            return self._evaluate_state(state)
+            return self._exact_exit_proximity(self._evaluate_state(state), frames)
         # Inspect every eligible input tick: entry/exit and momentum constraints
         # can become true, false and true again. Binary search is unsound here.
         best = None
@@ -588,13 +641,15 @@ class EndpointEvaluator:
             if previous is not None:
                 previous = (candidate.interaction_state, candidate.completed_exit_index)
             if candidate.feasible:
-                return replace(candidate, state_key=state.state_key())
+                return self._exact_exit_proximity(
+                    replace(candidate, state_key=state.state_key()), frames)
             if best is None or candidate.progress_key < best.progress_key:
                 best = replace(candidate, state_key=state.state_key())
         terminal = self._evaluate_state(state, arrival_eligible=False, jump_event=jump_event)
         if best is None:
             best = terminal
-        return replace(best, terminal_frame=terminal.frame, terminal_dead=terminal.dead)
+        return self._exact_exit_proximity(
+            replace(best, terminal_frame=terminal.frame, terminal_dead=terminal.dead), frames)
 
 
 def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointGoal,

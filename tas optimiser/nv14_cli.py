@@ -1990,7 +1990,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="switch-safe stochastic route waypoint splicing; requires completed speedrun",
     )
     command.add_argument("--auto-splice-points", modes=auto_modes, type=int, default=5,
-                         metavar="N", help="number of random path waypoints per round (default 5)")
+                         metavar="N", help="number of distinct random path waypoints per round; no extra control anchors (default 5)")
     command.add_argument("--auto-splice-distance", modes=auto_modes, type=float,
                          metavar="PIXELS", help="sample every N pixels of travel instead of by count")
     command.add_argument("--auto-splice-radius", modes=auto_modes, type=float, default=16.0,
@@ -3261,7 +3261,8 @@ def main() -> None:
                 seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
                       else 0 if args.seed is None else int(args.seed)),
             )
-            # Publishing is restricted to complete, canonical shorter replays.
+            # Publish only canonical completed runs with fewer frames or a
+            # meaningful same-frame exit-distance improvement.
             result = optimise_random_splices(
                 level, replay.frames, splice_config,
                 best_callback=lambda frames: _write_result(
@@ -3270,7 +3271,7 @@ def main() -> None:
             )
             if not result.improvements:
                 # Do not overwrite the previous best with an unverified partial route.
-                print("[auto:random-splice] no shorter switch-safe completed replay found")
+                print("[auto:random-splice] no shorter or closer switch-safe completed replay found")
             else:
                 _write_result(source, output_path, replay_output_path,
                               encode_complex_replay(result.frames))

@@ -1361,6 +1361,7 @@ For micro-optimising a **completed** Auto speedrun, `auto --auto-random-splice`
 creates random spatial waypoints along the best replay and reuses Local
 population search for earlier arrivals and progressive seam repairs. It
 hard-preserves reference switch/door/trapdoor interactions and verifies
-complete shorter replays before saving. Waypoint count or distance, region
+completed replays before saving: shorter finishes always win, while at an
+equal frame count the closer pre-finish exit approach wins. Waypoint count or distance, region
 radius, lookback, Local budget and repair depth are configurable under `[auto]`
 or as CLI arguments. See [docs/RANDOM_SPLICE.md](docs/RANDOM_SPLICE.md).

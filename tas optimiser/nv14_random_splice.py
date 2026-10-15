@@ -1,9 +1,10 @@
 """Switch-safe stochastic waypoint splicing of an existing completed N TAS.
 
 A waypoint is a spatial *goal*, not permission to ignore the reference's
-persistent interactions. Only canonically verified shorter *completed* replays
-are published. Intermediate splices can be incomplete and are repaired through
-later mandatory waypoints with Local's population search.
+persistent interactions. Only canonically verified *completed* replays are published: shorter
+finishes first, then closer exit approaches at equal frame count. Intermediate splices can be incomplete and are repaired through
+later sampled waypoints with Local's population search. Route-control events
+are enforced through interaction and replay constraints, not extra waypoints.
 """
 from __future__ import annotations
 
@@ -15,7 +16,8 @@ import time
 from collections.abc import Callable, Sequence
 from collections import Counter
 
-from nv14_auto import AutoEvaluation, CompactTracePoint, evaluate_replay_with_sentinel, verify_trimmed_replay
+from nv14_auto import (AutoEvaluation, CompactTracePoint, evaluate_replay_with_sentinel,
+                       pre_finish_exit_edge_distance, verify_trimmed_replay)
 from nv14_endpoint import EndpointGoal, EndpointEvaluator
 from nv14_engine import InputFrame, Level
 from nv14_objectives import (INTERACTION_GOLD, reference_interaction_requirements,
@@ -117,7 +119,13 @@ def _control_preserved(reference: AutoEvaluation, candidate: AutoEvaluation) -> 
 
 def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
                      rng: random.Random) -> tuple[Waypoint, ...]:
-    """Sample arc length, not screen coordinates; pin every control event."""
+    """Sample path waypoints without adding switch/door/trapdoor anchors.
+
+    `points` sets the exact number when sufficient editable frames exist.
+    Switch/door/trapdoor safety is enforced at the next selected checkpoint
+    and on every accepted complete replay; it must not expand the search count.
+    `distance` remains a separate, spacing-based selection mode.
+    """
     trace = reference.materialize_trace()
     if len(trace) < 4:
         return ()
@@ -133,29 +141,32 @@ def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
     candidates = list(range(2, limit + 1))
     selected: set[int] = set()
     if config.distance is None:
-        # Jitter a uniform arc-length partition; frame sampling is a fallback
-        # for stationary/slow paths where many arc-length positions coincide.
-        for k in range(1, config.points + 1):
+        # Always pick distinct frames. Quantised arc lengths and long stationary
+        # stretches used to collapse multiple configured points onto one frame.
+        # Frame position breaks arc-length ties, spreading the search budget
+        # over the timeline instead of clustering around a stopped ninja.
+        available = set(candidates)
+        count = min(config.points, len(available))
+        for k in range(1, count + 1):
+            jitter = k - 0.5 + rng.random()
+            frame_target = 2 + (limit - 1) * jitter / count
             if total > 1e-9:
-                target = total * (k - 0.5 + rng.random()) / config.points
-                selected.add(min(candidates, key=lambda i: abs(path[i] - target)))
+                distance_target = total * jitter / count
+                index = min(available, key=lambda i: (
+                    abs(path[i] - distance_target), abs(i - frame_target), i))
             else:
-                selected.add(rng.choice(candidates))
+                index = min(available, key=lambda i: (abs(i - frame_target), i))
+            selected.add(index)
+            available.remove(index)
     elif total > 0:
+        # Spacing-based mode deliberately derives its count from distance,
+        # unlike splice-points. Neither mode creates extra control anchors.
         for k in range(1, math.ceil(total / config.distance)):
             target = k * config.distance
             if target >= total:
                 break
             selected.add(min(candidates, key=lambda i: abs(path[i] - target)))
-    # When a switch/locked-door/trapdoor fires, protect its state by placing an
-    # anchor directly *after* the event, even if no random anchor fell there.
-    mandatory = set()
-    for event in reference.route_control_events:
-        tick = min(limit, event.tick + 1)
-        if tick >= 2:
-            selected.add(tick)
-            mandatory.add(tick)
-    return tuple(Waypoint(i, trace[i].x, trace[i].y, i in mandatory)
+    return tuple(Waypoint(i, trace[i].x, trace[i].y)
                  for i in sorted(selected))
 
 
@@ -284,29 +295,92 @@ def _repair_window_start(
     return start
 
 
+# Completed speedrun Auto ranks every genuine exit-distance improvement;
+# stagnation uses a separate 0.5px significance threshold per outer round.
+_MIN_EXIT_DISTANCE_GAIN = 0.5
+
+
+def _completed_improvement_kind(reference: AutoEvaluation, reference_length: int,
+                                candidate: AutoEvaluation, candidate_length: int,
+                                ) -> str | None:
+    """Compare canonically verified completions: finish first, door second."""
+    if not candidate.valid or candidate.finish_tick != candidate_length:
+        return None
+    if candidate_length < reference_length:
+        return "speedrun"
+    if candidate_length != reference_length:
+        return None
+    old = reference.pre_finish_exit_distance
+    new = candidate.pre_finish_exit_distance
+    if (old is not None and new is not None and math.isfinite(old)
+            and math.isfinite(new) and old - new > 1e-9):
+        return "proximity"
+    return None
+
+
+def _significant_progress(reference: AutoEvaluation, reference_length: int,
+                          candidate: AutoEvaluation, candidate_length: int) -> bool:
+    kind = _completed_improvement_kind(reference, reference_length,
+                                       candidate, candidate_length)
+    if kind == "speedrun":
+        return True
+    if kind != "proximity":
+        return False
+    assert reference.pre_finish_exit_distance is not None
+    assert candidate.pre_finish_exit_distance is not None
+    return (reference.pre_finish_exit_distance - candidate.pre_finish_exit_distance
+            >= _MIN_EXIT_DISTANCE_GAIN - 1e-9)
+
+
+def _completed_rank(evaluation: AutoEvaluation, length: int) -> tuple[float, float]:
+    distance = evaluation.pre_finish_exit_distance
+    return (float(length), float(distance) if distance is not None and math.isfinite(distance)
+            else math.inf)
+
+
+def _improvement_description(level: Level, reference: AutoEvaluation,
+                             old_length: int, candidate: AutoEvaluation,
+                             new_length: int, where: str) -> str:
+    kind = _completed_improvement_kind(reference, old_length, candidate, new_length)
+    if kind == "speedrun":
+        return (f"[auto:random-splice] speedrun improved: {old_length} -> "
+                f"{new_length} frames {where}")
+    old_gap = pre_finish_exit_edge_distance(level, reference)
+    new_gap = pre_finish_exit_edge_distance(level, candidate)
+    return (f"[auto:random-splice] exit proximity improved: {new_length} frames, "
+            f"{old_gap:.2f}px -> {new_gap:.2f}px {where}")
+
+
 def _validated_improvement(level: Level, proposal: Sequence[InputFrame],
                            reference: AutoEvaluation, original_length: int
                            ) -> tuple[InputFrame, ...] | None:
-    """Repack, replay independently, require completion and every reference control."""
+    """Require canonical completion, route controls, and a better speedrun rank.
+
+    A shorter finish always wins. At the same frame count, accept a strictly
+    smaller pre-finish exit distance. Stagnation resets for >=0.5px per round.
+    """
     packed = tuple(editable_frames(decode_complex_replay(encode_complex_replay(proposal)).frames))
     evaluation = evaluate_replay_with_sentinel(level, packed)
     if not evaluation.valid or evaluation.finish_tick is None:
         return None
-    if evaluation.finish_tick >= original_length:
+    if evaluation.finish_tick > original_length:
         return None
-    # A shorter output has to finish *on its new implicit neutral sentinel*.
     body = packed[:evaluation.finish_tick]
+    # In both cases the output must finish on its new implicit neutral sentinel.
     try:
         verified = verify_trimmed_replay(level, body)
     except ValueError:
         return None
-    return body if _control_preserved(reference, verified) else None
+    if not _control_preserved(reference, verified):
+        return None
+    return (body if _completed_improvement_kind(reference, original_length,
+                                               verified, len(body)) is not None else None)
 
 
 def _exit_segment_start(finish: int, previous_end: int, lookback: int) -> int:
     """Allow the exit objective to repair a useful approach, not 2-5 final frames.
 
-    Optional/mandatory path checkpoints help exploration, but do not constrain
+    Sampled path checkpoints help exploration, but do not constrain
     the last speedrun improvement: it is safe to revisit earlier checkpoints
     because the endpoint goal and final canonical replay must preserve every
     required control interaction. This overlap is essential after an earlier
@@ -379,12 +453,19 @@ def _progressive_frontier(
                     counters["near_miss_carried"] += 1
                 proposals.append((endpoint.progress_key, trial, endpoint.feasible))
         if not proposals:
-            if progress:
-                progress(f"[auto:random-splice] frontier stopped at waypoint {waypoint.frame}: "
-                         "no surviving interaction-safe candidates")
-            return None, attempts, evaluations, counters
+            # A verified reference always survives its own checkpoint. This
+            # protects a frontier whose mutated branches all lost switches.
+            fallback = EndpointEvaluator(level, goal).evaluate(current)
+            proposals.append((fallback.progress_key, current, fallback.feasible))
+            counters["reference_fallbacks"] += 1
         # Keep a feasible majority if available and at least one near miss.
         # Niche diversity is based on physical state at the checkpoint.
+        # Preserve the known-completed reference as a non-negotiable fallback.
+        # Without it, a frontier of invalid switch states can evict the only
+        # interaction-safe path, and the search never reaches the EXIT stage.
+        if not any(trial == current for _key, trial, _feasible in proposals):
+            ref_endpoint = EndpointEvaluator(level, goal).evaluate(current)
+            proposals.append((ref_endpoint.progress_key, current, ref_endpoint.feasible))
         ranked = sorted(proposals, key=lambda c: c[0])
         selected: list[tuple[InputFrame, ...]] = []
         state_niches: set[tuple] = set()
@@ -401,6 +482,7 @@ def _progressive_frontier(
             if niche not in state_niches:
                 selected.append(trial)
                 state_niches.add(niche)
+        offer(current)
         for _rank, trial, _feasible in ranked:
             if len(selected) >= config.frontier:
                 break
@@ -411,16 +493,20 @@ def _progressive_frontier(
             for _key, trial, feasible in ranked:
                 if not feasible and trial not in selected:
                     if len(selected) >= config.frontier:
+                        if len(selected) <= 1:
+                            break
                         selected.pop()
                     offer(trial)
                     break
-        branches = selected or [ranked[0][1]]
+        branches = selected or [current]
+        counters["reference_branch_preserved"] += int(current in branches)
         previous_end = waypoint.frame
         counters["retained_branches"] += len(branches)
         if progress:
             progress(f"[auto:random-splice] frontier waypoint {waypoint.frame}: "
                      f"retained {len(branches)} branches, "
-                     f"{counters['near_miss_carried']} near-miss candidates seen")
+                     f"{counters['near_miss_carried']} near-miss candidates seen; "
+                     "verified reference retained")
 
     # Search the entire last interval from each retained prefix to the exit.
     finish = len(current)
@@ -430,8 +516,10 @@ def _progressive_frontier(
     exit_target = resolve_interaction_target(level, f"exit:{reference.completed_exit_index}")
     goal = EndpointGoal(target_frame=finish, objective="earliest-interaction",
                         interaction_target=exit_target, arrival_start=start,
+                        exit_distance_tiebreak=True,
                         required_interactions=_requirements_at(level, current, finish - 1))
-    shortest: tuple[InputFrame, ...] | None = None
+    best_completion: tuple[InputFrame, ...] | None = None
+    best_completion_rank: tuple[float, float] | None = None
     min_exit_gap = math.inf
     door = level.static_world.entry_for_ref(
         level.static_world.exit_door_ref(reference.completed_exit_index))
@@ -441,11 +529,16 @@ def _progressive_frontier(
         if progress:
             progress(f"[auto:random-splice] frontier EXIT branch {branch_index+1}/{len(branches)} "
                      f"searching [{start}:{finish-1}]")
+        frontier_exit_progress = {} if progress is None else {
+            "progress": lambda text, index=branch_index: progress(
+                f"[auto:random-splice] frontier EXIT branch {index+1}: "
+                + text.removeprefix("[local:population] ")),
+        }
         found, used = _local_search(
             level, branch + (InputFrame(),), goal, start=start,
             editable_end=finish-1, config=config, iterations=config.iterations,
             rounds=config.splice_rounds, seed=rng.getrandbits(63),
-            include_partial=True,
+            include_partial=True, **frontier_exit_progress,
         )
         evaluations += used
         for trial, _tick in found:
@@ -458,16 +551,20 @@ def _progressive_frontier(
             validated = _validated_improvement(level, trial, reference, len(current))
             if validated is None:
                 counters["exit_unverified"] += 1
-            elif shortest is None or len(validated) < len(shortest):
-                shortest = validated
+            else:
+                completed_eval = evaluate_replay_with_sentinel(level, validated)
+                rank = _completed_rank(completed_eval, len(validated))
+                if best_completion_rank is None or rank < best_completion_rank:
+                    best_completion = validated
+                    best_completion_rank = rank
     if progress:
         distance = (f"{min_exit_gap:.2f}px edge gap" if math.isfinite(min_exit_gap)
                     else "no measurable near miss")
         progress(f"[auto:random-splice] frontier EXIT: "
                  f"{counters['exit_near_misses']} near misses; closest {distance}; "
                  f"{counters['exit_unverified']} unverified completions; "
-                 f"{'best '+str(len(shortest))+' frames' if shortest else 'no shorter completion'}")
-    return shortest, attempts, evaluations, counters
+                 f"{'best '+str(len(best_completion))+' frames' if best_completion else 'no better completion'}")
+    return best_completion, attempts, evaluations, counters
 
 
 def optimise_random_splices(
@@ -497,9 +594,12 @@ def optimise_random_splices(
         last_waypoints = waypoints
         if progress:
             progress(f"[auto:random-splice] round {round_no+1}/{config.rounds or chr(8734)}: "
-                     f"{len(waypoints)} waypoints ({sum(w.mandatory for w in waypoints)} control anchors)")
+                     f"{len(waypoints)} waypoints "
+                     f"({len(reference.route_control_events)} control events constrained; "
+                     "no additional control anchors)")
         round_start = time.monotonic()
         round_improved = False
+        round_significant = False
         for i, anchor in enumerate(waypoints):
             if anchor.frame >= len(current) - 1:
                 continue
@@ -629,7 +729,14 @@ def optimise_random_splices(
                                 break
                     if result is not None:
                         final_eval = evaluate_replay_with_sentinel(level, result)
-                        if len(result) < len(current) and _control_preserved(first_reference, final_eval):
+                        if (_control_preserved(first_reference, final_eval)
+                                and _completed_improvement_kind(
+                                    reference, len(current), final_eval, len(result)) is not None):
+                            message = _improvement_description(
+                                level, reference, len(current), final_eval, len(result),
+                                f"at anchor {anchor.frame} (lead {reference_tick-cut_tick})")
+                            round_significant = _significant_progress(
+                                reference, len(current), final_eval, len(result))
                             current = result
                             improvements += 1
                             improved = True
@@ -637,8 +744,7 @@ def optimise_random_splices(
                             if best_callback:
                                 best_callback(current)
                             if progress:
-                                progress(f"[auto:random-splice] improved to {len(current)} frames "
-                                         f"at anchor {anchor.frame} (lead {reference_tick-cut_tick})")
+                                progress(message)
                         break
                 if improved:
                     break
@@ -662,6 +768,7 @@ def optimise_random_splices(
                 attempts += 1
                 exit_goal = EndpointGoal(
                     target_frame=exit_deadline, objective="earliest-interaction",
+                    exit_distance_tiebreak=True,
                     interaction_target=resolve_interaction_target(
                         level, f"exit:{reference.completed_exit_index}"),
                     arrival_start=exit_start,
@@ -697,14 +804,18 @@ def optimise_random_splices(
                     verified_exit = evaluate_replay_with_sentinel(level, shorter)
                     if not _control_preserved(first_reference, verified_exit):
                         continue
+                    message = _improvement_description(
+                        level, reference, len(current), verified_exit, len(shorter),
+                        "via EXIT segment")
+                    round_significant = _significant_progress(
+                        reference, len(current), verified_exit, len(shorter))
                     current = shorter
                     improvements += 1
                     round_improved = True
                     if best_callback:
                         best_callback(current)
                     if progress:
-                        progress(f"[auto:random-splice] improved to {len(current)} "
-                                 f"frames via EXIT segment")
+                        progress(message)
                     break
         # Full-route multi-splice fallback: preserve useful partial edits across
         # waypoint boundaries even when no single splice fits the old suffix.
@@ -715,19 +826,25 @@ def optimise_random_splices(
             evaluations += extra_evaluations
             if proposal is not None:
                 final_eval = evaluate_replay_with_sentinel(level, proposal)
-                if len(proposal) < len(current) and _control_preserved(first_reference, final_eval):
+                if (_control_preserved(first_reference, final_eval)
+                        and _completed_improvement_kind(
+                            reference, len(current), final_eval, len(proposal)) is not None):
+                    message = _improvement_description(
+                        level, reference, len(current), final_eval, len(proposal),
+                        "via progressive multi-splice")
+                    round_significant = _significant_progress(
+                        reference, len(current), final_eval, len(proposal))
                     current = proposal
                     improvements += 1
                     round_improved = True
                     if best_callback:
                         best_callback(current)
                     if progress:
-                        progress(f"[auto:random-splice] improved to {len(current)} "
-                                 f"frames via progressive multi-splice")
+                        progress(message)
             if progress:
                 progress(f"[auto:random-splice] frontier diagnostics: "
                          + ", ".join(f"{name}={count}" for name, count in sorted(diagnostic.items())))
-        stagnant = 0 if round_improved else stagnant + 1
+        stagnant = 0 if round_significant else stagnant + 1
         if progress:
             progress(f"[auto:random-splice] round {round_no+1} completed in "
                      f"{time.monotonic()-round_start:.1f}s; "
@@ -737,6 +854,6 @@ def optimise_random_splices(
         if config.stagnation_rounds and stagnant >= config.stagnation_rounds:
             if progress:
                 progress(f"[auto:random-splice] stopping after {stagnant} "
-                         "rounds with no completed replay improvement")
+                         "rounds with no verified frame or exit-proximity improvement")
             break
     return RandomSpliceResult(current, last_waypoints, improvements, attempts, evaluations)
