@@ -1567,9 +1567,16 @@ Branch 8: bounceblocks are a suggestion
 Can't get a triple to work on the first slope, I always get a stumble for the 3rd jump
 
 # 47-1
-rerecords: 0
+rerecords: 330
 
-
+Branch 9: slightly faster higher up
+Branch 8: another ascent on the left
+Branch 7: attempt at getting a triple bb
+Branch 6: using 2 tiles, then going up to the switch
+Branch 5: attempt at getting on the top bb
+Branch 4: ascent on the complete left
+Branch 3: going directly up to the switch
+Branch 2: going directly up to the switch using a quad bb
 
 # 47-2
 rerecords: 138
@@ -1582,9 +1589,12 @@ rerecords: 0
 
 
 # 47-4
-rerecords: 0
+rerecords: 279
 
-
+Branch 9: best attempt at the pacelock
+Branch 8: using a bbbwj to get to the left
+Branch 7: turnaround before the switch
+Branch 6: attempt at micro optimizing
 
 # 48-0
 rerecords: 0
@@ -1601,7 +1611,7 @@ Branch 6: taking the switch from the top
 Branch 5: triple bbbwj
 
 # 48-2
-rerecords: 0
+rerecords: 142
 
 
 
@@ -3071,4 +3081,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 264235
+# Total rerecords: 264986
