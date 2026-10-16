@@ -1628,9 +1628,10 @@ rerecords: 0
 
 
 # 49-0
-rerecords: 0
+rerecords: 87
 
-
+Branch 9: lmao
+Branch 8: jumping normally on the left wall
 
 # 49-1
 rerecords: 340
@@ -3083,4 +3084,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 265535
+# Total rerecords: 265622
