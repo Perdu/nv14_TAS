@@ -1,9 +1,9 @@
 [local]
 search = "population"
-target_frame = 919
-range = "819:919"
+target_frame = 800
+range = "650:800"
 simulate-enemies = true
 objective = "earliest-interaction"
 target-object = "exit:0"
 secondary_objective = "min-exit-distance"
-# require-interaction = ["testdoor:0"]
+require-interaction = ["testdoor:0"]
