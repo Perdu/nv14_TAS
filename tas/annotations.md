@@ -1589,7 +1589,7 @@ rerecords: 0
 
 
 # 47-4
-rerecords: 510
+rerecords: 828
 
 Branch 9: Stupidity on the top
 Branch 8: using a bbbwj to get to the left
@@ -3083,4 +3083,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 265217
+# Total rerecords: 265535
