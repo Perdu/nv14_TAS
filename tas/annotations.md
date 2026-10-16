@@ -1589,12 +1589,14 @@ rerecords: 0
 
 
 # 47-4
-rerecords: 279
+rerecords: 510
 
-Branch 9: best attempt at the pacelock
+Branch 9: Stupidity on the top
 Branch 8: using a bbbwj to get to the left
 Branch 7: turnaround before the switch
 Branch 6: attempt at micro optimizing
+Branch 5: passing after the drone
+Branch 4: passing over the drone
 
 # 48-0
 rerecords: 0
@@ -3081,4 +3083,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 264986
+# Total rerecords: 265217
