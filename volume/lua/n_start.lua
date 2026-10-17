@@ -153,8 +153,12 @@ function onPaint()
 
    if bestPath[f] then
       print(bestPath)
-      gui.text(505, 575, string.format("vx: %f", bestPath[f].vx), BEST_POSITION_COLOR, 0, 0, 15)
-      gui.text(505, 585, string.format("vy: %f", bestPath[f].vy), BEST_POSITION_COLOR, 0, 0, 15)
+      if bestPath[f].vx ~= nil then
+         gui.text(505, 575, string.format("vx: %f", bestPath[f].vx), BEST_POSITION_COLOR, 0, 0, 15)
+      end
+      if bestPath[f].vy ~= nil then
+         gui.text(505, 585, string.format("vy: %f", bestPath[f].vy), BEST_POSITION_COLOR, 0, 0, 15)
+      end
    end
 
    -- display help comparison to either ghost or best path
