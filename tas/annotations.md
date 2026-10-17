@@ -2550,9 +2550,11 @@ rerecords: 18
 
 
 # 80-2
-rerecords: 0
+rerecords: 155
 
-
+Branch 9: a faster beginning that needs everything redone. I need better bruteforcers for this @todo
+Branch 8: getting so much speed we just crash on the tile
+Branch 7: maximum speed
 
 # 80-3
 rerecords: 0
@@ -3084,4 +3086,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 265678
+# Total rerecords: 265833

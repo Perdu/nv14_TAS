@@ -8,11 +8,11 @@ Speedruns: 500
 
 Levels already TASed (optimization level >= 5):
 Highscores: 162
-Speedruns: 381
+Speedruns: 382
 
 Levels already TASed (optimization level >= 6):
 Highscores: 3
-Speedruns: 78
+Speedruns: 79
 
 
 Episode Speedrun Grid (optimization level >= 4):
@@ -54,9 +54,9 @@ Episode Speedrun Grid (optimization level >= 6):
 🟠08 🟠18 🔴28 🔴38 🟠48 🟠58 🔴68 🔴78 🟠88 🔴98
 🔴09 🔴19 🔴29 🟠39 🟠49 🔴59 🟠69 🔴79 🟠89 🟠99
 
-Total TAS: 257996 f (1h47m29.900s)
+Total TAS: 257974 f (1h47m29.350s)
 Total RTA: 280575 f (1h56m54.375s) / 280575 f (1h56m54.375s) (100.00 %)
-Total Δ   = -22579 f (9m24.475s) (45.16f per level)
+Total Δ   = -22601 f (9m25.025s) (45.20f per level)
 
 ────────────────────────────────────────────────────────────
 
@@ -489,7 +489,7 @@ Time differences (Speedrun) — RTA vs TAS (sorted by level):
 79-4: TAS= 406 f  RTA= 543 f  -137 f (3.425) (-25.23%) █████████
 80-0: TAS= 304 f  RTA= 320 f   -16 f (0.400) (- 5.00%) █
 80-1: TAS= 855 f  RTA= 908 f   -53 f (1.325) (- 5.84%) ███
-80-2: TAS= 655 f  RTA= 729 f   -74 f (1.850) (-10.15%) █████
+80-2: TAS= 633 f  RTA= 729 f   -96 f (2.400) (-13.17%) ██████
 80-3: TAS= 491 f  RTA= 499 f    -8 f (0.200) (- 1.60%) 
 80-4: TAS=1544 f  RTA=1591 f   -47 f (1.175) (- 2.95%) ███
 81-0: TAS= 773 f  RTA= 837 f   -64 f (1.600) (- 7.65%) ████
