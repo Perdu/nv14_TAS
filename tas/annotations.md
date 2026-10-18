@@ -1531,7 +1531,7 @@ Branch 6: route on the left
 Branch 5: original auto route (without initial jump)
 
 # 46-0
-rerecords: 27
+rerecords: 25
 
 
 
@@ -1778,9 +1778,12 @@ rerecords: 14
 Optimal
 
 # 53-1
-rerecords: 0
+rerecords: 156
 
+Branch 8: bwj under the first bb
+Branch 7: jumping on the wall to take switch 0
 
+Bruteforcer can get local gains but I don't manage to propagate them up to the end of the run. @todo
 
 # 53-2
 rerecords: 40
@@ -2550,7 +2553,7 @@ rerecords: 18
 
 
 # 80-2
-rerecords: 155
+rerecords: 165
 
 Branch 9: a faster beginning that needs everything redone. I need better bruteforcers for this @todo
 Branch 8: getting so much speed we just crash on the tile
@@ -3086,4 +3089,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 265833
+# Total rerecords: 265997
