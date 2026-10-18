@@ -1,18 +1,18 @@
 Levels already TASed (optimization level >= 0):
 Highscores: 500
-Speedruns: 500
+Speedruns: 500 (100.00%)
 
 Levels already TASed (optimization level >= 4):
 Highscores: 499
-Speedruns: 500
+Speedruns: 500 (100.00%)
 
 Levels already TASed (optimization level >= 5):
 Highscores: 162
-Speedruns: 383
+Speedruns: 383 (76.60%)
 
 Levels already TASed (optimization level >= 6):
 Highscores: 3
-Speedruns: 80
+Speedruns: 80 (16.00%)
 
 
 Episode Speedrun Grid (optimization level >= 4):

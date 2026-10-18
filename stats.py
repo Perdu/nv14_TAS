@@ -37,7 +37,7 @@ def count_highscores_and_speedruns(filename, min_opt_level=0):
 
     print(f"Levels already TASed (optimization level >= {min_opt_level}):")
     print(f"Highscores: {highscores}")
-    print(f"Speedruns: {speedruns}")
+    print(f"Speedruns: {speedruns} ({speedruns / 500 * 100:.2f}%)")
     print()
 
 def parse_score(value, score_type="Speedrun"):
