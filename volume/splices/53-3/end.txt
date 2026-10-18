@@ -6,4 +6,4 @@ simulate-enemies = false
 objective = "earliest-interaction"
 target-object = "exit:0"
 secondary_objective = "min-exit-distance"
-# require-interaction = ["testdoor:0"]
+require-interaction = ["switch"]
