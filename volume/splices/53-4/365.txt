@@ -1,10 +1,10 @@
 [local]
 search = "population"
-target_frame = 365
-range = "253:365"
+target_frame = 338
+range = "253:338"
 simulate-enemies = true
 objective = "earliest-arrival"
-target_region = "476:506,178:198"
-secondary_objective = "max-y"
+target_region = "476:490,178:198"
+secondary_objective = "min-x"
 require-interaction = ["switch"]
 
