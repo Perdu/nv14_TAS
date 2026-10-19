@@ -152,7 +152,6 @@ function onPaint()
    end
 
    if bestPath[f] then
-      print(bestPath)
       if bestPath[f].vx ~= nil then
          gui.text(505, 575, string.format("vx: %f", bestPath[f].vx), BEST_POSITION_COLOR, 0, 0, 15)
       end
