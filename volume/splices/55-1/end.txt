@@ -1,9 +1,11 @@
 [local]
 search = "population"
 target_frame = 970
-range = "870:970"
+range = "710:970"
 simulate-enemies = false
 objective = "earliest-interaction"
 target-object = "exit:0"
 secondary_objective = "min-exit-distance"
 # require-interaction = ["testdoor:0"]
+#require-jump-frames = "826:836"
+#require-jump-region = "303:323,276:306"
