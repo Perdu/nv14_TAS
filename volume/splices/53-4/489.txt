@@ -7,5 +7,5 @@ objective = "earliest-arrival"
 target_region = "455:475,290:360"
 secondary_objective = "min-x"
 require-interaction = ["switch", "testdoor:1", "testdoor:2"]
-require-jump-frames = "412:422"
+require-jump-frames = "380:422"
 require-jump-region = "634:654,365:390"
