@@ -1796,11 +1796,13 @@ rerecords: 299
 Branch 9: attempt at going down first. Drones are in the way.
 
 # 53-4
-rerecords: 545
+rerecords: 700
 
+Branch 9: slower route, but better optimized distance to door
+Branch 8: a bit faster way to the switch that I don't really feel like propagating
 Branch 3: going under the drone, faster
 Branch 4: Going after the drone, simple wj on the platform
-Branch 5: Going after the drone, jumping on the upper platform (458)
+Branch 5: Going after the drone, jumping on the upper platform
 Branch 6: attempt at getting a better jump after the drone
 
 # 54-0
@@ -1814,9 +1816,11 @@ rerecords: 334
 Branch 8: trying to beat the drone
 
 # 54-2
-rerecords: 0
+rerecords: 108
 
-
+Branch 9: attempt at going up to the roof to go down faster
+Branch 7-8: attempts at using first bb
+Branch 6: quad on the previous bb
 
 # 54-3
 rerecords: 398
@@ -3092,4 +3096,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 266841
+# Total rerecords: 267104
