@@ -1796,9 +1796,12 @@ rerecords: 299
 Branch 9: attempt at going down first. Drones are in the way.
 
 # 53-4
-rerecords: 419
+rerecords: 545
 
-
+Branch 3: going under the drone, faster
+Branch 4: Going after the drone, simple wj on the platform
+Branch 5: Going after the drone, jumping on the upper platform (458)
+Branch 6: attempt at getting a better jump after the drone
 
 # 54-0
 rerecords: 283
@@ -3089,4 +3092,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 266715
+# Total rerecords: 266841
