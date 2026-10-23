@@ -1838,7 +1838,7 @@ rerecords: 1541
 
 
 # 55-1
-rerecords: 332
+rerecords: 339
 
 This level has so many possibilities, along with so many resync points. This could do level with a physic-based bruteforcer @todo
 
@@ -2975,7 +2975,7 @@ rerecords: 283
 
 
 # 95-3
-rerecords: 0
+rerecords: 88
 
 
 
@@ -3098,4 +3098,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 267436
+# Total rerecords: 267531
