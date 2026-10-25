@@ -3454,23 +3454,58 @@ def main() -> None:
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc
 
-        print(f"[auto:goal] seed {endpoint_config.seed}; "
-              f"workers {max(1, args.workers)}; rounds {args.auto_runs}", flush=True)
+        endpoint_start = time.monotonic()
+        endpoint_checkpoints = 0
+
+        def endpoint_elapsed() -> str:
+            seconds = max(0, int(time.monotonic() - endpoint_start))
+            hours, remainder = divmod(seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+        def endpoint_status(phase: str, message: str) -> None:
+            print(
+                f"[{time.strftime('%H:%M:%S')}] [auto:{phase}] "
+                f"{message}; elapsed {endpoint_elapsed()}", flush=True,
+            )
+
+        endpoint_status(
+            "parallel", f"endpoint objective {goal.objective}; seed {endpoint_config.seed}; "
+            f"workers {max(1, args.workers)}; rounds {args.auto_runs}",
+        )
 
         def save_endpoint_best(candidate):
+            nonlocal endpoint_checkpoints
+            # The campaign checks the candidate independently and invokes this
+            # only for a strict improvement over the starting objective.
             replay_text = encode_complex_replay(candidate.frames)
             _write_result(source, output_path, replay_output_path, replay_text)
+            endpoint_checkpoints += 1
+
             e = candidate.evaluation
-            print(f"[auto:goal] new verified best; frame {e.frame}; "
-                  f"score {e.score:.12g}; position ({e.x:.12g}, {e.y:.12g}); "
-                  f"velocity ({e.vx:.12g}, {e.vy:.12g})", flush=True)
+            endpoint_status(
+                "checkpoint", f"saved best #{endpoint_checkpoints}: "
+                f"frame {e.frame}; score {e.score:.12g}; "
+                f"position ({e.x:.12g}, {e.y:.12g}); "
+                f"velocity ({e.vx:.12g}, {e.vy:.12g})",
+            )
+
+        def show_endpoint_progress(message: str) -> None:
+            if message.startswith("baseline:"):
+                endpoint_status("baseline", message[len("baseline:"):].strip())
+            elif "starting " in message or " finished; " in message:
+                endpoint_status("parallel", message)
+            elif "proposals (" in message or "distinct evaluations;" in message:
+                endpoint_status("beam", message)
+            else:
+                endpoint_status("parallel", message)
 
         try:
             baseline, winner, count = optimise_auto_endpoint_campaign(
                 level, replay.frames, goal, endpoint_config,
                 workers=max(1, args.workers), runs=args.auto_runs,
                 best_callback=save_endpoint_best,
-                progress=lambda message: print(f"[auto:goal] {message}", flush=True),
+                progress=show_endpoint_progress,
             )
             if winner is None:
                 raise ValueError("no feasible endpoint found; no output was written")
@@ -3486,9 +3521,12 @@ def main() -> None:
             _write_result(source, output_path, replay_output_path, encode_complex_replay(packed))
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc
-        print(f"auto endpoint objective: {goal.objective}; policy: {endpoint_config.completion_policy}; "
-              f"evaluations: {count}; score: {verified.score:.12g}; "
-              f"frame: {verified.frame}; baseline score: {baseline.evaluation.score:.12g}")
+        endpoint_status(
+            "parallel", f"endpoint search complete: {count:,} distinct evaluations; "
+            f"baseline score {baseline.evaluation.score:.12g}; "
+            f"final score {verified.score:.12g}; frame {verified.frame}; "
+            f"{endpoint_checkpoints} verified improvement(s)",
+        )
         return
 
     if args.mode == "auto":

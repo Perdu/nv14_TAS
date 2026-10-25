@@ -61,6 +61,15 @@ class AutoEndpointCandidate:
     complete: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class _EndpointWorkerProgress:
+    """Small heartbeat; no native objects or replay data cross processes."""
+    worker_index: int
+    proposals: int
+    evaluations: int
+    elapsed_seconds: float
+
+
 def _key(frames: Sequence[InputFrame]) -> bytes:
     return bytes(int(f.left) | (int(f.right) << 1) | (int(f.jump) << 2) for f in frames)
 
@@ -363,11 +372,16 @@ def optimise_auto_endpoint(
 
     baseline = evaluate_candidate(source)
     beam = [baseline]
+    # The source is a baseline, not a newly discovered improvement.  It must
+    # never enter the checkpoint callback merely because it is feasible.
     best = baseline if baseline.evaluation.feasible else None
-    if best is not None and best_callback:
-        best_callback(best)
     evaluated = 0
     spent = 0
+    last_progress = time.monotonic()
+    last_reported = -1
+    if progress is not None:
+        progress(0, 0, best)
+        last_reported = 0
 
     def consider(frames: tuple[InputFrame, ...]) -> AutoEndpointCandidate | None:
         nonlocal evaluated, spent, best, beam
@@ -381,7 +395,7 @@ def optimise_auto_endpoint(
         candidate = evaluate_candidate(frames)
         evaluated += 1
         if candidate.evaluation.feasible and (
-            best is None or _rank(candidate, original_key) < _rank(best, original_key)
+            best is None or candidate.evaluation.objective_key < best.evaluation.objective_key
         ):
             # Canonical packed replay and completion policy are always verified
             # before publication, including candidates recovered by repair.
@@ -418,24 +432,46 @@ def optimise_auto_endpoint(
                              start=start, end=end, config=config, rng=rng,
                              consider=consider,
                              budget=min(config.repair_steps, config.iterations - spent))
-        if progress and (spent % 1000 < 2 or spent == config.iterations):
-            progress(spent, evaluated, best)
+        # Repairs can advance spent by dozens of proposals in one step, so
+        # checking spent modulo a fixed stride would miss many reporting
+        # opportunities. The clock check is negligible beside simulation.
+        if progress is not None:
+            now = time.monotonic()
+            if now - last_progress >= 1.5 or spent == config.iterations:
+                progress(spent, evaluated, best)
+                last_progress = now
+                last_reported = spent
+    if progress is not None and last_reported != spent:
+        progress(spent, evaluated, best)
     return baseline, best, evaluated
 
 
 def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Spawn-safe worker: construct engine locally, never transfer native handles."""
-    level_string, simulate_enemies, frames, goal, config, updates = payload
+    level_string, simulate_enemies, frames, goal, config, updates, worker_index = payload
     from nv14_engine import parse_level_string
     local_level = parse_level_string(level_string, simulate_enemies=simulate_enemies)
+    started = time.monotonic()
     last_sent = 0.0
+
     def send(candidate: AutoEndpointCandidate) -> None:
         nonlocal last_sent
-        if updates is not None and time.monotonic() - last_sent >= 0.75:
+        now = time.monotonic()
+        if updates is not None and now - last_sent >= 0.75:
             updates.put(candidate)
-            last_sent = time.monotonic()
-    result = optimise_auto_endpoint(local_level, frames, goal, config,
-                                    best_callback=send if updates is not None else None)
+            last_sent = now
+
+    def heartbeat(proposals: int, evaluations: int, _best: AutoEndpointCandidate | None) -> None:
+        if updates is not None:
+            updates.put(_EndpointWorkerProgress(
+                worker_index, proposals, evaluations, time.monotonic() - started,
+            ))
+
+    result = optimise_auto_endpoint(
+        local_level, frames, goal, config,
+        best_callback=send if updates is not None else None,
+        progress=heartbeat if updates is not None else None,
+    )
     return result
 
 
@@ -453,10 +489,33 @@ def optimise_auto_endpoint_campaign(
     if workers < 1 or runs < 1:
         raise ValueError("endpoint workers and runs must be positive")
     initial = tuple(editable_frames(source_frames))
-    best: AutoEndpointCandidate | None = None
-    baseline: AutoEndpointCandidate | None = None
+    # Evaluate the reference exactly once in the parent, before launching
+    # workers, so all rounds compare against a genuine baseline.  Evaluating
+    # with zero proposals uses the same completion policy and endpoint path.
+    baseline, _, _ = optimise_auto_endpoint(
+        level, initial, goal, replace(config, iterations=0),
+    )
+    best: AutoEndpointCandidate | None = (
+        baseline if baseline.evaluation.feasible else None
+    )
     total = 0
     current = initial
+    if progress is not None:
+        result = baseline.evaluation
+        progress(
+            f"baseline: source {'feasible' if result.feasible else 'infeasible'}; "
+            f"frame {result.frame}; score {result.score:.12g}; "
+            f"position ({result.x:.12g}, {result.y:.12g}); "
+            f"velocity ({result.vx:.12g}, {result.vy:.12g}); "
+            f"objective {goal.objective}; policy {config.completion_policy}"
+        )
+
+    def best_status() -> str:
+        if best is None:
+            return "no feasible endpoint yet"
+        result = best.evaluation
+        suffix = " (baseline)" if best is baseline else ""
+        return f"best frame {result.frame}, score {result.score:.12g}{suffix}"
 
     def absorb(candidate: AutoEndpointCandidate | None) -> bool:
         nonlocal best
@@ -471,68 +530,157 @@ def optimise_auto_endpoint_campaign(
             if not full.valid or full.finish_tick != len(candidate.frames):
                 raise ValueError("worker supplied a non-completing endpoint")
         candidate = AutoEndpointCandidate(candidate.frames, checked, candidate.complete)
-        if best is None or _rank(candidate, _key(initial)) < _rank(best, _key(initial)):
+        # Only real goal improvements are checkpoints.  Lexicographic input
+        # tie-breaks are useful for beam diversity, but not for announcing or
+        # writing a supposed new best with an identical endpoint score.
+        if best is None or checked.objective_key < best.evaluation.objective_key:
             best = candidate
             if best_callback:
                 best_callback(best)
             return True
         return False
 
-    if workers == 1:
+    # Endpoint goals use long independent searches just like full-run Auto.
+    # Unlike the earlier endpoint implementation, status is emitted while the
+    # workers search, even if none finds a new feasible improvement.
+    manager = None
+    pool = None
+    try:
         for round_index in range(runs):
-            worker_config = replace(config, seed=config.seed + round_index * 1000003)
-            run_baseline, winner, evaluated = optimise_auto_endpoint(
-                level, current, goal, worker_config,
-                best_callback=absorb,
-            )
-            if baseline is None:
-                baseline = run_baseline
-            total += evaluated
+            if progress:
+                progress(
+                    f"round {round_index + 1}/{runs}: starting {workers} worker(s) "
+                    f"x {config.iterations:,} proposals "
+                    f"({workers * config.iterations:,} total budget)"
+                )
+            started = time.monotonic()
+            last_status = started
+
+            if workers == 1:
+                worker_config = replace(config, seed=config.seed + round_index * 1000003)
+
+                def serial_progress(proposals: int, evaluations: int,
+                                    _worker_best: AutoEndpointCandidate | None) -> None:
+                    nonlocal last_status
+                    now = time.monotonic()
+                    if progress and (now - last_status >= 5.0 or
+                                     proposals == config.iterations):
+                        elapsed = max(0.001, now - started)
+                        progress(
+                            f"round {round_index + 1}/{runs}: worker 1/1; "
+                            f"{proposals:,}/{config.iterations:,} proposals "
+                            f"({100 * proposals / max(1, config.iterations):.0f}%); "
+                            f"{evaluations:,} distinct evaluations; "
+                            f"{best_status()}; "
+                            f"{proposals / elapsed:,.1f} proposals/s; "
+                            f"{elapsed:.1f}s elapsed"
+                        )
+                        last_status = now
+
+                run_baseline, winner, evaluated = optimise_auto_endpoint(
+                    level, current, goal, worker_config,
+                    best_callback=absorb,
+                    progress=serial_progress if progress else None,
+                )
+                total += evaluated
+                absorb(winner)
+            else:
+                from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+                from multiprocessing import get_context
+                import queue
+                source_string = getattr(level, "source_level_string", None)
+                if not source_string:
+                    raise ValueError("parallel endpoint search requires original level data")
+                context = get_context("spawn")
+                # Keep the executor alive across outer rounds; worker progress is
+                # cheap and contains no heavyweight replay/native state.
+                if pool is None:
+                    manager = context.Manager()
+                    updates = manager.Queue()
+                    pool = ProcessPoolExecutor(max_workers=workers, mp_context=context)
+                tasks = [
+                    (source_string, level.simulate_enemies, current, goal,
+                     replace(config, seed=config.seed + round_index * 1000003
+                             + worker_index * 104729), updates, worker_index)
+                    for worker_index in range(workers)
+                ]
+                futures = {pool.submit(_endpoint_worker, task): index
+                           for index, task in enumerate(tasks)}
+                worker_status: dict[int, _EndpointWorkerProgress] = {}
+                finished: dict[int, int] = {}
+
+                def drain_updates() -> None:
+                    while True:
+                        try:
+                            update = updates.get_nowait()
+                        except queue.Empty:
+                            break
+                        if isinstance(update, _EndpointWorkerProgress):
+                            if update.worker_index not in finished:
+                                old = worker_status.get(update.worker_index)
+                                if old is None or update.proposals >= old.proposals:
+                                    worker_status[update.worker_index] = update
+                        else:
+                            absorb(update)
+
+                def report_status(force: bool = False) -> None:
+                    nonlocal last_status
+                    if not progress:
+                        return
+                    now = time.monotonic()
+                    if not force and now - last_status < 5.0:
+                        return
+                    elapsed = max(0.001, now - started)
+                    proposals = sum(finished.values()) + sum(
+                        worker.proposals for index, worker in worker_status.items()
+                        if index not in finished
+                    )
+                    distinct = sum(finished_evaluations.values()) + sum(
+                        worker.evaluations for index, worker in worker_status.items()
+                        if index not in finished
+                    )
+                    progress(
+                        f"round {round_index + 1}/{runs}: "
+                        f"{len(finished)}/{workers} workers finished; "
+                        f"{proposals:,}/{workers * config.iterations:,} proposals "
+                        f"({100 * proposals / max(1, workers * config.iterations):.0f}%); "
+                        f"{distinct:,} distinct evaluations; "
+                        f"{best_status()}; "
+                        f"{proposals / elapsed:,.1f} proposals/s; "
+                        f"{elapsed:.1f}s elapsed"
+                    )
+                    last_status = now
+
+                finished_evaluations: dict[int, int] = {}
+                while futures:
+                    done, _ = wait(tuple(futures), timeout=0.25,
+                                   return_when=FIRST_COMPLETED)
+                    drain_updates()
+                    for future in done:
+                        index = futures.pop(future)
+                        run_baseline, winner, evaluated = future.result()
+                        total += evaluated
+                        finished[index] = config.iterations
+                        finished_evaluations[index] = evaluated
+                        absorb(winner)
+                        if progress:
+                            progress(
+                                f"round {round_index + 1}/{runs}: "
+                                f"worker {index + 1}/{workers} finished; "
+                                f"{evaluated:,} distinct evaluations"
+                            )
+                    report_status()
+                drain_updates()
+                report_status(force=True)
+
             if best is not None:
                 current = best.frames
             if progress:
-                progress(f"round {round_index + 1}/{runs}: {total} distinct evaluations")
-    else:
-        from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
-        from multiprocessing import get_context
-        import queue
-        source_string = getattr(level, "source_level_string", None)
-        if not source_string:
-            raise ValueError("parallel endpoint search requires original level data")
-        context = get_context("spawn")
-        # Manager queue is spawn-pickleable (unlike a raw multiprocessing Queue).
-        # Updates are verified by the parent before publishing any output.
-        with context.Manager() as manager:
-            updates = manager.Queue()
-            with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
-                for round_index in range(runs):
-                    tasks = [
-                        (source_string, level.simulate_enemies, current, goal,
-                         replace(config, seed=config.seed + round_index * 1000003 + worker_index * 104729), updates)
-                        for worker_index in range(workers)
-                    ]
-                    futures = {pool.submit(_endpoint_worker, task) for task in tasks}
-                    while futures:
-                        done, futures = wait(futures, timeout=0.25, return_when=FIRST_COMPLETED)
-                        while True:
-                            try:
-                                absorb(updates.get_nowait())
-                            except queue.Empty:
-                                break
-                        for future in done:
-                            run_baseline, winner, evaluated = future.result()
-                            if baseline is None:
-                                baseline = run_baseline
-                            total += evaluated
-                            absorb(winner)
-                    while True:
-                        try:
-                            absorb(updates.get_nowait())
-                        except queue.Empty:
-                            break
-                    if best is not None:
-                        current = best.frames
-                    if progress:
-                        progress(f"round {round_index + 1}/{runs}: {total} distinct evaluations")
-    assert baseline is not None
+                progress(f"round {round_index + 1}/{runs} complete: "
+                         f"{total:,} distinct evaluations total")
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=True)
+        if manager is not None:
+            manager.shutdown()
     return baseline, best, total
