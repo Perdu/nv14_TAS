@@ -3249,19 +3249,27 @@ def main() -> None:
             f"retime {spec_index}: suffix transition {mutation.suffix_start} "
             f"{mutation.delta:+d} frame(s)"
         )
-    # A cut-off Local replay implicitly holds no buttons after its last input.
-    # Materialise those neutral ticks through the inclusive target frame so
-    # both window and population searches can edit and verify that tail.
-    # Pad the original reference too: Local uses it for baseline evaluation.
+    # A cut-off replay implicitly holds no buttons after its last input.
+    # Materialise neutral ticks through the inclusive target frame so Local
+    # and endpoint Auto can both optimise and verify an otherwise absent tail.
+    # Also pad the reference, which is used to score the baseline. Completed-
+    # run Auto is deliberately unaffected: its replay length is significant.
+    target = None
+    tail_mode = None
     if args.mode == "local" and local_config is not None:
         target = local_config.target_frame
-        if target is not None and target >= 0:
-            needed = target + 1
-            source_frames = source_frames + [InputFrame()] * max(0, needed - len(source_frames))
-            extra = max(0, needed - len(retimed_frames))
-            if extra:
-                retimed_frames = retimed_frames + [InputFrame()] * extra
-                print(f"local: appended {extra} neutral input frame(s) through frame {target}")
+        tail_mode = "local"
+    elif (args.mode == "auto" and not args.auto_random_splice
+          and args.auto_objective not in AUTO_OBJECTIVES):
+        target = args.auto_target_frame
+        tail_mode = "auto:goal"
+    if target is not None and target >= 0:
+        needed = target + 1
+        source_frames = source_frames + [InputFrame()] * max(0, needed - len(source_frames))
+        extra = max(0, needed - len(retimed_frames))
+        if extra:
+            retimed_frames = retimed_frames + [InputFrame()] * extra
+            print(f"{tail_mode}: appended {extra} neutral input frame(s) through frame {target}")
     replay = ComplexReplay(retimed_frames)
 
     auto_parent_frames: list[tuple[InputFrame, ...]] = []
