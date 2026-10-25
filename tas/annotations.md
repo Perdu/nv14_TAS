@@ -1758,9 +1758,13 @@ rerecords: 276
 
 
 # 52-2
-rerecords: 0
+rerecords: 459
 
-
+Branch 9: going inbetween the drones in the beginning
+Branch 8: alt ending, a bit slower
+Branch 7: faster way to the switch I couldn't propagate back to the way down (because of the gauss turret)
+Branch 6: another alt ending
+Branch 5: another alt ending (simple jump on lp)
 
 # 52-3
 rerecords: 0
@@ -3098,4 +3102,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 267531
+# Total rerecords: 267990
