@@ -34,6 +34,7 @@ auxiliary_beam_seeds = 1
 # endpoint-repair-steps = 32
 endpoint-repair-steps = 0
 endpoint-repair-lookback = 40
+endpoint-iterations-per-frame = 500
 
 [local]
 

@@ -548,6 +548,44 @@ def parse_nonnegative_int(text: str) -> int:
     return value
 
 
+def parse_positive_finite_float(text: str) -> float:
+    """A positive finite rate, suitable for iterations per editable frame."""
+    try:
+        value = float(text)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("value must be a positive finite number") from exc
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError("value must be a positive finite number")
+    return value
+
+
+def resolve_auto_endpoint_iterations(
+    *, full_run_iterations: int, endpoint_iterations: int | None,
+    endpoint_iterations_per_frame: float | None,
+    range_start: int, range_end: int,
+) -> int:
+    """Select the per-worker endpoint budget without changing full-run Auto.
+
+    Explicit endpoint-iterations takes priority over the optional per-frame
+    rate, and both fall back to the historical --iterations value.
+    Ranges are inclusive, including any materialised neutral tail.
+    """
+    if not 0 <= range_start <= range_end:
+        raise ValueError("invalid endpoint editable range for iteration budget")
+    if endpoint_iterations is not None:
+        if endpoint_iterations < 0:
+            raise ValueError("endpoint-iterations must be non-negative")
+        return endpoint_iterations
+    if endpoint_iterations_per_frame is not None:
+        if not math.isfinite(endpoint_iterations_per_frame) or endpoint_iterations_per_frame <= 0:
+            raise ValueError("endpoint-iterations-per-frame must be a positive finite number")
+        scaled = endpoint_iterations_per_frame * (range_end - range_start + 1)
+        if not math.isfinite(scaled):
+            raise ValueError("endpoint iteration budget is too large")
+        return max(1, math.ceil(scaled))
+    return full_run_iterations
+
+
 def parse_positive_int(text: str) -> int:
     try:
         value = int(text)
@@ -1906,6 +1944,19 @@ def build_parser() -> argparse.ArgumentParser:
             "auto mode macro candidate evaluation budget per independent "
             "worker search and round (default: 5000)"
         ),
+    )
+    command.add_argument(
+        "--auto-endpoint-iterations", modes=auto_modes,
+        type=parse_nonnegative_int, default=None, metavar="N",
+        help=("per-worker proposal budget for Auto with Local-style goals; "
+              "defaults to --iterations, does not affect full-run Auto"),
+    )
+    command.add_argument(
+        "--auto-endpoint-iterations-per-frame", modes=auto_modes,
+        type=parse_positive_finite_float, default=None, metavar="RATE",
+        help=("Auto endpoint proposals per editable frame (inclusive); "
+              "used when --auto-endpoint-iterations is unset, "
+              "does not affect full-run Auto"),
     )
     command.add_argument(
         "--auto-runs",
@@ -3450,8 +3501,15 @@ def main() -> None:
                 require_jump_frames=(args.auto_require_jump_frames or (start, frame))
                 if args.auto_require_jump_region is not None else None,
             )
+            endpoint_budget = resolve_auto_endpoint_iterations(
+                full_run_iterations=args.iterations,
+                endpoint_iterations=args.auto_endpoint_iterations,
+                endpoint_iterations_per_frame=args.auto_endpoint_iterations_per_frame,
+                range_start=start,
+                range_end=frame if end is None else end,
+            )
             endpoint_config = AutoEndpointConfig(
-                iterations=args.iterations, beam_width=args.beam,
+                iterations=endpoint_budget, beam_width=args.beam,
                 max_retime=args.max_retime,
                 seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
                       else 0 if args.seed is None else int(args.seed)),
@@ -3480,7 +3538,10 @@ def main() -> None:
             )
 
         endpoint_status(
-            "parallel", f"endpoint objective {goal.objective}; seed {endpoint_config.seed}; "
+            "parallel", f"endpoint objective {goal.objective}; "
+            f"editable frames {endpoint_config.range_start}:"
+            f"{frame if endpoint_config.range_end is None else endpoint_config.range_end}; "
+            f"iterations per worker {endpoint_config.iterations}; seed {endpoint_config.seed}; "
             f"workers {max(1, args.workers)}; rounds {args.auto_runs}",
         )
 
