@@ -10,11 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import random
+import time
 from collections.abc import Callable, Sequence
 
 from nv14_auto import NEUTRAL_INPUT, evaluate_replay_with_sentinel, mutate_jump_pulse
 from nv14_endpoint import EndpointEvaluation, EndpointEvaluator, EndpointGoal, verify_endpoint
 from nv14_engine import InputFrame, Level
+from nv14_population import PopulationCandidate, _mutate as _population_mutate
+from nv14_search import ALL_INPUT_CHOICES
 from nv14_replay import (
     RetimeMutation, apply_single_transition_retime, apply_suffix_retime,
     editable_frames, input_transition_frames,
@@ -31,6 +34,8 @@ class AutoEndpointConfig:
     range_end: int | None = None
     mutation_span: int = 24
     completion_policy: str = "checkpoint"
+    repair_steps: int = 32
+    repair_lookback: int = 40
 
     def __post_init__(self) -> None:
         if self.iterations < 0 or self.beam_width < 1:
@@ -43,6 +48,10 @@ class AutoEndpointConfig:
             raise ValueError("mutation-span must be positive")
         if self.completion_policy not in ("checkpoint", "complete"):
             raise ValueError("completion-policy must be checkpoint or complete")
+        if type(self.repair_steps) is not int or self.repair_steps < 0:
+            raise ValueError("endpoint repair-steps must be nonnegative")
+        if type(self.repair_lookback) is not int or self.repair_lookback < 1:
+            raise ValueError("endpoint repair-lookback must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +151,179 @@ def _proposal(
     return tuple(result)
 
 
+def _hybrid_proposal(
+    parent: AutoEndpointCandidate, donor: AutoEndpointCandidate, *,
+    rng: random.Random, config: AutoEndpointConfig, start: int, end: int,
+) -> tuple[tuple[InputFrame, ...], int]:
+    """Mix Auto retiming/jump macros with Local's richer pulse/jump/crossover ops.
+
+    Both operators preserve the immutable replay prefix/suffix and do not
+    require a completed level. Using Local's actual mutation implementation
+    prevents the endpoint path from drifting into a weaker copy of its tools.
+    """
+    if rng.randrange(2):
+        frames = _proposal(parent.frames, rng=rng, config=config,
+                           start=start, end=end, donor=donor.frames)
+        changes = [i for i in range(start, end + 1)
+                   if frames[i] != parent.frames[i]]
+        return frames, (changes[0] if changes else rng.randint(start, end))
+    first = PopulationCandidate(parent.frames, parent.evaluation)
+    second = PopulationCandidate(donor.frames, donor.evaluation)
+    frames, _label, anchor = _population_mutate(
+        first, second, ((start, end),), tuple(range(start, end + 1)),
+        rng, config.mutation_span,
+    )
+    return frames, anchor
+
+
+def _select_endpoint_beam(
+    candidates: Sequence[AutoEndpointCandidate], size: int, source_key: bytes,
+) -> list[AutoEndpointCandidate]:
+    """Keep valid elites *and* physically different, repairable failures.
+
+    The old beam could discard every infeasible route immediately after finding
+    a feasible one. Required jumps / switches frequently need a temporarily
+    infeasible route to be repaired across several mutations.
+    """
+    unique = {_key(candidate.frames): candidate for candidate in candidates}
+    if len(unique) <= size:
+        return sorted(unique.values(), key=lambda c: _rank(c, source_key))
+    feasible = sorted((c for c in unique.values() if c.evaluation.feasible),
+                      key=lambda c: _rank(c, source_key))
+    infeasible = sorted((c for c in unique.values() if not c.evaluation.feasible),
+                        key=lambda c: _rank(c, source_key))
+    reserve = min(len(infeasible), max(1, size // 4), size - 1) if feasible else size
+    target_valid = size - reserve if feasible else 0
+    selected: list[AutoEndpointCandidate] = []
+    used: set[bytes] = set()
+
+    def add_from(group: list[AutoEndpointCandidate], limit: int) -> None:
+        if not limit:
+            return
+        niches: set[tuple] = set()
+        chosen: list[AutoEndpointCandidate] = []
+        for candidate in group[:max(1, limit // 4)]:
+            identity = _key(candidate.frames)
+            if identity not in used:
+                chosen.append(candidate)
+                used.add(identity)
+                niches.add(candidate.evaluation.niche_key)
+        for candidate in group:
+            if len(chosen) >= limit:
+                break
+            identity = _key(candidate.frames)
+            if identity not in used and candidate.evaluation.niche_key not in niches:
+                chosen.append(candidate)
+                used.add(identity)
+                niches.add(candidate.evaluation.niche_key)
+        for candidate in group:
+            if len(chosen) >= limit:
+                break
+            identity = _key(candidate.frames)
+            if identity not in used:
+                chosen.append(candidate)
+                used.add(identity)
+        selected.extend(chosen)
+
+    add_from(feasible, target_valid)
+    add_from(infeasible, reserve)
+    for candidate in sorted(unique.values(), key=lambda c: _rank(c, source_key)):
+        if len(selected) >= size:
+            break
+        identity = _key(candidate.frames)
+        if identity not in used:
+            selected.append(candidate)
+            used.add(identity)
+    return sorted(selected, key=lambda c: _rank(c, source_key))
+
+
+def _repair_frame_candidates(
+    frames: Sequence[InputFrame], source: Sequence[InputFrame],
+    goal: EndpointGoal, candidate: AutoEndpointCandidate, *, anchor: int,
+    start: int, end: int, lookback: int, rng: random.Random,
+) -> list[int]:
+    """Prioritise the mutation, failure, jump windows and reference transitions.
+
+    A required event might be many frames before the target; only looking at
+    the last 32 frames silently prevents repairing that event.
+    """
+    centers = [anchor]
+    endpoint = candidate.evaluation
+    if endpoint.terminal_dead and start <= endpoint.terminal_frame <= end:
+        centers.insert(0, endpoint.terminal_frame)
+    if endpoint.missing_jump or endpoint.missing_jump_indices:
+        for requirement in goal.required_jumps:
+            centers.extend((requirement.frames[0], requirement.frames[1]))
+        if goal.require_jump_frames is not None:
+            centers.extend(goal.require_jump_frames)
+    centers.append(min(end, max(start, endpoint.frame)))
+    # Prefer nearby changed frames and places where the known source changes
+    # input. Repair can undo damage and restore a required route-control event.
+    centers = [min(end, max(start, c)) for c in centers]
+    seen: set[int] = set()
+    positions: list[int] = []
+    for center in centers:
+        bounds = range(max(start, center - lookback), min(end, center + 4) + 1)
+        local = [i for i in bounds if frames[i] != source[i]
+                 or (i > start and source[i] != source[i - 1])]
+        local += [i for i in bounds if i not in local]
+        for index in local:
+            if index not in seen:
+                positions.append(index)
+                seen.add(index)
+    # Prevent a fixed seed from inspecting precisely the same distant frames.
+    distant = [i for i in range(start, end + 1) if i not in seen]
+    rng.shuffle(distant)
+    positions.extend(distant)
+    return positions
+
+
+def _endpoint_repair(
+    candidate: AutoEndpointCandidate, parent: AutoEndpointCandidate,
+    source: tuple[InputFrame, ...], goal: EndpointGoal,
+    *, anchor: int, start: int, end: int, config: AutoEndpointConfig,
+    rng: random.Random, consider: Callable[[tuple[InputFrame, ...]], AutoEndpointCandidate | None],
+    budget: int,
+) -> None:
+    """Bounded, goal-scored local continuation/interaction repair.
+
+    Every trial uses EndpointEvaluator, which enforces switch identities,
+    required jumps and checkpoint constraints. No completion-only Auto splice
+    state is reused. Repair trials consume the *same* search budget as macros.
+    """
+    if budget <= 0:
+        return
+    positions = _repair_frame_candidates(candidate.frames, source, goal, candidate,
+                                         anchor=anchor, start=start, end=end,
+                                         lookback=config.repair_lookback, rng=rng)
+    repaired = candidate
+    used = 0
+    for index in positions:
+        if used >= budget:
+            break
+        # Try source restoration and parent restoration first: switch-safe
+        # repair often consists of reintroducing one skipped reference input.
+        choices = [source[index], parent.frames[index]]
+        pool = list(ALL_INPUT_CHOICES)
+        rng.shuffle(pool)
+        choices += pool
+        keys: set[tuple] = set()
+        for choice in choices:
+            if used >= budget:
+                break
+            buttons = (choice.left, choice.right, choice.jump, choice.jump_trigger)
+            if buttons in keys or choice == repaired.frames[index]:
+                continue
+            keys.add(buttons)
+            frames = list(repaired.frames)
+            frames[index] = choice
+            used += 1
+            outcome = consider(tuple(frames))
+            if outcome is not None and _rank(outcome, _key(source)) < _rank(repaired, _key(source)):
+                repaired = outcome
+                # One repair may enable a previously missed interaction; allow
+                # follow-up changes at other frames, not just single-bit fixes.
+
 def optimise_auto_endpoint(
     level: Level, source_frames: Sequence[InputFrame], goal: EndpointGoal,
     config: AutoEndpointConfig, *,
@@ -185,50 +367,76 @@ def optimise_auto_endpoint(
     if best is not None and best_callback:
         best_callback(best)
     evaluated = 0
-    for step in range(config.iterations):
-        parent = rng.choice(beam[:min(len(beam), max(1, config.beam_width // 2))])
-        donor = rng.choice(beam).frames if len(beam) >= 2 else None
-        proposed = _proposal(parent.frames, rng=rng, config=config,
-                             start=start, end=end, donor=donor)
-        identity = _key(proposed)
+    spent = 0
+
+    def consider(frames: tuple[InputFrame, ...]) -> AutoEndpointCandidate | None:
+        nonlocal evaluated, spent, best, beam
+        if spent >= config.iterations:
+            return None
+        spent += 1
+        identity = _key(frames)
         if identity in visited:
-            continue
+            return None
         visited.add(identity)
-        candidate = evaluate_candidate(proposed)
+        candidate = evaluate_candidate(frames)
         evaluated += 1
         if candidate.evaluation.feasible and (
             best is None or _rank(candidate, original_key) < _rank(best, original_key)
         ):
-            # Require canonical packed replay verification *before* saving.
+            # Canonical packed replay and completion policy are always verified
+            # before publication, including candidates recovered by repair.
             from nv14_replay import decode_complex_replay, encode_complex_replay
             packed = tuple(editable_frames(decode_complex_replay(
-                encode_complex_replay(proposed)).frames))
+                encode_complex_replay(frames)).frames))
             checked = verify_endpoint(level, packed, goal, expected=candidate.evaluation)
-            if checked.feasible and (
-                config.completion_policy != "complete" or
-                evaluate_replay_with_sentinel(level, packed).valid
-                and evaluate_replay_with_sentinel(level, packed).finish_tick == len(packed)
-            ):
-                best = AutoEndpointCandidate(packed, checked, candidate.complete)
+            valid_finish = True
+            if config.completion_policy == "complete":
+                full = evaluate_replay_with_sentinel(level, packed)
+                valid_finish = full.valid and full.finish_tick == len(packed)
+            if checked.feasible and valid_finish:
+                best = AutoEndpointCandidate(packed, checked, valid_finish
+                                             if config.completion_policy == "complete" else False)
                 if best_callback:
                     best_callback(best)
-        beam.append(candidate)
-        beam.sort(key=lambda item: _rank(item, original_key))
-        if len(beam) > config.beam_width:
-            # Keep one source-lineage candidate to prevent early collapse of
-            # infeasible checkpoint searches into a single promising niche.
-            beam = beam[:config.beam_width]
-        if progress and (step + 1) % 1000 == 0:
-            progress(step + 1, evaluated, best)
+        beam = _select_endpoint_beam((*beam, candidate), config.beam_width, original_key)
+        return candidate
+
+    while spent < config.iterations:
+        # Preserve feasible solutions and diverse repairable failures using
+        # the hybrid beam. Full-level Auto uses a different coordinator.
+        parent = min(rng.sample(beam, min(2, len(beam))),
+                     key=lambda c: _rank(c, original_key)) if rng.random() < 0.7 else rng.choice(beam)
+        donor = rng.choice(beam)
+        proposed, anchor = _hybrid_proposal(parent, donor, rng=rng,
+                                            config=config, start=start, end=end)
+        candidate = consider(proposed)
+        if (candidate is not None and config.repair_steps
+                and spent < config.iterations and
+                (_rank(candidate, original_key) < _rank(parent, original_key)
+                 or (not candidate.evaluation.feasible and rng.random() < 0.25))):
+            _endpoint_repair(candidate, parent, source, goal, anchor=anchor,
+                             start=start, end=end, config=config, rng=rng,
+                             consider=consider,
+                             budget=min(config.repair_steps, config.iterations - spent))
+        if progress and (spent % 1000 < 2 or spent == config.iterations):
+            progress(spent, evaluated, best)
     return baseline, best, evaluated
 
 
 def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Spawn-safe worker: construct engine locally, never transfer native handles."""
-    level_string, simulate_enemies, frames, goal, config = payload
+    level_string, simulate_enemies, frames, goal, config, updates = payload
     from nv14_engine import parse_level_string
     local_level = parse_level_string(level_string, simulate_enemies=simulate_enemies)
-    return optimise_auto_endpoint(local_level, frames, goal, config)
+    last_sent = 0.0
+    def send(candidate: AutoEndpointCandidate) -> None:
+        nonlocal last_sent
+        if updates is not None and time.monotonic() - last_sent >= 0.75:
+            updates.put(candidate)
+            last_sent = time.monotonic()
+    result = optimise_auto_endpoint(local_level, frames, goal, config,
+                                    best_callback=send if updates is not None else None)
+    return result
 
 
 def optimise_auto_endpoint_campaign(
@@ -285,28 +493,46 @@ def optimise_auto_endpoint_campaign(
             if progress:
                 progress(f"round {round_index + 1}/{runs}: {total} distinct evaluations")
     else:
-        from concurrent.futures import ProcessPoolExecutor, as_completed
+        from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
         from multiprocessing import get_context
+        import queue
         source_string = getattr(level, "source_level_string", None)
         if not source_string:
             raise ValueError("parallel endpoint search requires original level data")
-        with ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn")) as pool:
-            for round_index in range(runs):
-                tasks = [
-                    (source_string, level.simulate_enemies, current, goal,
-                     replace(config, seed=config.seed + round_index * 1000003 + worker_index * 104729))
-                    for worker_index in range(workers)
-                ]
-                futures = [pool.submit(_endpoint_worker, task) for task in tasks]
-                for future in as_completed(futures):
-                    run_baseline, winner, evaluated = future.result()
-                    if baseline is None:
-                        baseline = run_baseline
-                    total += evaluated
-                    absorb(winner)
-                if best is not None:
-                    current = best.frames
-                if progress:
-                    progress(f"round {round_index + 1}/{runs}: {total} distinct evaluations")
+        context = get_context("spawn")
+        # Manager queue is spawn-pickleable (unlike a raw multiprocessing Queue).
+        # Updates are verified by the parent before publishing any output.
+        with context.Manager() as manager:
+            updates = manager.Queue()
+            with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
+                for round_index in range(runs):
+                    tasks = [
+                        (source_string, level.simulate_enemies, current, goal,
+                         replace(config, seed=config.seed + round_index * 1000003 + worker_index * 104729), updates)
+                        for worker_index in range(workers)
+                    ]
+                    futures = {pool.submit(_endpoint_worker, task) for task in tasks}
+                    while futures:
+                        done, futures = wait(futures, timeout=0.25, return_when=FIRST_COMPLETED)
+                        while True:
+                            try:
+                                absorb(updates.get_nowait())
+                            except queue.Empty:
+                                break
+                        for future in done:
+                            run_baseline, winner, evaluated = future.result()
+                            if baseline is None:
+                                baseline = run_baseline
+                            total += evaluated
+                            absorb(winner)
+                    while True:
+                        try:
+                            absorb(updates.get_nowait())
+                        except queue.Empty:
+                            break
+                    if best is not None:
+                        current = best.frames
+                    if progress:
+                        progress(f"round {round_index + 1}/{runs}: {total} distinct evaluations")
     assert baseline is not None
     return baseline, best, total

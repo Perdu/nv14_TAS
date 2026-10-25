@@ -2060,6 +2060,15 @@ def build_parser() -> argparse.ArgumentParser:
                          help="endpoint search: allow a partial route or require a full verified finish")
     command.add_argument("--auto-mutation-span", modes=auto_modes, type=int,
                          default=24, help="maximum endpoint macro edit span")
+    # Backward compatibility for existing TOMLs. Endpoint Auto always runs the
+    # hybrid algorithm; the former legacy beam is no longer selectable.
+    command.add_argument("--auto-endpoint-strategy", modes=auto_modes,
+                         choices=("hybrid",), default="hybrid",
+                         help=argparse.SUPPRESS)
+    command.add_argument("--auto-endpoint-repair-steps", modes=auto_modes, type=int,
+                         default=32, help="maximum goal-guided repair proposals per mutation (shared budget)")
+    command.add_argument("--auto-endpoint-repair-lookback", modes=auto_modes, type=int,
+                         default=40, help="frames to search around mutations, deaths and required jumps")
     command.add_argument(
         "--auto-require-reference-gold",
         modes=auto_modes,
@@ -3439,6 +3448,8 @@ def main() -> None:
                 range_start=start, range_end=end,
                 mutation_span=args.auto_mutation_span,
                 completion_policy=args.auto_completion_policy,
+                repair_steps=args.auto_endpoint_repair_steps,
+                repair_lookback=args.auto_endpoint_repair_lookback,
             )
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc
