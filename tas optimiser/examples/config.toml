@@ -5,7 +5,7 @@ simulate-enemies = false
 # ltm-postroll = 0
 
 [auto]
-iterations = 1000
+iterations = 10000
 runs = 0
 beam = 32
 max-retime = 3

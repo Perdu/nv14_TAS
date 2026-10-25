@@ -8,7 +8,8 @@ and repair coordinator.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
+from bisect import insort
 import random
 import time
 from collections.abc import Callable, Sequence
@@ -185,65 +186,122 @@ def _hybrid_proposal(
     return frames, anchor
 
 
-def _select_endpoint_beam(
-    candidates: Sequence[AutoEndpointCandidate], size: int, source_key: bytes,
-) -> list[AutoEndpointCandidate]:
-    """Keep valid elites *and* physically different, repairable failures.
+@dataclass(frozen=True, slots=True, order=True)
+class _RankedEndpointCandidate:
+    """Immutable beam record: expensive input identity/rank are computed once."""
+    rank: tuple
+    identity: bytes = field(compare=False)
+    candidate: AutoEndpointCandidate = field(compare=False)
 
-    The old beam could discard every infeasible route immediately after finding
-    a feasible one. Required jumps / switches frequently need a temporarily
-    infeasible route to be repaired across several mutations.
+
+def _ranked_candidate(
+    candidate: AutoEndpointCandidate, source_key: bytes,
+    identity: bytes | None = None,
+) -> _RankedEndpointCandidate:
+    if identity is None:
+        identity = _key(candidate.frames)
+    changed = sum(a != b for a, b in zip(identity, source_key))
+    result = candidate.evaluation
+    if candidate.complete or result.feasible:
+        rank = (0, *result.objective_key, changed, identity)
+    else:
+        rank = (1, result.progress_key, changed, identity)
+    return _RankedEndpointCandidate(rank, identity, candidate)
+
+
+def _select_ranked_endpoint_beam(
+    entries: Sequence[_RankedEndpointCandidate], size: int,
+) -> list[_RankedEndpointCandidate]:
+    """Original niche/reserve policy operating on pre-ranked, ordered entries.
+
+    ``entries`` is already sorted by immutable rank.  In contrast to the old
+    selector, this does not re-encode or re-rank the 16-128 survivors on every
+    search proposal; only the newly inserted candidate requires that work.
     """
-    unique = {_key(candidate.frames): candidate for candidate in candidates}
-    if len(unique) <= size:
-        return sorted(unique.values(), key=lambda c: _rank(c, source_key))
-    feasible = sorted((c for c in unique.values() if c.evaluation.feasible),
-                      key=lambda c: _rank(c, source_key))
-    infeasible = sorted((c for c in unique.values() if not c.evaluation.feasible),
-                        key=lambda c: _rank(c, source_key))
+    if len(entries) <= size:
+        return list(entries)
+    feasible = [entry for entry in entries if entry.candidate.evaluation.feasible]
+    infeasible = [entry for entry in entries if not entry.candidate.evaluation.feasible]
     reserve = min(len(infeasible), max(1, size // 4), size - 1) if feasible else size
     target_valid = size - reserve if feasible else 0
-    selected: list[AutoEndpointCandidate] = []
+    selected: list[_RankedEndpointCandidate] = []
     used: set[bytes] = set()
 
-    def add_from(group: list[AutoEndpointCandidate], limit: int) -> None:
+    def add_from(group: list[_RankedEndpointCandidate], limit: int) -> None:
         if not limit:
             return
         niches: set[tuple] = set()
-        chosen: list[AutoEndpointCandidate] = []
-        for candidate in group[:max(1, limit // 4)]:
-            identity = _key(candidate.frames)
-            if identity not in used:
-                chosen.append(candidate)
-                used.add(identity)
-                niches.add(candidate.evaluation.niche_key)
-        for candidate in group:
+        chosen: list[_RankedEndpointCandidate] = []
+        for entry in group[:max(1, limit // 4)]:
+            if entry.identity not in used:
+                chosen.append(entry)
+                used.add(entry.identity)
+                niches.add(entry.candidate.evaluation.niche_key)
+        for entry in group:
             if len(chosen) >= limit:
                 break
-            identity = _key(candidate.frames)
-            if identity not in used and candidate.evaluation.niche_key not in niches:
-                chosen.append(candidate)
-                used.add(identity)
-                niches.add(candidate.evaluation.niche_key)
-        for candidate in group:
+            if entry.identity not in used and entry.candidate.evaluation.niche_key not in niches:
+                chosen.append(entry)
+                used.add(entry.identity)
+                niches.add(entry.candidate.evaluation.niche_key)
+        for entry in group:
             if len(chosen) >= limit:
                 break
-            identity = _key(candidate.frames)
-            if identity not in used:
-                chosen.append(candidate)
-                used.add(identity)
+            if entry.identity not in used:
+                chosen.append(entry)
+                used.add(entry.identity)
         selected.extend(chosen)
 
     add_from(feasible, target_valid)
     add_from(infeasible, reserve)
-    for candidate in sorted(unique.values(), key=lambda c: _rank(c, source_key)):
+    for entry in entries:
         if len(selected) >= size:
             break
-        identity = _key(candidate.frames)
-        if identity not in used:
-            selected.append(candidate)
-            used.add(identity)
-    return sorted(selected, key=lambda c: _rank(c, source_key))
+        if entry.identity not in used:
+            selected.append(entry)
+            used.add(entry.identity)
+    # Sorting a handful of cached tuples is cheap; no replay scan is needed.
+    selected.sort()
+    return selected
+
+
+class _EndpointBeam:
+    """Bounded, sorted beam with one key and rank calculation per proposal."""
+
+    __slots__ = ("entries", "width", "source_key", "identities")
+
+    def __init__(self, initial: AutoEndpointCandidate, width: int, source_key: bytes):
+        first = _ranked_candidate(initial, source_key, source_key)
+        self.entries = [first]
+        self.width = width
+        self.source_key = source_key
+        self.identities = {source_key}
+
+    def add(self, candidate: AutoEndpointCandidate, identity: bytes) -> None:
+        # In the search, `visited` prevents duplicates. Keep this guard here
+        # too so the selection policy never spends capacity on identical paths.
+        if identity in self.identities:
+            return
+        entry = _ranked_candidate(candidate, self.source_key, identity)
+        insort(self.entries, entry)
+        if len(self.entries) > self.width:
+            self.entries = _select_ranked_endpoint_beam(self.entries, self.width)
+            self.identities = {item.identity for item in self.entries}
+        else:
+            self.identities.add(identity)
+
+
+def _select_endpoint_beam(
+    candidates: Sequence[AutoEndpointCandidate], size: int, source_key: bytes,
+) -> list[AutoEndpointCandidate]:
+    """Stateless compatibility selector; retained for tests and comparison.
+
+    Search uses ``_EndpointBeam`` to avoid re-ranking previously seen entries.
+    """
+    unique = {_key(candidate.frames): candidate for candidate in candidates}
+    entries = sorted(_ranked_candidate(candidate, source_key, identity)
+                     for identity, candidate in unique.items())
+    return [entry.candidate for entry in _select_ranked_endpoint_beam(entries, size)]
 
 
 def _repair_frame_candidates(
@@ -307,6 +365,7 @@ def _endpoint_repair(
                                          lookback=config.repair_lookback, rng=rng)
     repaired = candidate
     used = 0
+    source_key = _key(source)
     for index in positions:
         if used >= budget:
             break
@@ -328,7 +387,7 @@ def _endpoint_repair(
             frames[index] = choice
             used += 1
             outcome = consider(tuple(frames))
-            if outcome is not None and _rank(outcome, _key(source)) < _rank(repaired, _key(source)):
+            if outcome is not None and _rank(outcome, source_key) < _rank(repaired, source_key):
                 repaired = outcome
                 # One repair may enable a previously missed interaction; allow
                 # follow-up changes at other frames, not just single-bit fixes.
@@ -371,7 +430,7 @@ def optimise_auto_endpoint(
         return AutoEndpointCandidate(frames, evaluation, complete)
 
     baseline = evaluate_candidate(source)
-    beam = [baseline]
+    beam = _EndpointBeam(baseline, config.beam_width, original_key)
     # The source is a baseline, not a newly discovered improvement.  It must
     # never enter the checkpoint callback merely because it is feasible.
     best = baseline if baseline.evaluation.feasible else None
@@ -384,7 +443,7 @@ def optimise_auto_endpoint(
         last_reported = 0
 
     def consider(frames: tuple[InputFrame, ...]) -> AutoEndpointCandidate | None:
-        nonlocal evaluated, spent, best, beam
+        nonlocal evaluated, spent, best
         if spent >= config.iterations:
             return None
         spent += 1
@@ -412,15 +471,16 @@ def optimise_auto_endpoint(
                                              if config.completion_policy == "complete" else False)
                 if best_callback:
                     best_callback(best)
-        beam = _select_endpoint_beam((*beam, candidate), config.beam_width, original_key)
+        beam.add(candidate, identity)
         return candidate
 
     while spent < config.iterations:
         # Preserve feasible solutions and diverse repairable failures using
         # the hybrid beam. Full-level Auto uses a different coordinator.
-        parent = min(rng.sample(beam, min(2, len(beam))),
-                     key=lambda c: _rank(c, original_key)) if rng.random() < 0.7 else rng.choice(beam)
-        donor = rng.choice(beam)
+        parent_entry = (min(rng.sample(beam.entries, min(2, len(beam.entries))))
+                        if rng.random() < 0.7 else rng.choice(beam.entries))
+        parent = parent_entry.candidate
+        donor = rng.choice(beam.entries).candidate
         proposed, anchor = _hybrid_proposal(parent, donor, rng=rng,
                                             config=config, start=start, end=end)
         candidate = consider(proposed)
