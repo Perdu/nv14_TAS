@@ -31,7 +31,8 @@ beam_repair_revisit_limit = 4
 splice_repair_revisit_limit = 100
 splice_plans_per_pair = 2
 auxiliary_beam_seeds = 1
-endpoint-repair-steps = 32
+# endpoint-repair-steps = 32
+endpoint-repair-steps = 0
 endpoint-repair-lookback = 40
 
 [local]
