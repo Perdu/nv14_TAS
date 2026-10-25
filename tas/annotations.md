@@ -1758,7 +1758,7 @@ rerecords: 276
 
 
 # 52-2
-rerecords: 459
+rerecords: 477
 
 Branch 9: going inbetween the drones in the beginning
 Branch 8: alt ending, a bit slower
@@ -1854,7 +1854,7 @@ rerecords: 165
 
 
 # 55-3
-rerecords: 0
+rerecords: 190
 
 
 
@@ -3102,4 +3102,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 267990
+# Total rerecords: 268198
