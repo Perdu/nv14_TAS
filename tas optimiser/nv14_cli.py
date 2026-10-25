@@ -29,7 +29,9 @@ from nv14_auto import (
     verify_trimmed_replay,
 )
 from nv14_auto_parallel import optimise_autonomous_campaign
-from nv14_auto_endpoint import AutoEndpointConfig, optimise_auto_endpoint_campaign
+from nv14_auto_endpoint import (
+    AutoEndpointConfig, endpoint_exit_edge_distance, optimise_auto_endpoint_campaign,
+)
 from nv14_random_splice import RandomSpliceConfig, optimise_random_splices
 from nv14_endpoint import EndpointGoal, RequiredJump, verify_endpoint
 from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
@@ -3491,9 +3493,12 @@ def main() -> None:
             endpoint_checkpoints += 1
 
             e = candidate.evaluation
+            gap = endpoint_exit_edge_distance(level, goal, e)
+            distance_text = (f" (distance to exit {gap:.2f})"
+                             if gap is not None else "")
             endpoint_status(
                 "checkpoint", f"saved best #{endpoint_checkpoints}: "
-                f"frame {e.frame}; score {e.score:.12g}; "
+                f"frame {e.frame}{distance_text}; score {e.score:.12g}; "
                 f"position ({e.x:.12g}, {e.y:.12g}); "
                 f"velocity ({e.vx:.12g}, {e.vy:.12g})",
             )
@@ -3529,10 +3534,13 @@ def main() -> None:
             _write_result(source, output_path, replay_output_path, encode_complex_replay(packed))
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc
+        final_gap = endpoint_exit_edge_distance(level, goal, verified)
+        final_distance = (f" (distance to exit {final_gap:.2f})"
+                          if final_gap is not None else "")
         endpoint_status(
             "parallel", f"endpoint search complete: {count:,} distinct evaluations; "
             f"baseline score {baseline.evaluation.score:.12g}; "
-            f"final score {verified.score:.12g}; frame {verified.frame}; "
+            f"final score {verified.score:.12g}; frame {verified.frame}{final_distance}; "
             f"{endpoint_checkpoints} verified improvement(s)",
         )
         return

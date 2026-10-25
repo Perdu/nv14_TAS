@@ -9,6 +9,7 @@ and repair coordinator.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace, field
+import math
 from bisect import insort
 import random
 import time
@@ -16,7 +17,7 @@ from collections.abc import Callable, Sequence
 
 from nv14_auto import NEUTRAL_INPUT, evaluate_replay_with_sentinel, mutate_jump_pulse
 from nv14_endpoint import EndpointEvaluation, EndpointEvaluator, EndpointGoal, verify_endpoint
-from nv14_engine import InputFrame, Level
+from nv14_engine import APP_TILE_SCALE, OBJTYPE_EXIT, InputFrame, Level
 from nv14_population import PopulationCandidate, _mutate as _population_mutate
 from nv14_search import ALL_INPUT_CHOICES
 from nv14_replay import (
@@ -69,6 +70,56 @@ class _EndpointWorkerProgress:
     proposals: int
     evaluations: int
     elapsed_seconds: float
+
+
+
+def endpoint_exit_edge_distance(
+    level: Level, goal: EndpointGoal, evaluation: EndpointEvaluation,
+) -> float | None:
+    """Signed player-edge to exit-door-edge gap at the evaluated endpoint.
+
+    Only report this for explicit exit-door objectives (for example,
+    ``target-object=exit:0``). A partial endpoint uses its evaluated player
+    position; other objective types have no door-distance display.
+    Never affect scoring.
+    """
+    if not math.isfinite(evaluation.x) or not math.isfinite(evaluation.y):
+        return None
+    doors = [spec.params[:2] for spec in level.all_specs
+             if spec.obj_type == OBJTYPE_EXIT and len(spec.params) >= 4]
+    if not doors:
+        return None
+
+    requested: set[int] = set()
+    if goal.target is not None:
+        requested = {item.type_index for item in goal.target.targets
+                     if item.obj_type == OBJTYPE_EXIT and item.anchor == "door"
+                     and item.type_index is not None}
+    elif goal.interaction_target is not None:
+        from nv14_objectives import INTERACTION_EXIT_DOOR
+        requested = {atom.type_index for atom in goal.interaction_target.alternatives
+                     if atom.kind == INTERACTION_EXIT_DOOR}
+    # Do not report distance to an arbitrary nearby exit for ordinary splice
+    # goals such as max-x, target-point or switch/contact objectives.
+    if not requested:
+        return None
+    indexes = sorted(requested)
+    indexes = [index for index in indexes if 0 <= index < len(doors)]
+    if not indexes:
+        return None
+
+    # Exit-interaction scoring can already have the exact pre-exit centre gap,
+    # avoiding a costly second replay and matching full-run Auto precisely.
+    if (evaluation.pre_finish_exit_distance is not None
+            and math.isfinite(evaluation.pre_finish_exit_distance)
+            and evaluation.completed_exit_index in indexes):
+        centre_distance = evaluation.pre_finish_exit_distance
+    else:
+        centre_distance = min(math.hypot(
+            evaluation.x - float(doors[index][0]),
+            evaluation.y - float(doors[index][1]),
+        ) for index in indexes)
+    return centre_distance - level.player.r - APP_TILE_SCALE
 
 
 def _key(frames: Sequence[InputFrame]) -> bytes:
@@ -562,9 +613,12 @@ def optimise_auto_endpoint_campaign(
     current = initial
     if progress is not None:
         result = baseline.evaluation
+        distance = endpoint_exit_edge_distance(level, goal, result)
+        distance_text = (f" (distance to exit {distance:.2f})"
+                         if distance is not None else "")
         progress(
             f"baseline: source {'feasible' if result.feasible else 'infeasible'}; "
-            f"frame {result.frame}; score {result.score:.12g}; "
+            f"frame {result.frame}{distance_text}; score {result.score:.12g}; "
             f"position ({result.x:.12g}, {result.y:.12g}); "
             f"velocity ({result.vx:.12g}, {result.vy:.12g}); "
             f"objective {goal.objective}; policy {config.completion_policy}"
@@ -575,7 +629,10 @@ def optimise_auto_endpoint_campaign(
             return "no feasible endpoint yet"
         result = best.evaluation
         suffix = " (baseline)" if best is baseline else ""
-        return f"best frame {result.frame}, score {result.score:.12g}{suffix}"
+        distance = endpoint_exit_edge_distance(level, goal, result)
+        distance_text = (f" (distance to exit {distance:.2f})"
+                         if distance is not None else "")
+        return f"best frame {result.frame}{distance_text}, score {result.score:.12g}{suffix}"
 
     def absorb(candidate: AutoEndpointCandidate | None) -> bool:
         nonlocal best
