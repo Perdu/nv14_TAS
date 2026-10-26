@@ -1692,6 +1692,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_iterations", "auto_splice_repair_anchors",
     "auto_splice_repair_searches", "auto_splice_rounds",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_exit_lookback",
+    "auto_splice_search",
 })
 
 
@@ -2046,6 +2047,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--auto-random-splice", modes=auto_modes, action="store_true",
         help="switch-safe stochastic route waypoint splicing; requires completed speedrun",
     )
+    command.add_argument("--auto-splice-search", modes=auto_modes,
+                         choices=("local", "endpoint-auto"), default="local",
+                         help="waypoint/repair search backend: Local population (default) or endpoint Auto Hybrid")
     command.add_argument("--auto-splice-points", modes=auto_modes, type=int, default=5,
                          metavar="N", help="number of distinct random path waypoints per round; no extra control anchors (default 5)")
     command.add_argument("--auto-splice-distance", modes=auto_modes, type=float,
@@ -2055,13 +2059,13 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-lookback", modes=auto_modes, type=int, default=32,
                          metavar="N", help="seam matching and local mutation span; entire preceding waypoint interval is editable (default 32)")
     command.add_argument("--auto-splice-iterations", modes=auto_modes, type=int, default=400,
-                         metavar="N", help="Local population evaluations per waypoint (default 400)")
+                         metavar="N", help="proposals per worker per waypoint search round (default 400)")
     command.add_argument("--auto-splice-repair-iterations", modes=auto_modes, type=int, default=250,
-                         metavar="N", help="Local evaluations per continuation repair (default 250)")
+                         metavar="N", help="proposals per worker per continuation repair round (default 250)")
     command.add_argument("--auto-splice-rounds", modes=auto_modes, type=int, default=1,
-                         metavar="N", help="Local population rounds PER waypoint (default 1); [auto] rounds alias")
+                         metavar="N", help="backend search rounds PER waypoint (default 1); [auto] rounds alias")
     command.add_argument("--auto-splice-repair-rounds", modes=auto_modes, type=int, default=1,
-                         metavar="N", help="Local population rounds PER continuation repair (default 1)")
+                         metavar="N", help="backend search rounds PER continuation repair (default 1)")
     command.add_argument("--auto-splice-repair-anchors", modes=auto_modes, type=int, default=2,
                          metavar="N", help="subsequent waypoints to repair after a splice (default 2)")
     command.add_argument("--auto-splice-frontier", modes=auto_modes, type=int,
@@ -3386,6 +3390,11 @@ def main() -> None:
                 points=args.auto_splice_points, distance=args.auto_splice_distance,
                 radius=args.auto_splice_radius, lookback=args.auto_splice_lookback,
                 iterations=args.auto_splice_iterations,
+                search_backend=args.auto_splice_search,
+                endpoint_max_retime=args.max_retime,
+                endpoint_mutation_span=args.auto_mutation_span,
+                endpoint_repair_steps=args.auto_endpoint_repair_steps,
+                endpoint_repair_lookback=args.auto_endpoint_repair_lookback,
                 repair_iterations=args.auto_splice_repair_iterations,
                 splice_rounds=args.auto_splice_rounds,
                 repair_rounds=args.auto_splice_repair_rounds,

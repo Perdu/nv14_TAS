@@ -342,6 +342,25 @@ class _EndpointBeam:
             self.identities.add(identity)
 
 
+def _endpoint_frontier(
+    beam: _EndpointBeam, limit: int,
+) -> tuple[AutoEndpointCandidate, ...]:
+    """Export a small, diverse survivor set for multi-stage route builders.
+
+    Feasible alternatives and live infeasible near-misses are both useful for
+    subsequent waypoint searches.  Dead candidates and the original baseline
+    are not useful donors.  Ranking, deduplication, and the feasible/infeasible
+    reserve are exactly those of the active Hybrid beam.
+    """
+    if limit <= 0:
+        return ()
+    eligible = [entry for entry in beam.entries
+                if entry.identity != beam.source_key
+                and not entry.candidate.evaluation.dead]
+    return tuple(entry.candidate for entry in
+                 _select_ranked_endpoint_beam(eligible, min(limit, beam.width)))
+
+
 def _select_endpoint_beam(
     candidates: Sequence[AutoEndpointCandidate], size: int, source_key: bytes,
 ) -> list[AutoEndpointCandidate]:
@@ -448,6 +467,8 @@ def optimise_auto_endpoint(
     config: AutoEndpointConfig, *,
     best_callback: Callable[[AutoEndpointCandidate], None] | None = None,
     progress: Callable[[int, int, AutoEndpointCandidate | None], None] | None = None,
+    frontier_callback: Callable[[tuple[AutoEndpointCandidate, ...]], None] | None = None,
+    frontier_limit: int = 0,
 ) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Return (baseline, best feasible candidate or None, unique evaluations).
 
@@ -554,12 +575,18 @@ def optimise_auto_endpoint(
                 last_reported = spent
     if progress is not None and last_reported != spent:
         progress(spent, evaluated, best)
+    if frontier_callback is not None and frontier_limit > 0:
+        frontier_callback(_endpoint_frontier(beam, frontier_limit))
     return baseline, best, evaluated
 
 
 def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Spawn-safe worker: construct engine locally, never transfer native handles."""
-    level_string, simulate_enemies, frames, goal, config, updates, worker_index = payload
+    # The seven-element payload retains the existing worker ABI. Only callers
+    # requesting a survivor frontier include the optional eighth element.
+    level_string, simulate_enemies, frames, goal, config, updates, worker_index = payload[:7]
+    frontier_limit = payload[7] if len(payload) > 7 else 0
+    survivor_batches: list[tuple[AutoEndpointCandidate, ...]] = []
     from nv14_engine import parse_level_string
     local_level = parse_level_string(level_string, simulate_enemies=simulate_enemies)
     started = time.monotonic()
@@ -582,7 +609,11 @@ def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpoin
         local_level, frames, goal, config,
         best_callback=send if updates is not None else None,
         progress=heartbeat if updates is not None else None,
+        frontier_callback=survivor_batches.append if frontier_limit else None,
+        frontier_limit=frontier_limit,
     )
+    if frontier_limit:
+        return (*result, survivor_batches[0] if survivor_batches else ())
     return result
 
 
@@ -591,6 +622,8 @@ def optimise_auto_endpoint_campaign(
     config: AutoEndpointConfig, *, workers: int = 1, runs: int = 1,
     best_callback: Callable[[AutoEndpointCandidate], None] | None = None,
     progress: Callable[[str], None] | None = None,
+    frontier_callback: Callable[[tuple[AutoEndpointCandidate, ...]], None] | None = None,
+    frontier_limit: int = 0,
 ) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Run seeded Auto-style endpoint beams in independent processes.
 
@@ -611,6 +644,36 @@ def optimise_auto_endpoint_campaign(
     )
     total = 0
     current = initial
+    export_limit = (min(frontier_limit, config.beam_width)
+                    if frontier_callback is not None else 0)
+    survivors: dict[bytes, AutoEndpointCandidate] = {}
+
+    def absorb_frontier(candidates: Sequence[AutoEndpointCandidate]) -> None:
+        if not export_limit:
+            return
+        for candidate in candidates:
+            # Death *after* an earlier qualifying arrival is repairable at
+            # the next waypoint; only death at the measured endpoint is fatal.
+            if candidate.evaluation.dead:
+                continue
+            identity = _key(candidate.frames)
+            if identity == _key(initial):
+                continue
+            # Re-score in the parent: non-feasible states are NEVER sent to
+            # the checkpoint publisher, but still must agree with native
+            # physics before they can become splice donors.
+            checked = verify_endpoint(level, candidate.frames, goal,
+                                      expected=candidate.evaluation)
+            survivors[identity] = AutoEndpointCandidate(candidate.frames, checked,
+                                                         candidate.complete)
+        # Keep a bounded cross-worker pool; don't retain an unbounded number
+        # of replay arrays from every worker and every campaign round.
+        if len(survivors) > export_limit * 2:
+            ranked = sorted(_ranked_candidate(c, _key(initial), identity)
+                            for identity, c in survivors.items())
+            chosen = _select_ranked_endpoint_beam(ranked, export_limit)
+            survivors.clear()
+            survivors.update((entry.identity, entry.candidate) for entry in chosen)
     if progress is not None:
         result = baseline.evaluation
         distance = endpoint_exit_edge_distance(level, goal, result)
@@ -698,6 +761,8 @@ def optimise_auto_endpoint_campaign(
                     level, current, goal, worker_config,
                     best_callback=absorb,
                     progress=serial_progress if progress else None,
+                    frontier_callback=absorb_frontier if export_limit else None,
+                    frontier_limit=export_limit,
                 )
                 total += evaluated
                 absorb(winner)
@@ -716,6 +781,10 @@ def optimise_auto_endpoint_campaign(
                     updates = manager.Queue()
                     pool = ProcessPoolExecutor(max_workers=workers, mp_context=context)
                 tasks = [
+                    (source_string, level.simulate_enemies, current, goal,
+                     replace(config, seed=config.seed + round_index * 1000003
+                             + worker_index * 104729), updates, worker_index,
+                     export_limit) if export_limit else
                     (source_string, level.simulate_enemies, current, goal,
                      replace(config, seed=config.seed + round_index * 1000003
                              + worker_index * 104729), updates, worker_index)
@@ -775,7 +844,10 @@ def optimise_auto_endpoint_campaign(
                     drain_updates()
                     for future in done:
                         index = futures.pop(future)
-                        run_baseline, winner, evaluated = future.result()
+                        result = future.result()
+                        run_baseline, winner, evaluated = result[:3]
+                        if export_limit:
+                            absorb_frontier(result[3])
                         total += evaluated
                         finished[index] = config.iterations
                         finished_evaluations[index] = evaluated
@@ -800,4 +872,9 @@ def optimise_auto_endpoint_campaign(
             pool.shutdown(wait=True)
         if manager is not None:
             manager.shutdown()
+    if export_limit:
+        ranked = sorted(_ranked_candidate(c, _key(initial), identity)
+                        for identity, c in survivors.items())
+        chosen = _select_ranked_endpoint_beam(ranked, export_limit)
+        frontier_callback(tuple(entry.candidate for entry in chosen))
     return baseline, best, total

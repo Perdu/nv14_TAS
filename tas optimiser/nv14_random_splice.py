@@ -32,10 +32,15 @@ class RandomSpliceConfig:
     distance: float | None = None  # arc-length spacing in pixels; supersedes points
     radius: float = 16.0
     lookback: int = 32  # seam matching/maximum local mutation span, NOT a segment length
-    iterations: int = 400  # Local proposals per anchor
+    iterations: int = 400  # proposals per worker, per anchor search round
+    search_backend: str = "local"  # local population or endpoint Auto hybrid
+    endpoint_max_retime: int = 3
+    endpoint_mutation_span: int = 24
+    endpoint_repair_steps: int = 32
+    endpoint_repair_lookback: int = 40
     repair_iterations: int = 250  # Local proposals per subsequent anchor and worker per round
-    splice_rounds: int = 1  # Local population rounds PER waypoint, not global Auto runs
-    repair_rounds: int = 1  # Local population rounds PER continuation repair
+    splice_rounds: int = 1  # backend search rounds PER waypoint, not global Auto runs
+    repair_rounds: int = 1  # backend search rounds PER continuation repair
     repair_anchors: int = 2
     beam: int = 16
     workers: int = 1
@@ -59,6 +64,12 @@ class RandomSpliceConfig:
         for field in ("splice_rounds", "repair_rounds"):
             if type(getattr(self, field)) is not int or getattr(self, field) < 1:
                 raise ValueError(f"random splice {field} must be a positive integer")
+        if self.search_backend not in ("local", "endpoint-auto"):
+            raise ValueError("random splice search_backend must be local or endpoint-auto")
+        if not 1 <= self.endpoint_max_retime <= 3:
+            raise ValueError("random splice endpoint_max_retime must be between 1 and 3")
+        if self.endpoint_mutation_span < 1 or self.endpoint_repair_lookback < 1 or self.endpoint_repair_steps < 0:
+            raise ValueError("invalid random splice endpoint mutation/repair parameters")
         if type(self.rounds) is not int or self.rounds < 0:
             raise ValueError("random splice rounds must be nonnegative (0 means continuous)")
         if type(self.stagnation_rounds) is not int or self.stagnation_rounds < 0:
@@ -197,6 +208,43 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
                   editable_end: int | None = None, include_partial: bool = False):
     if start > (goal.target_frame if editable_end is None else editable_end) or goal.target_frame >= len(frames):
         return (), 0
+    if config.search_backend == "endpoint-auto":
+        # Reuse the exact endpoint Hybrid search and evaluator, but *not* its
+        # checkpoint publishing: only random-splice may commit a completed,
+        # switch-safe improvement after validating the joined suffix.
+        from nv14_auto_endpoint import AutoEndpointConfig, optimise_auto_endpoint_campaign
+        auto_config = AutoEndpointConfig(
+            iterations=iterations, beam_width=config.beam,
+            seed=seed, range_start=start,
+            range_end=goal.target_frame if editable_end is None else editable_end,
+            max_retime=config.endpoint_max_retime,
+            mutation_span=config.endpoint_mutation_span,
+            completion_policy="checkpoint",
+            repair_steps=config.endpoint_repair_steps,
+            repair_lookback=config.endpoint_repair_lookback,
+        )
+        survivors = []
+        baseline, winner, evaluations = optimise_auto_endpoint_campaign(
+            level, frames, goal, auto_config, workers=config.workers, runs=rounds,
+            progress=progress, frontier_callback=survivors.extend,
+            frontier_limit=min(max(6, config.frontier * 3), config.beam),
+        )
+        # Normal seam searches only offer feasible endpoints. Progressive
+        # frontier searches may also carry live near-misses into the next
+        # waypoint, where reference-control masks and eventual full completion
+        # are checked independently before anything is published.
+        candidates = ([winner] if winner is not None and winner.evaluation.feasible else [])
+        candidates.extend(survivors)
+        selected = []
+        seen = set()
+        for candidate in candidates:
+            if (candidate is not None
+                    and (candidate.evaluation.feasible or include_partial)
+                    and not candidate.evaluation.dead
+                    and candidate.frames not in seen):
+                selected.append((candidate.frames, candidate.evaluation.frame))
+                seen.add(candidate.frames)
+        return tuple(selected), evaluations
     result = optimise_local_population(
         level, frames, goal=goal, frame_ranges=((start,
             goal.target_frame if editable_end is None else editable_end),),
@@ -672,7 +720,7 @@ def _optimise_target_splices(
                 attempts += 1
                 if progress:
                     progress(f"[auto:random-splice:goal] checkpoint {index+1}/{len(waypoints)} "
-                             f"frame {point.frame}; Local range [{start}:{point.frame}]")
+                             f"frame {point.frame}; {'Local' if config.search_backend == 'local' else 'endpoint-auto'} range [{start}:{point.frame}]")
                 try:
                     found, used = _local_search(
                         level, branch, stage_goal, start=start, config=config,
@@ -719,7 +767,7 @@ def _optimise_target_splices(
             attempts += 1
             if progress:
                 progress(f"[auto:random-splice:goal] TARGET branch {index+1}, "
-                         f"Local range [{final_start}:{last_editable}]")
+                         f"{'Local' if config.search_backend == 'local' else 'endpoint-auto'} range [{final_start}:{last_editable}]")
             try:
                 found, used = _local_search(
                     level, branch, goal, start=final_start, editable_end=last_editable,
@@ -798,7 +846,7 @@ def optimise_random_splices(
                 progress(f"[auto:random-splice] {label}: searching FULL segment "
                          f"[{start}:{anchor.frame}] ({anchor.frame-start+1} editable frames); "
                          f"{config.workers} workers x {config.iterations} proposals "
-                         f"x {config.splice_rounds} Local rounds")
+                         f"x {config.splice_rounds} {'Local' if config.search_backend == 'local' else 'endpoint-auto'} rounds")
             stage_start = time.monotonic()
             search_kw = {} if progress is None else {
                 "progress": lambda text, label=label: progress(
@@ -869,7 +917,7 @@ def optimise_random_splices(
                                          f"{repair_searches}/{config.max_repair_searches}, "
                                          f"range [{repair_start}:{deadline}], "
                                          f"{config.workers} workers x {config.repair_iterations} proposals "
-                                         f"x {config.repair_rounds} Local rounds")
+                                         f"x {config.repair_rounds} {'Local' if config.search_backend == 'local' else 'endpoint-auto'} rounds")
                             repair_start_time = time.monotonic()
                             repair_progress_kw = {} if progress is None else {
                                 "progress": lambda text, label=label: progress(
@@ -962,7 +1010,7 @@ def optimise_random_splices(
                     progress(f"[auto:random-splice] EXIT segment [{exit_start}:{exit_deadline - 1}] "
                              f"({exit_deadline-exit_start} editable frames); "
                              f"{config.workers} workers x {config.iterations} proposals "
-                             f"x {config.splice_rounds} Local rounds")
+                             f"x {config.splice_rounds} {'Local' if config.search_backend == 'local' else 'endpoint-auto'} rounds")
                 stage_start = time.monotonic()
                 exit_progress = {} if progress is None else {
                     "progress": lambda text: progress(

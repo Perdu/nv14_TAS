@@ -1,6 +1,8 @@
 [auto]
 objective = "speedrun"
 random-splice = true
+# local auto mode
+splice-search = "endpoint-auto"
 runs = 5
 rounds = 10
 
@@ -18,5 +20,6 @@ splice-frontier = 3
 
 splice-exit-lookback = 120
 
+endpoint-repair-steps = 0
 
 seed = "random"
