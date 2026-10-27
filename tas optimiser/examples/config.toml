@@ -7,7 +7,7 @@ simulate-enemies = false
 [auto]
 iterations = 10000
 runs = 0
-beam = 32
+beam = 64
 max-retime = 3
 objective = "speedrun"
 # require-reference-gold = false
