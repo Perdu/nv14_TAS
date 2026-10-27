@@ -1,0 +1,17 @@
+[local]
+search = "population"
+target_frame = 82
+range = ":82"
+simulate-enemies = true
+objective = "earliest-arrival"
+target_region = "312:392,355:375"
+secondary_objective = "min-y"
+# require-interaction = ["switch"]
+
+[[local.require-jumps]]
+region = "340:380,469:489"
+frames = "32:42"
+
+[[local.require-jumps]]
+region = "388:408,419:439"
+frames = "45:61"
