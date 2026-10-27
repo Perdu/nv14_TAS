@@ -1,4 +1,5 @@
-function loadGhost()
+function loadGhost(ghostFilePath, isRTA)
+    print("Loading ghost from file " .. ghostFilePath)
     local file = io.open(ghostFilePath, "r")
     if not file then
         print("ERROR: Could not open ghost CSV file!")
@@ -8,7 +9,7 @@ function loadGhost()
     for line in file:lines() do
         local frame, x, y, shift, left, right, vx, vy = line:match("(%d+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+)")
         if frame and x and y then
-           ghostData[tonumber(frame)] = {
+           local line = {
               x = tonumber(x),
               y = tonumber(y),
               shift = tonumber(shift),
@@ -17,6 +18,11 @@ function loadGhost()
               vx = tonumber(vx),
               vy = tonumber(vy)
            }
+           if isRTA then
+              ghostData[tonumber(frame)] = line
+           else
+              ghostData2[tonumber(frame + 2)] = line
+           end
            if display_ghost_path then
               table.insert(sortedFrames, tonumber(frame))
            end
@@ -27,7 +33,11 @@ function loadGhost()
     if display_ghost_path then
        table.sort(sortedFrames)
     end
-    print("Ghost loaded: " .. tostring(#ghostData) .. " frames")
+    if isRTA then
+       print("Ghost loaded: " .. tostring(#ghostData) .. " frames")
+    else
+       print("Ghost loaded: " .. tostring(#ghostData2) .. " frames")
+    end
 end
 
 

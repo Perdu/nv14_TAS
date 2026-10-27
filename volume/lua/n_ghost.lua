@@ -17,6 +17,7 @@ display_position = false
 
 ---- Session state
 ghostData = {}
+ghostData2 = {}
 level = nil
 ghostFilePath = nil
 sortedFrames = {}   -- ordered list of frame numbers
@@ -53,6 +54,10 @@ function onPaint()
             end
          end
       end
+      local ghost2 = ghostData2[i]
+      if ghost2 then
+         gui.ellipse(ghost2.x, ghost2.y, 10, 10, 1, 0xffff0000)
+      end
 
       if display_history then
          display_ghost_history(ghost, f)
@@ -87,12 +92,15 @@ function onStartup()
       case = "combined"
       ghostFilePath = "/home/n_recomp_rta_speedrun_ghost.csv"
       triggered = true
+      loadGhost(ghostFilePath, true)
    else
       case = "level"
       level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
       ghostFilePath = "/home/ghosts/" .. level .. ".csv"
+      loadGhost(ghostFilePath, true)
+      ghostFilePath = "/home/ghosts_TAS/" .. level .. ".csv"
+      loadGhost(ghostFilePath, false)
    end
-   loadGhost()
    space_frame = -100
    triggered = false
 end

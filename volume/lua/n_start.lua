@@ -36,6 +36,7 @@ clean_splices_region_markers = false
 SAVE_SLOT = 1             -- Save slot number (1–10)
 ASSUME_STARTS_PAUSED = false  -- Set to false if your game starts unpaused
 GHOST_COLOR = 0xffff00ff
+GHOST2_COLOR = 0xffff0000
 BEST_POSITION_COLOR = 0xffffff00
 
 ---- Session state
@@ -51,6 +52,7 @@ drones_target_memx = {}
 shift_pressed = false
 original_input_modified = false
 ghostData = {}      -- frame → {x, y}
+ghostData2 = {}
 space_frame = -100
 pos_found = false
 ramsearch_done = false
@@ -136,6 +138,10 @@ function onPaint()
                gui.text(ghost.x + 6, ghost.y + 13, ">", 0xffffffff)
             end
          end
+      end
+      local ghost2 = ghostData2[f - space_frame]
+      if ghost2 then
+         gui.ellipse(ghost2.x, ghost2.y, HITBOX_PLAYER, HITBOX_PLAYER, 1, GHOST2_COLOR)
       end
 
       display_ghost_history(ghost, f)
@@ -235,9 +241,12 @@ function onStartup()
     need_unpause = ASSUME_STARTS_PAUSED
 
     ghostData = {}
+    ghostData2 = {}
     level = movie.getMovieFileName():match("/(%d+-%d+).*%.ltm$")
     ghostFilePath = "/home/ghosts/" .. level .. ".csv"
-    loadGhost()
+    loadGhost(ghostFilePath, true)
+    ghostFilePath = "/home/ghosts_TAS/" .. level .. ".csv"
+    loadGhost(ghostFilePath, false)
 
     path = {}
     bestPath = {}
