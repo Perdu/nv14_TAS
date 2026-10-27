@@ -35,6 +35,8 @@ auxiliary_beam_seeds = 1
 endpoint-repair-steps = 0
 endpoint-repair-lookback = 40
 endpoint-iterations-per-frame = 500
+# How much does the auto local mode use the auto algorithm or the local random modifications
+endpoint-auto-mutation-share = 0.5
 
 [local]
 

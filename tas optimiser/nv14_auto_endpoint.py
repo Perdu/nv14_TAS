@@ -38,6 +38,7 @@ class AutoEndpointConfig:
     completion_policy: str = "checkpoint"
     repair_steps: int = 32
     repair_lookback: int = 40
+    auto_mutation_share: float = 0.5
 
     def __post_init__(self) -> None:
         if self.iterations < 0 or self.beam_width < 1:
@@ -54,6 +55,8 @@ class AutoEndpointConfig:
             raise ValueError("endpoint repair-steps must be nonnegative")
         if type(self.repair_lookback) is not int or self.repair_lookback < 1:
             raise ValueError("endpoint repair-lookback must be positive")
+        if not math.isfinite(self.auto_mutation_share) or not 0 <= self.auto_mutation_share <= 1:
+            raise ValueError("endpoint auto-mutation-share must be between 0 and 1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,7 +225,10 @@ def _hybrid_proposal(
     require a completed level. Using Local's actual mutation implementation
     prevents the endpoint path from drifting into a weaker copy of its tools.
     """
-    if rng.randrange(2):
+    # Preserve the historical RNG sequence for the default 50/50 mixture.
+    use_auto = (bool(rng.randrange(2)) if config.auto_mutation_share == 0.5
+                else rng.random() < config.auto_mutation_share)
+    if use_auto:
         frames = _proposal(parent.frames, rng=rng, config=config,
                            start=start, end=end, donor=donor.frames)
         changes = [i for i in range(start, end + 1)
@@ -469,6 +475,7 @@ def optimise_auto_endpoint(
     progress: Callable[[int, int, AutoEndpointCandidate | None], None] | None = None,
     frontier_callback: Callable[[tuple[AutoEndpointCandidate, ...]], None] | None = None,
     frontier_limit: int = 0,
+    initial_population: Sequence[AutoEndpointCandidate] = (),
 ) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Return (baseline, best feasible candidate or None, unique evaluations).
 
@@ -507,6 +514,28 @@ def optimise_auto_endpoint(
     # never enter the checkpoint callback merely because it is feasible.
     best = baseline if baseline.evaluation.feasible else None
     evaluated = 0
+    # Reevaluate inherited survivors under the current reference/goal, rather
+    # than trusting evaluations from an earlier round. They are seeds, not new
+    # mutation proposals, and therefore do not spend the iteration budget.
+    for inherited in initial_population:
+        frames = tuple(inherited.frames)
+        if (len(frames) != len(source) or frames[:start] != source[:start]
+                or frames[end + 1:] != source[end + 1:]):
+            continue
+        identity = _key(frames)
+        if identity in visited:
+            continue
+        visited.add(identity)
+        refreshed = evaluate_candidate(frames)
+        evaluated += 1
+        beam.add(refreshed, identity)
+        if (refreshed.evaluation.feasible and
+                (best is None or refreshed.evaluation.objective_key < best.evaluation.objective_key)):
+            checked = verify_endpoint(level, frames, goal, expected=refreshed.evaluation)
+            if checked.feasible:
+                best = AutoEndpointCandidate(frames, checked, refreshed.complete)
+                if best_callback is not None:
+                    best_callback(best)
     spent = 0
     last_progress = time.monotonic()
     last_reported = -1
@@ -586,6 +615,7 @@ def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpoin
     # requesting a survivor frontier include the optional eighth element.
     level_string, simulate_enemies, frames, goal, config, updates, worker_index = payload[:7]
     frontier_limit = payload[7] if len(payload) > 7 else 0
+    initial_population = payload[8] if len(payload) > 8 else ()
     survivor_batches: list[tuple[AutoEndpointCandidate, ...]] = []
     from nv14_engine import parse_level_string
     local_level = parse_level_string(level_string, simulate_enemies=simulate_enemies)
@@ -611,6 +641,7 @@ def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpoin
         progress=heartbeat if updates is not None else None,
         frontier_callback=survivor_batches.append if frontier_limit else None,
         frontier_limit=frontier_limit,
+        initial_population=initial_population,
     )
     if frontier_limit:
         return (*result, survivor_batches[0] if survivor_batches else ())
@@ -627,8 +658,9 @@ def optimise_auto_endpoint_campaign(
 ) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Run seeded Auto-style endpoint beams in independent processes.
 
-    Rounds feed back the best *verified* checkpoint into the next generation.
-    Incomplete-route endpoints are never handed to the complete-run coordinator.
+    Rounds inherit a bounded, diverse feasible/infeasible survivor population
+    from every worker, rather than restarting only from the global best.
+    Incomplete endpoints never enter the complete-run coordinator.
     """
     if workers < 1 or runs < 1:
         raise ValueError("endpoint workers and runs must be positive")
@@ -647,9 +679,15 @@ def optimise_auto_endpoint_campaign(
     export_limit = (min(frontier_limit, config.beam_width)
                     if frontier_callback is not None else 0)
     survivors: dict[bytes, AutoEndpointCandidate] = {}
+    inherited_population: tuple[AutoEndpointCandidate, ...] = ()
+    # Request a small frontier from each worker when there will be a next
+    # round. This is independent of frontier export to random splicing.
+    carry_limit = min(config.beam_width, 16) if runs > 1 else 0
+    worker_frontier_limit = max(export_limit, carry_limit)
+    round_donors: dict[bytes, AutoEndpointCandidate] = {}
 
     def absorb_frontier(candidates: Sequence[AutoEndpointCandidate]) -> None:
-        if not export_limit:
+        if not worker_frontier_limit:
             return
         for candidate in candidates:
             # Death *after* an earlier qualifying arrival is repairable at
@@ -664,16 +702,25 @@ def optimise_auto_endpoint_campaign(
             # physics before they can become splice donors.
             checked = verify_endpoint(level, candidate.frames, goal,
                                       expected=candidate.evaluation)
-            survivors[identity] = AutoEndpointCandidate(candidate.frames, checked,
-                                                         candidate.complete)
-        # Keep a bounded cross-worker pool; don't retain an unbounded number
-        # of replay arrays from every worker and every campaign round.
-        if len(survivors) > export_limit * 2:
+            checked_candidate = AutoEndpointCandidate(candidate.frames, checked,
+                                                       candidate.complete)
+            if export_limit:
+                survivors[identity] = checked_candidate
+            if carry_limit:
+                round_donors[identity] = checked_candidate
+        # Keep the optional cross-campaign export pool bounded too.
+        if export_limit and len(survivors) > export_limit * 2:
             ranked = sorted(_ranked_candidate(c, _key(initial), identity)
                             for identity, c in survivors.items())
             chosen = _select_ranked_endpoint_beam(ranked, export_limit)
             survivors.clear()
             survivors.update((entry.identity, entry.candidate) for entry in chosen)
+    def secondary_status(result: EndpointEvaluation) -> str:
+        if goal.secondary_objective is None or not result.feasible:
+            return ""
+        return (f"; secondary {goal.secondary_objective}="
+                f"{result.secondary_value:.15g}")
+
     if progress is not None:
         result = baseline.evaluation
         distance = endpoint_exit_edge_distance(level, goal, result)
@@ -685,6 +732,7 @@ def optimise_auto_endpoint_campaign(
             f"position ({result.x:.12g}, {result.y:.12g}); "
             f"velocity ({result.vx:.12g}, {result.vy:.12g}); "
             f"objective {goal.objective}; policy {config.completion_policy}"
+            f"{secondary_status(result)}"
         )
 
     def best_status() -> str:
@@ -695,7 +743,8 @@ def optimise_auto_endpoint_campaign(
         distance = endpoint_exit_edge_distance(level, goal, result)
         distance_text = (f" (distance to exit {distance:.2f})"
                          if distance is not None else "")
-        return f"best frame {result.frame}{distance_text}, score {result.score:.12g}{suffix}"
+        return (f"best frame {result.frame}{distance_text}, score {result.score:.12g}"
+                f"{secondary_status(result)}{suffix}")
 
     def absorb(candidate: AutoEndpointCandidate | None) -> bool:
         nonlocal best
@@ -727,11 +776,13 @@ def optimise_auto_endpoint_campaign(
     pool = None
     try:
         for round_index in range(runs):
+            round_donors.clear()
             if progress:
                 progress(
                     f"round {round_index + 1}/{runs}: starting {workers} worker(s) "
                     f"x {config.iterations:,} proposals "
-                    f"({workers * config.iterations:,} total budget)"
+                    f"({workers * config.iterations:,} total budget); "
+                    f"{len(inherited_population)} inherited candidates"
                 )
             started = time.monotonic()
             last_status = started
@@ -761,8 +812,9 @@ def optimise_auto_endpoint_campaign(
                     level, current, goal, worker_config,
                     best_callback=absorb,
                     progress=serial_progress if progress else None,
-                    frontier_callback=absorb_frontier if export_limit else None,
-                    frontier_limit=export_limit,
+                    frontier_callback=absorb_frontier if worker_frontier_limit else None,
+                    frontier_limit=worker_frontier_limit,
+                    initial_population=inherited_population,
                 )
                 total += evaluated
                 absorb(winner)
@@ -784,10 +836,7 @@ def optimise_auto_endpoint_campaign(
                     (source_string, level.simulate_enemies, current, goal,
                      replace(config, seed=config.seed + round_index * 1000003
                              + worker_index * 104729), updates, worker_index,
-                     export_limit) if export_limit else
-                    (source_string, level.simulate_enemies, current, goal,
-                     replace(config, seed=config.seed + round_index * 1000003
-                             + worker_index * 104729), updates, worker_index)
+                     worker_frontier_limit, inherited_population)
                     for worker_index in range(workers)
                 ]
                 futures = {pool.submit(_endpoint_worker, task): index
@@ -846,7 +895,7 @@ def optimise_auto_endpoint_campaign(
                         index = futures.pop(future)
                         result = future.result()
                         run_baseline, winner, evaluated = result[:3]
-                        if export_limit:
+                        if worker_frontier_limit:
                             absorb_frontier(result[3])
                         total += evaluated
                         finished[index] = config.iterations
@@ -864,9 +913,23 @@ def optimise_auto_endpoint_campaign(
 
             if best is not None:
                 current = best.frames
+            if carry_limit and round_index + 1 < runs:
+                # Preserve the current winner plus diverse survivors from all
+                # workers and earlier rounds. Select with the same feasible /
+                # near-miss niche policy used inside each worker's beam.
+                carry = {_key(c.frames): c for c in inherited_population}
+                carry.update(round_donors)
+                if best is not None:
+                    carry[_key(best.frames)] = best
+                ranked = sorted(_ranked_candidate(c, _key(initial), key)
+                                for key, c in carry.items()
+                                if not c.evaluation.dead)
+                chosen = _select_ranked_endpoint_beam(ranked, config.beam_width)
+                inherited_population = tuple(entry.candidate for entry in chosen)
             if progress:
                 progress(f"round {round_index + 1}/{runs} complete: "
-                         f"{total:,} distinct evaluations total")
+                         f"{total:,} distinct evaluations total; "
+                         f"{len(inherited_population)} candidates available for next round")
     finally:
         if pool is not None:
             pool.shutdown(wait=True)

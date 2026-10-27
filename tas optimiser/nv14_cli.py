@@ -2122,6 +2122,10 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-endpoint-strategy", modes=auto_modes,
                          choices=("hybrid",), default="hybrid",
                          help=argparse.SUPPRESS)
+    command.add_argument("--auto-endpoint-auto-mutation-share", modes=auto_modes,
+                         type=float, default=0.5,
+                         help="share of endpoint Hybrid proposals using Auto mutations "
+                              "(0=Local only, 1=Auto only; default 0.5)")
     command.add_argument("--auto-endpoint-repair-steps", modes=auto_modes, type=int,
                          default=32, help="maximum goal-guided repair proposals per mutation (shared budget)")
     command.add_argument("--auto-endpoint-repair-lookback", modes=auto_modes, type=int,
@@ -3527,6 +3531,7 @@ def main() -> None:
                 completion_policy=args.auto_completion_policy,
                 repair_steps=args.auto_endpoint_repair_steps,
                 repair_lookback=args.auto_endpoint_repair_lookback,
+                auto_mutation_share=args.auto_endpoint_auto_mutation_share,
             )
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc
@@ -3551,7 +3556,8 @@ def main() -> None:
             f"editable frames {endpoint_config.range_start}:"
             f"{frame if endpoint_config.range_end is None else endpoint_config.range_end}; "
             f"iterations per worker {endpoint_config.iterations}; seed {endpoint_config.seed}; "
-            f"workers {max(1, args.workers)}; rounds {args.auto_runs}",
+            f"workers {max(1, args.workers)}; rounds {args.auto_runs}; "
+            f"Auto mutation share {endpoint_config.auto_mutation_share:.0%}",
         )
 
         def save_endpoint_best(candidate):
@@ -3570,7 +3576,9 @@ def main() -> None:
                 "checkpoint", f"saved best #{endpoint_checkpoints}: "
                 f"frame {e.frame}{distance_text}; score {e.score:.12g}; "
                 f"position ({e.x:.12g}, {e.y:.12g}); "
-                f"velocity ({e.vx:.12g}, {e.vy:.12g})",
+                f"velocity ({e.vx:.12g}, {e.vy:.12g})" +
+                (f"; secondary {goal.secondary_objective}={e.secondary_value:.15g}"
+                 if goal.secondary_objective is not None else ""),
             )
 
         def show_endpoint_progress(message: str) -> None:
@@ -3611,7 +3619,9 @@ def main() -> None:
             "parallel", f"endpoint search complete: {count:,} distinct evaluations; "
             f"baseline score {baseline.evaluation.score:.12g}; "
             f"final score {verified.score:.12g}; frame {verified.frame}{final_distance}; "
-            f"{endpoint_checkpoints} verified improvement(s)",
+            f"{endpoint_checkpoints} verified improvement(s)" +
+            (f"; secondary {goal.secondary_objective}={verified.secondary_value:.15g}"
+             if goal.secondary_objective is not None and verified.feasible else ""),
         )
         return
 
