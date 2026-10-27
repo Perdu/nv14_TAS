@@ -3049,7 +3049,7 @@ rerecords: 291
 F2: WJ start; Unable to find skip or ck which works
 
 # 98-2
-rerecords: 38
+rerecords: 134
 
 
 
@@ -3102,4 +3102,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 268552
+# Total rerecords: 268648
