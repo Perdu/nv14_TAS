@@ -214,6 +214,7 @@ The different commands are:
 - `r0` to `r6`: adds `require-interaction = ["testdoor:0-6"]` to the created splice file. If multiple of them (or `rw`) are selected, the array is created with all of them.
 - `w`: creates the `switch.txt` splice at the current frame, using the switch as target object.
 - `0` to `6`: create the `switchN.txt` splice at the current frame, using the related locked door switch as target object.
+- `S`: create a normal square splice, smaller than `s`.
 
 
 ### Contributing to this repository

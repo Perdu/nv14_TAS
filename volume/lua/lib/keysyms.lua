@@ -7,6 +7,7 @@ KEY_RIGHT = 0xff53   -- XK_Right
 KEY_e     = 0x0065
 KEY_r     = 0x0072
 KEY_s     = 0x0073
+KEY_S     = 0x0053
 KEY_t     = 0x0074
 KEY_T     = 0x0054
 KEY_w     = 0x0077

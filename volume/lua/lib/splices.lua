@@ -371,6 +371,7 @@ local splice_modes = {
    s4 = {},
    s5 = {},
    s6 = {},
+   S = {},
 
    r = {objective = "max-x",  arrow = ">"},
    R = {objective = "max-vx", arrow = ">>"},
@@ -423,6 +424,11 @@ function create_splice_file(key)
       x1 = x_int - splice_region_size_small
       x2 = x_int + splice_region_size_small
    elseif key == 'u' or key == 'U' or key == 'd' or key == 'D' then
+      y1 = y_int - splice_region_size_small
+      y2 = y_int + splice_region_size_small
+   elseif key == 'S' then
+      x1 = x_int - splice_region_size_small
+      x2 = x_int + splice_region_size_small
       y1 = y_int - splice_region_size_small
       y2 = y_int + splice_region_size_small
    end

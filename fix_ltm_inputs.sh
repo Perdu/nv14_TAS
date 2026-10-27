@@ -75,14 +75,16 @@ function replace_editor_inputs() {
 31\name=5
 32\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\0\0\0\xff\xb6)
 32\name=6
-33\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\x1\0\0\0\x1)
-33\name=Mouse X coord
-34\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\x2\0\0\0\x1)
-34\name=Mouse Y coord
-35\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\x5\0\0\0\0)
-35\name=Mouse button 1
-36\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\0\0\0\0y)
-36\name=y
+33\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\0\0\0\0S)
+33\name=S
+34\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\x1\0\0\0\x1)
+34\name=Mouse X coord
+35\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\x2\0\0\0\x1)
+35\name=Mouse Y coord
+36\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\x5\0\0\0\0)
+36\name=Mouse button 1
+37\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\0\0\0\0y)
+37\name=y
 4\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\0\0\0\0 )
 4\name=space
 5\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\0\0\0\0s)
@@ -95,7 +97,7 @@ function replace_editor_inputs() {
 8\name=\x2191
 9\input=@Variant(\0\0\0\x7f\0\0\0\fSingleInput\0\0\0\0\0\0\0\0\x64)
 9\name=\x2193
-size=36
+size=37
 EOF
 
     # Replace the existing [input_names] section while preserving

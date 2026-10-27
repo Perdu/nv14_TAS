@@ -378,6 +378,9 @@ require-jump-region = "%d:%d,%d:%d"
     elseif input.getKey(KEY_KP_6) ~= 0 then
        create_splice_file("s6")
        input.setKey(KEY_KP_6, 0)
+    elseif input.getKey(KEY_S) ~= 0 then
+       create_splice_file("S")
+       input.setKey(KEY_S, 0)
     end
 
 end
