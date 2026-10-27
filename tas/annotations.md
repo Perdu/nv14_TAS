@@ -3039,9 +3039,12 @@ rerecords: 0
 
 
 # 98-0
-rerecords: 0
+rerecords: 163
 
-
+Branch 9: bwj on the first tile
+Branch 7: attempt at doing wj on the first 2 tiles
+Branch 6: jumping on every single tile
+Branch 5: faster way down but lost to the bump
 
 # 98-1
 rerecords: 291
@@ -3102,4 +3105,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 268648
+# Total rerecords: 268811
