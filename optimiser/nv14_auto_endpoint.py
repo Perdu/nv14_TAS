@@ -18,7 +18,10 @@ from collections.abc import Callable, Sequence
 from nv14_auto import NEUTRAL_INPUT, evaluate_replay_with_sentinel, mutate_jump_pulse
 from nv14_endpoint import EndpointEvaluation, EndpointEvaluator, EndpointGoal, verify_endpoint
 from nv14_engine import APP_TILE_SCALE, OBJTYPE_EXIT, InputFrame, Level
-from nv14_population import PopulationCandidate, _mutate as _population_mutate
+from nv14_population import (
+    PopulationCandidate, _mutate as _population_mutate,
+    _select_population as _select_population,
+)
 from nv14_search import ALL_INPUT_CHOICES
 from nv14_replay import (
     RetimeMutation, apply_single_transition_retime, apply_suffix_retime,
@@ -39,6 +42,11 @@ class AutoEndpointConfig:
     repair_steps: int = 32
     repair_lookback: int = 40
     auto_mutation_share: float = 0.5
+    # Interleave the original Hybrid beam with persistent Local population search.
+    progressive_refinement: bool = True
+    refinement_share: float = 0.25
+    adaptive_refinement: bool = True
+    refinement_cycle: int = 128
 
     def __post_init__(self) -> None:
         if self.iterations < 0 or self.beam_width < 1:
@@ -57,6 +65,12 @@ class AutoEndpointConfig:
             raise ValueError("endpoint repair-lookback must be positive")
         if not math.isfinite(self.auto_mutation_share) or not 0 <= self.auto_mutation_share <= 1:
             raise ValueError("endpoint auto-mutation-share must be between 0 and 1")
+        if type(self.progressive_refinement) is not bool or type(self.adaptive_refinement) is not bool:
+            raise ValueError("progressive/adaptive refinement must be booleans")
+        if not math.isfinite(self.refinement_share) or not 0 <= self.refinement_share <= 1:
+            raise ValueError("refinement-share must be between 0 and 1")
+        if type(self.refinement_cycle) is not int or self.refinement_cycle < 2:
+            raise ValueError("refinement-cycle must be an integer of at least 2")
 
 
 @dataclass(frozen=True, slots=True)
@@ -468,6 +482,22 @@ def _endpoint_repair(
                 # One repair may enable a previously missed interaction; allow
                 # follow-up changes at other frames, not just single-bit fixes.
 
+def _next_refinement_share(
+    share: float, local_gains: int, local_used: int,
+    auto_gains: int, auto_used: int,
+) -> float:
+    """Reallocate only after a complete cycle, using verified strict gains."""
+    if not local_used or not auto_used:
+        return share
+    local_rate = local_gains / local_used
+    auto_rate = auto_gains / auto_used
+    if local_rate > auto_rate:
+        return min(0.5, share + 0.05)
+    if auto_rate > local_rate:
+        return max(0.1, share - 0.05)
+    return share
+
+
 def optimise_auto_endpoint(
     level: Level, source_frames: Sequence[InputFrame], goal: EndpointGoal,
     config: AutoEndpointConfig, *,
@@ -510,6 +540,26 @@ def optimise_auto_endpoint(
 
     baseline = evaluate_candidate(source)
     beam = _EndpointBeam(baseline, config.beam_width, original_key)
+    # Each phase keeps a separate survivor policy. They share one endpoint
+    # evaluator and visited set; neither phase runs an additional simulation.
+    def as_local(candidate: AutoEndpointCandidate, identity: bytes) -> PopulationCandidate:
+        return PopulationCandidate(
+            candidate.frames, candidate.evaluation, (),
+            sum(a != b for a, b in zip(identity, original_key)), identity,
+        )
+
+    local_pool: tuple[PopulationCandidate, ...] = (
+        _select_population((as_local(baseline, original_key),), config.beam_width)
+        if config.progressive_refinement else ()
+    )
+
+    def add_to_pools(candidate: AutoEndpointCandidate, identity: bytes) -> None:
+        nonlocal local_pool
+        beam.add(candidate, identity)
+        if config.progressive_refinement:
+            local_pool = _select_population(
+                (*local_pool, as_local(candidate, identity)), config.beam_width,
+            )
     # The source is a baseline, not a newly discovered improvement.  It must
     # never enter the checkpoint callback merely because it is feasible.
     best = baseline if baseline.evaluation.feasible else None
@@ -528,7 +578,7 @@ def optimise_auto_endpoint(
         visited.add(identity)
         refreshed = evaluate_candidate(frames)
         evaluated += 1
-        beam.add(refreshed, identity)
+        add_to_pools(refreshed, identity)
         if (refreshed.evaluation.feasible and
                 (best is None or refreshed.evaluation.objective_key < best.evaluation.objective_key)):
             checked = verify_endpoint(level, frames, goal, expected=refreshed.evaluation)
@@ -572,23 +622,67 @@ def optimise_auto_endpoint(
                                              if config.completion_policy == "complete" else False)
                 if best_callback:
                     best_callback(best)
-        beam.add(candidate, identity)
+        add_to_pools(candidate, identity)
         return candidate
 
+    # The phase schedule is deterministic and interleaved (not a terminal
+    # Local pass). A cycle's allocated Local proposals are spread evenly.
+    cycle_start = 0
+    cycle_length = min(config.refinement_cycle, config.iterations)
+    share = config.refinement_share
+    local_gains = auto_gains = local_used = auto_used = 0
+    mutable_frames = tuple(range(start, end + 1))
     while spent < config.iterations:
-        # Preserve feasible solutions and diverse repairable failures using
-        # the hybrid beam. Full-level Auto uses a different coordinator.
-        parent_entry = (min(rng.sample(beam.entries, min(2, len(beam.entries))))
-                        if rng.random() < 0.7 else rng.choice(beam.entries))
-        parent = parent_entry.candidate
-        donor = rng.choice(beam.entries).candidate
-        proposed, anchor = _hybrid_proposal(parent, donor, rng=rng,
-                                            config=config, start=start, end=end)
+        use_local = False
+        if config.progressive_refinement:
+            offset = spent - cycle_start
+            slots = round(cycle_length * share)
+            use_local = ((offset + 1) * slots // cycle_length
+                         > offset * slots // cycle_length)
+        if use_local:
+            # Local's tournament selection and niche-aware population, not
+            # merely Local's mutation operators inside Auto's beam.
+            first = (min(rng.sample(local_pool, min(2, len(local_pool))),
+                         key=lambda c: (c.evaluation.progress_key, c.edits, c.input_key))
+                     if rng.random() < 0.65 else rng.choice(local_pool))
+            second = rng.choice(local_pool)
+            proposed, _label, anchor = _population_mutate(
+                first, second, ((start, end),), mutable_frames, rng,
+                config.mutation_span,
+            )
+            parent = AutoEndpointCandidate(first.frames, first.evaluation)
+        else:
+            # Unmodified Hybrid Auto exploration, including its pre-existing
+            # 50/50 Auto/Local mutation policy and parent selection.
+            parent_entry = (min(rng.sample(beam.entries, min(2, len(beam.entries))))
+                            if rng.random() < 0.7 else rng.choice(beam.entries))
+            parent = parent_entry.candidate
+            donor = rng.choice(beam.entries).candidate
+            proposed, anchor = _hybrid_proposal(parent, donor, rng=rng,
+                                                config=config, start=start, end=end)
+        previous_best = best
         candidate = consider(proposed)
-        if (candidate is not None and config.repair_steps
-                and spent < config.iterations and
-                (_rank(candidate, original_key) < _rank(parent, original_key)
-                 or (not candidate.evaluation.feasible and rng.random() < 0.25))):
+        if config.progressive_refinement:
+            if use_local:
+                local_used += 1
+                local_gains += best is not previous_best
+            else:
+                auto_used += 1
+                auto_gains += best is not previous_best
+            if spent - cycle_start >= cycle_length:
+                if config.adaptive_refinement:
+                    share = _next_refinement_share(
+                        share, local_gains, local_used, auto_gains, auto_used,
+                    )
+                cycle_start = spent
+                cycle_length = min(config.refinement_cycle, config.iterations - spent)
+                local_gains = auto_gains = local_used = auto_used = 0
+        elif (candidate is not None and config.repair_steps
+              and spent < config.iterations and
+              (_rank(candidate, original_key) < _rank(parent, original_key)
+               or (not candidate.evaluation.feasible and rng.random() < 0.25))):
+            # Historical Hybrid fallback retains its repair behavior. The new
+            # progressive path intentionally avoids this costly inner loop.
             _endpoint_repair(candidate, parent, source, goal, anchor=anchor,
                              start=start, end=end, config=config, rng=rng,
                              consider=consider,
@@ -605,7 +699,25 @@ def optimise_auto_endpoint(
     if progress is not None and last_reported != spent:
         progress(spent, evaluated, best)
     if frontier_callback is not None and frontier_limit > 0:
-        frontier_callback(_endpoint_frontier(beam, frontier_limit))
+        if config.progressive_refinement:
+            # Export local-only niches as well as Auto's beam survivors so
+            # cross-round inheritance can exploit either search phase.
+            candidates = {
+                entry.identity: entry.candidate for entry in beam.entries
+                if entry.identity != original_key and not entry.candidate.evaluation.dead
+            }
+            for item in local_pool:
+                if item.input_key != original_key and not item.evaluation.dead:
+                    candidates.setdefault(
+                        item.input_key, AutoEndpointCandidate(item.frames, item.evaluation),
+                    )
+            frontier = _select_endpoint_beam(
+                tuple(candidates.values()), min(frontier_limit, config.beam_width),
+                original_key,
+            )
+            frontier_callback(tuple(frontier))
+        else:
+            frontier_callback(_endpoint_frontier(beam, frontier_limit))
     return baseline, best, evaluated
 
 

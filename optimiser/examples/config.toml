@@ -37,6 +37,11 @@ endpoint-repair-lookback = 40
 endpoint-iterations-per-frame = 500
 # How much does the auto local mode use the auto algorithm or the local random modifications
 endpoint-auto-mutation-share = 0.5
+# Parameters to progressively switch to the local algorithm
+progressive-refinement = true
+refinement-share = 0.25
+adaptive-refinement = true
+refinement-cycle = 128
 
 [local]
 

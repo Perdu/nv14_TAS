@@ -2126,6 +2126,20 @@ def build_parser() -> argparse.ArgumentParser:
                          type=float, default=0.5,
                          help="share of endpoint Hybrid proposals using Auto mutations "
                               "(0=Local only, 1=Auto only; default 0.5)")
+    command.add_argument("--auto-progressive-refinement", modes=auto_modes,
+                         action=argparse.BooleanOptionalAction, default=True,
+                         help="interleave Hybrid Auto exploration with persistent Local refinement "
+                              "(disable to restore the previous Hybrid search)")
+    command.add_argument("--auto-refinement-share", modes=auto_modes,
+                         type=float, default=0.25,
+                         help="initial fraction of Auto endpoint proposals reserved for Local "
+                              "refinement (default 0.25)")
+    command.add_argument("--auto-adaptive-refinement", modes=auto_modes,
+                         action=argparse.BooleanOptionalAction, default=True,
+                         help="adapt the exploration/refinement split on verified gains")
+    command.add_argument("--auto-refinement-cycle", modes=auto_modes,
+                         type=int, default=128,
+                         help="proposal slots per interleaved refinement cycle (default 128)")
     command.add_argument("--auto-endpoint-repair-steps", modes=auto_modes, type=int,
                          default=32, help="maximum goal-guided repair proposals per mutation (shared budget)")
     command.add_argument("--auto-endpoint-repair-lookback", modes=auto_modes, type=int,
@@ -3532,6 +3546,10 @@ def main() -> None:
                 repair_steps=args.auto_endpoint_repair_steps,
                 repair_lookback=args.auto_endpoint_repair_lookback,
                 auto_mutation_share=args.auto_endpoint_auto_mutation_share,
+                progressive_refinement=args.auto_progressive_refinement,
+                refinement_share=args.auto_refinement_share,
+                adaptive_refinement=args.auto_adaptive_refinement,
+                refinement_cycle=args.auto_refinement_cycle,
             )
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc
