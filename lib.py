@@ -80,7 +80,7 @@ class DistanceToDoorError(RuntimeError):
 
 def emulate_distance_to_door(demo):
     """Signed circle-edge gap after the last input, without a neutral tick."""
-    optimizer_dir = SCRIPT_DIR / 'tas optimiser'
+    optimizer_dir = SCRIPT_DIR / 'optimiser'
     if not optimizer_dir.is_dir():
         raise DistanceToDoorError(f'Optimiser directory not found: {optimizer_dir}')
     optimizer_path = str(optimizer_dir)
