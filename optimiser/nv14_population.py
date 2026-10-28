@@ -622,6 +622,13 @@ def optimise_local_population(
         if type(config.seed) is int and config.seed != seed:
             raise ValueError("population checkpoint seed differs from the explicitly configured seed")
     if progress:
+        progress(f"[local:population:baseline] frame {baseline.frame}; "
+                 f"score {baseline.score:.15g}; "
+                 f"position ({baseline.x:.12g}, {baseline.y:.12g}); "
+                 f"velocity ({baseline.vx:.12g}, {baseline.vy:.12g}); "
+                 f"feasible {baseline.feasible}"
+                 + (f"; secondary {goal.secondary_objective}={baseline.secondary_value:.15g}"
+                    if goal.secondary_objective is not None and baseline.feasible else ""))
         progress(f"[local:population] seed {seed}; {worker_count} worker(s); "
                  f"{len(context.mutable_frames)} editable frames; beam {config.beam}")
     best: PopulationCandidate | None = None

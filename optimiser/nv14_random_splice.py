@@ -672,6 +672,16 @@ def _optimise_target_splices(
         return packed, checked
 
     best = validated(current)
+    if progress:
+        if best is None:
+            progress(f"[auto:random-splice:goal:baseline] source is not feasible for "
+                     f"{goal.objective} at target frame {goal.target_frame}")
+        else:
+            e = best[1]
+            progress(f"[auto:random-splice:goal:baseline] source feasible for "
+                     f"{goal.objective}; frame {e.frame}; score {e.score:.12g}"
+                     + (f"; secondary {goal.secondary_objective}={e.secondary_value:.15g}"
+                        if goal.secondary_objective is not None else ""))
 
     def consider(frames: Sequence[InputFrame], context: str) -> bool:
         nonlocal best, improvements, current
@@ -815,6 +825,11 @@ def optimise_random_splices(
     if not verified.valid or verified.finish_tick != len(current):
         raise ValueError("random splicing needs a replay finishing on its neutral sentinel")
     first_reference = verified
+    if progress:
+        distance = pre_finish_exit_edge_distance(level, verified)
+        gap = f"; distance to exit {distance:.2f}" if distance is not None else ""
+        progress(f"[auto:random-splice:baseline] verified completion at "
+                 f"frame {verified.finish_tick}{gap}")
     rng = random.Random(config.seed)
     improvements = attempts = evaluations = 0
     stagnant = 0

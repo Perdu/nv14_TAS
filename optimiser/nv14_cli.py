@@ -95,8 +95,17 @@ from nv14_search import evaluate_fixed_replay_native, player_snapshot_key
 
 def _print_best_line(message: str, *, color: bool) -> None:
     """Highlight a new best on TTYs, keeping redirected logs ANSI-free."""
+    _print_colored_line(message, color=color, ansi_color=32)
+
+
+def _print_baseline_line(message: str, *, color: bool) -> None:
+    """Show the starting result in blue, without ANSI escapes in captured logs."""
+    _print_colored_line(message, color=color, ansi_color=34)
+
+
+def _print_colored_line(message: str, *, color: bool, ansi_color: int) -> None:
     if color and sys.stdout.isatty():
-        print(f"\x1b[32m{message}\x1b[0m", flush=True)
+        print(f"\x1b[{ansi_color}m{message}\x1b[0m", flush=True)
     else:
         print(message, flush=True)
 
@@ -1907,7 +1916,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     command.add_argument(
         "--color", action=argparse.BooleanOptionalAction, default=True,
-        help="show verified new-best lines in green (default: enabled; --no-color disables)",
+        help="show baselines in blue and verified new bests in green (default: enabled; --no-color disables)",
     )
     command.add_argument(
         "--levels-file",
@@ -3034,7 +3043,9 @@ def _run_local_population(
             level, frames, goal=goal, frame_ranges=ranges, config=search_config,
             best_callback=save_best,
             progress=lambda message: (
-                _print_best_line(message, color=color)
+                _print_baseline_line(message, color=color)
+                if message.startswith("[local:population:baseline]")
+                else _print_best_line(message, color=color)
                 if message.endswith(" [NEW BEST SO FAR]")
                 else print(message, flush=True)
             ),
@@ -3056,10 +3067,13 @@ def _run_local_population(
 
     print()
     baseline = result.baseline
-    print(f"baseline frame {baseline.frame}: score={baseline.score:.15g}; "
-          f"position=({baseline.x:.15g}, {baseline.y:.15g}); "
-          f"velocity=({baseline.vx:.15g}, {baseline.vy:.15g}); feasible={baseline.feasible}"
-          f"{secondary_summary(baseline)}{interaction_summary(baseline)}")
+    _print_baseline_line(
+        f"baseline frame {baseline.frame}: score={baseline.score:.15g}; "
+        f"position=({baseline.x:.15g}, {baseline.y:.15g}); "
+        f"velocity=({baseline.vx:.15g}, {baseline.vy:.15g}); feasible={baseline.feasible}"
+        f"{secondary_summary(baseline)}{interaction_summary(baseline)}",
+        color=color,
+    )
     print(f"local population: objective={config.objective}; rounds={result.rounds}; "
           f"evaluations={result.evaluations}; feasible outputs={len(verified)}/{config.top_results}")
     if config.objective == "earliest-arrival":
@@ -3456,7 +3470,12 @@ def main() -> None:
                 best_callback=lambda frames: _write_result(
                     source, output_path, replay_output_path, encode_complex_replay(frames)),
                 progress=lambda message: (
-                    _print_best_line(message, color=common_config.color)
+                    _print_baseline_line(message, color=common_config.color)
+                    if message.startswith((
+                        "[auto:random-splice:baseline]",
+                        "[auto:random-splice:goal:baseline]",
+                    ))
+                    else _print_best_line(message, color=common_config.color)
                     if message.startswith((
                         "[auto:random-splice:goal] improved ",
                         "[auto:random-splice] speedrun improved:",
@@ -3594,11 +3613,14 @@ def main() -> None:
             minutes, seconds = divmod(remainder, 60)
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-        def endpoint_status(phase: str, message: str, *, new_best: bool = False) -> None:
+        def endpoint_status(phase: str, message: str, *, new_best: bool = False,
+                            baseline: bool = False) -> None:
             line = (f"[{time.strftime('%H:%M:%S')}] [auto:{phase}] "
                     f"{message}; elapsed {endpoint_elapsed()}")
             if new_best:
                 _print_best_line(line, color=common_config.color)
+            elif baseline:
+                _print_baseline_line(line, color=common_config.color)
             else:
                 print(line, flush=True)
 
@@ -3635,7 +3657,7 @@ def main() -> None:
 
         def show_endpoint_progress(message: str) -> None:
             if message.startswith("baseline:"):
-                endpoint_status("baseline", message[len("baseline:"):].strip())
+                endpoint_status("baseline", message[len("baseline:"):].strip(), baseline=True)
             elif "starting " in message or " finished; " in message:
                 endpoint_status("parallel", message)
             elif "proposals (" in message or "distinct evaluations;" in message:
@@ -3840,7 +3862,10 @@ def main() -> None:
                         f"{update.macro_evaluations}/{update.budget} evaluations; "
                         f"{best}{repair}{update.message}"
                     )
-                print(text, flush=True)
+                if update.phase == "baseline":
+                    _print_baseline_line(text, color=common_config.color)
+                else:
+                    print(text, flush=True)
 
             auto_stdout_start = time.monotonic()
 
@@ -3976,11 +4001,12 @@ def main() -> None:
                 if raw_change < 0
                 else "same raw time"
             )
-            print(
+            _print_baseline_line(
                 f"auto baseline: finish {auto_result.baseline_finish_tick}; "
                 f"gold {auto_result.baseline_gold_count}; "
                 f"gold bonus {auto_result.baseline_gold_bonus_ticks}; "
-                f"highscore value {auto_result.baseline_objective_value}"
+                f"highscore value {auto_result.baseline_objective_value}",
+                color=common_config.color,
             )
             print(
                 f"auto optimised: finish {auto_result.finish_tick} "
@@ -4010,9 +4036,10 @@ def main() -> None:
                 )
             )
         else:
-            print(
+            _print_baseline_line(
                 f"auto baseline finish tick: {auto_result.baseline_finish_tick} "
-                f"({auto_result.baseline_finish_tick} serialized inputs)"
+                f"({auto_result.baseline_finish_tick} serialized inputs)",
+                color=common_config.color,
             )
             print(
                 f"auto optimised finish tick: {auto_result.finish_tick} "
@@ -4319,6 +4346,13 @@ def main() -> None:
             "--fixed-jump-frames requires the jump-pattern subcommand"
         )
 
+    bp = baseline.state.player
+    _print_baseline_line(
+        f"baseline frame {target_frame}: "
+        f"x={bp.pos.x:.15f}, y={bp.pos.y:.15f}; score={baseline.score:.15g}",
+        color=common_config.color,
+    )
+
     jump_results: list[JumpSearchResult] | None = None
     local_checkpoint_written = False
     if args.mode == "jump-pattern":
@@ -4494,7 +4528,6 @@ def main() -> None:
     _write_result(source, output_path, replay_output_path, replay_string)
 
     changed = changed_frame_indices(original_editable, optimised_frames)
-    bp = baseline.state.player
     fp = final_eval.state.player
     print()
     if jump_results is not None:
@@ -4512,10 +4545,6 @@ def main() -> None:
             else:
                 print(line)
         print()
-    print(
-        f"baseline frame {target_frame}: "
-        f"x={bp.pos.x:.15f}, y={bp.pos.y:.15f}"
-    )
     if retimed_seed_eval is not None:
         rp = retimed_seed_eval.state.player
         print(
