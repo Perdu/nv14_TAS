@@ -2197,6 +2197,10 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-refinement-cycle", modes=auto_modes,
                          type=int, default=128,
                          help="proposal slots per interleaved refinement cycle (default 128)")
+    command.add_argument("--auto-refinement-polish", modes=auto_modes,
+                         action=argparse.BooleanOptionalAction, default=True,
+                         help="use budgeted single-frame sweeps around each verified new best "
+                              "(default enabled; --no-auto-refinement-polish disables)")
     command.add_argument("--auto-endpoint-repair-steps", modes=auto_modes, type=int,
                          default=32, help="maximum goal-guided repair proposals per mutation (shared budget)")
     command.add_argument("--auto-endpoint-repair-lookback", modes=auto_modes, type=int,
@@ -3639,6 +3643,7 @@ def main() -> None:
                 refinement_share=args.auto_refinement_share,
                 adaptive_refinement=args.auto_adaptive_refinement,
                 refinement_cycle=args.auto_refinement_cycle,
+                refinement_polish=args.auto_refinement_polish,
             )
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc
@@ -3669,7 +3674,10 @@ def main() -> None:
             f"{frame if endpoint_config.range_end is None else endpoint_config.range_end}; "
             f"iterations per worker {endpoint_config.iterations}; seed {endpoint_config.seed}; "
             f"workers {max(1, args.workers)}; rounds {args.auto_runs}; "
-            f"Auto mutation share {endpoint_config.auto_mutation_share:.0%}",
+            f"Auto mutation share {endpoint_config.auto_mutation_share:.0%}; "
+            f"progressive refinement {'on' if endpoint_config.progressive_refinement else 'off'}; "
+            f"initial Local share {endpoint_config.refinement_share:.0%}; "
+            f"one-frame polishing {'on' if endpoint_config.progressive_refinement and endpoint_config.refinement_polish else 'off'}",
         )
 
         def save_endpoint_best(candidate):

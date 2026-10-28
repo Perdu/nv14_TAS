@@ -28,6 +28,8 @@ def test_config_validates_refinement_controls():
         AutoEndpointConfig(progressive_refinement=1)
     with pytest.raises(ValueError, match='booleans'):
         AutoEndpointConfig(adaptive_refinement=0)
+    with pytest.raises(ValueError, match='booleans'):
+        AutoEndpointConfig(refinement_polish=0)
 
 
 def test_toml_controls_and_legacy_fallback(tmp_path):
@@ -37,6 +39,7 @@ progressive-refinement = false
 refinement-share = 0.35
 adaptive-refinement = false
 refinement-cycle = 40
+refinement-polish = false
 endpoint-repair-steps = 0
 ''')
     args = parse_arguments(['auto', 'source.ltm', '--config', str(settings)])
@@ -44,8 +47,11 @@ endpoint-repair-steps = 0
     assert args.auto_refinement_share == 0.35
     assert not args.auto_adaptive_refinement
     assert args.auto_refinement_cycle == 40
+    assert not args.auto_refinement_polish
     assert args.auto_endpoint_repair_steps == 0
     assert parse_arguments(['auto', 'source.ltm']).auto_progressive_refinement
+    assert parse_arguments(['auto', 'source.ltm']).auto_refinement_polish
+    assert not parse_arguments(['auto', 'source.ltm', '--no-auto-refinement-polish']).auto_refinement_polish
 
 
 def test_interleaved_proposals_have_exact_budget_and_no_repair(monkeypatch):
@@ -71,7 +77,8 @@ def test_interleaved_proposals_have_exact_budget_and_no_repair(monkeypatch):
         level, frames, goal,
         AutoEndpointConfig(iterations=40, beam_width=8, seed=4,
                            refinement_share=0.25, refinement_cycle=20,
-                           adaptive_refinement=False, repair_steps=64),
+                           adaptive_refinement=False, repair_steps=64,
+                           refinement_polish=False),
         progress=lambda proposed, unique, best: reports.append((proposed, unique)),
     )
     assert calls == {'auto': 30, 'local': 10}
@@ -121,3 +128,60 @@ def test_progressive_results_are_verified_and_frame_bounded():
     assert winner.frames[:4] == frames[:4]
     assert winner.frames[25:] == frames[25:]
     assert verify_endpoint(level, winner.frames, goal, expected=winner.evaluation).feasible
+
+
+def test_polisher_systematically_checks_one_frame_variants_and_exhausts():
+    from types import SimpleNamespace
+    level, frames, goal = _setup()
+    import random
+    leader = endpoint.AutoEndpointCandidate(frames, SimpleNamespace(frame=20))
+    polisher = endpoint._SingleFramePolisher()
+    rng = random.Random(17)
+    changes = set()
+    while (proposed := polisher.propose(leader, start=4, end=24, rng=rng)) is not None:
+        indexes = [i for i, (old, new) in enumerate(zip(frames, proposed)) if old != new]
+        assert len(indexes) == 1
+        assert 4 <= indexes[0] <= 20
+        changes.add(endpoint._key(proposed))
+    assert len(changes) == 17 * 5  # six input choices minus the original
+    assert polisher.propose(leader, start=4, end=24, rng=rng) is None
+    changed_leader = list(frames)
+    changed_leader[7] = endpoint.ALL_INPUT_CHOICES[4]
+    different = endpoint.AutoEndpointCandidate(tuple(changed_leader), SimpleNamespace(frame=20))
+    assert polisher.propose(different, start=4, end=24, rng=rng) is not None
+
+
+def test_polishing_spends_no_extra_proposals_or_repairs(monkeypatch):
+    level, frames, goal = _setup()
+    calls = {'auto': 0, 'local': 0}
+
+    def hybrid(parent, donor, **kwargs):
+        calls['auto'] += 1
+        return parent.frames, 8
+
+    def local(parent, donor, ranges, mutable, rng, span):
+        calls['local'] += 1
+        return parent.frames, 'no-op', 8
+
+    monkeypatch.setattr(endpoint, '_hybrid_proposal', hybrid)
+    monkeypatch.setattr(endpoint, '_population_mutate', local)
+    monkeypatch.setattr(endpoint, '_endpoint_repair', lambda *args, **kw: pytest.fail('repair invoked'))
+    config = AutoEndpointConfig(iterations=80, beam_width=8, seed=17,
+                                refinement_share=0.5, refinement_cycle=20,
+                                adaptive_refinement=False, repair_steps=64)
+    _baseline, best, evaluated = optimise_auto_endpoint(level, frames, goal, config)
+    assert calls['auto'] == 40
+    assert 0 < calls['local'] < 40  # some Local slots are deterministic polish
+    assert 0 < evaluated <= 40
+    assert best is not None
+    assert verify_endpoint(level, best.frames, goal, expected=best.evaluation).feasible
+
+
+def test_stagnation_raises_local_share_without_exceeding_cap():
+    update = endpoint._stagnation_refinement_share
+    assert update(0.25, 23) == 0.25
+    assert update(0.25, 24) == pytest.approx(0.30)
+    assert update(0.60, 48) == pytest.approx(0.65)
+    assert update(0.65, 48) == 0.65
+    assert update(0.8, 48) == 0.8
+    assert update(0.0, 48) == 0.0

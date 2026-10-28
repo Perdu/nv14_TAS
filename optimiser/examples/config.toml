@@ -42,6 +42,7 @@ endpoint-auto-mutation-share = 0.5
 progressive-refinement = true
 refinement-share = 0.25
 adaptive-refinement = true
+refinement-polish = true
 refinement-cycle = 128
 
 [local]

@@ -47,6 +47,7 @@ class AutoEndpointConfig:
     refinement_share: float = 0.25
     adaptive_refinement: bool = True
     refinement_cycle: int = 128
+    refinement_polish: bool = True
 
     def __post_init__(self) -> None:
         if self.iterations < 0 or self.beam_width < 1:
@@ -65,8 +66,10 @@ class AutoEndpointConfig:
             raise ValueError("endpoint repair-lookback must be positive")
         if not math.isfinite(self.auto_mutation_share) or not 0 <= self.auto_mutation_share <= 1:
             raise ValueError("endpoint auto-mutation-share must be between 0 and 1")
-        if type(self.progressive_refinement) is not bool or type(self.adaptive_refinement) is not bool:
-            raise ValueError("progressive/adaptive refinement must be booleans")
+        if (type(self.progressive_refinement) is not bool
+                or type(self.adaptive_refinement) is not bool
+                or type(self.refinement_polish) is not bool):
+            raise ValueError("progressive/adaptive/polish refinement must be booleans")
         if not math.isfinite(self.refinement_share) or not 0 <= self.refinement_share <= 1:
             raise ValueError("refinement-share must be between 0 and 1")
         if type(self.refinement_cycle) is not int or self.refinement_cycle < 2:
@@ -498,6 +501,64 @@ def _next_refinement_share(
     return share
 
 
+
+class _SingleFramePolisher:
+    """Exhaust the six-input, one-frame neighbourhood of a verified leader.
+
+    Unlike nested endpoint repair, each trial uses exactly one ordinary
+    proposal slot. The sweep is reset on a strict new best and not repeated
+    after exhaustion. This gives endpoint polishing a small bounded cost
+    (at most five variants per editable frame per leader), not a multiplier
+    on every macro mutation. A nearby endpoint frame gets first priority.
+    """
+
+    __slots__ = ("leader_key", "pending")
+
+    def __init__(self) -> None:
+        self.leader_key: bytes | None = None
+        self.pending: list[tuple[int, InputFrame]] = []
+
+    def propose(
+        self, leader: AutoEndpointCandidate, *, start: int, end: int,
+        rng: random.Random,
+    ) -> tuple[InputFrame, ...] | None:
+        identity = _key(leader.frames)
+        if identity != self.leader_key:
+            self.leader_key = identity
+            self.pending = []
+            # Editing *after* the measured interaction cannot improve it.
+            finish = min(end, leader.evaluation.frame)
+            close = list(range(max(start, finish - 31), finish + 1))
+            distant = list(range(start, max(start, finish - 31)))
+            rng.shuffle(close)
+            rng.shuffle(distant)
+            # Pop the near-end region first; keep a chance to improve earlier
+            # acceleration/turnaround frames before exhausting the leader.
+            for index in distant + close:
+                original = leader.frames[index]
+                alternatives = [choice for choice in ALL_INPUT_CHOICES
+                                if (choice.left, choice.right, choice.jump)
+                                != (original.left, original.right, original.jump)]
+                rng.shuffle(alternatives)
+                self.pending.extend((index, choice) for choice in alternatives)
+        if not self.pending:
+            return None
+        index, choice = self.pending.pop()
+        frames = list(leader.frames)
+        frames[index] = choice
+        return tuple(frames)
+
+
+def _stagnation_refinement_share(share: float, idle_cycles: int) -> float:
+    """Gradually favour fine tuning after many *whole* cycles without gains.
+
+    A requested zero share remains zero, and explicit shares above the cap
+    are never reduced. No additional proposals are generated.
+    """
+    if 0 < share < 0.65 and idle_cycles and idle_cycles % 24 == 0:
+        return min(0.65, share + 0.05)
+    return share
+
 def optimise_auto_endpoint(
     level: Level, source_frames: Sequence[InputFrame], goal: EndpointGoal,
     config: AutoEndpointConfig, *,
@@ -631,6 +692,8 @@ def optimise_auto_endpoint(
     cycle_length = min(config.refinement_cycle, config.iterations)
     share = config.refinement_share
     local_gains = auto_gains = local_used = auto_used = 0
+    idle_cycles = 0
+    polisher = _SingleFramePolisher()
     mutable_frames = tuple(range(start, end + 1))
     while spent < config.iterations:
         use_local = False
@@ -640,17 +703,30 @@ def optimise_auto_endpoint(
             use_local = ((offset + 1) * slots // cycle_length
                          > offset * slots // cycle_length)
         if use_local:
-            # Local's tournament selection and niche-aware population, not
-            # merely Local's mutation operators inside Auto's beam.
-            first = (min(rng.sample(local_pool, min(2, len(local_pool))),
-                         key=lambda c: (c.evaluation.progress_key, c.edits, c.input_key))
-                     if rng.random() < 0.65 else rng.choice(local_pool))
-            second = rng.choice(local_pool)
-            proposed, _label, anchor = _population_mutate(
-                first, second, ((start, end),), mutable_frames, rng,
-                config.mutation_span,
-            )
-            parent = AutoEndpointCandidate(first.frames, first.evaluation)
+            # Reserve every other Local slot for a bounded, systematic
+            # one-frame search around the *verified* feasible winner. This
+            # detects tiny secondary-objective gains that broad mutations miss.
+            # Exhaustion falls back to ordinary Local population evolution.
+            polish = (polisher.propose(best, start=start, end=end, rng=rng)
+                      if config.refinement_polish and best is not None
+                      and local_used % 2 == 0 else None)
+            if polish is not None:
+                parent = best
+                proposed = polish
+                anchor = next(i for i in range(start, end + 1)
+                              if polish[i] != parent.frames[i])
+            else:
+                # Local's tournament selection and niche-aware population, not
+                # merely Local's mutation operators inside Auto's beam.
+                first = (min(rng.sample(local_pool, min(2, len(local_pool))),
+                             key=lambda c: (c.evaluation.progress_key, c.edits, c.input_key))
+                         if rng.random() < 0.65 else rng.choice(local_pool))
+                second = rng.choice(local_pool)
+                proposed, _label, anchor = _population_mutate(
+                    first, second, ((start, end),), mutable_frames, rng,
+                    config.mutation_span,
+                )
+                parent = AutoEndpointCandidate(first.frames, first.evaluation)
         else:
             # Unmodified Hybrid Auto exploration, including its pre-existing
             # 50/50 Auto/Local mutation policy and parent selection.
@@ -670,10 +746,17 @@ def optimise_auto_endpoint(
                 auto_used += 1
                 auto_gains += best is not previous_best
             if spent - cycle_start >= cycle_length:
+                if local_gains + auto_gains:
+                    idle_cycles = 0
+                else:
+                    idle_cycles += 1
                 if config.adaptive_refinement:
-                    share = _next_refinement_share(
-                        share, local_gains, local_used, auto_gains, auto_used,
-                    )
+                    if local_gains + auto_gains:
+                        share = _next_refinement_share(
+                            share, local_gains, local_used, auto_gains, auto_used,
+                        )
+                    else:
+                        share = _stagnation_refinement_share(share, idle_cycles)
                 cycle_start = spent
                 cycle_length = min(config.refinement_cycle, config.iterations - spent)
                 local_gains = auto_gains = local_used = auto_used = 0
