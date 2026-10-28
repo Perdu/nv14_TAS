@@ -10,12 +10,12 @@ extract/
 db_config.py
 __pycache__/
 volume/n_v14_patched.swf
-tas optimiser/__pycache__/
-tas optimiser/.pytest_cache/
-tas optimiser/build/
-tas optimiser/wip/
-tas optimiser/local_arrival_checkpoint.json
-tas optimiser/leaderboard_ghost_cache/
+optimiser/__pycache__/
+optimiser/.pytest_cache/
+optimiser/build/
+optimiser/wip/
+optimiser/local_arrival_checkpoint.json
+optimiser/leaderboard_ghost_cache/
 *.pyd
 *.so
 chatgpt_package.zip

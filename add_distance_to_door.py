@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Add distance_to_door to every run in tas/level_data.yml (N v1.4).
 
-Place this script beside the 'tas' and 'tas optimiser' directories, then run
+Place this script beside the 'tas' and 'optimiser' directories, then run
 from that directory:
     python -m pip install PyYAML
     python add_distance_to_door.py
 
 Optional arguments:
     --yaml PATH          Input YAML (default: tas/level_data.yml).
-    --engine-dir PATH    Extracted optimiser (default: tas optimiser).
+    --engine-dir PATH    Extracted optimiser (default: optimiser).
     --output PATH        Write a separate YAML instead of updating the input.
     --backend python    Force the reference Python engine.
     --backend native    Require the compiled native engine.
@@ -55,7 +55,7 @@ def arguments():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--yaml', type=Path, default=Path('tas/level_data.yml'))
-    parser.add_argument('--engine-dir', type=Path, default=Path('tas optimiser'))
+    parser.add_argument('--engine-dir', type=Path, default=Path('optimiser'))
     parser.add_argument('--output', type=Path)
     parser.add_argument('--backend', choices=('auto', 'native', 'python'), default='auto')
     return parser.parse_args()

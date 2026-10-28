@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-OPTIMIZER_DIR = ROOT / "tas optimiser"
+OPTIMIZER_DIR = ROOT / "optimiser"
 DESTINATION = ROOT / "volume" / "ghosts_TAS"
 LEVEL_RE = re.compile(r"(\d{2})-([0-4])\Z")
 
@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         if not native.backend_info().get("player_dump_abi"):
             raise RuntimeError("player dump ABI unavailable")
     except RuntimeError as exc:
-        parser.error(f"{exc}; run python3 build_native.py inside 'tas optimiser/'")
+        parser.error(f"{exc}; run python3 build_native.py inside 'optimiser/'")
 
     DESTINATION.mkdir(parents=True, exist_ok=True)
     written = skipped = 0

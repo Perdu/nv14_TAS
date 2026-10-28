@@ -27,7 +27,7 @@ from lib import save_demo, get_demo_frame_count, get_replay_string, DistanceToDo
 SCRIPT_DIR = Path(__file__).resolve().parent
 SOL_FILE_LOCATION = SCRIPT_DIR / 'volume' / 'n_tas.sol'
 LEVEL_DATA_FILE = SCRIPT_DIR / 'external' / 'N v1.4 + NReality levels.txt'
-OPTIMIZER_DIR = SCRIPT_DIR / 'tas optimiser'
+OPTIMIZER_DIR = SCRIPT_DIR / 'optimiser'
 DEFAULT_OPTIMIZATION_LEVEL = 2
 TICKS_PER_SECOND = 40
 INITIAL_TIME_TICKS = 90 * TICKS_PER_SECOND
@@ -50,7 +50,7 @@ def usage(ret_code):
     print("Paste the demo on one line; press Enter at Authors to preserve saved authors.")
     print("Replay inputs accept a full level+replay or raw FRAME_COUNT:PACKED_INPUTS.")
     print("Put options before LEVEL. In SOL mode, authors default to the LTM authors.")
-    print("Replay highscore mode requires the emulator in 'tas optimiser/'.")
+    print("Replay highscore mode requires the emulator in 'optimiser/'.")
     print("Saving any replay requires that emulator to calculate distance_to_door.")
     sys.exit(ret_code)
 

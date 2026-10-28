@@ -9,9 +9,9 @@ cd "$SCRIPT_DIR"
 EXTRACT_FOLDER="extract"
 
 if [ $# -lt 1 ]; then
-    OPTIM_FILE="tas optimiser/wip/optim.ltm"
+    OPTIM_FILE="optimiser/wip/optim.ltm"
 else
-    OPTIM_FILE="tas optimiser/wip/$1.ltm"
+    OPTIM_FILE="optimiser/wip/$1.ltm"
 fi
 
 tar xzf "$OPTIM_FILE" -C $EXTRACT_FOLDER

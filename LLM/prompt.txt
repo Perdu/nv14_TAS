@@ -1,6 +1,6 @@
 Here is a TAS of the N game running on Ruffle, using libTAS. In the attached archive, you will find:
 - the SWF of the game, and a patched version displaying more information when running (among other things)
-- a bruteforcer (in tas\ optimiser/) that you can use to optimize a route. This bruteforcer contains a rewrite of the game's engine in C for faster execution.
+- a bruteforcer (in optimiser/) that you can use to optimize a route. This bruteforcer contains a rewrite of the game's engine in C for faster execution.
 - the binaries for libTAS and ruffle, so you can run them locally, in case you need to verify the run against the original game (you probably don't, use the simulator)
 - LLM/techniques_llm.md: a list of techniques and glitches we found in the game and use for the TAS.
 - a libTAS ltm file for the level we are TASing.
