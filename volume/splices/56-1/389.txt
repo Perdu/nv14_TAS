@@ -8,3 +8,7 @@ target_region = "366:406,69:89"
 secondary_objective = "max-y"
 require-interaction = ["switch"]
 
+#require-jump-frames = "337:347"
+#require-jump-region = "375:400,76:107"
+require-jump-frames = "352:362"
+require-jump-region = "362:392,41:61"

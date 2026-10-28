@@ -7,4 +7,5 @@ objective = "earliest-interaction"
 target-object = "switch"
 # secondary_objective = "max-vx"
 # require-interaction = ["testdoor:0"]
-
+#require-jump-frames = "337:347"
+#require-jump-region = "375:400,76:107"
