@@ -1,6 +1,7 @@
 [common]
 workers = 8
 simulate-enemies = false
+color = true
 # level-id = "00-0"
 # ltm-postroll = 0
 

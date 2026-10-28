@@ -93,6 +93,14 @@ from nv14_replay import (
 from nv14_search import evaluate_fixed_replay_native, player_snapshot_key
 
 
+def _print_best_line(message: str, *, color: bool) -> None:
+    """Highlight a new best on TTYs, keeping redirected logs ANSI-free."""
+    if color and sys.stdout.isatty():
+        print(f"\x1b[32m{message}\x1b[0m", flush=True)
+    else:
+        print(message, flush=True)
+
+
 @dataclass(frozen=True, slots=True)
 class CommonConfig:
     """Configuration shared by the three optimisation subcommands.
@@ -111,6 +119,7 @@ class CommonConfig:
     retime: tuple[tuple[str | int, int], ...] = ()
     config_path: Path | None = None
     simulate_enemies: bool | None = None
+    color: bool = True
 
     @classmethod
     def from_namespace(cls, args: argparse.Namespace) -> "CommonConfig":
@@ -124,6 +133,7 @@ class CommonConfig:
             retime=tuple(args.retime),
             config_path=args.config,
             simulate_enemies=args.simulate_enemies,
+            color=args.color,
         )
 
 
@@ -1896,6 +1906,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="combined custom-level/replay text file or libTAS .ltm movie",
     )
     command.add_argument(
+        "--color", action=argparse.BooleanOptionalAction, default=True,
+        help="show verified new-best lines in green (default: enabled; --no-color disables)",
+    )
+    command.add_argument(
         "--levels-file",
         type=Path,
         help=(
@@ -2900,6 +2914,7 @@ def _run_local_population(
     output_path: Path,
     replay_output_path: Path | None,
     config_path: Path | None = None,
+    color: bool = True,
 ) -> None:
     """Dispatch bounded population search independently of Local's window loop."""
     from nv14_endpoint import EndpointGoal, RequiredJump, verify_endpoint
@@ -3005,16 +3020,24 @@ def _run_local_population(
         replay_string, _packed, evaluation = verified_candidate(candidate)
         _write_result(source, output_path, replay_output_path, replay_string)
         checkpoint_written = True
-        print(f"[local:best] frame {evaluation.frame}; score {evaluation.score:.15g}; "
-              f"position ({evaluation.x:.12g}, {evaluation.y:.12g}); "
-              f"velocity ({evaluation.vx:.12g}, {evaluation.vy:.12g})"
-              f"{secondary_summary(evaluation)}{interaction_summary(evaluation)}", flush=True)
+        _print_best_line(
+            f"[local:best] frame {evaluation.frame}; score {evaluation.score:.15g}; "
+            f"position ({evaluation.x:.12g}, {evaluation.y:.12g}); "
+            f"velocity ({evaluation.vx:.12g}, {evaluation.vy:.12g})"
+            f"{secondary_summary(evaluation)}{interaction_summary(evaluation)}",
+            color=color,
+        )
         return True
 
     try:
         result = optimise_local_population(
             level, frames, goal=goal, frame_ranges=ranges, config=search_config,
-            best_callback=save_best, progress=lambda message: print(message, flush=True),
+            best_callback=save_best,
+            progress=lambda message: (
+                _print_best_line(message, color=color)
+                if message.endswith(" [NEW BEST SO FAR]")
+                else print(message, flush=True)
+            ),
         )
         if not result.candidates:
             if result.interrupted:
@@ -3432,7 +3455,15 @@ def main() -> None:
                 level, replay.frames, splice_config,
                 best_callback=lambda frames: _write_result(
                     source, output_path, replay_output_path, encode_complex_replay(frames)),
-                progress=lambda message: print(message, flush=True),
+                progress=lambda message: (
+                    _print_best_line(message, color=common_config.color)
+                    if message.startswith((
+                        "[auto:random-splice:goal] improved ",
+                        "[auto:random-splice] speedrun improved:",
+                        "[auto:random-splice] exit proximity improved:",
+                    ))
+                    else print(message, flush=True)
+                ),
                 target_goal=target_goal, range_start=target_start,
                 range_end=target_end, completion_policy=args.auto_completion_policy,
             )
@@ -3563,11 +3594,13 @@ def main() -> None:
             minutes, seconds = divmod(remainder, 60)
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-        def endpoint_status(phase: str, message: str) -> None:
-            print(
-                f"[{time.strftime('%H:%M:%S')}] [auto:{phase}] "
-                f"{message}; elapsed {endpoint_elapsed()}", flush=True,
-            )
+        def endpoint_status(phase: str, message: str, *, new_best: bool = False) -> None:
+            line = (f"[{time.strftime('%H:%M:%S')}] [auto:{phase}] "
+                    f"{message}; elapsed {endpoint_elapsed()}")
+            if new_best:
+                _print_best_line(line, color=common_config.color)
+            else:
+                print(line, flush=True)
 
         endpoint_status(
             "parallel", f"endpoint objective {goal.objective}; "
@@ -3597,6 +3630,7 @@ def main() -> None:
                 f"velocity ({e.vx:.12g}, {e.vy:.12g})" +
                 (f"; secondary {goal.secondary_objective}={e.secondary_value:.15g}"
                  if goal.secondary_objective is not None else ""),
+                new_best=True,
             )
 
         def show_endpoint_progress(message: str) -> None:
@@ -3862,22 +3896,22 @@ def main() -> None:
                     else ""
                 )
                 if auto_config.objective == AUTO_OBJECTIVE_HIGHSCORE:
-                    print(
+                    _print_best_line(
                         f"[{auto_system_time()}] "
                         f"[auto:checkpoint] saved best #{checkpoint_count}: "
                         f"score {candidate.evaluation.highscore_value}; "
                         f"finish {candidate.finish_tick}{distance}; "
                         f"gold {candidate.evaluation.gold_count}; "
                         f"elapsed {auto_elapsed()}",
-                        flush=True,
+                        color=common_config.color,
                     )
                 else:
-                    print(
+                    _print_best_line(
                         f"[{auto_system_time()}] "
                         f"[auto:checkpoint] saved best #{checkpoint_count}: "
                         f"finish {candidate.finish_tick}{distance}; "
                         f"elapsed {auto_elapsed()}",
-                        flush=True,
+                        color=common_config.color,
                     )
 
             auto_campaign = optimise_autonomous_campaign(
@@ -4071,6 +4105,7 @@ def main() -> None:
             input_path=input_path, output_path=output_path,
             replay_output_path=replay_output_path,
             config_path=common_config.config_path,
+            color=common_config.color,
         )
         return
 
@@ -4364,6 +4399,14 @@ def main() -> None:
                 checkpoint_replay,
             )
             local_checkpoint_written = True
+            e = _packed_evaluation
+            p = e.state.player
+            _print_best_line(
+                f"[local:best] verified checkpoint at frame {target_frame}; "
+                f"score {e.score:.15g}; "
+                f"position ({p.pos.x:.12g}, {p.pos.y:.12g})",
+                color=common_config.color,
+            )
             return True
 
         try:
@@ -4459,11 +4502,15 @@ def main() -> None:
         for rank, result in enumerate(jump_results, start=1):
             p = result.evaluation.state.player
             pulse_text = ", ".join(str(pulse) for pulse in result.pulses)
-            print(
+            line = (
                 f"  {rank:>2}. score={result.score:.17g}; "
                 f"position=({p.pos.x:.15g}, {p.pos.y:.15g}); "
                 f"jumps={pulse_text}"
             )
+            if rank == 1 and result.evaluation.score < baseline.score:
+                _print_best_line(line, color=common_config.color)
+            else:
+                print(line)
         print()
     print(
         f"baseline frame {target_frame}: "
