@@ -12,7 +12,7 @@ Speedruns: 395 (79.00%)
 
 Levels already TASed (optimization level >= 6):
 Highscores: 4
-Speedruns: 92 (18.40%)
+Speedruns: 93 (18.60%)
 
 
 Episode Speedrun Grid (optimization level >= 4):
@@ -51,7 +51,7 @@ Episode Speedrun Grid (optimization level >= 6):
 🟠05 🔴15 🔴25 🔴35 🟠45 🟠55 🔴65 🟠75 🟠85 🟠95
 🔴06 🟠16 🔴26 🔴36 🟠46 🟠56 🔴66 🔴76 🔴86 🟠96
 🔴07 🔴17 🟠27 🔴37 🟠47 🟠57 🔴67 🟠77 🔴87 🟠97
-🟠08 🟠18 🔴28 🔴38 🟠48 🟠58 🔴68 🔴78 🟠88 🟡98
+🟠08 🟠18 🔴28 🔴38 🟠48 🟠58 🔴68 🔴78 🟠88 🟢98
 🔴09 🔴19 🔴29 🟠39 🟠49 🔴59 🟠69 🔴79 🟠89 🟠99
 
 Total TAS: 257412 f (1h47m15.300s)
