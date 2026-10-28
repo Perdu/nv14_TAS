@@ -160,11 +160,13 @@ def test_secondary_gain_resets_stagnation_but_edit_only_gain_does_not(monkeypatc
         config=population.PopulationConfig(iterations=1, workers=1, rounds=0, stagnation_rounds=1),
         best_callback=saved.append, progress=messages.append)
     assert result.rounds == 3 and result.stagnant_rounds == 1
-    assert len(saved) == 4  # baseline, two secondary gains, then fewer edits
+    # The starting baseline must not be announced as a new best; later
+    # improvements in objective or replay-edit tie-breaks are still saved.
+    assert len(saved) == 3
     assert {c.evaluation.frame for c in saved} == {3}
-    assert saved[0].evaluation.secondary_score < saved[1].evaluation.secondary_score < saved[2].evaluation.secondary_score
-    assert saved[2].evaluation.secondary_score == saved[3].evaluation.secondary_score
-    assert saved[3].edits < saved[2].edits
+    assert saved[0].evaluation.secondary_score < saved[1].evaluation.secondary_score
+    assert saved[1].evaluation.secondary_score == saved[2].evaluation.secondary_score
+    assert saved[2].edits < saved[1].edits
     assert result.candidates[0].frames == proposals[-1]
     assert any(f"secondary {secondary}={saved[-1].evaluation.secondary_value:.15g}" in message for message in messages)
 
@@ -299,3 +301,63 @@ def test_secondary_cli_output_matches_independent_python_physics(tmp_path, worke
     assert f"arrival tie-break: {secondary}" in stdout
     assert f"secondary {secondary}={values[0]:.15g}" in stdout
     assert "1. frame=8; score=-8;" in stdout
+
+
+def test_feasible_baseline_is_not_reported_as_a_new_best(monkeypatch):
+    level = ground_level()
+    source = (InputFrame(),) * 12
+    goal = arrival_goal("max-x")
+    saved, messages = [], []
+
+    def no_change_worker(job, context, observer):
+        return job[3], 1
+
+    monkeypatch.setattr(population, "_run_worker", no_change_worker)
+    result = population.optimise_local_population(
+        level, source, goal=goal, frame_ranges=((0, 8),),
+        config=population.PopulationConfig(iterations=1, rounds=1, workers=1, repair_steps=0),
+        best_callback=saved.append, progress=messages.append,
+    )
+    assert result.baseline.feasible
+    assert result.candidates[0].frames == source
+    assert result.stagnant_rounds == 1
+    assert saved == []  # The blue baseline is not a green improvement.
+    assert messages[0].startswith("[local:population:baseline]")
+
+
+def test_resumed_population_is_not_announced_again_without_new_improvement(monkeypatch, tmp_path):
+    level = ground_level()
+    source = (InputFrame(),) * 12
+    better = (InputFrame(right=True),) + source[1:]
+    goal = arrival_goal("max-x")
+    state = tmp_path / "population.json"
+    saved = []
+
+    def improvement_worker(job, context, observer):
+        candidate = context.candidate(better, ("new objective",))
+        observer(candidate, 1, 1)
+        return (*job[3], candidate), 1
+
+    monkeypatch.setattr(population, "_run_worker", improvement_worker)
+    config = population.PopulationConfig(
+        iterations=1, rounds=1, workers=1, repair_steps=0, checkpoint_path=state,
+    )
+    first = population.optimise_local_population(
+        level, source, goal=goal, frame_ranges=((0, 8),),
+        config=config, best_callback=saved.append,
+    )
+    assert len(saved) == 1
+    assert first.candidates[0].evaluation.objective_key < first.baseline.objective_key
+
+    def no_change_worker(job, context, observer):
+        return job[3], 1
+
+    monkeypatch.setattr(population, "_run_worker", no_change_worker)
+    resumed_saved = []
+    resumed = population.optimise_local_population(
+        level, source, goal=goal, frame_ranges=((0, 8),),
+        config=replace(config, rounds=2, resume=True), best_callback=resumed_saved.append,
+    )
+    assert resumed_saved == []
+    assert resumed.candidates[0].frames == first.candidates[0].frames
+    assert resumed.stagnant_rounds == 1

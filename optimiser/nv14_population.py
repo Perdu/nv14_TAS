@@ -631,7 +631,15 @@ def optimise_local_population(
                     if goal.secondary_objective is not None and baseline.feasible else ""))
         progress(f"[local:population] seed {seed}; {worker_count} worker(s); "
                  f"{len(context.mutable_frames)} editable frames; beam {config.beam}")
-    best: PopulationCandidate | None = None
+    # A feasible source replay is the existing best, not a new discovery.
+    # Likewise, a resumed population was found in a previous run. Retain its
+    # best candidate without publishing a misleading [local:best] checkpoint.
+    best: PopulationCandidate | None = baseline_candidate if baseline.feasible else None
+    for candidate in population:
+        if candidate.evaluation.feasible and (
+            best is None or _primary_rank(candidate) < _primary_rank(best)
+        ):
+            best = candidate
 
     def accept(candidate: PopulationCandidate | None) -> None:
         nonlocal best
@@ -641,9 +649,6 @@ def optimise_local_population(
             if best_callback is not None and best_callback(candidate) is False:
                 raise ValueError("population best candidate failed output verification")
             best = candidate
-
-    for candidate in population:
-        accept(candidate)
     executor: ProcessPoolExecutor | None = None
     events: Any = None
     interrupted = False
