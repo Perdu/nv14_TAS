@@ -1706,7 +1706,8 @@ def _validate_local_strategy(args: argparse.Namespace, explicit: set[str]) -> No
 
 
 _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
-    "auto_splice_points", "auto_splice_distance", "auto_splice_radius",
+    "auto_splice_points", "auto_splice_frames_per_point",
+    "auto_splice_distance", "auto_splice_radius",
     "auto_splice_lookback", "auto_splice_iterations",
     "auto_splice_repair_iterations", "auto_splice_repair_anchors",
     "auto_splice_repair_searches", "auto_splice_rounds",
@@ -2075,6 +2076,9 @@ def build_parser() -> argparse.ArgumentParser:
                          help="waypoint/repair search backend: Local population (default) or endpoint Auto Hybrid")
     command.add_argument("--auto-splice-points", modes=auto_modes, type=int, default=5,
                          metavar="N", help="number of distinct random path waypoints per round; no extra control anchors (default 5)")
+    command.add_argument("--auto-splice-frames-per-point", modes=auto_modes,
+                         type=parse_positive_int, metavar="FRAMES",
+                         help="derive waypoint count from current run length: approximately one per N frames, rounded half up; overrides --auto-splice-points")
     command.add_argument("--auto-splice-distance", modes=auto_modes, type=float,
                          metavar="PIXELS", help="sample every N pixels of travel instead of by count")
     command.add_argument("--auto-splice-radius", modes=auto_modes, type=float, default=16.0,
@@ -3442,7 +3446,9 @@ def main() -> None:
             raise SystemExit("random splice does not support auto parents or checkpoint/resume")
         try:
             splice_config = RandomSpliceConfig(
-                points=args.auto_splice_points, distance=args.auto_splice_distance,
+                points=args.auto_splice_points,
+                frames_per_point=args.auto_splice_frames_per_point,
+                distance=args.auto_splice_distance,
                 radius=args.auto_splice_radius, lookback=args.auto_splice_lookback,
                 iterations=args.auto_splice_iterations,
                 search_backend=args.auto_splice_search,

@@ -29,6 +29,7 @@ from nv14_replay import decode_complex_replay, editable_frames, encode_complex_r
 @dataclass(frozen=True, slots=True)
 class RandomSpliceConfig:
     points: int = 5
+    frames_per_point: int | None = None  # optional one waypoint per N replay frames (rounded)
     distance: float | None = None  # arc-length spacing in pixels; supersedes points
     radius: float = 16.0
     lookback: int = 32  # seam matching/maximum local mutation span, NOT a segment length
@@ -54,6 +55,12 @@ class RandomSpliceConfig:
     def __post_init__(self) -> None:
         if type(self.points) is not int or self.points < 1:
             raise ValueError("random splice points must be positive")
+        if self.frames_per_point is not None and (
+            type(self.frames_per_point) is not int or self.frames_per_point < 1
+        ):
+            raise ValueError("random splice frames_per_point must be a positive integer")
+        if self.frames_per_point is not None and self.distance is not None:
+            raise ValueError("random splice frames_per_point and distance are alternative spacing modes")
         if self.distance is not None and (not math.isfinite(self.distance) or self.distance <= 0):
             raise ValueError("random splice distance must be positive and finite")
         if not math.isfinite(self.radius) or self.radius <= 0:
@@ -134,6 +141,8 @@ def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
     """Sample path waypoints without adding switch/door/trapdoor anchors.
 
     `points` sets the exact number when sufficient editable frames exist.
+    `frames_per_point` derives the count from the active replay length, rounded
+    half up (e.g. 314 frames / 100 -> 3), with at least one waypoint.
     Switch/door/trapdoor safety is enforced at the next selected checkpoint
     and on every accepted complete replay; it must not expand the search count.
     `distance` remains a separate, spacing-based selection mode.
@@ -161,7 +170,17 @@ def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
         # Frame position breaks arc-length ties, spreading the search budget
         # over the timeline instead of clustering around a stopped ninja.
         available = set(candidates)
-        count = min(config.points, len(available))
+        if config.frames_per_point is not None:
+            # Include the otherwise-excluded first and last input frames when
+            # measuring run length, but restrict endpoint searches to their
+            # editable frame interval. The number is re-evaluated after each
+            # round, so a shortened replay also gets fewer waypoints.
+            active_frames = max(1, limit - first + 4)
+            requested = max(1, (2 * active_frames + config.frames_per_point)
+                            // (2 * config.frames_per_point))
+        else:
+            requested = config.points
+        count = min(requested, len(available))
         for k in range(1, count + 1):
             jitter = k - 0.5 + rng.random()
             frame_target = first + (limit - first) * jitter / count

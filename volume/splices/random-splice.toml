@@ -6,7 +6,9 @@ splice-search = "endpoint-auto"
 runs = 5
 rounds = 10
 
-splice-points = 12
+# splice-points = 4
+# One splice point for every 100 frames of the run
+splice-frames-per-point = 100
 splice-radius = 30.0
 splice-lookback = 40
 splice-iterations = 10000
