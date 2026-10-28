@@ -1869,9 +1869,9 @@ rerecords: 0
 
 
 # 56-1
-rerecords: 257
+rerecords: 416
 
-Branch 9: ascent in the center
+Branch 9: former TAS, slower to the pacelock but better distance to door
 Branch 8: ascent using 2 thwump pushes on the left
 Branch 7: another central ascent
 Branch 6: ascent from the right
@@ -3089,7 +3089,7 @@ Branch 5: taking switch0 before the drone
 I lost the "taking switch 0 after the drone" branch, which might still be faster but massively deoptimized. Current route is ~5f faster than that branch, which was not optimized
 
 # 99-3
-rerecords: 170
+rerecords: 223
 
 I have no idea how to properly route or splice the lower 2 sections. @todo
 
@@ -3105,4 +3105,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 268811
+# Total rerecords: 269023
