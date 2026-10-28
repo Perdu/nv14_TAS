@@ -1505,6 +1505,13 @@ def _coerce_config_value(
                 return not value
         return value
 
+    if action.dest == "auto_splice_interactions" and isinstance(value, (list, tuple)):
+        if not value or not all(isinstance(item, str) for item in value):
+            raise ValueError(f"TOML key {key!r} must be a nonempty string array")
+        try:
+            return parse_splice_interactions(",".join(value))
+        except argparse.ArgumentTypeError as exc:
+            raise ValueError(str(exc)) from exc
     if action.dest in ("require_jumps", "auto_require_jumps"):
         if not isinstance(value, (list, tuple)):
             raise ValueError(f"TOML key {key!r} must be an array of jump requirement tables")
@@ -1706,7 +1713,8 @@ def _validate_local_strategy(args: argparse.Namespace, explicit: set[str]) -> No
 
 
 _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
-    "auto_splice_points", "auto_splice_frames_per_point",
+    "auto_splice_points", "auto_splice_frames_per_point", "auto_splice_mode",
+    "auto_splice_interactions", "auto_splice_skip_probability",
     "auto_splice_distance", "auto_splice_radius",
     "auto_splice_lookback", "auto_splice_iterations",
     "auto_splice_repair_iterations", "auto_splice_repair_anchors",
@@ -1809,6 +1817,18 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
         _validate_auto_goal_strategy(result, explicit)
         result._explicit_options = frozenset(explicit)
         return result
+
+
+def parse_splice_interactions(value: str) -> tuple[str, ...]:
+    """Parse the optional physics event kinds (TOML also accepts string arrays)."""
+    if not isinstance(value, str):
+        raise argparse.ArgumentTypeError("splice interactions must be comma-separated")
+    choices = {"switch", "walljump", "landing", "bounceblock"}
+    values = tuple(part.strip().lower() for part in value.split(","))
+    if not values or any(part not in choices for part in values) or len(set(values)) != len(values):
+        raise argparse.ArgumentTypeError(
+            "splice interactions must be unique names from switch, walljump, landing, bounceblock")
+    return values
 
 
 def parse_arguments(
@@ -2074,6 +2094,16 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-search", modes=auto_modes,
                          choices=("local", "endpoint-auto"), default="local",
                          help="waypoint/repair search backend: Local population (default) or endpoint Auto Hybrid")
+    command.add_argument("--auto-splice-mode", modes=auto_modes,
+                         choices=("random", "complexity", "physics"), default="random",
+                         help="waypoint selection: random (default), complexity input-burst boundaries, or physical interactions")
+    command.add_argument("--auto-splice-interactions", modes=auto_modes,
+                         type=parse_splice_interactions,
+                         default=("switch", "walljump", "landing"),
+                         metavar="LIST", help="physics events, comma-separated; optional bounceblock (default switch,walljump,landing)")
+    command.add_argument("--auto-splice-skip-probability", modes=auto_modes,
+                         type=float, default=0.35, metavar="P",
+                         help="probability of testing a route without each optional physics contact; never skip switches (default 0.35)")
     command.add_argument("--auto-splice-points", modes=auto_modes, type=int, default=5,
                          metavar="N", help="number of distinct random path waypoints per round; no extra control anchors (default 5)")
     command.add_argument("--auto-splice-frames-per-point", modes=auto_modes,
@@ -3447,6 +3477,9 @@ def main() -> None:
         try:
             splice_config = RandomSpliceConfig(
                 points=args.auto_splice_points,
+                mode=args.auto_splice_mode,
+                physics_interactions=args.auto_splice_interactions,
+                physics_skip_probability=args.auto_splice_skip_probability,
                 frames_per_point=args.auto_splice_frames_per_point,
                 distance=args.auto_splice_distance,
                 radius=args.auto_splice_radius, lookback=args.auto_splice_lookback,

@@ -1364,4 +1364,8 @@ hard-preserves reference switch/door/trapdoor interactions and verifies
 completed replays before saving: shorter finishes always win, while at an
 equal frame count the closer pre-finish exit approach wins. Waypoint count or distance, region
 radius, lookback, Local budget and repair depth are configurable under `[auto]`
-or as CLI arguments. See [docs/RANDOM_SPLICE.md](docs/RANDOM_SPLICE.md).
+or as CLI arguments. Use `splice-frames-per-point = 100` to scale the number
+of checkpoints with run length; `splice-mode = "complexity"` targets boundaries
+of rapid input sequences, and `splice-mode = "physics"` targets switches,
+walljumps, and landings (with optional bounce-block events). See
+[docs/RANDOM_SPLICE.md](docs/RANDOM_SPLICE.md).

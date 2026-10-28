@@ -25,3 +25,14 @@ splice-exit-lookback = 120
 endpoint-repair-steps = 0
 
 seed = "random"
+
+# splice-mode = "complexity"
+# splice-mode = "physics"
+# parameters for physics-based splicer
+#splice-interactions = [
+#    "switch",
+#    "walljump",
+#    "landing",
+#]
+
+#splice-skip-probability = 0.35

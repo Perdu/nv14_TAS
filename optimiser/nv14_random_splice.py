@@ -19,7 +19,7 @@ from collections import Counter
 from nv14_auto import (AutoEvaluation, CompactTracePoint, evaluate_replay_with_sentinel,
                        pre_finish_exit_edge_distance, verify_trimmed_replay)
 from nv14_endpoint import EndpointGoal, EndpointEvaluator, verify_endpoint
-from nv14_engine import InputFrame, Level
+from nv14_engine import InputFrame, Level, OBJTYPE_BOUNCEBLOCK
 from nv14_objectives import (INTERACTION_GOLD, reference_interaction_requirements,
                              resolve_interaction_target)
 from nv14_population import PopulationConfig, optimise_local_population
@@ -29,6 +29,9 @@ from nv14_replay import decode_complex_replay, editable_frames, encode_complex_r
 @dataclass(frozen=True, slots=True)
 class RandomSpliceConfig:
     points: int = 5
+    mode: str = "random"  # random, complexity (input activity), physics (actual interactions)
+    physics_interactions: tuple[str, ...] = ("switch", "walljump", "landing")
+    physics_skip_probability: float = 0.35  # optional events only; switches are never skipped
     frames_per_point: int | None = None  # optional one waypoint per N replay frames (rounded)
     distance: float | None = None  # arc-length spacing in pixels; supersedes points
     radius: float = 16.0
@@ -53,12 +56,29 @@ class RandomSpliceConfig:
     seed: int = 0
 
     def __post_init__(self) -> None:
+        if self.mode not in ("random", "complexity", "physics"):
+            raise ValueError("splice mode must be random, complexity, or physics")
+        allowed = {"switch", "walljump", "landing", "bounceblock"}
+        if (not isinstance(self.physics_interactions, (tuple, list))
+                or not all(isinstance(kind, str) and kind in allowed
+                           for kind in self.physics_interactions)
+                or len(set(self.physics_interactions)) != len(self.physics_interactions)):
+            raise ValueError("splice physics interactions must be a unique list of "
+                             "switch, walljump, landing, bounceblock")
+        object.__setattr__(self, "physics_interactions", tuple(self.physics_interactions))
+        if not (isinstance(self.physics_skip_probability, (float, int))
+                and not isinstance(self.physics_skip_probability, bool)
+                and math.isfinite(self.physics_skip_probability)
+                and 0 <= self.physics_skip_probability <= 1):
+            raise ValueError("physics_skip_probability must be between 0 and 1")
         if type(self.points) is not int or self.points < 1:
             raise ValueError("random splice points must be positive")
         if self.frames_per_point is not None and (
             type(self.frames_per_point) is not int or self.frames_per_point < 1
         ):
             raise ValueError("random splice frames_per_point must be a positive integer")
+        if self.distance is not None and self.mode != "random":
+            raise ValueError("splice distance applies only to random waypoint mode")
         if self.frames_per_point is not None and self.distance is not None:
             raise ValueError("random splice frames_per_point and distance are alternative spacing modes")
         if self.distance is not None and (not math.isfinite(self.distance) or self.distance <= 0):
@@ -99,6 +119,10 @@ class Waypoint:
     x: float
     y: float
     mandatory: bool = False
+    kind: str = "path"
+    target_index: int | None = None
+    direction: int = 0  # anticipated motion after this event, -1 / 0 / +1
+    source_kind: str = "exit"  # actual control event type, including locked-door
 
     def region(self, radius: float) -> tuple[float, float, float, float]:
         return (self.x - radius, self.x + radius, self.y - radius, self.y + radius)
@@ -135,22 +159,179 @@ def _control_preserved(reference: AutoEvaluation, candidate: AutoEvaluation) -> 
     return _mask_preserved(reference.trace[-1], candidate.trace[-1])
 
 
+def _requested_waypoint_count(config: RandomSpliceConfig, first: int, limit: int) -> int:
+    if config.frames_per_point is None:
+        return config.points
+    # Use the editable route extent, preserving the existing frames-per-point
+    # rule for manually bounded endpoint searches.
+    active_frames = max(1, limit - first + 4)
+    n = config.frames_per_point
+    return max(1, (2 * active_frames + n) // (2 * n))
+
+
+def _complexity_regions(frames: Sequence[InputFrame], reference: AutoEvaluation,
+                        limit: int) -> tuple[tuple[int, int, float], ...]:
+    """Cluster rapid input decisions into passages; ignore long held directions.
+
+    Regions describe the active *passage*.  Splice points are placed on the
+    simpler approach and departure, not inside dense input changes.
+    """
+    if not frames:
+        return ()
+    events: list[tuple[int, float]] = []
+    last_direction = frames[0].horizontal
+    last_jump = frames[0].jump
+    for tick in range(1, min(limit + 1, len(frames))):
+        item = frames[tick]
+        weight = 0.0
+        if item.horizontal != last_direction:
+            weight += 2.0 if item.horizontal * last_direction == -1 else 1.5
+        if item.jump != last_jump:
+            weight += 2.5 if item.jump else 0.9
+        last_direction, last_jump = item.horizontal, item.jump
+        if weight:
+            events.append((tick, weight))
+    if not events:
+        return ()
+    clusters: list[list[tuple[int, float]]] = []
+    for tick, weight in events:
+        if not clusters or tick - clusters[-1][-1][0] > 12:
+            clusters.append([])
+        clusters[-1].append((tick, weight))
+    regions = []
+    for cluster in clusters:
+        if len(cluster) < 2:
+            continue
+        first, last = cluster[0][0], cluster[-1][0]
+        duration = last - first + 1
+        score = sum(value for _, value in cluster) * (1 + min(4, len(cluster)) / max(2, duration))
+        regions.append((first, last, score))
+    return tuple(sorted(regions, key=lambda region: (-region[2], region[0])))
+
+
+def _bounceblock_positions(level: Level | None) -> tuple[tuple[float, float], ...]:
+    if level is None:
+        return ()
+    if hasattr(level, "all_specs"):
+        return tuple((spec.params[0], spec.params[1])
+                     for spec in level.all_specs
+                     if spec.obj_type == OBJTYPE_BOUNCEBLOCK and len(spec.params) >= 2)
+    # NativeLevel exposes descriptors rather than Python ObjectSpec objects.
+    if hasattr(level, "object_descriptors"):
+        return tuple((row["parameters"][0], row["parameters"][1])
+                     for row in level.object_descriptors()
+                     if row["object_type"] == OBJTYPE_BOUNCEBLOCK
+                     and len(row["parameters"]) >= 2)
+    return ()
+
+
+def _physics_event_tick(reference: AutoEvaluation, waypoint: Waypoint,
+                        start: int, end: int, radius: float,
+                        *, level: Level | None = None) -> int | None:
+    """Find the actual observed event, not merely a nearby player position."""
+    trace = reference.materialize_trace()
+    first = max(1, start)
+    last = min(end, len(trace) - 1)
+    if waypoint.kind == "switch":
+        return next((e.tick for e in reference.route_control_events
+                     if first <= e.tick <= last
+                     and e.index == waypoint.target_index
+                     and e.kind == waypoint.source_kind), None)
+    bounceblocks = _bounceblock_positions(level) if waypoint.kind == "bounceblock" else ()
+    for tick in range(first, last + 1):
+        point, prev = trace[tick], trace[tick - 1]
+        if math.hypot(point.x - waypoint.x, point.y - waypoint.y) > radius:
+            continue
+        if waypoint.kind == "walljump" and (tick in reference.successful_jumps
+                and (point.near_wall or prev.near_wall)):
+            return tick
+        if waypoint.kind == "landing" and prev.in_air and not point.in_air:
+            return tick
+        if waypoint.kind == "bounceblock" and bounceblocks:
+            # This optional detector is a contact *proxy*: near the block
+            # plus a measurable impulse.  The trace has no exact block-hit
+            # event, so do not treat mere spatial proximity as a touch.
+            if any(math.hypot(point.x-x, point.y-y) < 18 for x, y in bounceblocks):
+                if abs(point.vx-prev.vx) + abs(point.vy-prev.vy) > 0.65:
+                    return tick
+    return None
+
+
+def _direction_after(trace: Sequence, tick: int) -> int:
+    # Use a short forward look-ahead so a switch's secondary momentum ranking
+    # helps the *next* passage rather than blindly pushing the switch earlier.
+    if tick + 1 >= len(trace):
+        return 0
+    later = min(len(trace) - 1, tick + 12)
+    dx = trace[later].x - trace[tick].x
+    return 1 if dx > 2 else -1 if dx < -2 else 0
+
+
+def _physics_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
+                       rng: random.Random, first: int, limit: int,
+                       level: Level | None) -> list[Waypoint]:
+    trace = reference.materialize_trace()
+    candidates: list[Waypoint] = []
+    if "switch" in config.physics_interactions:
+        for event in reference.route_control_events:
+            if event.kind not in ("exit", "locked-door") or not first <= event.tick <= limit:
+                continue
+            p = trace[event.tick]
+            candidates.append(Waypoint(event.tick, p.x, p.y, True, "switch",
+                                       event.index, _direction_after(trace, event.tick),
+                                       event.kind))
+    if "walljump" in config.physics_interactions:
+        for tick in reference.successful_jumps:
+            if first <= tick <= limit and (trace[tick].near_wall or trace[tick-1].near_wall):
+                p = trace[tick]
+                candidates.append(Waypoint(tick, p.x, p.y, kind="walljump",
+                                           direction=_direction_after(trace, tick)))
+    if "landing" in config.physics_interactions:
+        for tick in range(max(1, first), limit+1):
+            if trace[tick-1].in_air and not trace[tick].in_air:
+                p = trace[tick]
+                candidates.append(Waypoint(tick, p.x, p.y, kind="landing",
+                                           direction=_direction_after(trace, tick)))
+    if "bounceblock" in config.physics_interactions and level is not None:
+        for x, y in _bounceblock_positions(level):
+            near = [tick for tick in range(max(1, first), limit+1)
+                    if math.hypot(trace[tick].x-x, trace[tick].y-y) < 18
+                    and abs(trace[tick].vx-trace[tick-1].vx)
+                    + abs(trace[tick].vy-trace[tick-1].vy) > 0.65]
+            if near:
+                tick = near[0]
+                candidates.append(Waypoint(tick, trace[tick].x, trace[tick].y,
+                                           kind="bounceblock",
+                                           direction=_direction_after(trace, tick)))
+    # Let the next important interaction define the desired post-switch
+    # travel direction (fall back to the local trace when nearly stationary).
+    ordered = sorted(candidates, key=lambda item: item.frame)
+    for index, point in enumerate(ordered):
+        if point.kind != "switch":
+            continue
+        later = next((item for item in ordered[index + 1:]
+                      if abs(item.x - point.x) > 2), None)
+        if later is not None:
+            ordered[index] = replace(point, direction=1 if later.x > point.x else -1)
+    candidates = ordered
+    # Mandatory switches consume slots even if they exceed the point budget.
+    # Optional contacts may be sampled away on each round to test bypasses.
+    mandatory = [p for p in candidates if p.mandatory]
+    optional = [p for p in candidates if not p.mandatory
+                and rng.random() >= config.physics_skip_probability]
+    optional.sort(key=lambda p: p.frame)
+    return sorted(mandatory + optional, key=lambda p: p.frame)
+
+
 def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
                      rng: random.Random, *, min_frame: int = 2,
-                     max_frame: int | None = None) -> tuple[Waypoint, ...]:
-    """Sample path waypoints without adding switch/door/trapdoor anchors.
-
-    `points` sets the exact number when sufficient editable frames exist.
-    `frames_per_point` derives the count from the active replay length, rounded
-    half up (e.g. 314 frames / 100 -> 3), with at least one waypoint.
-    Switch/door/trapdoor safety is enforced at the next selected checkpoint
-    and on every accepted complete replay; it must not expand the search count.
-    `distance` remains a separate, spacing-based selection mode.
-    """
+                     max_frame: int | None = None,
+                     frames: Sequence[InputFrame] | None = None,
+                     level: Level | None = None) -> tuple[Waypoint, ...]:
+    """Pick path checkpoints with random, action-boundary or physics-event bias."""
     trace = reference.materialize_trace()
     if len(trace) < 4:
         return ()
-    # No first/last-frame goal; these cannot save a meaningful segment.
     limit = min(len(trace) - 2, (reference.finish_tick or len(trace)) - 2)
     if max_frame is not None:
         limit = min(limit, max_frame)
@@ -159,50 +340,78 @@ def choose_waypoints(reference: AutoEvaluation, config: RandomSpliceConfig,
         return ()
     path = [0.0]
     for i in range(1, limit + 1):
-        path.append(path[-1] + math.hypot(trace[i].x - trace[i-1].x,
-                                          trace[i].y - trace[i-1].y))
+        path.append(path[-1] + math.hypot(trace[i].x-trace[i-1].x,
+                                          trace[i].y-trace[i-1].y))
     total = path[-1]
-    candidates = list(range(first, limit + 1))
-    selected: set[int] = set()
-    if config.distance is None:
-        # Always pick distinct frames. Quantised arc lengths and long stationary
-        # stretches used to collapse multiple configured points onto one frame.
-        # Frame position breaks arc-length ties, spreading the search budget
-        # over the timeline instead of clustering around a stopped ninja.
-        available = set(candidates)
-        if config.frames_per_point is not None:
-            # Include the otherwise-excluded first and last input frames when
-            # measuring run length, but restrict endpoint searches to their
-            # editable frame interval. The number is re-evaluated after each
-            # round, so a shortened replay also gets fewer waypoints.
-            active_frames = max(1, limit - first + 4)
-            requested = max(1, (2 * active_frames + config.frames_per_point)
-                            // (2 * config.frames_per_point))
-        else:
-            requested = config.points
-        count = min(requested, len(available))
-        for k in range(1, count + 1):
-            jitter = k - 0.5 + rng.random()
-            frame_target = first + (limit - first) * jitter / count
-            if total > 1e-9:
-                distance_target = path[first] + (total - path[first]) * jitter / count
-                index = min(available, key=lambda i: (
-                    abs(path[i] - distance_target), abs(i - frame_target), i))
-            else:
-                index = min(available, key=lambda i: (abs(i - frame_target), i))
-            selected.add(index)
-            available.remove(index)
-    elif total > 0:
-        # Spacing-based mode deliberately derives its count from distance,
-        # unlike splice-points. Neither mode creates extra control anchors.
-        for k in range(1, math.ceil(total / config.distance)):
-            target = k * config.distance
-            if target >= total:
-                break
-            selected.add(min(candidates, key=lambda i: abs(path[i] - target)))
-    return tuple(Waypoint(i, trace[i].x, trace[i].y)
-                 for i in sorted(selected))
+    candidates = list(range(first, limit+1))
+    available = set(candidates)
+    count = min(_requested_waypoint_count(config, first, limit), len(candidates))
+    chosen: dict[int, Waypoint] = {}
 
+    def add(frame: int, waypoint: Waypoint | None = None) -> None:
+        if frame in available:
+            chosen[frame] = waypoint or Waypoint(frame, trace[frame].x, trace[frame].y)
+            available.remove(frame)
+
+    if config.mode == "physics":
+        events = _physics_waypoints(reference, config, rng, first, limit, level)
+        for point in events:
+            if point.mandatory:
+                add(point.frame, point)
+        optional = [point for point in events if not point.mandatory and point.frame in available]
+        rng.shuffle(optional)
+        # Retain time-distributed events rather than repeatedly selecting
+        # adjacent frames of one wall/landing sequence.  Relax spacing only
+        # if too few independent targets are available.
+        target = max(count, len(chosen))
+        gap = max(3, min(12, (limit-first)//max(1, 5*count)))
+        for enforce_gap in (True, False):
+            for point in optional:
+                if len(chosen) >= target:
+                    break
+                if point.frame not in available:
+                    continue
+                if enforce_gap and any(abs(point.frame-tick) < gap for tick in chosen):
+                    continue
+                add(point.frame, point)
+    elif config.mode == "complexity" and frames is not None:
+        regions = _complexity_regions(frames, reference, limit)
+        for begin, end, _score in regions:
+            if len(chosen) >= count:
+                break
+            # Surround the burst, never put anchors in its dense interior.
+            for target in (begin - 9, end + 9):
+                if len(chosen) >= count or not available:
+                    break
+                eligible = [t for t in available if (t < begin if target < begin else t > end)]
+                if eligible:
+                    add(min(eligible, key=lambda t: (abs(t-target), t)))
+
+    if config.distance is not None and config.mode == "random" and total > 0:
+        for k in range(1, math.ceil(total/config.distance)):
+            distance_target = k*config.distance
+            if distance_target >= total:
+                break
+            if available:
+                add(min(available, key=lambda i: abs(path[i]-distance_target)))
+    elif config.distance is None:
+        # Fill any remaining slots with the original arc-length/time jitter
+        # sampler; optional physics events can be skipped without leaving an
+        # empty round.  A path checkpoint is never a mandatory interaction.
+        remaining = max(0, count-len(chosen))
+        for k in range(1, remaining+1):
+            if not available:
+                break
+            jitter = k - 0.5 + rng.random()
+            target_frame = first+(limit-first)*jitter/remaining
+            if total > 1e-9:
+                target_distance = path[first]+(total-path[first])*jitter/remaining
+                index = min(available, key=lambda i: (
+                    abs(path[i]-target_distance), abs(i-target_frame), i))
+            else:
+                index = min(available, key=lambda i: (abs(i-target_frame), i))
+            add(index)
+    return tuple(chosen[i] for i in sorted(chosen))
 
 def _requirements_at(level: Level, frames: Sequence[InputFrame], frame: int):
     state = simulate_through_frame(level, frames, frame)
@@ -213,12 +422,45 @@ def _requirements_at(level: Level, frames: Sequence[InputFrame], frame: int):
 
 def _goal(level: Level, reference_frames: Sequence[InputFrame], waypoint: Waypoint,
           config: RandomSpliceConfig, *, deadline: int, start: int) -> EndpointGoal:
+    required = _requirements_at(level, reference_frames, waypoint.frame)
+    if config.mode == "physics" and waypoint.kind == "switch" and waypoint.target_index is not None:
+        # Actual fresh switch activation is the objective, not merely reaching
+        # the old switch coordinate.  Secondary momentum looks towards the next
+        # section, so a delayed switch can beat an earlier wrong-way switch in
+        # the final verified completed-route ranking.
+        selector = (f"testdoor:{waypoint.target_index}"
+                    if waypoint.source_kind == "locked-door"
+                    else f"exit:{waypoint.target_index}.switch")
+        try:
+            target = resolve_interaction_target(level, selector)
+        except ValueError:
+            target = None
+        if target is not None:
+            return EndpointGoal(
+                target_frame=deadline, objective="earliest-interaction",
+                interaction_target=target,
+                secondary_objective=("max-vx" if waypoint.direction > 0
+                                     else "min-vx" if waypoint.direction < 0 else None),
+                arrival_start=max(0, start), required_interactions=required)
+    if config.mode == "physics" and waypoint.kind == "walljump":
+        return EndpointGoal(
+            target_frame=deadline, objective="earliest-arrival",
+            target_region=waypoint.region(config.radius),
+            arrival_start=max(0, start), required_interactions=required,
+            require_jump_region=waypoint.region(config.radius),
+            require_jump_frames=(max(0, start), deadline))
     return EndpointGoal(
         target_frame=deadline, objective="earliest-arrival",
         target_region=waypoint.region(config.radius),
-        arrival_start=max(0, start),
-        required_interactions=_requirements_at(level, reference_frames, waypoint.frame),
-    )
+        arrival_start=max(0, start), required_interactions=required)
+
+
+def _event_confirmed(level: Level, candidate: AutoEvaluation, anchor: Waypoint,
+                     start: int, end: int, config: RandomSpliceConfig) -> bool:
+    if config.mode != "physics" or anchor.kind == "path":
+        return True
+    return _physics_event_tick(candidate, anchor, start, end, config.radius,
+                               level=level) is not None
 
 
 def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGoal,
@@ -298,6 +540,18 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
     return tuple(selected), result.evaluations
 
 
+def _physics_deadline(anchor: Waypoint, replay_size: int, config: RandomSpliceConfig) -> int:
+    """Allow a later event if it ultimately improves the completed route.
+
+    Earliest-event remains the stage objective, but the total-route comparison
+    is authoritative. The small timing slack captures later switch pickups
+    that enable a faster turnaround without allowing unrestricted drift.
+    """
+    if config.mode != "physics" or anchor.kind == "path":
+        return anchor.frame
+    return min(replay_size - 2, anchor.frame + max(4, min(12, config.lookback // 2)))
+
+
 def _candidate_seams(reference: AutoEvaluation, candidate: AutoEvaluation,
                      anchor: Waypoint, earliest: int, config: RandomSpliceConfig
                      ) -> tuple[tuple[int, int], ...]:
@@ -315,8 +569,15 @@ def _candidate_seams(reference: AutoEvaluation, candidate: AutoEvaluation,
         ref = reference.point(r)
         if ref is None or ref.dead or ref.complete:
             continue
-        for t in range(max(1, earliest - config.lookback // 2),
-                       min(r - 1, len(candidate.trace) - 2,
+        # Ordinary speedrun seams need a strict time lead.  Physics search
+        # may test a modest lag, because picking up a switch later can improve
+        # the *next* target's approach.  Full-run verification decides value.
+        last_candidate = (r - 1 if config.mode != "physics" else
+                          r + max(4, min(12, config.lookback // 2)))
+        earliest_seam = (earliest if config.mode == "physics" else
+                         earliest - config.lookback // 2)
+        for t in range(max(1, earliest_seam),
+                       min(last_candidate, len(candidate.trace) - 2,
                            earliest + config.lookback) + 1):
             state = candidate.point(t)
             if (state is None or state.dead or state.complete
@@ -481,6 +742,10 @@ def _progressive_frontier(
     previous_end = -1
     for index, waypoint in enumerate(waypoints):
         start = previous_end + 1
+        if config.mode == "physics" and index:
+            # Retiming the immediately previous target (or its predecessor)
+            # may be necessary to approach the current one with useful momentum.
+            start = max(0, waypoints[max(0, index-2)].frame - config.lookback)
         goal = _goal(level, current, waypoint, config, deadline=waypoint.frame, start=start)
         reference_point = reference.point(waypoint.frame)
         if reference_point is None:
@@ -519,6 +784,10 @@ def _progressive_frontier(
                 endpoint = EndpointEvaluator(level, goal).evaluate(trial)
                 if endpoint.violated_interactions:
                     counters["forbidden_interaction"] += 1
+                    continue
+                if endpoint.feasible and not _event_confirmed(
+                        level, simulation, waypoint, start, waypoint.frame, config):
+                    counters["wrong_physics_event"] += 1
                     continue
                 if not endpoint.feasible:
                     counters["near_miss_carried"] += 1
@@ -723,9 +992,12 @@ def _optimise_target_splices(
     for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
         round_start = time.monotonic()
         reference = evaluate_replay_with_sentinel(level, current)
+        waypoint_context = ({"frames": current, "level": level}
+                            if config.mode != "random" else {})
         waypoints = choose_waypoints(
             reference, config, rng,
-            min_frame=max(2, range_start), max_frame=last_editable - 1)
+            min_frame=max(2, range_start), max_frame=last_editable - 1,
+            **waypoint_context)
         last_waypoints = waypoints
         if progress:
             progress(f"[auto:random-splice:goal] round {round_no+1}/{config.rounds or chr(8734)}: "
@@ -739,6 +1011,8 @@ def _optimise_target_splices(
         improved_round = False
         for index, point in enumerate(waypoints):
             start = max(range_start, previous_end + 1)
+            if config.mode == "physics" and index:
+                start = max(range_start, waypoints[max(0, index-2)].frame - config.lookback)
             if start > point.frame:
                 continue
             stage_goal = _goal(level, current, point, config,
@@ -770,6 +1044,9 @@ def _optimise_target_splices(
                         continue
                     check = EndpointEvaluator(level, stage_goal).evaluate(trial)
                     if check.violated_interactions:
+                        continue
+                    if check.feasible and not _event_confirmed(
+                            level, stage_eval, point, start, point.frame, config):
                         continue
                     rank = check.progress_key
                     offerings.append((rank, trial))
@@ -856,13 +1133,16 @@ def optimise_random_splices(
     for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
         # Re-sample against the *current best* route after each round.
         reference = evaluate_replay_with_sentinel(level, current)
-        waypoints = choose_waypoints(reference, config, rng)
+        waypoint_context = ({"frames": current, "level": level}
+                            if config.mode != "random" else {})
+        waypoints = choose_waypoints(reference, config, rng, **waypoint_context)
         last_waypoints = waypoints
         if progress:
             progress(f"[auto:random-splice] round {round_no+1}/{config.rounds or chr(8734)}: "
                      f"{len(waypoints)} waypoints "
                      f"({len(reference.route_control_events)} control events constrained; "
-                     "no additional control anchors)")
+                     + ("no additional control anchors)" if config.mode == "random" else
+                        f"mode {config.mode}; optional contact skip {config.physics_skip_probability:g})"))
         round_start = time.monotonic()
         round_improved = False
         round_significant = False
@@ -871,14 +1151,19 @@ def optimise_random_splices(
                 continue
             attempts += 1
             start = _segment_start(waypoints, i)
+            if config.mode == "physics" and i >= 2:
+                # Revisit the *previous two* event intervals; a faster switch
+                # activation can be a poor starting state for the next turn.
+                start = max(0, waypoints[i-2].frame - config.lookback)
             label = f"anchor {i+1}/{len(waypoints)} frame {anchor.frame}"
             if progress:
                 progress(f"[auto:random-splice] {label}: preparing checkpoint "
                          f"and reference interaction requirements")
-            goal = _goal(level, current, anchor, config, deadline=anchor.frame, start=start)
+            deadline = _physics_deadline(anchor, len(current), config)
+            goal = _goal(level, current, anchor, config, deadline=deadline, start=start)
             if progress:
                 progress(f"[auto:random-splice] {label}: searching FULL segment "
-                         f"[{start}:{anchor.frame}] ({anchor.frame-start+1} editable frames); "
+                         f"[{start}:{deadline}] ({deadline-start+1} editable frames); "
                          f"{config.workers} workers x {config.iterations} proposals "
                          f"x {config.splice_rounds} {'Local' if config.search_backend == 'local' else 'endpoint-auto'} rounds")
             stage_start = time.monotonic()
@@ -900,9 +1185,12 @@ def optimise_random_splices(
             repair_cap_reported = False
             improved = False
             for frames, arrival in found:
-                if arrival >= anchor.frame:
+                if arrival >= anchor.frame and config.mode != "physics":
                     continue
                 candidate_eval = evaluate_replay_with_sentinel(level, frames)
+                if not _event_confirmed(level, candidate_eval, anchor, start,
+                                        deadline, config):
+                    continue
                 seams = _candidate_seams(reference, candidate_eval, anchor,
                                          arrival, config)
                 # Broad-region arrival remains a fallback when no aligned seam

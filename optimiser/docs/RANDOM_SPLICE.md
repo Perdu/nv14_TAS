@@ -157,3 +157,60 @@ python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm \
   --goal-config ../splices/${LEVEL}/${SPLICE}.txt \
   --output wip/optim.ltm --replay-output wip/${LEVEL}.txt --workers 15
 ```
+
+## Frame-scaled and passage-aware checkpoints
+
+The point budget can scale with the *current* replay length instead of a fixed
+number. `splice-frames-per-point = 100` requests approximately one checkpoint
+per 100 input frames, rounded to the nearest integer (half up), recalculated
+when the best replay changes. It overrides `splice-points` but cannot be used
+with distance spacing.
+
+Three selection strategies share the same Local/endpoint-Auto backend, seam
+checking, continuation repair, full-run verification, and completion ranking:
+
+- `splice-mode = "random"` (default): existing stochastic distance/time path
+  sampling. `splice-distance` works only with this mode.
+- `splice-mode = "complexity"`: detect bursts of closely spaced jump presses,
+  releases, and direction reversals. Prefer checkpoints *before and after* each
+  burst, not in the most complicated section. Long constant-direction holds
+  incur no complexity penalty. Fill any remaining slots with random waypoints.
+- `splice-mode = "physics"`: use real reference walljumps, landing transitions,
+  and activated exit/locked-door switches as candidate checkpoints. Switches are
+  mandatory and cannot be randomly omitted (they can exceed the requested
+  point budget); other events are sampled or omitted on each round. The search
+  uses a fresh earliest-interaction goal for exit switches, movement-direction
+  momentum as a tie-break, and jump-in-region for walljumps. Landing and
+  optional bounce-block contacts use a position-guided endpoint with a further
+  post-simulation *actual-event* check; the underlying endpoint engine does not
+  currently provide a dedicated earliest-landing/contact objective. Bounce
+  contact is approximated by block proximity plus velocity impulse, not an
+  instrumented collision event. These may make optimization less efficient.
+
+Physics mode can search a short interval *after* the original interaction
+frame, then attempt state-compatible seams with limited timing lag. It also
+allows overlapping editing across up to two prior interactions. A later switch
+that gives a faster subsequent turnaround is therefore not prohibited merely
+because its own activation is slower. As always, an independently verified
+completed replay must be better in completion frame, or closer to the exit at
+identical frame count; no individual checkpoint is published by itself.
+
+Example configuration:
+
+```toml
+[auto]
+objective = "speedrun"
+random-splice = true
+splice-mode = "physics" # alternatively: complexity or random
+splice-frames-per-point = 100
+splice-interactions = ["switch", "walljump", "landing"]
+splice-skip-probability = 0.35 # optional contacts only, 0 = never skip
+```
+
+To additionally *try* bounce-block contacts, include `"bounceblock"` in
+`splice-interactions`; it is deliberately off by default. Use
+`--auto-splice-mode physics`, `--auto-splice-frames-per-point 100`,
+`--auto-splice-interactions switch,walljump,landing,bounceblock` and
+`--auto-splice-skip-probability 0.35` for equivalent CLI control. These modes
+are heuristics, not guaranteed faster than random splicing: compare under the
+same worker count, seeds, budgets, and rounds.
