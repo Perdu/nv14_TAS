@@ -137,3 +137,54 @@ For multiple requirements, evaluation performs an exact per-frame native-state
 scan with Python orchestration to track all successful jumps and enforce
 correct earliest-goal ordering. This **does not change game physics or the
 Cython/native ABI**, but is slower than the single-jump compiled endpoint scan.
+
+## Native endpoint fast path and optional diagnostics
+
+After applying the native endpoint performance update, rebuild once:
+
+```sh
+cd optimiser
+python3 build_native.py
+```
+
+The compiled endpoint scan now returns the exact player coordinates **before**
+its selected interaction tick. `min-exit-distance` uses this point instead of
+simulating the whole replay a second time. The reference-scoring fallback is
+unchanged, and the previous seven-element `NativeEndpointPlan.scan()` return
+value is preserved unless `with_pre_position=True` is requested.
+
+Auto reuses compact packed keys when trying a single-frame polish or chain edit.
+It still materializes a complete replay for each distinct candidate, because
+checkpoint persistence and verification require it. These changes do **not**
+change proposal order or consume additional evaluation slots.
+
+For detailed worker timing and duplication counters:
+
+```toml
+[auto]
+performance-stats = true
+```
+
+The reported evaluate duration includes native scanning and Python-side
+scoring, but does not separate their time internally. Pack/mutate/population
+categories account for timed portions of each worker, so they need not sum to
+100% of its wall-clock time. Timing is disabled by default to avoid overhead.
+
+Optional same-round exchange of newly verified best replays:
+
+```toml
+[auto]
+shared-refinement-proposals = 128
+```
+
+This is a **supplemental** search after a worker completes its original budget,
+using the latest confirmed candidate received from another worker during the
+round. It never replaces proposals from that original seeded search. The value
+is an *additional* per-worker proposal allowance, not a fraction of the existing
+budget. `0` (the default) disables it. Extra simulations and worker time may be
+spent, and the additional search may not run when no better shared candidate
+is available. Asynchronous arrival affects the optional supplemental results,
+not the original worker streams.
+
+The equivalent CLI options are `--auto-performance-stats` and
+`--auto-shared-refinement-proposals 128`.

@@ -99,7 +99,7 @@ nv14_status nv14_endpoint_scan(
     if (p->has_jump_region) jump = p->prefix_jump;
     out->jump = jump;
     out->state = NULL;
-    out->eligible = out->needs_reference = 0;
+    out->eligible = out->needs_reference = out->has_pre_position = 0;
     if (p->target_count) {
         previous = calloc(p->target_count, 1);
         events = calloc(p->target_count, 1);
@@ -111,6 +111,10 @@ nv14_status nv14_endpoint_scan(
     state = nv14_state_clone(prefix, &error);
     if (!state) { status = error.code; goto done; }
     for (size_t frame = (size_t)state->frame; frame <= p->target_frame && !state->player.dead; ++frame) {
+        /* Record the position before the physics step: oldpos is not this
+         * position after wall and floor collisions adjust implicit velocity. */
+        const double pre_x = state->player.pos.x;
+        const double pre_y = state->player.pos.y;
         uint8_t code = inputs[frame];
         nv14_input input = {code & 1, (code >> 1) & 1, (code >> 2) & 1,
                             (int8_t)((code & 16) ? -1 : ((code >> 3) & 1))};
@@ -223,6 +227,9 @@ nv14_status nv14_endpoint_scan(
                 if (status != NV14_STATUS_OK) goto done;
             }
             best_rank = rank;
+            out->pre_x = pre_x;
+            out->pre_y = pre_y;
+            out->has_pre_position = 1;
             out->jump = jump;
             out->eligible = 1;
             if (p->target_count) memcpy(out->events, events, p->target_count);

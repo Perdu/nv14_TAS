@@ -528,7 +528,8 @@ class EndpointEvaluator:
                 and region[0] <= x <= region[1] and region[2] <= y <= region[3])
 
     def _exact_exit_proximity(self, result: EndpointEvaluation,
-                              frames: Sequence[InputFrame]) -> EndpointEvaluation:
+                              frames: Sequence[InputFrame],
+                              pre_position: tuple[float, float] | None = None) -> EndpointEvaluation:
         """Match Auto's *pre-step* exit distance, even after collision impulses.
 
         The post-step player's oldpos is usually the previous position, but
@@ -539,11 +540,16 @@ class EndpointEvaluator:
         """
         if not self.goal.exit_distance_tiebreak or not result.feasible:
             return result
-        tick = result.frame
-        pre = self.level.initial_state()
-        if tick:
-            pre.step_many(frames[:tick], stop_on_dead=True, stop_on_complete=True)
-        x, y = pre.player_snapshot()["pos"]
+        if pre_position is None:
+            # Exact reference path / multiple-jumps fallback; ordinary native
+            # scans already supplied this point without a second simulation.
+            tick = result.frame
+            pre = self.level.initial_state()
+            if tick:
+                pre.step_many(frames[:tick], stop_on_dead=True, stop_on_complete=True)
+            x, y = pre.player_snapshot()["pos"]
+        else:
+            x, y = pre_position
         distances = tuple(
             (atom, math.hypot(x - self._target_positions[atom][0],
                               y - self._target_positions[atom][1]))
@@ -574,8 +580,8 @@ class EndpointEvaluator:
             raise ValueError("candidate changed the immutable cached prefix")
         if self._reference_required:
             return self.evaluate_reference(frames)
-        state, events, eligible, terminal_frame, terminal_dead, jump_event, ambiguous = self._native_plan.scan(
-            self._prefix, key, jump_event=self._prefix_jump)
+        state, events, eligible, terminal_frame, terminal_dead, jump_event, ambiguous, pre_position = self._native_plan.scan(
+            self._prefix, key, jump_event=self._prefix_jump, with_pre_position=True)
         if ambiguous:
             # libc hypot and Python math.hypot can differ in their final bit.
             # Re-evaluate only precision-sensitive scans with the exact original
@@ -586,7 +592,7 @@ class EndpointEvaluator:
         result = self._evaluate_state(state, arrival_eligible=eligible, interaction_events=atoms, jump_event=jump_event)
         if result.terminal_frame != terminal_frame or result.terminal_dead != terminal_dead:
             result = replace(result, terminal_frame=terminal_frame, terminal_dead=terminal_dead)
-        return self._exact_exit_proximity(result, frames)
+        return self._exact_exit_proximity(result, frames, pre_position)
 
     def _evaluate_multiple_jumps(self, frames: tuple[InputFrame, ...]) -> EndpointEvaluation:
         """Exact native-physics reference scorer for several independent jump predicates.

@@ -2205,6 +2205,13 @@ def build_parser() -> argparse.ArgumentParser:
                          type=int, default=32,
                          help="bounded Local-style multi-frame probes per promising mutation, "
                               "spent in existing Local proposal slots (0 disables; default 32)")
+    command.add_argument("--auto-shared-refinement-proposals", modes=auto_modes,
+                         type=int, default=0,
+                         help="additional post-search worker proposals using a best result "
+                              "shared during the same round (0 disables; original budget intact)")
+    command.add_argument("--auto-performance-stats", modes=auto_modes,
+                         action=argparse.BooleanOptionalAction, default=False,
+                         help="log per-worker duplicates, packing, survivor fast-path and timings")
     command.add_argument("--auto-endpoint-repair-steps", modes=auto_modes, type=int,
                          default=32, help="maximum goal-guided repair proposals per mutation (shared budget)")
     command.add_argument("--auto-endpoint-repair-lookback", modes=auto_modes, type=int,
@@ -3649,6 +3656,8 @@ def main() -> None:
                 refinement_cycle=args.auto_refinement_cycle,
                 refinement_polish=args.auto_refinement_polish,
                 refinement_chain_steps=args.auto_refinement_chain_steps,
+                shared_refinement_proposals=args.auto_shared_refinement_proposals,
+                performance_stats=args.auto_performance_stats,
             )
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc

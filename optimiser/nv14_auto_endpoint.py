@@ -52,6 +52,9 @@ class AutoEndpointConfig:
     refinement_cycle: int = 128
     refinement_polish: bool = True
     refinement_chain_steps: int = 32
+    # Supplemental sharing does not replace or consume original proposals.
+    shared_refinement_proposals: int = 0
+    performance_stats: bool = False
 
     def __post_init__(self) -> None:
         if self.iterations < 0 or self.beam_width < 1:
@@ -80,6 +83,10 @@ class AutoEndpointConfig:
             raise ValueError("refinement-cycle must be an integer of at least 2")
         if type(self.refinement_chain_steps) is not int or self.refinement_chain_steps < 0:
             raise ValueError("refinement-chain-steps must be a nonnegative integer")
+        if type(self.shared_refinement_proposals) is not int or self.shared_refinement_proposals < 0:
+            raise ValueError("shared-refinement-proposals must be nonnegative")
+        if type(self.performance_stats) is not bool:
+            raise ValueError("performance-stats must be a boolean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +98,7 @@ class AutoEndpointCandidate:
     # the previous Auto deduplication/tie-break semantics.
     identity: bytes | None = field(default=None, compare=False)
     edits: int | None = field(default=None, compare=False)
+    native_key: bytes | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +109,21 @@ class _EndpointWorkerProgress:
     evaluations: int
     elapsed_seconds: float
 
+
+@dataclass(frozen=True, slots=True)
+class _EndpointWorkerStats:
+    worker_index: int
+    proposals: int
+    distinct: int
+    duplicates: int
+    single_frame_packs: int
+    beam_rejections: int
+    local_rejections: int
+    evaluation_seconds: float
+    packing_seconds: float
+    mutation_seconds: float
+    population_seconds: float
+    total_seconds: float
 
 
 def endpoint_exit_edge_distance(
@@ -166,6 +189,14 @@ def _packed_keys(frames: tuple[InputFrame, ...]) -> tuple[bytes, bytes]:
 
 def _key(frames: Sequence[InputFrame]) -> bytes:
     return _packed_keys(tuple(frames))[1]
+
+
+def _input_code(frame: InputFrame) -> int:
+    """Same lossless five-bit format as native population_input_key."""
+    trigger = frame.jump_trigger
+    return (int(bool(frame.left)) | (int(bool(frame.right)) << 1)
+            | (int(bool(frame.jump)) << 2)
+            | (16 if trigger is None else int(bool(trigger)) << 3))
 
 
 def _rank(candidate: AutoEndpointCandidate, source_key: bytes) -> tuple:
@@ -382,6 +413,14 @@ class _EndpointBeam:
         if identity in self.identities:
             return
         entry = _ranked_candidate(candidate, self.source_key, identity)
+        # Exact fast reject for the homogeneous, single-niche case only.
+        # A new (feasible or infeasible) class or physical niche MUST still
+        # pass through the full diversity selector.
+        if (len(self.entries) == self.width and entry >= self.entries[-1]
+                and all(e.candidate.evaluation.feasible == candidate.evaluation.feasible
+                        and e.candidate.evaluation.niche_key == candidate.evaluation.niche_key
+                        for e in self.entries)):
+            return
         insort(self.entries, entry)
         if len(self.entries) > self.width:
             self.entries = _select_ranked_endpoint_beam(self.entries, self.width)
@@ -543,10 +582,10 @@ class _SingleFramePolisher:
         self.leader_key: bytes | None = None
         self.pending: list[tuple[int, InputFrame]] = []
 
-    def propose(
+    def propose_edit(
         self, leader: AutoEndpointCandidate, *, start: int, end: int,
         rng: random.Random,
-    ) -> tuple[InputFrame, ...] | None:
+    ) -> tuple[int, InputFrame] | None:
         identity = leader.identity if leader.identity is not None else _key(leader.frames)
         if identity != self.leader_key:
             self.leader_key = identity
@@ -568,11 +607,17 @@ class _SingleFramePolisher:
                 self.pending.extend((index, choice) for choice in alternatives)
         if not self.pending:
             return None
-        index, choice = self.pending.pop()
+        return self.pending.pop()
+
+    def propose(self, leader: AutoEndpointCandidate, *, start: int, end: int,
+                rng: random.Random) -> tuple[InputFrame, ...] | None:
+        edit = self.propose_edit(leader, start=start, end=end, rng=rng)
+        if edit is None:
+            return None
+        index, choice = edit
         frames = list(leader.frames)
         frames[index] = choice
         return tuple(frames)
-
 
 
 class _BudgetedLocalChain:
@@ -612,7 +657,7 @@ class _BudgetedLocalChain:
             self.pending.extend((index, choice) for choice in choices)
         self.pending.reverse()
 
-    def propose(self) -> tuple[InputFrame, ...] | None:
+    def propose_edit(self) -> tuple[int, InputFrame] | None:
         if self.current is None:
             return None
         while self.remaining and self.pending:
@@ -620,13 +665,20 @@ class _BudgetedLocalChain:
             if self.current.frames[index] == choice:
                 continue
             self.remaining -= 1
-            changed = list(self.current.frames)
-            changed[index] = choice
-            return tuple(changed)
+            return index, choice
         self.current = None
         self.pending.clear()
         self.remaining = 0
         return None
+
+    def propose(self) -> tuple[InputFrame, ...] | None:
+        edit = self.propose_edit()
+        if edit is None or self.current is None:
+            return None
+        index, choice = edit
+        changed = list(self.current.frames)
+        changed[index] = choice
+        return tuple(changed)
 
     def observe(self, candidate: AutoEndpointCandidate | None, source_key: bytes) -> None:
         if (candidate is not None and self.current is not None
@@ -653,6 +705,7 @@ def optimise_auto_endpoint(
     frontier_callback: Callable[[tuple[AutoEndpointCandidate, ...]], None] | None = None,
     frontier_limit: int = 0,
     initial_population: Sequence[AutoEndpointCandidate] = (),
+    stats_callback: Callable[[_EndpointWorkerStats], None] | None = None,
 ) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Return (baseline, best feasible candidate or None, unique evaluations).
 
@@ -668,6 +721,10 @@ def optimise_auto_endpoint(
     start = config.range_start
     if start > end:
         raise ValueError("editable range is empty or lies beyond target-frame")
+    started_at = time.perf_counter()
+    evaluation_seconds = packing_seconds = mutation_seconds = population_seconds = 0.0
+    duplicates = single_frame_packs = 0
+    beam_rejections = local_rejections = 0
     evaluator = EndpointEvaluator(level, goal, source, prefix_frame=start)
     rng = random.Random(config.seed)
     original_packed, original_key = _packed_keys(source)
@@ -698,7 +755,7 @@ def optimise_auto_endpoint(
                 # Incomplete solutions may remain repair/exploration donors, but
                 # cannot displace an independently completed result.
                 evaluation = replace(evaluation, feasible=False)
-        return AutoEndpointCandidate(frames, evaluation, complete, identity, edits)
+        return AutoEndpointCandidate(frames, evaluation, complete, identity, edits, native_key)
 
     baseline = evaluate_candidate(source, original_packed, original_key, 0)
     beam = _EndpointBeam(baseline, config.beam_width, original_key)
@@ -723,11 +780,29 @@ def optimise_auto_endpoint(
     ]
 
     def add_to_pools(candidate: AutoEndpointCandidate, identity: bytes) -> None:
-        nonlocal local_pool
+        nonlocal local_pool, beam_rejections, local_rejections, population_seconds
+        pop_start = time.perf_counter() if config.performance_stats else 0.0
+        old_beam_count = len(beam.entries)
         beam.add(candidate, identity)
+        if len(beam.entries) == old_beam_count and identity not in beam.identities:
+            beam_rejections += 1
         if config.progressive_refinement:
             item = as_local(candidate, identity)
-            insort(local_ranked, (_population_rank(item), item))
+            rank = _population_rank(item)
+            # The full Local selector cannot reject unseen niches cheaply.
+            # When every retained candidate is in precisely the same niche
+            # and feasibility class, a worse-ranked newcomer cannot survive.
+            if (len(local_ranked) == config.beam_width and rank >= local_ranked[-1][0]
+                    and all(old.evaluation.feasible == item.evaluation.feasible
+                            and old.evaluation.niche_key == item.evaluation.niche_key
+                            and old.evaluation.objective_key == item.evaluation.objective_key
+                            and old.evaluation.progress_key == item.evaluation.progress_key
+                            for _, old in local_ranked)):
+                local_rejections += 1
+                if config.performance_stats:
+                    population_seconds += time.perf_counter() - pop_start
+                return
+            insort(local_ranked, (rank, item))
             if len(local_ranked) <= config.beam_width:
                 local_pool = tuple(item for _, item in local_ranked)
             else:
@@ -735,6 +810,8 @@ def optimise_auto_endpoint(
                     tuple(item for _, item in local_ranked), config.beam_width,
                 )
                 local_ranked[:] = [(_population_rank(item), item) for item in local_pool]
+        if config.performance_stats:
+            population_seconds += time.perf_counter() - pop_start
     # The source is a baseline, not a newly discovered improvement.  It must
     # never enter the checkpoint callback merely because it is feasible.
     best = baseline if baseline.evaluation.feasible else None
@@ -770,17 +847,42 @@ def optimise_auto_endpoint(
         progress(0, 0, best)
         last_reported = 0
 
-    def consider(frames: tuple[InputFrame, ...]) -> AutoEndpointCandidate | None:
-        nonlocal evaluated, spent, best
+    def consider(frames: tuple[InputFrame, ...] | None,
+                 *, single: tuple[AutoEndpointCandidate, int, InputFrame] | None = None,
+                 ) -> AutoEndpointCandidate | None:
+        nonlocal evaluated, spent, best, duplicates, single_frame_packs, evaluation_seconds, packing_seconds
         if spent >= config.iterations:
             return None
         spent += 1
-        native_key, identity = _packed_keys(frames)
+        pack_start = time.perf_counter() if config.performance_stats else 0.0
+        if single is not None:
+            parent, index, choice = single
+            # Reuse the immutable prefix/suffix and the already packed parent.
+            # Duplicates never allocate another complete replay tuple.
+            parent_key = (parent.native_key if parent.native_key is not None
+                          else _packed_keys(parent.frames)[0])
+            edited_key = bytearray(parent_key)
+            edited_key[index] = _input_code(choice)
+            native_key = bytes(edited_key)
+            identity = native_key.translate(_HELD_BUTTONS)
+            single_frame_packs += 1
+        else:
+            assert frames is not None
+            native_key, identity = _packed_keys(frames)
+        if config.performance_stats:
+            packing_seconds += time.perf_counter() - pack_start
         if identity in visited:
+            duplicates += 1
             return None
         visited.add(identity)
+        if frames is None:
+            parent, index, choice = single  # type: ignore[misc]
+            frames = parent.frames[:index] + (choice,) + parent.frames[index + 1:]
         edits = edited_frames(identity)
+        t0 = time.perf_counter() if config.performance_stats else 0.0
         candidate = evaluate_candidate(frames, native_key, identity, edits)
+        if config.performance_stats:
+            evaluation_seconds += time.perf_counter() - t0
         evaluated += 1
         if candidate.evaluation.feasible and (
             best is None or candidate.evaluation.objective_key < best.evaluation.objective_key
@@ -803,6 +905,7 @@ def optimise_auto_endpoint(
                     packed, checked, valid_finish if config.completion_policy == "complete" else False,
                     best_identity,
                     edited_frames(best_identity),
+                    _packed_keys(packed)[0],
                 )
                 if best_callback:
                     best_callback(best)
@@ -820,6 +923,7 @@ def optimise_auto_endpoint(
     local_chain = _BudgetedLocalChain()
     mutable_frames = tuple(range(start, end + 1))
     while spent < config.iterations:
+        mutation_start = time.perf_counter() if config.performance_stats else 0.0
         use_local = False
         if config.progressive_refinement:
             offset = spent - cycle_start
@@ -835,16 +939,15 @@ def optimise_auto_endpoint(
             # population mutations. The other half can exploit either the
             # verified leader or a promising *non-best* mutation through a
             # bounded, progressive, multi-frame repair chain.
-            polish = (polisher.propose(best, start=start, end=end, rng=rng)
+            polish = (polisher.propose_edit(best, start=start, end=end, rng=rng)
                       if config.refinement_polish and best is not None
                       and local_used % 4 == 0 else None)
             chain_parent = local_chain.current if local_used % 4 == 1 else None
             chained = local_chain.propose() if chain_parent is not None else None
             if polish is not None:
                 parent = best
-                proposed = polish
-                anchor = next(i for i in range(start, end + 1)
-                              if polish[i] != parent.frames[i])
+                anchor, choice = polish
+                proposed = None
                 local_proposal_kind = "polish"
             elif chained is not None:
                 parent = chain_parent
@@ -875,8 +978,14 @@ def optimise_auto_endpoint(
             donor = rng.choice(beam.entries).candidate
             proposed, anchor = _hybrid_proposal(parent, donor, rng=rng,
                                                 config=config, start=start, end=end)
+        if config.performance_stats:
+            mutation_seconds += time.perf_counter() - mutation_start
         previous_best = best
-        candidate = consider(proposed)
+        candidate = (consider(None, single=(parent, anchor, choice))
+                     if proposed is None else
+                     consider(proposed, single=(parent, anchor, proposed[anchor]))
+                     if use_local and local_proposal_kind == "chain"
+                     else consider(proposed))
         if config.progressive_refinement:
             if use_local:
                 if local_proposal_kind == "chain":
@@ -930,6 +1039,12 @@ def optimise_auto_endpoint(
                 last_reported = spent
     if progress is not None and last_reported != spent:
         progress(spent, evaluated, best)
+    if stats_callback is not None:
+        stats_callback(_EndpointWorkerStats(
+            -1, spent, evaluated, duplicates, single_frame_packs,
+            beam_rejections, local_rejections, evaluation_seconds,
+            packing_seconds, mutation_seconds, population_seconds,
+            time.perf_counter() - started_at))
     if frontier_callback is not None and frontier_limit > 0:
         if config.progressive_refinement:
             # Export local-only niches as well as Auto's beam survivors so
@@ -960,6 +1075,7 @@ def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpoin
     level_string, simulate_enemies, frames, goal, config, updates, worker_index = payload[:7]
     frontier_limit = payload[7] if len(payload) > 7 else 0
     initial_population = payload[8] if len(payload) > 8 else ()
+    shared_best = payload[9] if len(payload) > 9 else None
     survivor_batches: list[tuple[AutoEndpointCandidate, ...]] = []
     from nv14_engine import parse_level_string
     local_level = parse_level_string(level_string, simulate_enemies=simulate_enemies)
@@ -979,6 +1095,10 @@ def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpoin
                 worker_index, proposals, evaluations, time.monotonic() - started,
             ))
 
+    def worker_stats(stats: _EndpointWorkerStats) -> None:
+        if updates is not None:
+            updates.put(replace(stats, worker_index=worker_index))
+
     result = optimise_auto_endpoint(
         local_level, frames, goal, config,
         best_callback=send if updates is not None else None,
@@ -986,9 +1106,40 @@ def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpoin
         frontier_callback=survivor_batches.append if frontier_limit else None,
         frontier_limit=frontier_limit,
         initial_population=initial_population,
+        stats_callback=worker_stats if config.performance_stats else None,
     )
+    # Additive cross-worker search: the entire original seeded stream has
+    # already finished, so incoming discoveries cannot replace its proposals,
+    # its survivors or its probability of finding an improvement. This extra
+    # budget is reported separately and can be turned off (the default).
+    if shared_best is not None and config.shared_refinement_proposals:
+        remote = shared_best.get('best')
+        if (remote is not None and remote.evaluation.feasible and
+                (result[1] is None or remote.evaluation.objective_key <
+                 result[1].evaluation.objective_key)):
+            supplemental = optimise_auto_endpoint(
+                local_level, frames, goal,
+                replace(config, iterations=config.shared_refinement_proposals,
+                        seed=config.seed ^ 0x2F40A3C9D571B28E),
+                best_callback=send if updates is not None else None,
+                initial_population=(*initial_population, remote),
+                frontier_callback=survivor_batches.append if frontier_limit else None,
+                frontier_limit=frontier_limit,
+                stats_callback=worker_stats if config.performance_stats else None,
+            )
+            winner = result[1]
+            extra = supplemental[1]
+            if extra is not None and (winner is None or
+                    extra.evaluation.objective_key < winner.evaluation.objective_key):
+                winner = extra
+            result = (result[0], winner, result[2] + supplemental[2])
+            if updates is not None:
+                updates.put(("shared-refinement", worker_index,
+                             config.shared_refinement_proposals, supplemental[2]))
     if frontier_limit:
-        return (*result, survivor_batches[0] if survivor_batches else ())
+        # All survivors are additional seeds; never replace the normal beam.
+        joined = tuple(item for batch in survivor_batches for item in batch)
+        return (*result, joined)
     return result
 
 
@@ -1108,6 +1259,8 @@ def optimise_auto_endpoint_campaign(
         # writing a supposed new best with an identical endpoint score.
         if best is None or checked.objective_key < best.evaluation.objective_key:
             best = candidate
+            if shared_best is not None:
+                shared_best['best'] = candidate
             if best_callback:
                 best_callback(best)
             return True
@@ -1118,9 +1271,14 @@ def optimise_auto_endpoint_campaign(
     # workers search, even if none finds a new feasible improvement.
     manager = None
     pool = None
+    shared_best = None
     try:
         for round_index in range(runs):
             round_donors.clear()
+            if shared_best is not None:
+                shared_best.clear()
+                if best is not None:
+                    shared_best['best'] = best
             if progress:
                 progress(
                     f"round {round_index + 1}/{runs}: starting {workers} worker(s) "
@@ -1159,6 +1317,18 @@ def optimise_auto_endpoint_campaign(
                     frontier_callback=absorb_frontier if worker_frontier_limit else None,
                     frontier_limit=worker_frontier_limit,
                     initial_population=inherited_population,
+                    stats_callback=(lambda stat: progress(
+                        f"performance serial: {stat.proposals:,} proposals; "
+                        f"{stat.distinct:,} unique; {stat.duplicates:,} duplicates; "
+                        f"{stat.single_frame_packs:,} single-frame packs; "
+                        f"{stat.beam_rejections:,} beam fast rejects; "
+                        f"{stat.local_rejections:,} Local fast rejects; "
+                        f"{stat.evaluation_seconds:.3f}s evaluate; "
+                        f"{stat.packing_seconds:.3f}s pack; "
+                        f"{stat.mutation_seconds:.3f}s mutate; "
+                        f"{stat.population_seconds:.3f}s populations; "
+                        f"{stat.total_seconds:.3f}s total")
+                        if config.performance_stats and progress is not None else None),
                 )
                 total += evaluated
                 absorb(winner)
@@ -1175,12 +1345,14 @@ def optimise_auto_endpoint_campaign(
                 if pool is None:
                     manager = context.Manager()
                     updates = manager.Queue()
+                    if config.shared_refinement_proposals:
+                        shared_best = manager.dict()
                     pool = ProcessPoolExecutor(max_workers=workers, mp_context=context)
                 tasks = [
                     (source_string, level.simulate_enemies, current, goal,
                      replace(config, seed=config.seed + round_index * 1000003
                              + worker_index * 104729), updates, worker_index,
-                     worker_frontier_limit, inherited_population)
+                     worker_frontier_limit, inherited_population, shared_best)
                     for worker_index in range(workers)
                 ]
                 futures = {pool.submit(_endpoint_worker, task): index
@@ -1199,6 +1371,25 @@ def optimise_auto_endpoint_campaign(
                                 old = worker_status.get(update.worker_index)
                                 if old is None or update.proposals >= old.proposals:
                                     worker_status[update.worker_index] = update
+                        elif isinstance(update, _EndpointWorkerStats):
+                            if progress and config.performance_stats:
+                                progress(
+                                    f"performance worker {update.worker_index + 1}: "
+                                    f"{update.proposals:,} proposals; "
+                                    f"{update.distinct:,} unique; {update.duplicates:,} duplicates; "
+                                    f"{update.single_frame_packs:,} single-frame packs; "
+                                    f"{update.beam_rejections:,} beam fast rejects; "
+                                    f"{update.local_rejections:,} Local fast rejects; "
+                                    f"{update.evaluation_seconds:.3f}s evaluate; "
+                                    f"{update.packing_seconds:.3f}s pack; "
+                                    f"{update.mutation_seconds:.3f}s mutate; "
+                                    f"{update.population_seconds:.3f}s populations; "
+                                    f"{update.total_seconds:.3f}s total")
+                        elif isinstance(update, tuple) and update[0] == 'shared-refinement':
+                            if progress:
+                                progress(f"worker {update[1] + 1} supplemental shared "
+                                         f"search: {update[2]:,} extra proposals, "
+                                         f"{update[3]:,} distinct evaluations")
                         else:
                             absorb(update)
 

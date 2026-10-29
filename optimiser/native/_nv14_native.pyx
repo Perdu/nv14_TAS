@@ -4219,6 +4219,8 @@ cdef extern from "nv14_endpoint.h":
         int64_t terminal_frame
         uint8_t terminal_dead, eligible, needs_reference
         nv14_endpoint_jump jump
+        double pre_x, pre_y
+        uint8_t has_pre_position
     nv14_status nv14_endpoint_scan(
         const nv14_endpoint_plan *, const nv14_state *,
         const uint8_t *, size_t, nv14_endpoint_result *,
@@ -4357,7 +4359,7 @@ cdef class NativeEndpointPlan:
         PyMem_Free(self._plan.targets)
 
     def scan(self, NativeState prefix not None, bytes inputs not None,
-             jump_event=None, prefix_frames=None):
+             jump_event=None, prefix_frames=None, with_pre_position=False):
         cdef nv14_endpoint_plan plan = self._plan
         cdef nv14_endpoint_result result
         cdef nv14_status status
@@ -4400,10 +4402,15 @@ cdef class NativeEndpointPlan:
             selected = result.state
             result.state = NULL  # _from_handle owns cleanup, including on failure
             state = NativeState._from_handle(prefix._level, selected)
-            return (state, event_indices, bool(result.eligible), result.terminal_frame,
-                    bool(result.terminal_dead),
-                    None if result.jump.frame < 0 else (result.jump.frame, result.jump.x, result.jump.y),
-                    bool(result.needs_reference))
+            output = (state, event_indices, bool(result.eligible), result.terminal_frame,
+                      bool(result.terminal_dead),
+                      None if result.jump.frame < 0 else (result.jump.frame, result.jump.x, result.jump.y),
+                      bool(result.needs_reference))
+            if with_pre_position:
+                # Opt-in return shape keeps existing native scan callers compatible.
+                return output + (((result.pre_x, result.pre_y),)
+                                 if result.has_pre_position else (None,))
+            return output
         finally:
             nv14_state_destroy(result.state)
             PyMem_Free(result.events)

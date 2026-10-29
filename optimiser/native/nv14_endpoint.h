@@ -44,6 +44,9 @@ typedef struct nv14_endpoint_result {
     int64_t terminal_frame;
     uint8_t terminal_dead, eligible, needs_reference;
     nv14_endpoint_jump jump; /* history at the selected state, not the terminal state */
+    /* Position immediately BEFORE the selected tick, exact native double. */
+    double pre_x, pre_y;
+    uint8_t has_pre_position;
 } nv14_endpoint_result;
 
 /* Packed inputs use PopulationCandidate.input_key's lossless five-bit format.
