@@ -50,7 +50,6 @@
     time: 339 f
     diff_with_0th: 5 f (0.125)
     authors: EddyMataGallos, Raif, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.457346657170099
     demo: |-
@@ -127,7 +126,6 @@
     time: 544 f
     diff_with_0th: 9 f (0.225)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.2692872228713625
     demo: |-
@@ -185,7 +183,6 @@
     time: 824 f
     diff_with_0th: 53 f (1.325)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.18624296953374
     demo: |-
@@ -263,7 +260,6 @@
     time: 613 f
     diff_with_0th: 64 f (1.600)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.8349732631275266
     demo: |-
@@ -378,7 +374,6 @@
     time: 556 f
     diff_with_0th: 3 f (0.075)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.670165266327121
     demo: |-
@@ -465,7 +460,6 @@
     time: 145.250
     diff_with_0th: 1.075
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.5517313392965093
     demo: |-
@@ -475,7 +469,6 @@
     time: 640 f
     diff_with_0th: 247 f (6.175)
     authors: Raif, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.20827558394287848
     demo: |-
@@ -647,7 +640,6 @@
     time: 522 f
     diff_with_0th: 28 f (0.700)
     authors: Raif, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.6964739567180267
     demo: |-
@@ -667,7 +659,6 @@
     time: 473 f
     diff_with_0th: 22 f (0.550)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.6257674589366715
     demo: |-
@@ -687,7 +678,6 @@
     time: 493 f
     diff_with_0th: 57 f (1.425)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.4339327095958794
     demo: |-
@@ -764,7 +754,6 @@
     time: 903 f
     diff_with_0th: 55 f (1.375)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.19307117277385544
     demo: |-
@@ -841,7 +830,6 @@
     time: 687 f
     diff_with_0th: 149 f (3.725)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.5712975601249646
     demo: |-
@@ -966,7 +954,6 @@
     time: 118.775
     diff_with_0th: 0.200
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.2056402701334186
     demo: |-
@@ -976,7 +963,6 @@
     time: 298 f
     diff_with_0th: 8 f (0.200)
     authors: Raif, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.6205607639578865
     demo: |-
@@ -996,7 +982,6 @@
     time: 265 f
     diff_with_0th: 2 f (0.050)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.585211425859523
     demo: |-
@@ -1026,7 +1011,6 @@
     time: 156.075
     diff_with_0th: 0.050
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.9952470178041892
     demo: |-
@@ -1036,7 +1020,6 @@
     time: 176 f
     diff_with_0th: 3 f (0.075)
     authors: zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.45202963077843705
     demo: |-
@@ -1094,7 +1077,6 @@
     time: 715 f
     diff_with_0th: 100 f (2.500)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.458770652809953
     demo: |-
@@ -1124,7 +1106,6 @@
     time: 117.125
     diff_with_0th: 0.075
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.02566361123274774
     demo: |-
@@ -1134,7 +1115,6 @@
     time: 435 f
     diff_with_0th: 3 f (0.075)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.8318742461063415
     demo: |-
@@ -1154,7 +1134,6 @@
     time: 143 f
     diff_with_0th: 1 f (0.025)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 5.816810327270083
     demo: |-
@@ -1174,7 +1153,6 @@
     time: 378 f
     diff_with_0th: 26 f (0.650)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.9621152417656234
     demo: |-
@@ -1194,7 +1172,6 @@
     time: 497 f
     diff_with_0th: 24 f (0.600)
     authors: Raif, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.5920953456374214
     demo: |-
@@ -1214,7 +1191,6 @@
     time: 560 f
     diff_with_0th: 30 f (0.750)
     authors: Raif, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.883714645372425
     demo: |-
@@ -1234,7 +1210,6 @@
     time: 239 f
     diff_with_0th: 1 f (0.025)
     authors: Raif, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.6843378308869603
     demo: |-
@@ -1292,7 +1267,6 @@
     time: 724 f
     diff_with_0th: 17 f (0.425)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.139593606000382
     demo: |-
@@ -1388,7 +1362,6 @@
     time: 811 f
     diff_with_0th: 33 f (0.825)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.0525373687137325
     demo: |-
@@ -1408,7 +1381,6 @@
     time: 132 f
     diff_with_0th: 0 f (0.000)
     authors: zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.071474242741928
     demo: |-
@@ -1428,7 +1400,6 @@
     time: 306 f
     diff_with_0th: 29 f (0.725)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.953128386373802
     demo: |-
@@ -1448,7 +1419,6 @@
     time: 552 f
     diff_with_0th: 36 f (0.900)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 8.488440764567393
     demo: |-
@@ -1506,7 +1476,6 @@
     time: 830 f
     diff_with_0th: 52 f (1.300)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.1845733310674262
     demo: |-
@@ -1545,7 +1514,6 @@
     time: 195 f
     diff_with_0th: 3 f (0.075)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.060154527903382
     demo: |-
@@ -1583,7 +1551,6 @@
     time: 342 f
     diff_with_0th: 4 f (0.100)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.5650652911894198
     demo: |-
@@ -1622,7 +1589,6 @@
     time: 153 f
     diff_with_0th: 6 f (0.150)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.312841923659061
     demo: |-
@@ -1699,7 +1665,6 @@
     time: 1558 f
     diff_with_0th: 79 f (1.975)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 5.978195322745357
     demo: |-
@@ -1729,7 +1694,6 @@
     time: 103.750
     diff_with_0th: 0.225
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.000112939165991
     demo: |-
@@ -1777,7 +1741,6 @@
     time: 259 f
     diff_with_0th: 33 f (0.825)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.3031843415147257
     demo: |-
@@ -1816,7 +1779,6 @@
     time: 349 f
     diff_with_0th: 30 f (0.750)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.9350854834339586
     demo: |-
@@ -1855,7 +1817,6 @@
     time: 558 f
     diff_with_0th: 55 f (1.375)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.6493309242471419
     demo: |-
@@ -1894,7 +1855,6 @@
     time: 717 f
     diff_with_0th: 44 f (1.100)
     authors: TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.13959360423447
     demo: |-
@@ -1943,7 +1903,6 @@
     time: 145.975
     diff_with_0th: 0.025
     authors: TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.346057447405773
     demo: |-
@@ -1953,7 +1912,6 @@
     time: 149 f
     diff_with_0th: 0 f (0.000)
     authors: zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.173490576806099
     demo: |-
@@ -1973,7 +1931,6 @@
     time: 166 f
     diff_with_0th: 6 f (0.150)
     authors: Raif, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.9979169111711315
     demo: |-
@@ -1993,7 +1950,6 @@
     time: 564 f
     diff_with_0th: 96 f (2.400)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.065221235352187
     demo: |-
@@ -2013,7 +1969,6 @@
     time: 214 f
     diff_with_0th: 1 f (0.025)
     authors: zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.36227819543818285
     demo: |-
@@ -2033,7 +1988,6 @@
     time: 309 f
     diff_with_0th: 44 f (1.100)
     authors: TheRealOne, zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.31544700499731
     demo: |-
@@ -2053,7 +2007,6 @@
     time: 575 f
     diff_with_0th: 28 f (0.700)
     authors: zapkt, TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.1395936055829523
     demo: |-
@@ -2083,7 +2036,6 @@
     time: 237.525
     diff_with_0th: 0.800
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.5808396981164634
     demo: |-
@@ -2112,7 +2064,6 @@
     time: 354 f
     diff_with_0th: 11 f (0.275)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.792671519205886
     demo: |-
@@ -2132,7 +2083,6 @@
     time: 298 f
     diff_with_0th: 6 f (0.150)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.2725006031103625
     demo: |-
@@ -2190,7 +2140,6 @@
     time: 509 f
     diff_with_0th: 46 f (1.150)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.5246405421737386
     demo: |-
@@ -2210,7 +2159,6 @@
     time: 796 f
     diff_with_0th: 138 f (3.450)
     authors: TheRealOne, zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.7158368614279453
     demo: |-
@@ -2230,7 +2178,6 @@
     time: 1300 f
     diff_with_0th: 273 f (6.825)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.2762385730315451
     demo: |-
@@ -2250,7 +2197,6 @@
     time: 395 f
     diff_with_0th: 9 f (0.225)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 6.754305186323574
     demo: |-
@@ -2308,7 +2254,6 @@
     time: 405 f
     diff_with_0th: 39 f (0.975)
     authors: zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.489423798484477
     demo: |-
@@ -2328,7 +2273,6 @@
     time: 214 f
     diff_with_0th: 18 f (0.450)
     authors: TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.7193215689001242
     demo: |-
@@ -2386,7 +2330,6 @@
     time: 624 f
     diff_with_0th: 37 f (0.925)
     authors: TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.3996914511596366
     demo: |-
@@ -2406,7 +2349,6 @@
     time: 407 f
     diff_with_0th: 26 f (0.650)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.10131691231591944
     demo: |-
@@ -2464,7 +2406,6 @@
     time: 630 f
     diff_with_0th: 55 f (1.375)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.12192463511482643
     demo: |-
@@ -2484,7 +2425,6 @@
     time: 310 f
     diff_with_0th: 9 f (0.225)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 6.729911656615787
     demo: |-
@@ -2523,7 +2463,6 @@
     time: 533 f
     diff_with_0th: 35 f (0.875)
     authors: TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.4026898337971936
     demo: |-
@@ -2534,7 +2473,6 @@
     time: 117.075
     diff_with_0th: 0.050
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.3795467432014519
     demo: |-
@@ -2554,7 +2492,6 @@
     time: 85.025
     diff_with_0th: 0.025
     authors: zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.1372365100881368
     demo: |-
@@ -2564,7 +2501,6 @@
     time: 199 f
     diff_with_0th: 1 f (0.025)
     authors: zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.203598597642536
     demo: |-
@@ -2584,7 +2520,6 @@
     time: 519 f
     diff_with_0th: 21 f (0.525)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.88609674559461
     demo: |-
@@ -2604,7 +2539,6 @@
     time: 875 f
     diff_with_0th: 69 f (1.725)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.7885312428384168
     demo: |-
@@ -2624,7 +2558,6 @@
     time: 485 f
     diff_with_0th: 32 f (0.800)
     authors: TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.3001669115460395
     demo: |-
@@ -2682,7 +2615,6 @@
     time: 234 f
     diff_with_0th: 5 f (0.125)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 7.458178117457123
     demo: |-
@@ -2702,7 +2634,6 @@
     time: 315 f
     diff_with_0th: 10 f (0.250)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.6231421764811209
     demo: |-
@@ -2722,7 +2653,6 @@
     time: 678 f
     diff_with_0th: 108 f (2.700)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.2864430045708914
     demo: |-
@@ -2761,7 +2691,6 @@
     time: 219 f
     diff_with_0th: 79 f (1.975)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.5666723598852137
     demo: |-
@@ -2781,7 +2710,6 @@
     time: 285 f
     diff_with_0th: 7 f (0.175)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.09672720608654117
     demo: |-
@@ -2830,7 +2758,6 @@
     time: 154.075
     diff_with_0th: 0.050
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.49044111605637397
     demo: |-
@@ -2878,7 +2805,6 @@
     time: 224 f
     diff_with_0th: 4 f (0.100)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 6.706123873150652
     demo: |-
@@ -2898,7 +2824,6 @@
     time: 802 f
     diff_with_0th: 75 f (1.875)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.4086802249293555
     demo: |-
@@ -2937,7 +2862,6 @@
     time: 316 f
     diff_with_0th: 6 f (0.150)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.8514194548559892
     demo: |-
@@ -3003,7 +2927,6 @@
     time: 207 f
     diff_with_0th: 10 f (0.250)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.3398208718601907
     demo: |-
@@ -3099,7 +3022,6 @@
     time: 559 f
     diff_with_0th: 14 f (0.350)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.092755919280492
     demo: |-
@@ -3214,7 +3136,6 @@
     time: 640 f
     diff_with_0th: 90 f (2.250)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.1503438798318975
     demo: |-
@@ -3234,7 +3155,6 @@
     time: 345 f
     diff_with_0th: 6 f (0.150)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.7676582397788785
     demo: |-
@@ -3254,7 +3174,6 @@
     time: 262 f
     diff_with_0th: 7 f (0.175)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.4760517215195215
     demo: |-
@@ -3274,7 +3193,6 @@
     time: 767 f
     diff_with_0th: 91 f (2.275)
     authors: TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.330285349838178
     demo: |-
@@ -3294,7 +3212,6 @@
     time: 830 f
     diff_with_0th: 66 f (1.650)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.01193429548794
     demo: |-
@@ -3314,7 +3231,6 @@
     time: 236 f
     diff_with_0th: 6 f (0.150)
     authors: TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.6157432993140084
     demo: |-
@@ -3334,7 +3250,6 @@
     time: 190 f
     diff_with_0th: 54 f (1.350)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.2080455158161492
     demo: |-
@@ -3468,7 +3383,6 @@
     time: 440 f
     diff_with_0th: 78 f (1.950)
     authors: TheRealOne, zapkt, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 4.697160551550244
     demo: |-
@@ -3488,7 +3402,6 @@
     time: 120 f
     diff_with_0th: 7 f (0.175)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.8261729696038635
     demo: |-
@@ -3556,7 +3469,6 @@
     time: 81.550
     diff_with_0th: 0.900
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.98450440961404
     demo: |-
@@ -3623,7 +3535,6 @@
     time: 248 f
     diff_with_0th: 0 f (0.000)
     authors: zapkt (mostly using kryX-orange's 0th) and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 6.981530513921832
     demo: |-
@@ -3662,7 +3573,6 @@
     time: 153 f
     diff_with_0th: 0 f (0.000)
     authors: zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.1034064883206156
     demo: |-
@@ -3701,7 +3611,6 @@
     time: 327 f
     diff_with_0th: 35 f (0.875)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.0605139977351854
     demo: |-
@@ -3797,7 +3706,6 @@
     time: 441 f
     diff_with_0th: 22 f (0.550)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.449638649043564
     demo: |-
@@ -3874,7 +3782,6 @@
     time: 217 f
     diff_with_0th: 10 f (0.250)
     authors: TheRealOne, Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 7.713067005097049
     demo: |-
@@ -3923,7 +3830,6 @@
     time: 97.025
     diff_with_0th: 0.000
     authors: TAS Optimiser
-    type: tas
     optimization_level: 4
     distance_to_door: 0.8029909731504645
     demo: |-
@@ -3952,7 +3858,6 @@
     time: 216 f
     diff_with_0th: 6 f (0.150)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 2.9830635621888177
     demo: |-
@@ -3991,7 +3896,6 @@
     time: 351 f
     diff_with_0th: 30 f (0.750)
     authors: zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.7192117661734088
     demo: |-
@@ -4011,7 +3915,6 @@
     time: 460 f
     diff_with_0th: 28 f (0.700)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.0086421137990413
     demo: |-
@@ -4506,7 +4409,6 @@
     time: 226 f
     diff_with_0th: 9 f (0.225)
     authors: TheRealOne and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.963718087680725
     demo: |-
@@ -4735,7 +4637,6 @@
     time: 126 f
     diff_with_0th: 1 f (0.025)
     authors: zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.0565008589580067
     demo: |-
@@ -4812,7 +4713,6 @@
     time: 492 f
     diff_with_0th: 6 f (0.150)
     authors: TheRealOne, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 3.5405973868360014
     demo: |-
@@ -4908,7 +4808,6 @@
     time: 290 f
     diff_with_0th: 3 f (0.075)
     authors: Raif, zapkt and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.75661427480523
     demo: |-
@@ -4928,7 +4827,6 @@
     time: 383 f
     diff_with_0th: 53 f (1.325)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 1.4016692407847273
     demo: |-
@@ -5252,7 +5150,6 @@
     time: 106 f
     diff_with_0th: 0 f (0.000)
     authors: Raif and TAS Optimiser
-    type: tas
     optimization_level: 5
     distance_to_door: 0.35025381756786444
     demo: |-
