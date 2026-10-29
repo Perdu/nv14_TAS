@@ -185,3 +185,83 @@ def test_stagnation_raises_local_share_without_exceeding_cap():
     assert update(0.65, 48) == 0.65
     assert update(0.8, 48) == 0.8
     assert update(0.0, 48) == 0.0
+
+
+def test_chained_refinement_settings_are_configurable(tmp_path):
+    with pytest.raises(ValueError, match='refinement-chain-steps'):
+        AutoEndpointConfig(refinement_chain_steps=-1)
+    with pytest.raises(ValueError, match='refinement-chain-steps'):
+        AutoEndpointConfig(refinement_chain_steps=True)
+    path = tmp_path / 'chain.toml'
+    path.write_text('[auto]\nrefinement-chain-steps = 0\n')
+    assert parse_arguments(['auto', 'source.ltm', '--config', str(path)]).auto_refinement_chain_steps == 0
+    assert parse_arguments(['auto', 'source.ltm']).auto_refinement_chain_steps == 32
+
+
+def test_repair_chain_builds_on_intermediate_improvements_without_evaluating():
+    import random
+    level, source, goal = _setup()
+    evaluator = endpoint.EndpointEvaluator(level, goal, source, prefix_frame=4)
+    changed = list(source)
+    changed[8] = InputFrame(right=True)
+    first = endpoint.AutoEndpointCandidate(tuple(changed), evaluator.evaluate(changed))
+    chain = endpoint._BudgetedLocalChain()
+    chain.seed(first, anchor=8, start=4, end=24,
+               lookback=12, steps=5, rng=random.Random(11))
+    assert chain.current is first
+    first_proposal = chain.propose()
+    assert first_proposal is not None
+    assert sum(a != b for a, b in zip(first_proposal, first.frames)) == 1
+    assert first_proposal[:4] == source[:4]
+    assert first_proposal[25:] == source[25:]
+    # Feed the chain an explicitly better simulated intermediate candidate.
+    from dataclasses import replace
+    improved = endpoint.AutoEndpointCandidate(
+        first_proposal, replace(first.evaluation, score=first.evaluation.score + 1),
+    )
+    chain.observe(improved, endpoint._key(source))
+    assert chain.current is improved
+    second_proposal = chain.propose()
+    assert second_proposal is not None
+    assert sum(a != b for a, b in zip(second_proposal, improved.frames)) == 1
+
+
+def test_progressive_chain_uses_existing_proposal_slots(monkeypatch):
+    level, frames, goal = _setup()
+    calls = {'chain': 0, 'population': 0}
+    original_propose = endpoint._BudgetedLocalChain.propose
+
+    def counted_chain(self):
+        calls['chain'] += 1
+        return original_propose(self)
+
+    def improving_local(parent, donor, ranges, mutable, rng, span):
+        calls['population'] += 1
+        changed = list(parent.frames)
+        changed[6] = InputFrame(right=True)
+        return tuple(changed), 'direction pulse', 6
+
+    def no_hybrid(parent, donor, **kw):
+        return parent.frames, 6
+
+    monkeypatch.setattr(endpoint._BudgetedLocalChain, 'propose', counted_chain)
+    monkeypatch.setattr(endpoint, '_population_mutate', improving_local)
+    monkeypatch.setattr(endpoint, '_hybrid_proposal', no_hybrid)
+    monkeypatch.setattr(endpoint, '_endpoint_repair', lambda *args, **kw: pytest.fail('nested repair invoked'))
+    config = AutoEndpointConfig(iterations=36, beam_width=8, seed=4,
+                                range_start=4, range_end=24,
+                                refinement_share=1.0, refinement_cycle=12,
+                                refinement_polish=False, adaptive_refinement=False,
+                                refinement_chain_steps=8, repair_steps=64)
+    reports = []
+    baseline, winner, evaluations = optimise_auto_endpoint(
+        level, frames, goal, config,
+        progress=lambda spent, unique, best: reports.append((spent, unique)),
+    )
+    assert calls['population'] > 0
+    assert calls['chain'] > 0
+    assert evaluations <= config.iterations
+    assert reports[-1] == (config.iterations, evaluations)
+    assert winner is not None
+    assert winner.evaluation.objective_key <= baseline.evaluation.objective_key
+    assert verify_endpoint(level, winner.frames, goal, expected=winner.evaluation).feasible

@@ -44,6 +44,7 @@ refinement-share = 0.25
 adaptive-refinement = true
 refinement-polish = true
 refinement-cycle = 128
+refinement-chain-steps = 32
 
 [local]
 

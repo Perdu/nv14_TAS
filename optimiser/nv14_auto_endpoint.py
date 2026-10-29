@@ -48,6 +48,7 @@ class AutoEndpointConfig:
     adaptive_refinement: bool = True
     refinement_cycle: int = 128
     refinement_polish: bool = True
+    refinement_chain_steps: int = 32
 
     def __post_init__(self) -> None:
         if self.iterations < 0 or self.beam_width < 1:
@@ -74,6 +75,8 @@ class AutoEndpointConfig:
             raise ValueError("refinement-share must be between 0 and 1")
         if type(self.refinement_cycle) is not int or self.refinement_cycle < 2:
             raise ValueError("refinement-cycle must be an integer of at least 2")
+        if type(self.refinement_chain_steps) is not int or self.refinement_chain_steps < 0:
+            raise ValueError("refinement-chain-steps must be a nonnegative integer")
 
 
 @dataclass(frozen=True, slots=True)
@@ -549,6 +552,67 @@ class _SingleFramePolisher:
         return tuple(frames)
 
 
+
+class _BudgetedLocalChain:
+    """Local-style successive repairs, using *existing* Local proposal slots.
+
+    A promising macro mutation seeds a temporary work-in-progress replay.
+    Later input probes build on its improving intermediate states instead of
+    repeatedly restarting from the global winner. Nothing is evaluated here;
+    callers account for each attempt using their normal consider() path.
+    """
+
+    __slots__ = ("current", "pending", "remaining")
+
+    def __init__(self) -> None:
+        self.current: AutoEndpointCandidate | None = None
+        self.pending: list[tuple[int, InputFrame]] = []
+        self.remaining = 0
+
+    def seed(
+        self, candidate: AutoEndpointCandidate, *, anchor: int,
+        start: int, end: int, lookback: int, steps: int,
+        rng: random.Random,
+    ) -> None:
+        if self.remaining or not steps:
+            return
+        self.current = candidate
+        self.remaining = steps
+        centre = min(end, max(anchor, candidate.evaluation.frame))
+        near_endpoint = range(max(start, centre - lookback), centre + 1)
+        near_mutation = range(max(start, anchor - lookback), min(end, anchor) + 1)
+        indexes = list(dict.fromkeys((*near_endpoint, *near_mutation)))
+        rng.shuffle(indexes)
+        self.pending = []
+        for index in indexes:
+            choices = list(ALL_INPUT_CHOICES)
+            rng.shuffle(choices)
+            self.pending.extend((index, choice) for choice in choices)
+        self.pending.reverse()
+
+    def propose(self) -> tuple[InputFrame, ...] | None:
+        if self.current is None:
+            return None
+        while self.remaining and self.pending:
+            index, choice = self.pending.pop()
+            if self.current.frames[index] == choice:
+                continue
+            self.remaining -= 1
+            changed = list(self.current.frames)
+            changed[index] = choice
+            return tuple(changed)
+        self.current = None
+        self.pending.clear()
+        self.remaining = 0
+        return None
+
+    def observe(self, candidate: AutoEndpointCandidate | None, source_key: bytes) -> None:
+        if (candidate is not None and self.current is not None
+                and _rank(candidate, source_key) < _rank(self.current, source_key)):
+            self.current = candidate
+
+
+
 def _stagnation_refinement_share(share: float, idle_cycles: int) -> float:
     """Gradually favour fine tuning after many *whole* cycles without gains.
 
@@ -694,6 +758,7 @@ def optimise_auto_endpoint(
     local_gains = auto_gains = local_used = auto_used = 0
     idle_cycles = 0
     polisher = _SingleFramePolisher()
+    local_chain = _BudgetedLocalChain()
     mutable_frames = tuple(range(start, end + 1))
     while spent < config.iterations:
         use_local = False
@@ -707,15 +772,29 @@ def optimise_auto_endpoint(
             # one-frame search around the *verified* feasible winner. This
             # detects tiny secondary-objective gains that broad mutations miss.
             # Exhaustion falls back to ordinary Local population evolution.
+            # Four-way schedule leaves half of Local slots for fresh
+            # population mutations. The other half can exploit either the
+            # verified leader or a promising *non-best* mutation through a
+            # bounded, progressive, multi-frame repair chain.
             polish = (polisher.propose(best, start=start, end=end, rng=rng)
                       if config.refinement_polish and best is not None
-                      and local_used % 2 == 0 else None)
+                      and local_used % 4 == 0 else None)
+            chain_parent = local_chain.current if local_used % 4 == 1 else None
+            chained = local_chain.propose() if chain_parent is not None else None
             if polish is not None:
                 parent = best
                 proposed = polish
                 anchor = next(i for i in range(start, end + 1)
                               if polish[i] != parent.frames[i])
+                local_proposal_kind = "polish"
+            elif chained is not None:
+                parent = chain_parent
+                proposed = chained
+                anchor = next(i for i in range(start, end + 1)
+                              if chained[i] != parent.frames[i])
+                local_proposal_kind = "chain"
             else:
+                local_proposal_kind = "population"
                 # Local's tournament selection and niche-aware population, not
                 # merely Local's mutation operators inside Auto's beam.
                 first = (min(rng.sample(local_pool, min(2, len(local_pool))),
@@ -740,6 +819,16 @@ def optimise_auto_endpoint(
         candidate = consider(proposed)
         if config.progressive_refinement:
             if use_local:
+                if local_proposal_kind == "chain":
+                    local_chain.observe(candidate, original_key)
+                elif (local_proposal_kind == "population" and candidate is not None
+                      and config.refinement_chain_steps
+                      and _rank(candidate, original_key) < _rank(parent, original_key)):
+                    local_chain.seed(
+                        candidate, anchor=anchor, start=start, end=end,
+                        lookback=config.repair_lookback,
+                        steps=config.refinement_chain_steps, rng=rng,
+                    )
                 local_used += 1
                 local_gains += best is not previous_best
             else:
