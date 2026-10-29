@@ -21,8 +21,11 @@ from nv14_engine import APP_TILE_SCALE, OBJTYPE_EXIT, InputFrame, Level
 from nv14_population import (
     PopulationCandidate, _mutate as _population_mutate,
     _select_population as _select_population,
+    _select_population_from_ranked,
+    _rank as _population_rank,
 )
 from nv14_search import ALL_INPUT_CHOICES
+from nv14_native import require_native
 from nv14_replay import (
     RetimeMutation, apply_single_transition_retime, apply_suffix_retime,
     editable_frames, input_transition_frames,
@@ -84,6 +87,10 @@ class AutoEndpointCandidate:
     frames: tuple[InputFrame, ...]
     evaluation: EndpointEvaluation
     complete: bool = False
+    # Cache only *held-button* identity, not trigger metadata. This preserves
+    # the previous Auto deduplication/tie-break semantics.
+    identity: bytes | None = field(default=None, compare=False)
+    edits: int | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,16 +152,30 @@ def endpoint_exit_edge_distance(
     return centre_distance - level.player.r - APP_TILE_SCALE
 
 
+# The native endpoint key also records jump-trigger metadata. Historically
+# Auto's identity and tie-break intentionally considered *only held buttons*.
+# Translating the packed key in C retains that exact identity, while allowing
+# the full native key to be passed straight to EndpointEvaluator._evaluate_packed.
+_HELD_BUTTONS = bytes(i & 7 for i in range(256))
+
+
+def _packed_keys(frames: tuple[InputFrame, ...]) -> tuple[bytes, bytes]:
+    packed = require_native().population_input_key(frames)[0]
+    return packed, packed.translate(_HELD_BUTTONS)
+
+
 def _key(frames: Sequence[InputFrame]) -> bytes:
-    return bytes(int(f.left) | (int(f.right) << 1) | (int(f.jump) << 2) for f in frames)
+    return _packed_keys(tuple(frames))[1]
 
 
 def _rank(candidate: AutoEndpointCandidate, source_key: bytes) -> tuple:
     result = candidate.evaluation
-    changed = sum(a != b for a, b in zip(_key(candidate.frames), source_key))
+    identity = candidate.identity if candidate.identity is not None else _key(candidate.frames)
+    changed = (candidate.edits if candidate.edits is not None else
+               sum(a != b for a, b in zip(identity, source_key)))
     if candidate.complete or result.feasible:
-        return (0, *result.objective_key, changed, _key(candidate.frames))
-    return (1, result.progress_key, changed, _key(candidate.frames))
+        return (0, *result.objective_key, changed, identity)
+    return (1, result.progress_key, changed, identity)
 
 
 def _proposal(
@@ -276,8 +297,9 @@ def _ranked_candidate(
     identity: bytes | None = None,
 ) -> _RankedEndpointCandidate:
     if identity is None:
-        identity = _key(candidate.frames)
-    changed = sum(a != b for a, b in zip(identity, source_key))
+        identity = candidate.identity if candidate.identity is not None else _key(candidate.frames)
+    changed = (candidate.edits if candidate.edits is not None else
+               sum(a != b for a, b in zip(identity, source_key)))
     result = candidate.evaluation
     if candidate.complete or result.feasible:
         rank = (0, *result.objective_key, changed, identity)
@@ -525,7 +547,7 @@ class _SingleFramePolisher:
         self, leader: AutoEndpointCandidate, *, start: int, end: int,
         rng: random.Random,
     ) -> tuple[InputFrame, ...] | None:
-        identity = _key(leader.frames)
+        identity = leader.identity if leader.identity is not None else _key(leader.frames)
         if identity != self.leader_key:
             self.leader_key = identity
             self.pending = []
@@ -648,11 +670,26 @@ def optimise_auto_endpoint(
         raise ValueError("editable range is empty or lies beyond target-frame")
     evaluator = EndpointEvaluator(level, goal, source, prefix_frame=start)
     rng = random.Random(config.seed)
-    original_key = _key(source)
+    original_packed, original_key = _packed_keys(source)
     visited = {original_key}
+    # Count changed held-button frames with native big-integer bit operations;
+    # a byte changes iff at least one of its low three bits differs.  This is
+    # equivalent to sum(a != b for ...), but avoids an 805-iteration Python loop
+    # for every unique candidate in long replays.
+    reference_bits = int.from_bytes(original_key, "little")
+    byte_low_bits = int.from_bytes(b"\x01" * len(original_key), "little")
 
-    def evaluate_candidate(frames: tuple[InputFrame, ...]) -> AutoEndpointCandidate:
-        evaluation = evaluator.evaluate(frames)
+    def edited_frames(identity: bytes) -> int:
+        different = int.from_bytes(identity, "little") ^ reference_bits
+        return ((different | (different >> 1) | (different >> 2)) & byte_low_bits).bit_count()
+
+    def evaluate_candidate(
+        frames: tuple[InputFrame, ...], native_key: bytes, identity: bytes,
+        edits: int,
+    ) -> AutoEndpointCandidate:
+        # Never encode the same inputs twice: the native evaluator accepts the
+        # original packed key, while Auto's dedup/rank uses held-button identity.
+        evaluation = evaluator._evaluate_packed(native_key, frames)
         complete = False
         if config.completion_policy == "complete" and evaluation.feasible:
             full = evaluate_replay_with_sentinel(level, frames)
@@ -661,30 +698,43 @@ def optimise_auto_endpoint(
                 # Incomplete solutions may remain repair/exploration donors, but
                 # cannot displace an independently completed result.
                 evaluation = replace(evaluation, feasible=False)
-        return AutoEndpointCandidate(frames, evaluation, complete)
+        return AutoEndpointCandidate(frames, evaluation, complete, identity, edits)
 
-    baseline = evaluate_candidate(source)
+    baseline = evaluate_candidate(source, original_packed, original_key, 0)
     beam = _EndpointBeam(baseline, config.beam_width, original_key)
     # Each phase keeps a separate survivor policy. They share one endpoint
     # evaluator and visited set; neither phase runs an additional simulation.
     def as_local(candidate: AutoEndpointCandidate, identity: bytes) -> PopulationCandidate:
         return PopulationCandidate(
             candidate.frames, candidate.evaluation, (),
-            sum(a != b for a, b in zip(identity, original_key)), identity,
+            candidate.edits if candidate.edits is not None else
+            edited_frames(identity), identity,
         )
 
     local_pool: tuple[PopulationCandidate, ...] = (
         _select_population((as_local(baseline, original_key),), config.beam_width)
         if config.progressive_refinement else ()
     )
+    # The selector retains exactly Local's niche/elite rules.  Keep the
+    # previously sorted rank records and insert only the new candidate, rather
+    # than re-sorting/de-duplicating the whole beam on every evaluation.
+    local_ranked: list[tuple[tuple, PopulationCandidate]] = [
+        (_population_rank(item), item) for item in local_pool
+    ]
 
     def add_to_pools(candidate: AutoEndpointCandidate, identity: bytes) -> None:
         nonlocal local_pool
         beam.add(candidate, identity)
         if config.progressive_refinement:
-            local_pool = _select_population(
-                (*local_pool, as_local(candidate, identity)), config.beam_width,
-            )
+            item = as_local(candidate, identity)
+            insort(local_ranked, (_population_rank(item), item))
+            if len(local_ranked) <= config.beam_width:
+                local_pool = tuple(item for _, item in local_ranked)
+            else:
+                local_pool = _select_population_from_ranked(
+                    tuple(item for _, item in local_ranked), config.beam_width,
+                )
+                local_ranked[:] = [(_population_rank(item), item) for item in local_pool]
     # The source is a baseline, not a newly discovered improvement.  It must
     # never enter the checkpoint callback merely because it is feasible.
     best = baseline if baseline.evaluation.feasible else None
@@ -697,18 +747,20 @@ def optimise_auto_endpoint(
         if (len(frames) != len(source) or frames[:start] != source[:start]
                 or frames[end + 1:] != source[end + 1:]):
             continue
-        identity = _key(frames)
+        native_key, identity = _packed_keys(frames)
         if identity in visited:
             continue
         visited.add(identity)
-        refreshed = evaluate_candidate(frames)
+        edits = edited_frames(identity)
+        refreshed = evaluate_candidate(frames, native_key, identity, edits)
         evaluated += 1
         add_to_pools(refreshed, identity)
         if (refreshed.evaluation.feasible and
                 (best is None or refreshed.evaluation.objective_key < best.evaluation.objective_key)):
             checked = verify_endpoint(level, frames, goal, expected=refreshed.evaluation)
             if checked.feasible:
-                best = AutoEndpointCandidate(frames, checked, refreshed.complete)
+                best = AutoEndpointCandidate(frames, checked, refreshed.complete,
+                                             identity, edits)
                 if best_callback is not None:
                     best_callback(best)
     spent = 0
@@ -723,11 +775,12 @@ def optimise_auto_endpoint(
         if spent >= config.iterations:
             return None
         spent += 1
-        identity = _key(frames)
+        native_key, identity = _packed_keys(frames)
         if identity in visited:
             return None
         visited.add(identity)
-        candidate = evaluate_candidate(frames)
+        edits = edited_frames(identity)
+        candidate = evaluate_candidate(frames, native_key, identity, edits)
         evaluated += 1
         if candidate.evaluation.feasible and (
             best is None or candidate.evaluation.objective_key < best.evaluation.objective_key
@@ -743,8 +796,14 @@ def optimise_auto_endpoint(
                 full = evaluate_replay_with_sentinel(level, packed)
                 valid_finish = full.valid and full.finish_tick == len(packed)
             if checked.feasible and valid_finish:
-                best = AutoEndpointCandidate(packed, checked, valid_finish
-                                             if config.completion_policy == "complete" else False)
+                # Canonicalisation may change stored trigger metadata, so keep
+                # identity consistent with the actual verified replay.
+                best_identity = _key(packed)
+                best = AutoEndpointCandidate(
+                    packed, checked, valid_finish if config.completion_policy == "complete" else False,
+                    best_identity,
+                    edited_frames(best_identity),
+                )
                 if best_callback:
                     best_callback(best)
         add_to_pools(candidate, identity)
@@ -805,7 +864,8 @@ def optimise_auto_endpoint(
                     first, second, ((start, end),), mutable_frames, rng,
                     config.mutation_span,
                 )
-                parent = AutoEndpointCandidate(first.frames, first.evaluation)
+                parent = AutoEndpointCandidate(first.frames, first.evaluation,
+                                               False, first.input_key, first.edits)
         else:
             # Unmodified Hybrid Auto exploration, including its pre-existing
             # 50/50 Auto/Local mutation policy and parent selection.

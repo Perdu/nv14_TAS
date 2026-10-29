@@ -110,6 +110,17 @@ def _select_population(
     """Keep elites, distinct physical niches, and a bounded repair frontier."""
     unique = {candidate.input_key: candidate for candidate in candidates}
     ranked = sorted(unique.values(), key=_rank)
+    return _select_population_from_ranked(ranked, capacity)
+
+
+def _select_population_from_ranked(
+    ranked: Sequence[PopulationCandidate], capacity: int,
+) -> tuple[PopulationCandidate, ...]:
+    """Apply Local's unchanged niche policy to unique, rank-sorted candidates.
+
+    Auto maintains a sorted, deduplicated population incrementally and can
+    reuse this selection policy without sorting its survivors every proposal.
+    """
     if len(ranked) <= capacity:
         return tuple(ranked)
     feasible = sorted((c for c in ranked if c.evaluation.feasible), key=_primary_rank)
