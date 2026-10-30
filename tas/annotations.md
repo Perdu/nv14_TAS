@@ -3019,19 +3019,21 @@ rerecords: 0
 
 
 # 97-1
-rerecords: 0
+rerecords: 99
 
 
 
 # 97-2
-rerecords: 388
+rerecords: 800
 
-Branch 9: going down, then jumping to avoid drone 1 detection
+Branch 9: attempt at going up left after switch 0, to avoid the drone by its right side while falling
 Branch 8: for the end, go down then jump over the drone
-Branch 7: faster way to the pacelock (drone 1 early detection)
-Branch 6: earlier arrival in drone 3's detection range (but no earlier detection): best 438
-Branch 5: very small improvements in middle section
+Branch 7: faster way to the first pacelock (drone 3 early detection)
+Branch 6: earlier arrival in drone 1's detection range (but no earlier detection): best 438
+Branch 5: Use the right path on the way down
 Branch 4: drone 1 detection test: must be in the range at frame 433
+
+I'm missing 5f to being within top drone detection range, which might break the final pacelock since we won't have to slow the descent down to avoid its later detection (compare branches 6 and 4)
 
 # 97-3
 rerecords: 315
@@ -3110,4 +3112,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 269614
+# Total rerecords: 270125
