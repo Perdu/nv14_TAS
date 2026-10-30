@@ -1779,17 +1779,22 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
                             goal_config_path, command_parsers["local"]))
             except ValueError as exc:
                 raise SystemExit(str(exc)) from exc
+        # Track command-line options separately from TOML-provided values.
+        # A --rounds CLI override takes precedence over a stagnation value
+        # supplied by a config file; explicit CLI --stagnation-rounds still wins.
+        cli_explicit: set[str] = set()
         explicit = set(defaults)
         if command_parser is not None:
             option_destinations = {
                 option: action.dest for action in command_parser._actions
                 for option in action.option_strings
             }
-            explicit.update(
+            cli_explicit.update(
                 option_destinations[token.split("=", 1)[0]]
                 for token in actual_args
                 if token.split("=", 1)[0] in option_destinations
             )
+            explicit.update(cli_explicit)
         saved_action_defaults = (
             [(action, action.default) for action in command_parser._actions
              if action.dest in defaults] if command_parser is not None else []
@@ -1813,6 +1818,16 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
                                if name.startswith(option)}
                     if len(matches) == 1:
                         explicit.update(matches)
+                        cli_explicit.update(matches)
+        # An explicit finite round count is a requested search budget, not
+        # merely a ceiling silently truncated by the default 20-round
+        # stagnation limit.  Keep stagnation stopping for --rounds 0, or when
+        # a limit is explicitly selected at the same configuration level.
+        if mode == "local" and result.search == "population" and result.rounds > 0:
+            if ("rounds" in cli_explicit and "stagnation_rounds" not in cli_explicit
+                    or "rounds" in defaults and "rounds" not in cli_explicit
+                    and "stagnation_rounds" not in defaults):
+                result.stagnation_rounds = 0
         _validate_local_strategy(result, explicit)
         _validate_auto_goal_strategy(result, explicit)
         result._explicit_options = frozenset(explicit)
@@ -2527,8 +2542,8 @@ def build_parser() -> argparse.ArgumentParser:
     for option, default, help_text in (
         ("iterations", 10000, "proposal budget per worker per population round"),
         ("beam", 32, "maximum retained population candidates"),
-        ("rounds", 1, "population rounds; 0 continues until stagnation or Ctrl+C"),
-        ("stagnation-rounds", 20, "stop after this many rounds without primary or configured secondary objective gain; 0 disables"),
+        ("rounds", 1, "population rounds; explicit positive count disables default stagnation stopping"),
+        ("stagnation-rounds", 20, "stop after this many rounds without primary or configured secondary objective gain; 0 disables; explicitly setting it restores early stopping with --rounds"),
         ("repair-steps", 64, "goal-aware repair proposals per selected failed candidate; 0 disables"),
         ("repair-lookback", 32, "maximum repair lookback, clipped to editable ranges"),
         ("mutation-span", 32, "maximum pulse or bounded section length"),

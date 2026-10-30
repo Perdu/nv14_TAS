@@ -209,3 +209,21 @@ def test_no_feasible_candidate_never_calls_saved_best_callback():
         best_callback=saved.append)
     assert not result.candidates
     assert not saved
+
+
+def test_finite_round_limit_can_run_past_default_stagnation_boundary():
+    source = (InputFrame(),) * 12
+    goal = EndpointGoal(7, objective="earliest-arrival",
+                        target_region=(0, 1000, 0, 1000), arrival_start=0)
+    config = PopulationConfig(iterations=2, beam=2, rounds=22,
+                              stagnation_rounds=0, workers=1,
+                              repair_steps=0, seed=7)
+    result = optimise_local_population(level(), source, goal=goal,
+                                       frame_ranges=((0, 7),), config=config)
+    assert result.rounds == 22
+    assert result.stagnant_rounds == 22
+    stopped = optimise_local_population(level(), source, goal=goal,
+                                        frame_ranges=((0, 7),),
+                                        config=replace(config, stagnation_rounds=1))
+    assert stopped.rounds == 1
+    assert stopped.stagnant_rounds == 1

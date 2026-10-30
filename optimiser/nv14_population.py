@@ -641,7 +641,9 @@ def optimise_local_population(
                  + (f"; secondary {goal.secondary_objective}={baseline.secondary_value:.15g}"
                     if goal.secondary_objective is not None and baseline.feasible else ""))
         progress(f"[local:population] seed {seed}; {worker_count} worker(s); "
-                 f"{len(context.mutable_frames)} editable frames; beam {config.beam}")
+                 f"{len(context.mutable_frames)} editable frames; beam {config.beam}; "
+                 f"round limit {'unlimited' if config.rounds == 0 else config.rounds}; "
+                 f"stagnation stop {'disabled' if config.stagnation_rounds == 0 else str(config.stagnation_rounds) + ' rounds'}")
     # A feasible source replay is the existing best, not a new discovery.
     # Likewise, a resumed population was found in a previous run. Retain its
     # best candidate without publishing a misleading [local:best] checkpoint.

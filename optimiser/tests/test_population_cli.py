@@ -179,3 +179,42 @@ def test_population_enemy_default_and_dispatch(tmp_path, monkeypatch, enemy_opti
         *enemy_option])
     cli.main()
     assert seen == {"enemies": expected, "dispatch": True}
+
+
+def test_explicit_rounds_use_full_budget_without_default_stagnation():
+    for args in (("--rounds", "500"), ("--rounds=500",),
+                 ("--rounds", "3")):
+        local = parse("--search", "population", *args)._mode_configs.local
+        assert local.rounds in (3, 500)
+        assert local.stagnation_rounds == 0
+    original = parse("--search", "population")._mode_configs.local
+    assert (original.rounds, original.stagnation_rounds) == (1, 20)
+    continuous = parse("--search", "population", "--rounds", "0")._mode_configs.local
+    assert (continuous.rounds, continuous.stagnation_rounds) == (0, 20)
+
+
+def test_stagnation_limit_remains_available_when_explicitly_requested():
+    local = parse("--search", "population", "--rounds", "500",
+                  "--stagnation-rounds", "7")._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (500, 7)
+    disabled = parse("--search", "population", "--rounds", "500",
+                     "--stagnation-rounds", "0")._mode_configs.local
+    assert (disabled.rounds, disabled.stagnation_rounds) == (500, 0)
+
+
+def test_rounds_toml_defaults_and_cli_precedence(tmp_path):
+    config = tmp_path / "local.toml"
+    config.write_text('[local]\nsearch = "population"\nrounds = 500\n')
+    local = parse("--config", str(config))._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (500, 0)
+
+    config.write_text('[local]\nsearch = "population"\nrounds = 500\nstagnation-rounds = 7\n')
+    local = parse("--config", str(config))._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (500, 7)
+    local = parse("--config", str(config), "--rounds", "500")._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (500, 0)
+    local = parse("--config", str(config), "--rounds", "500",
+                  "--stagnation-rounds", "4")._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (500, 4)
+    local = parse("--config", str(config), "--rounds", "0")._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (0, 7)
