@@ -111,6 +111,17 @@ def _stage_sources(recent: Sequence[tuple[InputFrame, ...]],
     return result
 
 
+def _materialise_splice_tail(frames: Sequence[InputFrame], target_frame: int
+                             ) -> tuple[InputFrame, ...]:
+    """Materialise the neutral inputs implicit past a recorded replay's end.
+
+    This is a search-only workspace. A canonically completed source retains
+    its original length, and verified outputs are trimmed to their finish tick.
+    """
+    body = tuple(frames)
+    return body + (InputFrame(),) * max(0, target_frame + 1 - len(body))
+
+
 def optimise_user_splices(
     level: Level, source_frames: Sequence[InputFrame],
     stages: Sequence[UserSpliceStage], config: RandomSpliceConfig,
@@ -128,9 +139,13 @@ def optimise_user_splices(
         raise ValueError("user splice requires at least one named goal")
     if completion_policy not in ("checkpoint", "complete"):
         raise ValueError("invalid user splice completion policy")
-    current = tuple(editable_frames(source_frames))
-    source_eval = evaluate_replay_with_sentinel(level, current)
-    source_complete = bool(source_eval.valid and source_eval.finish_tick == len(current))
+    source = tuple(editable_frames(source_frames))
+    # Check canonical completion *before* materialising any neutral search
+    # inputs. Otherwise a completed source looks incomplete merely because
+    # the last named target-frame is later than its real finish tick.
+    source_eval = evaluate_replay_with_sentinel(level, source)
+    source_complete = bool(source_eval.valid and source_eval.finish_tick == len(source))
+    current = _materialise_splice_tail(source, max(s.goal.target_frame for s in stages))
     require_complete = completion_policy == "complete" or source_complete
     if completion_policy == "complete" and not source_complete:
         raise ValueError("user splice requires a canonically completed source for completion-policy=complete")
@@ -170,10 +185,14 @@ def optimise_user_splices(
 
     baseline = final_rank(current)
     best_rank = baseline[0] if baseline is not None else None
-    best_output = current
+    best_output = source
     improvements = attempts = evaluations = stagnant = 0
     if progress:
-        text = (f"completion at frame {len(current)}" if source_complete
+        if len(current) > len(source):
+            progress(f"[auto:user-splice] appended {len(current) - len(source)} "
+                     f"neutral search frame(s) through frame {len(current) - 1}; "
+                     "completed outputs remain trimmed")
+        text = (f"completion at frame {len(source)}" if source_complete
                 else "incomplete source")
         progress(f"[auto:user-splice:baseline] {text}; {len(stages)} named goals; "
                  f"{'full completion' if require_complete else 'endpoint checkpoint'} required")

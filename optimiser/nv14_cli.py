@@ -1884,7 +1884,7 @@ def _resolve_named_splice_files(directory: Path, names: Sequence[str]) -> tuple[
 
 def _load_named_splice_stages(level, frames, args, directory: Path, names: Sequence[str]):
     """Translate each existing Local goal file with the shared Auto goal parser."""
-    from nv14_user_splice import UserSpliceStage
+    from nv14_user_splice import UserSpliceStage, _materialise_splice_tail
     parser = build_parser()._command_parsers["local"]
     stages = []
     for name, path in _resolve_named_splice_files(directory, names):
@@ -1903,7 +1903,11 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
         stage_args.frame_range = None
         vars(stage_args).update(values)
         try:
-            goal, start, end = _auto_goal_from_options(level, frames, stage_args)
+            # A named goal may extend beyond an already completed input body.
+            # Like Local and ordinary endpoint Auto, evaluate it against an
+            # implicit neutral tail without changing the source replay length.
+            goal_frames = _materialise_splice_tail(frames, values["auto_target_frame"])
+            goal, start, end = _auto_goal_from_options(level, goal_frames, stage_args)
         except (ValueError, RuntimeError) as exc:
             raise ValueError(f"invalid splice {name!r} ({path}): {exc}") from exc
         stages.append(UserSpliceStage(name, goal, start, goal.target_frame if end is None else end))

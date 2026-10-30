@@ -115,3 +115,122 @@ def test_cli_loads_ordered_goals_from_explicit_directory(tmp_path, monkeypatch):
         replay = parse_combined_level_replay(out.read_text())
         checked = evaluate_replay_with_sentinel(level, decode_complex_replay(replay.replay_string).frames)
         assert checked.valid and checked.finish_tick == len(decode_complex_replay(replay.replay_string).frames)
+
+
+def test_named_goal_after_completed_replay_end_uses_neutral_tail(tmp_path):
+    """Regression: end.txt may target frames later than the recorded finish."""
+    level, source, check = _baseline()
+    assert check.finish_tick == len(source)
+    (tmp_path / '218.txt').write_text(
+        '[local]\nobjective="max-x"\ntarget-frame=15\nrange="0:15"\n')
+    (tmp_path / 'end.txt').write_text(
+        '[local]\nobjective="max-x"\ntarget-frame=36\nrange="20:36"\n')
+    args = parse_arguments(['auto', 'some.ltm', '--auto-splice-files', '218,end'])
+    stages = _load_named_splice_stages(level, source, args, tmp_path, ('218', 'end'))
+    assert [(s.name, s.goal.target_frame, s.start, s.end) for s in stages] == [
+        ('218', 15, 0, 15), ('end', 36, 20, 36)]
+
+    # The optimiser can search the padded interval, but must preserve the
+    # canonical, completed source when no strict improvement was found.
+    messages, saves = [], []
+    result = optimise_user_splices(
+        level, source, stages, RandomSpliceConfig(
+            iterations=6, splice_rounds=1, rounds=1, workers=1, beam=8, seed=4),
+        best_callback=saves.append, progress=messages.append,
+        completion_policy='complete')
+    assert result.evaluations > 0
+    assert any('appended 8 neutral search frame(s)' in line for line in messages)
+    assert any(f'completion at frame {len(source)}' in line for line in messages)
+    if saves:
+        assert result.frames == saves[-1]
+    else:
+        assert result.frames == tuple(source)
+    checked = evaluate_replay_with_sentinel(level, result.frames)
+    assert checked.valid and checked.finish_tick == len(result.frames)
+
+
+def test_named_goal_on_short_incomplete_source_uses_neutral_tail(tmp_path):
+    """An incomplete prefix can also be extended through the configured goal."""
+    level, source, _ = _baseline()
+    short = source[:12]
+    (tmp_path / 'end.txt').write_text(
+        '[local]\nobjective="max-x"\ntarget-frame=36\nrange="5:36"\n')
+    args = parse_arguments(['auto', 'some.ltm', '--auto-splice-files', 'end'])
+    stages = _load_named_splice_stages(level, short, args, tmp_path, ('end',))
+    messages = []
+    result = optimise_user_splices(
+        level, short, stages, RandomSpliceConfig(
+            iterations=6, splice_rounds=1, rounds=1, workers=1, beam=8, seed=5),
+        progress=messages.append, completion_policy='checkpoint')
+    assert result.evaluations > 0
+    assert any('appended 25 neutral search frame(s)' in line for line in messages)
+    assert any('incomplete source' in line for line in messages)
+
+
+def test_user_splice_unextended_completed_replay_remains_unchanged():
+    level, source, _ = _baseline()
+    stage = UserSpliceStage('end', EndpointGoal(15, 'max-x'), 0, 15)
+    result = optimise_user_splices(level, source, (stage,), RandomSpliceConfig(
+        iterations=4, splice_rounds=1, rounds=1, workers=1, beam=8, seed=2),
+        completion_policy='complete')
+    assert evaluate_replay_with_sentinel(level, result.frames).finish_tick == len(result.frames)
+
+
+def test_user_splice_end_interaction_can_precede_later_target(tmp_path):
+    """An early exit is valid even when end.txt ends several ticks afterward."""
+    from nv14_endpoint import EndpointEvaluator
+    from nv14_user_splice import _materialise_splice_tail
+    level, source, _ = _baseline()
+    (tmp_path / 'end.txt').write_text(
+        '[local]\nobjective="earliest-interaction"\n'
+        'target-object="exit:0.door"\ntarget-frame=36\n'
+        'arrival-start=0\nrange="20:36"\n')
+    args = parse_arguments(['auto', 'some.ltm', '--auto-splice-files', 'end'])
+    (stage,) = _load_named_splice_stages(level, source, args, tmp_path, ('end',))
+    goal_eval = EndpointEvaluator(level, stage.goal).evaluate(
+        _materialise_splice_tail(source, stage.goal.target_frame))
+    assert goal_eval.feasible and goal_eval.frame == len(source)
+
+    # The search starts from a canonical 29-tick completion, not an invalid
+    # 37-tick reference. Both backends may optimise the 37-tick workspace.
+    reports = []
+    result = optimise_user_splices(
+        level, source, [stage], RandomSpliceConfig(
+            search_backend='both', iterations=8, splice_rounds=1,
+            rounds=1, workers=1, beam=8, frontier=2, seed=7),
+        completion_policy='complete', progress=reports.append)
+    assert result.attempts == 2
+    assert result.evaluations > 0
+    assert any('completion at frame 29' in line for line in reports)
+    verified = evaluate_replay_with_sentinel(level, result.frames)
+    assert verified.valid and verified.finish_tick == len(result.frames)
+
+
+def test_cli_user_splicer_accepts_target_after_finish(tmp_path, monkeypatch):
+    level, frames, _ = _baseline()
+    input_path = tmp_path / 'source.txt'
+    input_path.write_text(f'$test#author#{level.source_level_string}#'
+                          f'{encode_complex_replay(frames)}#\n')
+    goals = tmp_path / 'goals'; goals.mkdir()
+    (goals / '218.txt').write_text(
+        '[local]\nobjective="max-x"\ntarget-frame=15\nrange="0:15"\n')
+    (goals / 'end.txt').write_text(
+        '[local]\nobjective="earliest-interaction"\n'
+        'target-object="exit:0.door"\ntarget-frame=36\n'
+        'arrival-start=0\nrange="20:36"\n')
+    config = tmp_path / 'multi-splicer.toml'
+    config.write_text('[auto]\nsplice-files=["218", "end"]\n'
+                      'splice-search="both"\nruns=1\nsplice-iterations=8\n'
+                      'splice-rounds=1\nbeam=8\nseed=0\n')
+    out = tmp_path / 'optim.txt'
+    monkeypatch.setattr(sys, 'argv', [
+        'optimize_replay.py', 'auto', str(input_path),
+        '--config', str(config), '--auto-splice-directory', str(goals),
+        '--output', str(out), '--workers', '1'])
+    main()
+    if out.exists():
+        from nv14_replay import parse_combined_level_replay, decode_complex_replay
+        rendered = parse_combined_level_replay(out.read_text())
+        candidate = decode_complex_replay(rendered.replay_string).frames
+        verified = evaluate_replay_with_sentinel(level, candidate)
+        assert verified.valid and verified.finish_tick == len(candidate)
