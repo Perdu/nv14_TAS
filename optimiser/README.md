@@ -1369,3 +1369,60 @@ of checkpoints with run length; `splice-mode = "complexity"` targets boundaries
 of rapid input sequences, and `splice-mode = "physics"` targets switches,
 walljumps, and landings (with optional bounce-block events). See
 [docs/RANDOM_SPLICE.md](docs/RANDOM_SPLICE.md).
+
+### User-defined multi-splicing (ordered Local splice files)
+
+The Python multi-splicer runs inside `auto` and reuses the existing random
+splicer's Local-population or endpoint-Auto search backends. Unlike random,
+complexity, or physics waypoints, its checkpoints are **explicit Local goal
+files**, attempted in exactly the order listed. For level `97-2`, add:
+
+```toml
+[auto]
+splice-files = ["203", "408", "switch", "end"]
+runs = 5
+splice-iterations = 400
+splice-rounds = 1
+splice-frontier = 3
+```
+
+This is sufficient to select `random-splice = true` and `splice-mode = "user"`
+automatically. It reads `../splices/97-2/{203,408,switch,end}.txt` (or `.toml`)
+when the input is `../n_levels/97-2.ltm`. Each goal must include a `[local]`
+`objective` and `target-frame`; its `range`, region, object, velocity and
+interaction constraints are interpreted by the same goal parser as
+`--goal-config`. Splice names are not sorted and no automatic waypoints are
+added. Use `splice-files = ["203.txt", "end.toml"]` to disambiguate extensions.
+
+To use **both** Local population and endpoint Auto Hybrid at each named
+checkpoint, set `splice-search = "both"`. The per-branch
+`splice-iterations` budget is shared approximately 50/50 between the two
+backends (the odd proposal goes to Local); candidates are merged into the
+same verified frontier. This backend choice is available for named files only.
+
+Every stage also retains its best verified candidate frontier across rounds.
+From the third stage, it tries seeds from both the preceding stage (**n-1**)
+and the stage before that (**n-2**), reserving a slot for a distinct n-2 elite
+even if n-1 won its local objective. This allows the later stage to avoid a
+locally better but globally detrimental splice. Earlier mandatory goals,
+route-control events, and completion still have to verify before saving any
+result. More source branches may increase total stage searches, but do not
+double the per-branch proposal budget.
+
+Set `splice-directory = "../some/other/directory"` if the input or goal files
+are elsewhere. A CLI equivalent is `--auto-splice-files 203,408,switch,end
+--auto-splice-directory ../splices/97-2`. The `--auto-random-splice` flag is
+not required when `splice-files` is set, although it remains supported.
+
+After each stage the optimiser carries a bounded frontier of candidate replays
+into the next stage. Every later candidate must still satisfy the preceding
+named goals, and a published improvement is independently checked against all
+stage objectives. The final stage's objective determines the improvement rank;
+for a completed source, the entire resulting route must also finish and retain
+its existing route-control interactions. An earlier canonical completion can be
+trimmed and verified. Failed partial splices are never written to the output.
+The best checkpoint is written immediately; the original output is untouched
+if no verified improvement exists. `splice-iterations`/`splice-rounds` control
+search effort *per stage*. Per-file Local search tuning (such as `window`,
+`passes`, or `restarts`) is not imported: only endpoint goal definitions are
+read. Set `runs` to a finite number if you do not want an indefinite campaign.

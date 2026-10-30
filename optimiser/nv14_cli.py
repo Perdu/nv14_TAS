@@ -1505,6 +1505,13 @@ def _coerce_config_value(
                 return not value
         return value
 
+    if action.dest == "auto_splice_files" and isinstance(value, (list, tuple)):
+        if not value or not all(isinstance(item, str) and item.strip() for item in value):
+            raise ValueError(f"TOML key {key!r} must be a nonempty array of splice file names")
+        try:
+            return parse_splice_files(",".join(value))
+        except argparse.ArgumentTypeError as exc:
+            raise ValueError(str(exc)) from exc
     if action.dest == "auto_splice_interactions" and isinstance(value, (list, tuple)):
         if not value or not all(isinstance(item, str) for item in value):
             raise ValueError(f"TOML key {key!r} must be a nonempty string array")
@@ -1720,7 +1727,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_iterations", "auto_splice_repair_anchors",
     "auto_splice_repair_searches", "auto_splice_rounds",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_exit_lookback",
-    "auto_splice_search",
+    "auto_splice_search", "auto_splice_files", "auto_splice_directory",
 })
 
 
@@ -1741,6 +1748,12 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
     if unused and not args.auto_random_splice:
         raise SystemExit("--" + ", --".join(n.replace("_", "-") for n in unused)
                          + " require --auto-random-splice")
+    if args.auto_random_splice and args.auto_splice_mode == "user" and not args.auto_splice_files:
+        raise SystemExit("user splice mode requires --auto-splice-files or [auto] splice-files")
+    if args.auto_random_splice and args.auto_splice_files and args.auto_splice_mode != "user":
+        raise SystemExit("splice-files requires --auto-splice-mode user")
+    if args.auto_random_splice and args.auto_splice_search == "both" and args.auto_splice_mode != "user":
+        raise SystemExit("splice-search=both requires user mode with splice-files")
     if args.auto_random_splice and args.auto_objective == AUTO_OBJECTIVE_HIGHSCORE:
         raise SystemExit("--auto-random-splice requires --objective speedrun or an endpoint objective (not highscore)")
     if args.auto_objective not in AUTO_OBJECTIVES:
@@ -1828,10 +1841,73 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
                     or "rounds" in defaults and "rounds" not in cli_explicit
                     and "stagnation_rounds" not in defaults):
                 result.stagnation_rounds = 0
+        if mode == "auto" and result.auto_splice_files:
+            # A named file list is sufficient to activate the integrated
+            # multi-splicer: no extra random-splice flag or mode is required.
+            if "auto_splice_mode" not in explicit:
+                result.auto_splice_mode = "user"
+            if "auto_random_splice" not in explicit:
+                result.auto_random_splice = True
         _validate_local_strategy(result, explicit)
         _validate_auto_goal_strategy(result, explicit)
         result._explicit_options = frozenset(explicit)
         return result
+
+
+def parse_splice_files(value: str) -> tuple[str, ...]:
+    """Named files only, not arbitrary paths; ordering is user-controlled."""
+    if not isinstance(value, str):
+        raise argparse.ArgumentTypeError("splice-files requires comma-separated names")
+    names = tuple(name.strip() for name in value.split(","))
+    if (not names or any(not name or name in (".", "..") or "/" in name or "\\" in name
+                         for name in names) or len(set(names)) != len(names)):
+        raise argparse.ArgumentTypeError("splice-files requires unique, nonempty filenames without paths")
+    return names
+
+
+def _resolve_named_splice_files(directory: Path, names: Sequence[str]) -> tuple[tuple[str, Path], ...]:
+    """Resolve .txt/.toml Local goal configurations in the given order."""
+    resolved = []
+    for name in names:
+        suffix = Path(name).suffix.lower()
+        if suffix not in ("", ".txt", ".toml"):
+            raise ValueError(f"unsupported splice file extension: {name}")
+        candidates = ([directory / name] if suffix else
+                      [directory / (name + ".txt"), directory / (name + ".toml")])
+        found = [path for path in candidates if path.is_file()]
+        if len(found) != 1:
+            raise ValueError(f"splice {name!r}: expected exactly one .txt/.toml file in "
+                             f"{directory}, found {len(found)}")
+        resolved.append((name, found[0]))
+    return tuple(resolved)
+
+
+def _load_named_splice_stages(level, frames, args, directory: Path, names: Sequence[str]):
+    """Translate each existing Local goal file with the shared Auto goal parser."""
+    from nv14_user_splice import UserSpliceStage
+    parser = build_parser()._command_parsers["local"]
+    stages = []
+    for name, path in _resolve_named_splice_files(directory, names):
+        values = _load_local_goal_defaults(path, parser)
+        if "auto_objective" not in values or "auto_target_frame" not in values:
+            raise ValueError(f"splice {name!r} ({path}) requires objective and target-frame")
+        stage_args = argparse.Namespace(**vars(args))
+        for local_key, auto_key in _LOCAL_GOAL_TO_AUTO.items():
+            if hasattr(stage_args, auto_key):
+                # Local file goals must not inherit unrelated Auto endpoint
+                # options from the current campaign's global goal.
+                setattr(stage_args, auto_key, None if auto_key not in (
+                    "auto_require_interaction", "auto_avoid_interaction", "auto_require_jumps",
+                    "auto_require_reference_interactions") else
+                    (() if auto_key != "auto_require_reference_interactions" else False))
+        stage_args.frame_range = None
+        vars(stage_args).update(values)
+        try:
+            goal, start, end = _auto_goal_from_options(level, frames, stage_args)
+        except (ValueError, RuntimeError) as exc:
+            raise ValueError(f"invalid splice {name!r} ({path}): {exc}") from exc
+        stages.append(UserSpliceStage(name, goal, start, goal.target_frame if end is None else end))
+    return tuple(stages)
 
 
 def parse_splice_interactions(value: str) -> tuple[str, ...]:
@@ -2107,11 +2183,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="switch-safe stochastic route waypoint splicing; requires completed speedrun",
     )
     command.add_argument("--auto-splice-search", modes=auto_modes,
-                         choices=("local", "endpoint-auto"), default="local",
-                         help="waypoint/repair search backend: Local population (default) or endpoint Auto Hybrid")
+                         choices=("local", "endpoint-auto", "both"), default="local",
+                         help="splice search: Local population (default), endpoint Auto Hybrid, or both (named files only; shared budget)")
     command.add_argument("--auto-splice-mode", modes=auto_modes,
-                         choices=("random", "complexity", "physics"), default="random",
-                         help="waypoint selection: random (default), complexity input-burst boundaries, or physical interactions")
+                         choices=("random", "complexity", "physics", "user"), default="random",
+                         help="waypoint selection: random (default), complexity boundaries, physical interactions, or user-named goal files")
+    command.add_argument("--auto-splice-files", modes=auto_modes,
+                         type=parse_splice_files, metavar="NAMES",
+                         help="ordered comma-separated Local splice names; [auto] splice-files accepts a TOML array")
+    command.add_argument("--auto-splice-directory", modes=auto_modes,
+                         type=Path, metavar="DIR",
+                         help="directory containing named .txt/.toml goals (default: ../splices/LEVEL relative to input)")
     command.add_argument("--auto-splice-interactions", modes=auto_modes,
                          type=parse_splice_interactions,
                          default=("switch", "walljump", "landing"),
@@ -3494,9 +3576,12 @@ def main() -> None:
         auto_parent_frames.append(tuple(parent_retimed_frames))
 
     if args.mode == "auto" and args.auto_random_splice:
+        if args.auto_splice_mode == "user" and _find_option_paths(sys.argv[1:], "--goal-config"):
+            raise SystemExit("user splice mode uses its own named goal files; omit --goal-config")
         target_goal = None
         target_start, target_end = 0, None
-        if args.auto_objective != AUTO_OBJECTIVE_SPEEDRUN:
+        if (args.auto_splice_mode != "user"
+                and args.auto_objective != AUTO_OBJECTIVE_SPEEDRUN):
             try:
                 target_goal, target_start, target_end = _auto_goal_from_options(
                     level, replay.frames, args)
@@ -3505,6 +3590,44 @@ def main() -> None:
         if args.auto_parents or args.auto_checkpoint or args.auto_resume:
             raise SystemExit("random splice does not support auto parents or checkpoint/resume")
         try:
+            if args.auto_splice_mode == "user":
+                from nv14_user_splice import optimise_user_splices
+                directory = (args.auto_splice_directory if args.auto_splice_directory is not None
+                             else input_path.parent.parent / "splices" / input_path.stem)
+                stages = _load_named_splice_stages(level, replay.frames, args,
+                                                   directory, args.auto_splice_files)
+                splice_config = RandomSpliceConfig(
+                    iterations=args.auto_splice_iterations,
+                    splice_rounds=args.auto_splice_rounds,
+                    search_backend=args.auto_splice_search,
+                    endpoint_max_retime=args.max_retime,
+                    endpoint_mutation_span=args.auto_mutation_span,
+                    endpoint_repair_steps=args.auto_endpoint_repair_steps,
+                    endpoint_repair_lookback=args.auto_endpoint_repair_lookback,
+                    lookback=args.auto_splice_lookback,
+                    beam=args.beam, workers=max(1, args.workers),
+                    rounds=args.auto_runs, stagnation_rounds=args.auto_stagnation_runs,
+                    frontier=max(1, args.auto_splice_frontier),
+                    seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
+                          else 0 if args.seed is None else int(args.seed)),
+                )
+                result = optimise_user_splices(
+                    level, replay.frames, stages, splice_config,
+                    completion_policy=args.auto_completion_policy,
+                    best_callback=lambda frames: _write_result(
+                        source, output_path, replay_output_path, encode_complex_replay(frames)),
+                    progress=lambda message: (
+                        _print_baseline_line(message, color=common_config.color)
+                        if message.startswith("[auto:user-splice:baseline]")
+                        else _print_best_line(message, color=common_config.color)
+                        if message.startswith("[auto:user-splice] improved ")
+                        else print(message, flush=True)),
+                )
+                if not result.improvements:
+                    print("[auto:user-splice] no verified improvement; existing output retained")
+                print(f"[auto:user-splice] {result.attempts} stage searches; "
+                      f"{result.evaluations} evaluations; {result.improvements} improvements")
+                return
             splice_config = RandomSpliceConfig(
                 points=args.auto_splice_points,
                 mode=args.auto_splice_mode,

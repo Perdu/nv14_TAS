@@ -91,8 +91,8 @@ class RandomSpliceConfig:
         for field in ("splice_rounds", "repair_rounds"):
             if type(getattr(self, field)) is not int or getattr(self, field) < 1:
                 raise ValueError(f"random splice {field} must be a positive integer")
-        if self.search_backend not in ("local", "endpoint-auto"):
-            raise ValueError("random splice search_backend must be local or endpoint-auto")
+        if self.search_backend not in ("local", "endpoint-auto", "both"):
+            raise ValueError("random splice search_backend must be local, endpoint-auto or both")
         if not 1 <= self.endpoint_max_retime <= 3:
             raise ValueError("random splice endpoint_max_retime must be between 1 and 3")
         if self.endpoint_mutation_span < 1 or self.endpoint_repair_lookback < 1 or self.endpoint_repair_steps < 0:
@@ -469,6 +469,8 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
                   editable_end: int | None = None, include_partial: bool = False):
     if start > (goal.target_frame if editable_end is None else editable_end) or goal.target_frame >= len(frames):
         return (), 0
+    if config.search_backend == "both":
+        raise ValueError("splice-search=both is only supported for user-defined splice-files")
     if config.search_backend == "endpoint-auto":
         # Reuse the exact endpoint Hybrid search and evaluator, but *not* its
         # checkpoint publishing: only random-splice may commit a completed,

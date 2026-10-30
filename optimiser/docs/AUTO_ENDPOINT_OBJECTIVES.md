@@ -188,3 +188,27 @@ not the original worker streams.
 
 The equivalent CLI options are `--auto-performance-stats` and
 `--auto-shared-refinement-proposals 128`.
+
+#### Ordered user-defined multi-splice goals
+
+The integrated Python multi-splicer accepts `[auto] splice-files = ["203",
+"408", "switch", "end"]`. Entries are basename identifiers resolved, in
+that order, under `../splices/LEVEL/` inferred from the replay input path (or
+under `splice-directory` if supplied). Each file is a Local TOML goal with an
+explicit objective, target frame, and optionally an editable range and
+interaction requirements. The list automatically enables the `user` splicing
+strategy. Existing random, complexity and physics strategies are unchanged.
+The final named goal drives ranking; verified full completion and preserved
+route controls remain mandatory when starting from a completed replay.
+
+### Both search backends with stage-skip elites
+
+For named `splice-files`, use `[auto] splice-search = "both"` to run Local
+population and endpoint Auto Hybrid for each stage with the same *combined*
+per-branch `splice-iterations` budget (Local gets the odd remainder). The
+resulting candidates share a verified frontier. From the third stage onward,
+seeds include top candidates from **n-2** as well as **n-1**, even if the
+n-1 optimization would hurt the final run. All earlier named goals are
+rechecked before admitting candidates and before saving final results; no
+required interaction or completion constraint is skipped. Cross-round stage
+elites are also retained.
