@@ -51,7 +51,7 @@ def test_temporary_best_is_not_saved_and_budget_is_shared(monkeypatch):
     ]
     calls = []
 
-    def fake_stage_search(level, branch, stage, config, rng):
+    def fake_stage_search(level, branch, stage, config, rng, **kwargs):
         calls.append((stage.name, config.iterations))
         if stage.name == '203':
             return ((better, 10),), 9, 2

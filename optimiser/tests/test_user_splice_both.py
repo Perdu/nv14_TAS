@@ -84,7 +84,7 @@ def test_third_stage_receives_n_minus_two_seed_despite_detrimental_middle(monkey
     assert EndpointEvaluator(level, stages[1].goal).evaluate(middle).feasible
     record = []
 
-    def fake_stage_search(level, branch, stage, config, rng):
+    def fake_stage_search(level, branch, stage, config, rng, **kwargs):
         record.append((stage.name, branch))
         if stage.name == '203' and branch == source:
             return ((earlier, 10),), 1, 1
@@ -132,7 +132,7 @@ def test_stage_elites_persist_into_next_outer_round(monkeypatch):
     ]
     calls = []
 
-    def fake_search(level, branch, stage, config, rng):
+    def fake_search(level, branch, stage, config, rng, **kwargs):
         calls.append((stage.name, branch))
         # Discover stage 203's winner once, then never return it again.
         if stage.name == '203' and calls.count(('203', source)) == 1:

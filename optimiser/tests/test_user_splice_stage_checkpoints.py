@@ -76,7 +76,7 @@ def test_cli_writes_named_stage_replays_beside_main_outputs(tmp_path, monkeypatc
         '--output', str(output), '--replay-output', str(replay), '--workers', '1'])
     import nv14_user_splice as us
     candidate = (InputFrame(left=True),) + source[1:]
-    monkeypatch.setattr(us, '_search_stage', lambda lvl, branch, stage, config, rng:
+    monkeypatch.setattr(us, '_search_stage', lambda lvl, branch, stage, config, rng, **kwargs:
                         (((candidate, stage.goal.target_frame),), 1, 1))
     main()
     for name in ('230', 'end'):

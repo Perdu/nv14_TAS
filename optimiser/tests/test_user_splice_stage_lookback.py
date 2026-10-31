@@ -94,7 +94,7 @@ def test_entire_stage_pipeline_keeps_configured_history(monkeypatch):
 
     monkeypatch.setattr(us, '_stage_sources_history', spy)
     monkeypatch.setattr(us, '_search_stage',
-                        lambda level, branch, stage, config, rng: ((), 0, 1))
+                        lambda level, branch, stage, config, rng, **kwargs: ((), 0, 1))
     optimise_user_splices(level, frames, stages,
                           RandomSpliceConfig(iterations=2, rounds=1,
                                              stage_lookback=3),

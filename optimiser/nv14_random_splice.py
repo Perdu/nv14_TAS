@@ -499,7 +499,8 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
                   *, start: int, config: RandomSpliceConfig, iterations: int,
                   rounds: int, seed: int, progress: Callable[[str], None] | None = None,
                   editable_end: int | None = None, include_partial: bool = False,
-                  stagnation_rounds: int | None = None):
+                  stagnation_rounds: int | None = None,
+                  best_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None):
     # With a backend-specific patience, a single uninterrupted search owns
     # its evolving population and applies stagnation after each *real* round.
     if stagnation_rounds is not None and (
@@ -540,6 +541,8 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             progress=progress, frontier_callback=survivors.extend,
             frontier_limit=min(max(6, config.frontier * 3), config.beam),
             stagnation_rounds=stagnation_rounds or 0,
+            best_callback=(lambda candidate: best_callback(candidate.frames, candidate.evaluation.frame))
+            if best_callback is not None else None,
         )
         # Normal seam searches only offer feasible endpoints. Progressive
         # frontier searches may also carry live near-misses into the next
@@ -569,6 +572,8 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             stagnation_rounds=stagnation_rounds if stagnation_rounds is not None else 20,
         ),
         progress=progress,
+        best_callback=(lambda candidate: best_callback(candidate.frames, candidate.evaluation.frame))
+        if best_callback is not None else None,
     )
     # Local population deliberately converts Ctrl+C into a partial result so
     # manual Local searches can retain their feasible endpoints. Random-splice

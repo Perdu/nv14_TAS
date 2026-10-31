@@ -44,6 +44,7 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                   rng: random.Random,
                   *, stage_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
                   progress: Callable[[str], None] | None = None,
+                  candidate_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
                   ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Run the requested backends with one shared per-branch proposal budget.
 
@@ -56,10 +57,12 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
     """
     if (config.splice_auto_stagnation_rounds or config.splice_local_stagnation_rounds):
         return _search_stage_backend_phases(
-            level, branch, stage, config, rng, stage_rank=stage_rank, progress=progress)
+            level, branch, stage, config, rng, stage_rank=stage_rank,
+            progress=progress, candidate_callback=candidate_callback)
     if config.splice_stagnation_rounds:
         return _search_stage_until_stagnant(
-            level, branch, stage, config, rng, stage_rank=stage_rank, progress=progress)
+            level, branch, stage, config, rng, stage_rank=stage_rank,
+            progress=progress, candidate_callback=candidate_callback)
     if config.search_backend == "both":
         if config.iterations < 2:
             raise ValueError("splice-search=both requires splice-iterations >= 2")
@@ -78,7 +81,8 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                 editable_end=stage.end,
                 config=replace(config, search_backend=backend),
                 iterations=iterations, rounds=config.splice_rounds,
-                seed=rng.getrandbits(63), include_partial=True)
+                seed=rng.getrandbits(63), include_partial=True,
+                **({"best_callback": candidate_callback} if candidate_callback else {}))
         except ValueError as exc:
             if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
                 raise
@@ -107,6 +111,7 @@ def _search_stage_backend_phases(
     config: RandomSpliceConfig, rng: random.Random,
     *, stage_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
     progress: Callable[[str], None] | None = None,
+    candidate_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
 ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Run each backend continuously until its own stagnant-round limit.
 
@@ -150,6 +155,23 @@ def _search_stage_backend_phases(
                 progress(f"[auto:user-splice:refine] {stage.name!r}: "
                          f"cycle {cycle}, starting continuous {backend} phase "
                          f"(stop after {patience} stagnant rounds)")
+            phase_improved = False
+
+            def on_live_best(frames: tuple[InputFrame, ...], frame: int) -> None:
+                nonlocal incumbent, best_rank, phase_improved, cycle_improved
+                candidate = tuple(frames)
+                merged.setdefault(candidate, frame)
+                # A backend improvement is not necessarily admissible at this
+                # stage: earlier named goals must still hold.
+                candidate_rank = rank(candidate)
+                if candidate_rank is not None and (
+                    best_rank is None or candidate_rank < best_rank
+                ):
+                    incumbent, best_rank = candidate, candidate_rank
+                    phase_improved = cycle_improved = True
+                if candidate_callback is not None:
+                    candidate_callback(candidate, frame)
+
             try:
                 found, used = _local_search(
                     level, search_seed, stage.goal, start=stage.start,
@@ -157,14 +179,14 @@ def _search_stage_backend_phases(
                     config=replace(config, search_backend=backend),
                     iterations=iterations, rounds=0,
                     stagnation_rounds=patience,
-                    seed=rng.getrandbits(63), include_partial=True)
+                    seed=rng.getrandbits(63), include_partial=True,
+                    best_callback=on_live_best if candidate_callback is not None else None)
             except ValueError as exc:
                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
                     raise
                 found, used = (), 0
             evaluations += used
             calls += 1
-            phase_improved = False
             near_miss = search_seed
             near_progress = best_progress
             for candidate, frame in found:
@@ -205,6 +227,7 @@ def _search_stage_until_stagnant(
     config: RandomSpliceConfig, rng: random.Random,
     *, stage_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
     progress: Callable[[str], None] | None = None,
+    candidate_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
 ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Alternate backend turns until N full cycles make no stage improvement.
 
@@ -251,7 +274,8 @@ def _search_stage_until_stagnant(
                     editable_end=stage.end,
                     config=replace(config, search_backend=backend),
                     iterations=iterations, rounds=config.splice_rounds,
-                    seed=rng.getrandbits(63), include_partial=True)
+                    seed=rng.getrandbits(63), include_partial=True,
+                    **({"best_callback": candidate_callback} if candidate_callback else {}))
             except ValueError as exc:
                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
                     raise
@@ -730,34 +754,21 @@ def optimise_user_splices(
                              f"range {stage.start}:{stage.end}, target {stage.goal.target_frame}; "
                              f"search={'Auto -> Local' if config.search_backend == 'both' else config.search_backend}; "
                              f"{allocation}")
-                if (config.splice_stagnation_rounds or config.splice_auto_stagnation_rounds
-                        or config.splice_local_stagnation_rounds):
-                    def admissible_rank(candidate, through=index + 1):
-                        if not valid_stages(candidate, through):
-                            return None
-                        return original_endpoints[through - 1].evaluate(candidate).objective_key
-                    found, used, calls = _search_stage(
-                        level, branch, stage, config, rng,
-                        stage_rank=admissible_rank, progress=progress)
-                else:
-                    found, used, calls = _search_stage(level, branch, stage, config, rng)
-                attempts += calls
-                evaluations += used
-                for candidate, _ in (*found, (branch, stage.goal.target_frame)):
-                    # Older-stage seeds can bypass detrimental intervening optimisations,
-                    # but cannot bypass the requirements of any named goal.
+                def accept_stage_candidate(candidate: tuple[InputFrame, ...]) -> None:
+                    nonlocal current, best_output, best_rank, improvements, improved, temp_gains
+                    # Validate in the same way as the post-search frontier.
+                    # Native backend callbacks can arrive before the phase
+                    # ends, so stage checkpoints are now durable immediately.
                     if not valid_stages(candidate, index + 1):
-                        continue
+                        return
                     normalized = tuple(editable_frames(decode_complex_replay(
                         encode_complex_replay(candidate)).frames))
                     if not valid_stages(normalized, index + 1):
-                        continue
+                        return
                     evaluation = original_endpoints[index].evaluate(normalized)
                     rank = evaluation.objective_key
                     if normalized not in eligible or rank < eligible[normalized]:
                         eligible[normalized] = rank
-                    # Stage-only improvements are useful for debugging but
-                    # never publish a replay without all final verifications.
                     candidate_final = (final_rank(normalized)
                                        if index == len(stages) - 1 else None)
                     is_final_gain = (candidate_final is not None
@@ -768,14 +779,13 @@ def optimise_user_splices(
                     if old_stage_rank is None or rank < old_stage_rank:
                         stage_best[index] = rank
                         stage_best_evaluation[index] = evaluation
-                        stage_checkpoints[index] = stage_export(normalized)
+                        exported = stage_export(normalized)
+                        stage_checkpoints[index] = exported
                         stage_checkpoint_evals[index] = evaluation
                         stage_checkpoint_origin[index] = "this run"
                         temp_gains += 1
                         if stage_best_callback:
-                            # Stage checkpoints are intentionally independent
-                            # of the fully verified final-run checkpoint.
-                            stage_best_callback(stage.name, stage_export(normalized))
+                            stage_best_callback(stage.name, exported)
                         if progress and not is_final_gain:
                             label = ("first feasible" if old_stage_rank is None
                                      else "new stage best")
@@ -797,6 +807,28 @@ def optimise_user_splices(
                                      f"({stage.name}); "
                                      f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}; "
                                      "saved")
+
+                def live_candidate(candidate: tuple[InputFrame, ...], frame: int) -> None:
+                    accept_stage_candidate(candidate)
+
+                if (config.splice_stagnation_rounds or config.splice_auto_stagnation_rounds
+                        or config.splice_local_stagnation_rounds):
+                    def admissible_rank(candidate, through=index + 1):
+                        if not valid_stages(candidate, through):
+                            return None
+                        return original_endpoints[through - 1].evaluate(candidate).objective_key
+                    found, used, calls = _search_stage(
+                        level, branch, stage, config, rng,
+                        stage_rank=admissible_rank, progress=progress,
+                        candidate_callback=live_candidate)
+                else:
+                    found, used, calls = _search_stage(
+                        level, branch, stage, config, rng,
+                        candidate_callback=live_candidate)
+                attempts += calls
+                evaluations += used
+                for candidate, _ in (*found, (branch, stage.goal.target_frame)):
+                    accept_stage_candidate(candidate)
             if progress:
                 progress(f"[auto:user-splice:stage] round {round_no+1} "
                          f"{stage.name!r}: {attempts - attempts_before_stage} "
