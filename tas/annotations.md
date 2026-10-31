@@ -3014,12 +3014,17 @@ rerecords: 906
 
 
 # 97-0
-rerecords: 0
+rerecords: 550
 
-
+Branch 9: direct way up in the beginning
+Branch 8: double jump in the beginning
+Branch 7: double jump without going up to the roof
+Branch 6: closest call to beat drone 3
+Branch 5: fastest way to splice 353
+Branch 4: trying to go above drone 3
 
 # 97-1
-rerecords: 99
+rerecords: 113
 
 
 
@@ -3096,9 +3101,11 @@ Branch 5: taking switch0 before the drone
 I lost the "taking switch 0 after the drone" branch, which might still be faster but massively deoptimized. Current route is ~5f faster than that branch, which was not optimized
 
 # 99-3
-rerecords: 223
+rerecords: 224
 
 I have no idea how to properly route or splice the lower 2 sections. @todo
+
+Branch 5: wj at the switch
 
 # 99-4
 rerecords: 1022
@@ -3112,4 +3119,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 270125
+# Total rerecords: 270690
