@@ -11,8 +11,14 @@ EXTRACT_FOLDER="extract"
 if [ $# -lt 1 ]; then
     OPTIM_FILE="optimiser/wip/optim.ltm"
 else
-    OPTIM_FILE="optimiser/wip/$1.ltm"
+    if [ $# -ge 2 ]; then
+        OPTIM_FILE="optimiser/wip/$1_$2.ltm"
+    else
+        OPTIM_FILE="optimiser/wip/$1.ltm"
+    fi
 fi
+
+echo "Getting $OPTIM_FILE"
 
 tar xzf "$OPTIM_FILE" -C $EXTRACT_FOLDER
 sed '0,/^|K20/d' "$EXTRACT_FOLDER/inputs" | xclip -selection clipboard
