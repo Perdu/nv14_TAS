@@ -1,0 +1,7 @@
+[auto]
+splice-files = ["423", "475", "581", "664", "717", "785", "837", "end"]
+splice-search = "both"
+splice-iterations = 10000
+splice-rounds = 10
+splice-frontier = 3
+runs = 5
