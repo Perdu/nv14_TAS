@@ -43,24 +43,28 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                   rng: random.Random) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Run the requested backends with one shared per-branch proposal budget.
 
-    With ``both``, an odd budget gives the extra proposal to Local. This is
-    deliberately *not* two full searches: the sum of backend iteration budgets
-    is exactly config.iterations. Native evaluation counts are reported as is.
+    With ``both``, endpoint Auto runs first. Local then starts from the
+    best Auto candidate (or the original stage seed when Auto did not improve
+    on it). Both backends retain their own share of the iteration budget,
+    and their candidates are merged for the next named stage.
+    The odd proposal goes to Local, so the combined backend budget remains
+    exactly config.iterations per worker and internal round.
     """
     if config.search_backend == "both":
         if config.iterations < 2:
             raise ValueError("splice-search=both requires splice-iterations >= 2")
-        modes = (("local", (config.iterations + 1) // 2),
-                 ("endpoint-auto", config.iterations // 2))
+        modes = (("endpoint-auto", config.iterations // 2),
+                 ("local", (config.iterations + 1) // 2))
     else:
         modes = ((config.search_backend, config.iterations),)
     merged: dict[tuple[InputFrame, ...], int] = {}
     evaluations = 0
     searches = 0
+    search_seed = branch
     for backend, iterations in modes:
         try:
             found, used = _local_search(
-                level, branch, stage.goal, start=stage.start,
+                level, search_seed, stage.goal, start=stage.start,
                 editable_end=stage.end,
                 config=replace(config, search_backend=backend),
                 iterations=iterations, rounds=config.splice_rounds,
@@ -73,6 +77,17 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
         searches += 1
         for candidate, frame in found:
             merged.setdefault(tuple(candidate), frame)
+        if config.search_backend == "both" and backend == "endpoint-auto" and found:
+            # Choose by the *stage* goal, not by discovery order. Auto returns
+            # feasible winners and diverse partial survivors. Keep a feasible
+            # incumbent over an infeasible near-miss, and use the same
+            # endpoint progress ranking as the search for partial branches.
+            # On tied ranks, prefer the Auto candidate for extra diversity.
+            evaluator = EndpointEvaluator(level, stage.goal)
+            auto_seeds = list(dict.fromkeys(tuple(candidate) for candidate, _ in found))
+            auto_seeds.append(branch)
+            search_seed = min(auto_seeds,
+                              key=lambda frames: evaluator.evaluate(frames).progress_key)
     return tuple(merged.items()), evaluations, searches
 
 
@@ -202,8 +217,8 @@ def optimise_user_splices(
         progress(f"[auto:user-splice:baseline] {text}; {len(stages)} named goals; "
                  f"{'full completion' if require_complete else 'endpoint checkpoint'} required")
         if config.search_backend == "both":
-            allocation = (f"Local {(config.iterations + 1) // 2} + "
-                          f"endpoint Auto {config.iterations // 2}")
+            allocation = (f"endpoint Auto {config.iterations // 2} -> "
+                          f"Local {(config.iterations + 1) // 2} (seeded from Auto best)")
         else:
             allocation = f"{config.search_backend} {config.iterations}"
         progress(f"[auto:user-splice:budget] {allocation} proposals per worker "
@@ -244,7 +259,7 @@ def optimise_user_splices(
                              f"stage {index+1}/{len(stages)} {stage.name!r} "
                              f"seed {seed_index}/{len(branches)}; "
                              f"range {stage.start}:{stage.end}, target {stage.goal.target_frame}; "
-                             f"search={config.search_backend}; "
+                             f"search={'Auto -> Local' if config.search_backend == 'both' else config.search_backend}; "
                              f"{config.iterations * config.workers * config.splice_rounds} "
                              "nominal proposal slots for this seed "
                              "(shared by the two backends when search=both)")
