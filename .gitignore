@@ -6,6 +6,8 @@ volume/n_levels/*_optimised*.ltm
 !volume/ghosts/
 !volume/ghosts/*.csv
 !volume/splices/
+volume/splices/*/.#*
+volume/splices/*/#*
 extract/
 db_config.py
 __pycache__/
