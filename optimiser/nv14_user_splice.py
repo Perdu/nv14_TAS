@@ -302,6 +302,9 @@ def optimise_user_splices(
         stage_best.append(evaluation.objective_key if evaluation is not None else None)
         stage_best_evaluation.append(evaluation)
     restored_stage_frames: list[tuple[InputFrame, ...] | None] = [None] * len(stages)
+    stage_checkpoints: list[tuple[InputFrame, ...] | None] = [None] * len(stages)
+    stage_checkpoint_evals: list[EndpointEvaluation | None] = [None] * len(stages)
+    stage_checkpoint_origin = ["saved" for _ in stages]
     for i, stage in enumerate(stages):
         for archived in (saved_stage_candidates or {}).get(stage.name, ()):
             # Saved movies may have been trimmed to an earlier finish.  Apply
@@ -313,6 +316,12 @@ def optimise_user_splices(
                              "ignored checkpoint failing the named goals")
                 continue
             score = original_endpoints[i].evaluate(replay)
+            # Keep the best validated on-disk candidate independently of the
+            # current source, which can already be better than the file.
+            if (stage_checkpoint_evals[i] is None or
+                    score.objective_key < stage_checkpoint_evals[i].objective_key):
+                stage_checkpoints[i] = replay
+                stage_checkpoint_evals[i] = score
             if stage_best[i] is None or score.objective_key < stage_best[i]:
                 stage_best[i] = score.objective_key
                 stage_best_evaluation[i] = score
@@ -349,6 +358,52 @@ def optimise_user_splices(
                  f"({stages[first_stage].name!r} through {stages[last_stage].name!r}); "
                  "earlier named goals remain mandatory; "
                  "partial-run outputs remain stage checkpoints")
+
+    def report_checkpoint_summary(label: str) -> None:
+        """Show verified full-run propagation, not misleading stage-only ranks.
+
+        'In best' means the saved replay's input prefix through this stage is
+        literally present in the completed run. 'Covered' means the completed
+        run meets or exceeds its objective, possibly using a different route.
+        Neither claims that a temporary stage checkpoint completes the level.
+        """
+        if progress is None:
+            return
+        progress(f"[auto:user-splice:summary] {label}: checkpoint propagation "
+                 f"({sum(r is not None for r in stage_checkpoints)}/{len(stages)} saved)")
+        for i, stage in enumerate(stages):
+            archived = stage_checkpoints[i]
+            candidate = stage_checkpoint_evals[i]
+            if archived is None or candidate is None:
+                progress(f"[auto:user-splice:summary:empty] {stage.name!r}: "
+                         "no saved stage gain")
+                continue
+            best_stage = None
+            best_workspace = _materialise_splice_tail(best_output, len(current) - 1)
+            if best_rank is not None and valid_stages(best_workspace, i + 1):
+                best_stage = original_endpoints[i].evaluate(best_workspace)
+            detail = _stage_improvement_text(stage.goal, None, candidate)
+            if best_stage is None or candidate.objective_key < best_stage.objective_key:
+                against = ("best run has no feasible checkpoint" if best_stage is None
+                           else "full run: " + _stage_improvement_text(stage.goal, None, best_stage))
+                progress(f"[auto:user-splice:summary:pending] {stage.name!r}: "
+                         f"pending ({stage_checkpoint_origin[i]}); "
+                         f"splice: {detail}; {against}")
+            else:
+                # Normalize jump triggers and implicit neutral tail before
+                # comparing prefixes.  Downstream edits may improve a stage
+                # objective without literally preserving the same inputs.
+                archived_prefix = _materialise_splice_tail(archived, stage.end - 1)
+                best_prefix = _materialise_splice_tail(best_output, stage.end - 1)
+                exact = (tuple(editable_frames(archived_prefix[:stage.end])) ==
+                         tuple(editable_frames(best_prefix[:stage.end])))
+                state = "in best (same input prefix)" if exact else "covered by best (different route)"
+                progress(f"[auto:user-splice:summary:propagated] {stage.name!r}: "
+                         f"{state} ({stage_checkpoint_origin[i]}); "
+                         f"splice: {detail}; full run: "
+                         f"{_stage_improvement_text(stage.goal, None, best_stage)}")
+
+    report_checkpoint_summary("startup")
 
     # Elites are retained across rounds as well as across stage boundaries.
     # Their rank is the objective of the stage that produced them; do not
@@ -415,6 +470,9 @@ def optimise_user_splices(
                     if old_stage_rank is None or rank < old_stage_rank:
                         stage_best[index] = rank
                         stage_best_evaluation[index] = evaluation
+                        stage_checkpoints[index] = stage_export(normalized)
+                        stage_checkpoint_evals[index] = evaluation
+                        stage_checkpoint_origin[index] = "this run"
                         temp_gains += 1
                         if stage_best_callback:
                             # Stage checkpoints are intentionally independent
@@ -481,6 +539,8 @@ def optimise_user_splices(
                      f"{improvements} saved improvement(s); stagnant {stagnant}"
                      + (f"; unmet checkpoints: {', '.join(unfulfilled)}"
                         if unfulfilled else ""))
+        report_checkpoint_summary(f"after round {round_no+1}")
         if config.stagnation_rounds and stagnant >= config.stagnation_rounds:
             break
+    report_checkpoint_summary("final")
     return UserSpliceResult(best_output, improvements, attempts, evaluations)

@@ -3815,9 +3815,11 @@ def main() -> None:
                         _print_baseline_line(message, color=common_config.color)
                         if message.startswith("[auto:user-splice:baseline]")
                         else _print_temporary_line(message, color=common_config.color)
-                        if message.startswith("[auto:user-splice:temporary]")
+                        if message.startswith(("[auto:user-splice:temporary]",
+                                               "[auto:user-splice:summary:pending]"))
                         else _print_best_line(message, color=common_config.color)
-                        if message.startswith("[auto:user-splice] improved ")
+                        if message.startswith(("[auto:user-splice] improved ",
+                                               "[auto:user-splice:summary:propagated]"))
                         else print(message, flush=True)),
                 )
                 if not result.improvements:
