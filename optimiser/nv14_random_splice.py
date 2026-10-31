@@ -42,6 +42,17 @@ class RandomSpliceConfig:
     endpoint_mutation_span: int = 24
     endpoint_repair_steps: int = 32
     endpoint_repair_lookback: int = 40
+    # Forward the regular endpoint Auto refinement settings when it is used
+    # as a splice backend. Defaults preserve the existing search behavior.
+    endpoint_auto_mutation_share: float = 0.5
+    endpoint_progressive_refinement: bool = True
+    endpoint_refinement_share: float = 0.25
+    endpoint_adaptive_refinement: bool = True
+    endpoint_refinement_cycle: int = 128
+    endpoint_refinement_polish: bool = True
+    endpoint_refinement_chain_steps: int = 32
+    endpoint_shared_refinement_proposals: int = 0
+    endpoint_performance_stats: bool = False
     repair_iterations: int = 250  # Local proposals per subsequent anchor and worker per round
     splice_rounds: int = 1  # backend search rounds PER waypoint, not global Auto runs
     repair_rounds: int = 1  # backend search rounds PER continuation repair
@@ -485,6 +496,15 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             completion_policy="checkpoint",
             repair_steps=config.endpoint_repair_steps,
             repair_lookback=config.endpoint_repair_lookback,
+            auto_mutation_share=config.endpoint_auto_mutation_share,
+            progressive_refinement=config.endpoint_progressive_refinement,
+            refinement_share=config.endpoint_refinement_share,
+            adaptive_refinement=config.endpoint_adaptive_refinement,
+            refinement_cycle=config.endpoint_refinement_cycle,
+            refinement_polish=config.endpoint_refinement_polish,
+            refinement_chain_steps=config.endpoint_refinement_chain_steps,
+            shared_refinement_proposals=config.endpoint_shared_refinement_proposals,
+            performance_stats=config.endpoint_performance_stats,
         )
         survivors = []
         baseline, winner, evaluations = optimise_auto_endpoint_campaign(

@@ -1387,7 +1387,64 @@ splice-frontier = 3
 ```
 
 This is sufficient to select `random-splice = true` and `splice-mode = "user"`
-automatically. It reads `../splices/97-2/{203,408,switch,end}.txt` (or `.toml`)
+automatically.
+
+To **share all multi-splicer settings between levels**, keep a reusable
+`[multi-splicer]` section in `examples/config.toml` alongside your regular
+`[auto]` and `[common]` settings:
+
+```toml
+# examples/config.toml
+[multi-splicer]
+search = "both"
+iterations = 400    # proposals per worker, per stage seed, per internal round
+rounds = 3         # internal rounds per stage seed
+frontier = 3
+runs = 5           # complete passes through the named splices
+```
+
+Then each level's file needs only the ordered splice names:
+
+```toml
+# ../splices/97-2/multi-splicer.toml
+[multi-splicer]
+files = ["203", "408", "switch", "end"]
+```
+
+Options from the two `[multi-splicer]` tables merge by key: the level file
+can optionally override individual shared options without resetting the others.
+The shared `[multi-splicer]` table is dormant for ordinary Auto runs if no
+named splice list is selected, so it does not override regular `[auto] runs`
+or other Auto settings. Both formats continue to work when everything is
+specified in a single file.
+
+Run from the `optimiser/` directory:
+
+```sh
+python3 optimize_replay.py auto ../n_levels/97-2.ltm \
+  --config examples/config.toml \
+  --splice-config ../splices/97-2/multi-splicer.toml \
+  --output wip/optim.ltm --replay-output wip/97-2.txt --workers 15
+```
+
+`--splice-config` overlays all preceding `--config` files; explicit CLI
+options win regardless of argument order. Splice goals are resolved relative
+to the `--splice-config` file's directory by default; an explicit
+`splice-directory` in the TOML or `--auto-splice-directory` on the CLI wins.
+The standard `[auto]` table in existing `multi-splicer.toml` files remains
+supported. `[multi-splicer]` may also appear in an ordinary `--config` file,
+and does not affect Local or other modes. Within this special table, short
+names (`files`, `search`, `iterations`, `rounds`, `frontier`, `directory`,
+`start`, `stop`) refer to the multi-splicer; standard `splice-*` keys are
+also accepted. `runs` means full multi-splice passes, while `iterations`
+means **splice** proposals, not the unrelated regular Auto `iterations`.
+Other regular `[auto]` keys can be overridden here if needed. When using
+`splice-search = "endpoint-auto"` or `"both"`, the named splicer also forwards
+Auto's mutation mix, progressive/adaptive refinement, polishing, chain length,
+shared refinement proposals and performance-statistics settings to its endpoint
+Auto backend; the backend's own per-stage proposal budget is still determined
+by `splice-iterations`.
+ It reads `../splices/97-2/{203,408,switch,end}.txt` (or `.toml`)
 when the input is `../n_levels/97-2.ltm`. Each goal must include a `[local]`
 `objective` and `target-frame`; its `range`, region, object, velocity and
 interaction constraints are interpreted by the same goal parser as

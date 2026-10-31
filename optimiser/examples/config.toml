@@ -86,3 +86,10 @@ jump-length = "1:"
 minimum-gap = 1
 top-results = 10
 # fixed-jump-frames = [42, 73]
+
+[multi-splicer]
+search = "both"
+iterations = 10000
+rounds = 10
+frontier = 3
+runs = 5

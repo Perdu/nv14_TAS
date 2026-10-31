@@ -1302,7 +1302,8 @@ def parse_immutable_jumps(text: str) -> tuple[ImmutableJumpSpec, ...]:
 
 
 _CONFIG_TABLE_NAMES = frozenset(
-    {"common", "goal", "auto", "local", "jump-pattern", "jump_pattern", "dump-player", "dump_player", "encode-video", "encode_video"}
+    {"common", "goal", "auto", "local", "multi-splicer", "multi_splicer",
+     "jump-pattern", "jump_pattern", "dump-player", "dump_player", "encode-video", "encode_video"}
 )
 _CONFIG_APPEND_DESTS = frozenset(
     {"retime", "auto_parents", "require_interaction", "avoid_interaction",
@@ -1310,7 +1311,7 @@ _CONFIG_APPEND_DESTS = frozenset(
      "require_jumps", "auto_require_jumps",
      "secondary_replays", "secondary_colors", "secondary_labels"}
 )
-_CONFIG_RESERVED_DESTS = frozenset({"config", "goal_config", "input", "mode"})
+_CONFIG_RESERVED_DESTS = frozenset({"config", "goal_config", "splice_config", "input", "mode"})
 
 
 def _find_option_paths(argv: Sequence[str], option: str) -> tuple[Path, ...]:
@@ -1576,8 +1577,12 @@ def _load_config_defaults(
     config_path: Path,
     command_parser: argparse.ArgumentParser,
     mode: str,
-) -> dict[str, object]:
-    """Load and validate common plus selected-mode TOML defaults."""
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Return regular and named-splicer defaults separately.
+
+    Keep [multi-splicer] values dormant until a named splice file list is
+    supplied. A reusable base config must not change ordinary Auto runs.
+    """
     try:
         with config_path.open("rb") as stream:
             data = tomllib.load(stream)
@@ -1599,7 +1604,8 @@ def _load_config_defaults(
         if isinstance(section, Mapping) and section_name not in _CONFIG_TABLE_NAMES:
             raise ValueError(
                 f"unknown TOML section [{section_name}] in {config_path}; "
-                "use [common], [goal], [auto], [local], [jump-pattern], [dump-player], or [encode-video]"
+                "use [common], [goal], [auto], [multi-splicer], [local], "
+                "[jump-pattern], [dump-player], or [encode-video]"
             )
         if section_name in _CONFIG_TABLE_NAMES and not isinstance(section, Mapping):
             raise ValueError(
@@ -1610,6 +1616,9 @@ def _load_config_defaults(
     if not isinstance(common, Mapping):
         raise ValueError(f"TOML [common] section must be a table: {config_path}")
     mode_values = _config_mode_section(data, mode)
+    # This optional table is confined to Auto. It overlays [auto] values in
+    # the same file, but does not change any other optimisation mode.
+    multi_values = _config_mode_section(data, "multi-splicer") if mode == "auto" else {}
 
     raw_values: list[tuple[str, object, bool]] = [
         (str(key), value, False)
@@ -1636,21 +1645,40 @@ def _load_config_defaults(
         for action in command_parser._actions
         if action.dest != "help"
     }
+    # Unprefixed names in [multi-splicer] refer to the *named splicer*,
+    # not to unrelated Auto settings (in particular iterations/rounds).
+    splice_aliases = dict(mode_aliases)
+    splice_aliases.update({
+        "files": "auto_splice_files",
+        "directory": "auto_splice_directory",
+        "start": "auto_splice_start",
+        "stop": "auto_splice_stop",
+        "search": "auto_splice_search",
+        "iterations": "auto_splice_iterations",
+        "rounds": "auto_splice_rounds",
+        "frontier": "auto_splice_frontier",
+    })
+    # The dedicated table is last within its file: a splice override wins over
+    # a general [auto] value, but any explicit CLI flag still wins later.
+    raw_values.extend((str(key), value, "splice") for key, value in multi_values.items())
     defaults: dict[str, object] = {}
+    multi_defaults: dict[str, object] = {}
     for key, value, allow_mode_aliases in raw_values:
         normalised_key = _normalise_config_key(key)
         destination = (
-            mode_aliases.get(normalised_key) if allow_mode_aliases else None
+            (splice_aliases if allow_mode_aliases == "splice" else mode_aliases).get(normalised_key)
+            if allow_mode_aliases else None
         ) or general_aliases.get(normalised_key)
         if destination is None:
             raise ValueError(
                 f"unknown TOML option {key!r} for [{mode}] in {config_path}"
             )
         action = actions_by_destination[destination]
-        defaults[destination] = _coerce_config_value(
+        selected = multi_defaults if allow_mode_aliases == "splice" else defaults
+        selected[destination] = _coerce_config_value(
             action, value, key=key, mode=mode
         )
-    return defaults
+    return defaults, multi_defaults
 
 
 # Only goal-related Local values are imported by --goal-config; Local's
@@ -1687,7 +1715,7 @@ def _load_local_goal_defaults(
     conversion, including interaction arrays and rectangle string syntax.
     Unknown or invalid Local configuration still gets a useful error.
     """
-    local_values = _load_config_defaults(config_path, local_parser, "local")
+    local_values, _ = _load_config_defaults(config_path, local_parser, "local")
     return {
         auto_key: local_values[local_key]
         for local_key, auto_key in _LOCAL_GOAL_TO_AUTO.items()
@@ -1781,17 +1809,55 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
     def parse_args(self, args=None, namespace=None) -> argparse.Namespace:
         actual_args = list(sys.argv[1:] if args is None else args)
         config_paths = _find_option_paths(actual_args, "--config")
+        splice_config_paths = _find_option_paths(actual_args, "--splice-config")
         goal_config_paths = _find_option_paths(actual_args, "--goal-config")
         command_parsers = getattr(self, "_command_parsers", {})
         mode = actual_args[0] if actual_args else None
         command_parser = command_parsers.get(mode)
         defaults = {}
+        splice_overrides: set[str] = set()
         if command_parser is not None:
             try:
+                # Preserve per-file precedence while keeping reusable
+                # [multi-splicer] settings out of ordinary Auto campaigns.
+                # Each layer is (regular settings, named-splicer settings).
+                layers: list[tuple[dict[str, object], dict[str, object]]] = []
                 for config_path in config_paths:
-                    # Each file is validated independently; later files win
-                    # for the same destination, while other keys are retained.
-                    defaults.update(_load_config_defaults(config_path, command_parser, mode))
+                    layers.append(_load_config_defaults(
+                        config_path, command_parser, mode))
+                if splice_config_paths:
+                    if mode != "auto":
+                        raise ValueError("--splice-config is only supported in auto mode")
+                    for splice_config_path in splice_config_paths:
+                        layer = _load_config_defaults(
+                            splice_config_path, command_parser, mode)
+                        layers.append(layer)
+                        splice_overrides.update(layer[0])
+                        splice_overrides.update(layer[1])
+
+                # The shared settings may appear in examples/config.toml
+                # without a files array; a later per-level --splice-config
+                # supplies just that array. Do not activate the shared table
+                # for unrelated Auto searches that never name splice files.
+                named_splices = (mode == "auto" and (
+                    any("auto_splice_files" in regular or
+                        "auto_splice_files" in multi
+                        for regular, multi in layers)
+                    or any(token.split("=", 1)[0] == "--auto-splice-files"
+                           for token in actual_args)))
+                for regular, multi in layers:
+                    defaults.update(regular)
+                    if named_splices:
+                        defaults.update(multi)
+
+                if ("auto_splice_files" in splice_overrides
+                        and "auto_splice_mode" not in splice_overrides):
+                    # An explicitly selected named-splice config overrides
+                    # unrelated random/physics defaults inherited from Auto.
+                    defaults["auto_splice_mode"] = "user"
+                if ("auto_splice_files" in splice_overrides
+                        and "auto_random_splice" not in splice_overrides):
+                    defaults["auto_random_splice"] = True
                 if goal_config_paths:
                     if mode != "auto":
                         raise ValueError("--goal-config is only supported in auto mode")
@@ -2987,6 +3053,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     command.add_argument(
+        "--splice-config",
+        modes=auto_modes,
+        type=Path,
+        metavar="MULTI_SPLICER.toml",
+        help=(
+            "additional named multi-splicer TOML applied after --config "
+            "(use [multi-splicer] for splice-files and per-run overrides; "
+            "old [auto] splice files are also supported); CLI flags win"
+        ),
+    )
+    command.add_argument(
         "--goal-config",
         modes=auto_modes,
         type=Path,
@@ -3725,6 +3802,7 @@ def main() -> None:
             if args.auto_splice_mode == "user":
                 from nv14_user_splice import optimise_user_splices
                 directory = (args.auto_splice_directory if args.auto_splice_directory is not None
+                             else args.splice_config.parent if args.splice_config is not None
                              else input_path.parent.parent / "splices" / input_path.stem)
                 stages = _load_named_splice_stages(level, replay.frames, args,
                                                    directory, args.auto_splice_files)
@@ -3732,6 +3810,7 @@ def main() -> None:
                     [stage.name for stage in stages], output_path, replay_output_path,
                     protected_paths=(("input", input_path),
                                      ("TOML config", args.config),
+                                     ("splice config", args.splice_config),
                                      ("levels file", source.levels_file_path),
                                      *((f"splice goal {name}", path) for name, path in
                                        _resolve_named_splice_files(directory, args.auto_splice_files))),
@@ -3753,6 +3832,7 @@ def main() -> None:
                     if alias is not None and source.ltm_movie is not None:
                         for label, protected in (("input", input_path),
                                                  ("config", args.config),
+                                                 ("splice config", args.splice_config),
                                                  ("final output", output_path),
                                                  ("final replay", replay_output_path),
                                                  *((f"splice {key} output", path)
@@ -3841,6 +3921,15 @@ def main() -> None:
                 endpoint_mutation_span=args.auto_mutation_span,
                 endpoint_repair_steps=args.auto_endpoint_repair_steps,
                 endpoint_repair_lookback=args.auto_endpoint_repair_lookback,
+                endpoint_auto_mutation_share=args.auto_endpoint_auto_mutation_share,
+                endpoint_progressive_refinement=args.auto_progressive_refinement,
+                endpoint_refinement_share=args.auto_refinement_share,
+                endpoint_adaptive_refinement=args.auto_adaptive_refinement,
+                endpoint_refinement_cycle=args.auto_refinement_cycle,
+                endpoint_refinement_polish=args.auto_refinement_polish,
+                endpoint_refinement_chain_steps=args.auto_refinement_chain_steps,
+                endpoint_shared_refinement_proposals=args.auto_shared_refinement_proposals,
+                endpoint_performance_stats=args.auto_performance_stats,
                 repair_iterations=args.auto_splice_repair_iterations,
                 splice_rounds=args.auto_splice_rounds,
                 repair_rounds=args.auto_splice_repair_rounds,
