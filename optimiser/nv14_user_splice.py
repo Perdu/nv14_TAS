@@ -327,6 +327,30 @@ def _stage_sources(recent: Sequence[tuple[InputFrame, ...]],
     return result
 
 
+def _stage_sources_history(history: Sequence[Sequence[tuple[InputFrame, ...]]],
+                           frontier: int) -> list[tuple[InputFrame, ...]]:
+    """Add older-stage seeds without displacing the existing n-1/n-2 seeds.
+
+    Keep the exact previous two-frontier selection, then append one distinct
+    candidate from each additional stage in recency order. The extra searches
+    have additional compute cost, but cannot remove an existing search path.
+    """
+    sources = [source for source in history if source]
+    if not sources:
+        return []
+    if len(sources) == 1:
+        return list(dict.fromkeys(sources[0]))[:max(1, frontier)]
+    selected = _stage_sources(sources[0], sources[1], frontier)
+    seen = set(selected)
+    for source in sources[2:]:
+        for candidate in source:
+            if candidate not in seen:
+                selected.append(candidate)
+                seen.add(candidate)
+                break
+    return selected
+
+
 def _materialise_splice_tail(frames: Sequence[InputFrame], target_frame: int
                              ) -> tuple[InputFrame, ...]:
     """Materialise the neutral inputs implicit past a recorded replay's end.
@@ -662,8 +686,7 @@ def optimise_user_splices(
     elites: list[list[tuple[InputFrame, ...]]] = [[] for _ in stages]
     for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
         begun = time.monotonic()
-        previous: list[tuple[InputFrame, ...]] = [current]
-        two_back: list[tuple[InputFrame, ...]] = []
+        history: list[list[tuple[InputFrame, ...]]] = [[current]]
         improved = False
         unfulfilled: list[str] = []
         for index in range(first_stage, last_stage + 1):
@@ -672,11 +695,13 @@ def optimise_user_splices(
             evaluations_before_stage = evaluations
             attempts_before_stage = attempts
             temp_gains = 0
-            branches = _stage_sources(previous, two_back, config.frontier)
-            if progress and index >= 2:
+            branches = _stage_sources_history(history, config.frontier)
+            if progress and len(history) > 1:
+                labels = "/".join(f"n-{i}" for i in range(1, len(history) + 1))
+                counts = "/".join(str(len(source)) for source in history)
                 progress(f"[auto:user-splice] {stage.name!r}: "
-                         f"{len(branches)} seed(s) from n-1/n-2 frontiers "
-                         f"({len(previous)}/{len(two_back)} available)")
+                         f"{len(branches)} seed(s) from {labels} frontiers "
+                         f"({counts} available; lookback {config.stage_lookback})")
             # Previously discovered stage elites are valid candidates without
             # spending more simulation proposals to rediscover them.
             eligible: dict[tuple[InputFrame, ...], tuple] = {}
@@ -719,7 +744,7 @@ def optimise_user_splices(
                 attempts += calls
                 evaluations += used
                 for candidate, _ in (*found, (branch, stage.goal.target_frame)):
-                    # n-2 seeds can bypass a detrimental n-1 optimisation,
+                    # Older-stage seeds can bypass detrimental intervening optimisations,
                     # but cannot bypass the requirements of any named goal.
                     if not valid_stages(candidate, index + 1):
                         continue
@@ -797,14 +822,14 @@ def optimise_user_splices(
                              f"{stage.name!r}: no candidate met all goals through this stage; "
                              f"continuing with {len(fallbacks)} fallback seed(s) "
                              "(final verification still requires all named goals)")
-                two_back, previous = previous, fallbacks
+                history = [fallbacks, *history][:config.stage_lookback]
                 continue
             ordered = sorted(eligible.items(), key=lambda item: item[1])
-            # Preserve at least the top n-2 option independent of whether an
-            # n-1 candidate later wins its own stage ranking.
+            # Keep distinct earlier-stage frontiers independent of whether a
+            # more recent stage wins its own intermediate ranking.
             selected = [candidate for candidate, _ in ordered[:max(1, config.frontier)]]
             elites[index] = selected
-            two_back, previous = previous, selected
+            history = [selected, *history][:config.stage_lookback]
         stagnant = 0 if improved else stagnant + 1
         if progress:
             progress(f"[auto:user-splice] round {round_no+1} complete in "

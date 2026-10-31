@@ -1660,6 +1660,7 @@ def _load_config_defaults(
         "auto_stagnation_rounds": "auto_splice_auto_stagnation_rounds",
         "local_stagnation_rounds": "auto_splice_local_stagnation_rounds",
         "frontier": "auto_splice_frontier",
+        "lookback": "auto_splice_stage_lookback",
     })
     # The dedicated table is last within its file: a splice override wins over
     # a general [auto] value, but any explicit CLI flag still wins later.
@@ -1764,7 +1765,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_searches", "auto_splice_rounds",
     "auto_splice_stagnation_rounds", "auto_splice_auto_stagnation_rounds",
     "auto_splice_local_stagnation_rounds",
-    "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_exit_lookback",
+    "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_stage_lookback", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_directory",
     "auto_splice_start", "auto_splice_stop",
 })
@@ -1795,6 +1796,9 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
         raise SystemExit("--splice-start/--splice-stop require named user splice mode")
     if args.auto_random_splice and args.auto_splice_search == "both" and args.auto_splice_mode != "user":
         raise SystemExit("splice-search=both requires user mode with splice-files")
+    if (args.auto_random_splice and args.auto_splice_mode != "user" and
+            "auto_splice_stage_lookback" in explicit):
+        raise SystemExit("--splice-stage-lookback requires named user splice mode")
     if (args.auto_random_splice and
             (args.auto_splice_stagnation_rounds or args.auto_splice_auto_stagnation_rounds
              or args.auto_splice_local_stagnation_rounds) and args.auto_splice_mode != "user"):
@@ -2330,6 +2334,10 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-frontier", modes=auto_modes, type=int,
                          default=3, metavar="N",
                          help="max partial routes carried across waypoint segments (default 3, 0 disables)")
+    command.add_argument("--splice-stage-lookback", "--auto-splice-stage-lookback",
+                         dest="auto_splice_stage_lookback", modes=auto_modes,
+                         type=parse_positive_int, default=2, metavar="N",
+                         help="named multi-splicer: use up to N preceding stage frontiers as search seeds (default 2: n-1 and n-2)")
     command.add_argument("--auto-splice-exit-lookback", modes=auto_modes, type=int,
                          default=96, metavar="FRAMES",
                          help="minimum editable exit-approach horizon; overlaps nearby waypoints (default 96)")
@@ -3904,6 +3912,7 @@ def main() -> None:
                     beam=args.beam, workers=max(1, args.workers),
                     rounds=args.auto_runs, stagnation_rounds=args.auto_stagnation_runs,
                     frontier=max(1, args.auto_splice_frontier),
+                    stage_lookback=args.auto_splice_stage_lookback,
                     seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
                           else 0 if args.seed is None else int(args.seed)),
                 )

@@ -1409,7 +1409,18 @@ Then each level's file needs only the ordered splice names:
 # ../splices/97-2/multi-splicer.toml
 [multi-splicer]
 files = ["203", "408", "switch", "end"]
+# Optional: allow the next splice to reuse seeds from n-1, n-2, n-3, etc.
+lookback = 3
 ```
+
+`lookback` is the **number of preceding splice frontiers**, not a count of
+skipped stages: `2` (default) keeps the previous n-1/n-2 behavior; `3`
+includes n-3, and `1` only uses n-1. This is independent of the existing
+`--auto-splice-lookback` frame-mutation setting. The existing n-1/n-2 seeds stay unchanged; one additional distinct seed
+from each older frontier is appended. Extra historical seeds increase the
+search budget because each seed runs its own backend search. Put `lookback` in the
+per-level file when different levels need different amounts of bypassing.
+The CLI equivalent is `--splice-stage-lookback 3`.
 
 Options from the two `[multi-splicer]` tables merge by key: the level file
 can optionally override individual shared options without resetting the others.
@@ -1434,8 +1445,8 @@ to the `--splice-config` file's directory by default; an explicit
 The standard `[auto]` table in existing `multi-splicer.toml` files remains
 supported. `[multi-splicer]` may also appear in an ordinary `--config` file,
 and does not affect Local or other modes. Within this special table, short
-names (`files`, `search`, `iterations`, `rounds`, `frontier`, `directory`,
-`start`, `stop`) refer to the multi-splicer; standard `splice-*` keys are
+names (`files`, `search`, `iterations`, `rounds`, `frontier`, `lookback`,
+`directory`, `start`, `stop`) refer to the multi-splicer; standard `splice-*` keys are
 also accepted. `runs` means full multi-splice passes, while `iterations`
 means **splice** proposals, not the unrelated regular Auto `iterations`.
 Other regular `[auto]` keys can be overridden here if needed. When using

@@ -66,6 +66,7 @@ class RandomSpliceConfig:
     stagnation_rounds: int = 0
     max_repair_searches: int = 8
     frontier: int = 0  # additional cross-waypoint partial beam; CLI defaults to 3
+    stage_lookback: int = 2  # named splices: use frontiers n-1 through n-N
     exit_lookback: int = 96  # minimum editable horizon of the exit approach
     seed: int = 0
 
@@ -134,6 +135,8 @@ class RandomSpliceConfig:
             raise ValueError("random splice exit_lookback must be positive")
         if type(self.frontier) is not int or self.frontier < 0:
             raise ValueError("random splice frontier must be nonnegative")
+        if type(self.stage_lookback) is not int or self.stage_lookback < 1:
+            raise ValueError("named splice stage_lookback must be a positive integer")
         if type(self.max_repair_searches) is not int or self.max_repair_searches < 0:
             raise ValueError("random splice max_repair_searches must be nonnegative")
         if type(self.repair_anchors) is not int or self.repair_anchors < 0:
