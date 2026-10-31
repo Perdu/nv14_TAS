@@ -47,7 +47,6 @@ refinement-cycle = 128
 refinement-chain-steps = 32
 
 [local]
-
 local-inputs = "direction"
 target-frame = 121
 range = ["15:121"]
@@ -73,7 +72,6 @@ window-span = 15
 # minimum-improvement = 0.0
 
 [jump-pattern]
-
 target-frame = 100
 range = "50:90"
 objective = "min-y"
