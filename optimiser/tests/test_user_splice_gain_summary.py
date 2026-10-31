@@ -48,7 +48,7 @@ def test_checkpoint_turns_green_when_full_run_includes_its_inputs(monkeypatch):
                and 'same input prefix' in m for m in messages)
 
 
-def test_empty_checkpoint_remains_neutral(monkeypatch):
+def test_initial_checkpoint_is_saved_and_summarized(monkeypatch):
     import nv14_user_splice as us
     level, source, _ = _baseline()
     stage = UserSpliceStage('556', EndpointGoal(10, 'min-x'), 0, 10)
@@ -57,4 +57,5 @@ def test_empty_checkpoint_remains_neutral(monkeypatch):
     optimise_user_splices(level, source, [stage],
                           RandomSpliceConfig(rounds=1, iterations=2, workers=1),
                           completion_policy='checkpoint', progress=messages.append)
-    assert sum('[auto:user-splice:summary:empty]' in m for m in messages) == 3
+    assert not any('[auto:user-splice:summary:empty]' in m for m in messages)
+    assert any('[auto:user-splice:initial]' in m for m in messages)

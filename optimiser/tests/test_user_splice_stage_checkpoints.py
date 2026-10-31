@@ -51,7 +51,7 @@ def test_stage_best_checkpoint_only_strict_updates(monkeypatch):
                           best_callback=finals.append,
                           stage_best_callback=lambda name, frames:
                           stage_saves.append((name, frames)))
-    assert stage_saves == [('230', alternative)], 'save only strict stage improvements'
+    assert stage_saves == [('230', source), ('230', alternative)], 'save initial feasible checkpoint, then strict gains'
     assert not finals, 'a stage-only gain may not overwrite the final completed replay'
 
 

@@ -601,6 +601,25 @@ def optimise_user_splices(
                 stage_best[i] = score.objective_key
                 stage_best_evaluation[i] = score
                 restored_stage_frames[i] = replay
+    # Create the initial stage checkpoints as well as subsequent new bests.
+    # Compare against validated on-disk checkpoints first: an existing better
+    # movie must never be overwritten by a weaker starting replay.
+    for i, stage in enumerate(stages):
+        baseline_evaluation = original_endpoints[i].evaluate(current) if valid_stages(current, i + 1) else None
+        archived_evaluation = stage_checkpoint_evals[i]
+        if (baseline_evaluation is not None and
+                (archived_evaluation is None or
+                 baseline_evaluation.objective_key < archived_evaluation.objective_key)):
+            exported = stage_export(current)
+            stage_checkpoints[i] = exported
+            stage_checkpoint_evals[i] = baseline_evaluation
+            stage_checkpoint_origin[i] = "baseline"
+            if stage_best_callback is not None:
+                stage_best_callback(stage.name, exported)
+            if progress:
+                progress(f"[auto:user-splice:initial] {stage.name!r}: "
+                         "saved starting stage result; "
+                         f"{_stage_improvement_text(stage.goal, None, baseline_evaluation)}")
     if progress:
         for i, replay in enumerate(restored_stage_frames):
             if replay is not None:
