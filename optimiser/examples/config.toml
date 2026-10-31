@@ -92,4 +92,4 @@ auto-stagnation-rounds = 10
 local-stagnation-rounds = 50
 lookback = 2
 frontier = 3
-runs = 5
+runs = 3
