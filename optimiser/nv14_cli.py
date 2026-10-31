@@ -98,6 +98,11 @@ def _print_best_line(message: str, *, color: bool) -> None:
     _print_colored_line(message, color=color, ansi_color=32)
 
 
+def _print_temporary_line(message: str, *, color: bool) -> None:
+    """Highlight an improving splice checkpoint, not a verified final best."""
+    _print_colored_line(message, color=color, ansi_color=33)
+
+
 def _print_baseline_line(message: str, *, color: bool) -> None:
     """Show the starting result in blue, without ANSI escapes in captured logs."""
     _print_colored_line(message, color=color, ansi_color=34)
@@ -3623,6 +3628,8 @@ def main() -> None:
                     progress=lambda message: (
                         _print_baseline_line(message, color=common_config.color)
                         if message.startswith("[auto:user-splice:baseline]")
+                        else _print_temporary_line(message, color=common_config.color)
+                        if message.startswith("[auto:user-splice:temporary]")
                         else _print_best_line(message, color=common_config.color)
                         if message.startswith("[auto:user-splice] improved ")
                         else print(message, flush=True)),

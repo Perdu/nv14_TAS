@@ -1400,6 +1400,24 @@ checkpoint, set `splice-search = "both"`. The per-branch
 backends (the odd proposal goes to Local); candidates are merged into the
 same verified frontier. This backend choice is available for named files only.
 
+`splice-iterations` is the **same budget for every splice stage**, measured in
+proposals per worker per internal search round. With `splice-search = "both"`,
+it is shared between Local and endpoint Auto, rather than given to each twice.
+`splice-rounds` runs the regular endpoint Auto campaign (or Local population
+rounds) that many times **for every stage seed**. `runs` / `--auto-runs` counts
+complete passes across all named splice files, and is independent of
+`splice-rounds`. The total number of searches increases when a stage has more
+seeds from its previous stage or two-back frontier. Actual distinct evaluations
+can differ from proposal counts because of caching and Local repair steps.
+
+A `[auto:user-splice:temporary]` line is **yellow** on a terminal and signals
+a new stage-only best, not a verified improvement to the completed run. Only
+`[auto:user-splice] improved verified final replay` is green and saved.
+Each stage also reports its backend search count, distinct evaluations, eligible
+replays and stage-best objective. The shared budget and the two round limits
+are printed at startup. Colors respect `[common] color = false` and `--no-color`;
+redirected logs contain no ANSI escape codes.
+
 Every stage also retains its best verified candidate frontier across rounds.
 From the third stage, it tries seeds from both the preceding stage (**n-1**)
 and the stage before that (**n-2**), reserving a slot for a distinct n-2 elite
