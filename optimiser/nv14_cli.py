@@ -1733,6 +1733,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_searches", "auto_splice_rounds",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_directory",
+    "auto_splice_start", "auto_splice_stop",
 })
 
 
@@ -1757,6 +1758,8 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
         raise SystemExit("user splice mode requires --auto-splice-files or [auto] splice-files")
     if args.auto_random_splice and args.auto_splice_files and args.auto_splice_mode != "user":
         raise SystemExit("splice-files requires --auto-splice-mode user")
+    if args.auto_random_splice and (args.auto_splice_start or args.auto_splice_stop) and args.auto_splice_mode != "user":
+        raise SystemExit("--auto-splice-start/stop require named user splice mode")
     if args.auto_random_splice and args.auto_splice_search == "both" and args.auto_splice_mode != "user":
         raise SystemExit("splice-search=both requires user mode with splice-files")
     if args.auto_random_splice and args.auto_objective == AUTO_OBJECTIVE_HIGHSCORE:
@@ -2203,6 +2206,10 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-directory", modes=auto_modes,
                          type=Path, metavar="DIR",
                          help="directory containing named .txt/.toml goals (default: ../splices/LEVEL relative to input)")
+    command.add_argument("--auto-splice-start", modes=auto_modes, metavar="NAME",
+                         help="first named splice to optimise (inclusive; preceding goals still enforced)")
+    command.add_argument("--auto-splice-stop", modes=auto_modes, metavar="NAME",
+                         help="last named splice to optimise (inclusive; full-run outputs require all goals)")
     command.add_argument("--auto-splice-interactions", modes=auto_modes,
                          type=parse_splice_interactions,
                          default=("switch", "walljump", "landing"),
@@ -3694,6 +3701,7 @@ def main() -> None:
                 result = optimise_user_splices(
                     level, replay.frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
+                    start_at=args.auto_splice_start, stop_at=args.auto_splice_stop,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path, encode_complex_replay(frames)),
                     stage_best_callback=save_stage_best,

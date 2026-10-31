@@ -144,6 +144,7 @@ def optimise_user_splices(
     stage_best_callback: Callable[[str, tuple[InputFrame, ...]], None] | None = None,
     progress: Callable[[str], None] | None = None,
     completion_policy: str = "complete",
+    start_at: str | None = None, stop_at: str | None = None,
 ) -> UserSpliceResult:
     """Optimise named goals in order, retaining diverse feasible continuations.
 
@@ -157,6 +158,22 @@ def optimise_user_splices(
         raise ValueError("user splice requires at least one named goal")
     if completion_policy not in ("checkpoint", "complete"):
         raise ValueError("invalid user splice completion policy")
+    # Selection does not waive requirements of earlier goals.
+    def stage_index(requested: str | None, default: int, label: str) -> int:
+        if requested is None:
+            return default
+        matches = [i for i, stage in enumerate(stages)
+                   if stage.name == requested or
+                   (stage.name.rsplit(".", 1)[0] == requested and
+                    stage.name.endswith((".txt", ".toml")))]
+        if len(matches) != 1:
+            raise ValueError(f"{label} splice {requested!r} is not a unique name "
+                             f"in splice-files: {[s.name for s in stages]}")
+        return matches[0]
+    first_stage = stage_index(start_at, 0, "start")
+    last_stage = stage_index(stop_at, len(stages) - 1, "stop")
+    if first_stage > last_stage:
+        raise ValueError("splice start must not be after splice stop")
     source = tuple(editable_frames(source_frames))
     # Check canonical completion *before* materialising any neutral search
     # inputs. Otherwise a completed source looks incomplete merely because
@@ -248,6 +265,13 @@ def optimise_user_splices(
                  f"{config.workers} worker(s); "
                  f"{config.rounds or 'unlimited'} outer multi-splice round(s)")
 
+    if progress and (first_stage or last_stage != len(stages) - 1):
+        progress(f"[auto:user-splice] selected stages "
+                 f"{first_stage+1}-{last_stage+1}/{len(stages)} "
+                 f"({stages[first_stage].name!r} through {stages[last_stage].name!r}); "
+                 "earlier named goals remain mandatory; "
+                 "partial-run outputs remain stage checkpoints")
+
     # Elites are retained across rounds as well as across stage boundaries.
     # Their rank is the objective of the stage that produced them; do not
     # promote a local improvement if its mandatory earlier goals were lost.
@@ -258,7 +282,8 @@ def optimise_user_splices(
         two_back: list[tuple[InputFrame, ...]] = []
         improved = False
         unfulfilled: list[str] = []
-        for index, stage in enumerate(stages):
+        for index in range(first_stage, last_stage + 1):
+            stage = stages[index]
             stage_started = time.monotonic()
             evaluations_before_stage = evaluations
             attempts_before_stage = attempts
