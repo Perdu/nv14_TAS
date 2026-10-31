@@ -37,7 +37,7 @@ def test_both_passes_internal_rounds_and_shared_iterations(monkeypatch):
     _search_stage(level, source, stage,
                   RandomSpliceConfig(search_backend='both', iterations=401,
                                      splice_rounds=3), random.Random(1))
-    assert observed == [('local', 201, 3), ('endpoint-auto', 200, 3)]
+    assert observed == [('endpoint-auto', 200, 3), ('local', 201, 3)]
 
 
 def test_temporary_best_is_not_saved_and_budget_is_shared(monkeypatch):
@@ -65,7 +65,7 @@ def test_temporary_best_is_not_saved_and_budget_is_shared(monkeypatch):
                            search_backend='both'),
         progress=messages.append, best_callback=saves.append)
     assert calls and all(amount == 400 for _, amount in calls)
-    assert any('Local 200 + endpoint Auto 200' in line
+    assert any('endpoint Auto 200 -> Local 200 (seeded from Auto best)' in line
                and '2 internal round(s) per seed' in line for line in messages)
     assert any('[auto:user-splice:temporary]' in line and "'203'" in line
                and 'new stage best' in line for line in messages)

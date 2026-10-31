@@ -1395,10 +1395,12 @@ interaction constraints are interpreted by the same goal parser as
 added. Use `splice-files = ["203.txt", "end.toml"]` to disambiguate extensions.
 
 To use **both** Local population and endpoint Auto Hybrid at each named
-checkpoint, set `splice-search = "both"`. The per-branch
-`splice-iterations` budget is shared approximately 50/50 between the two
-backends (the odd proposal goes to Local); candidates are merged into the
-same verified frontier. This backend choice is available for named files only.
+checkpoint, set `splice-search = "both"`. **Endpoint Auto runs first**;
+Local then starts from Auto's best stage candidate, or the original seed if
+Auto did not improve on it. The per-branch `splice-iterations` budget is shared
+approximately 50/50 between the two backends (the odd proposal goes to Local).
+Results from both searches are merged into the same verified frontier. This
+backend choice is available for named files only.
 
 `splice-iterations` is the **same budget for every splice stage**, measured in
 proposals per worker per internal search round. With `splice-search = "both"`,
@@ -1409,6 +1411,12 @@ complete passes across all named splice files, and is independent of
 `splice-rounds`. The total number of searches increases when a stage has more
 seeds from its previous stage or two-back frontier. Actual distinct evaluations
 can differ from proposal counts because of caching and Local repair steps.
+
+With `splice-search = "both"`, Auto's returned candidates are ranked using the
+named stage's endpoint objective before choosing Local's starting replay.
+Feasible candidates outrank partial near-misses; the original stage seed is
+retained as a fallback, and both backend results remain available to later
+stages. This is sequential cooperation, not simultaneous execution.
 
 A `[auto:user-splice:temporary]` line is **yellow** on a terminal and signals
 a new stage-only best, not a verified improvement to the completed run. Only

@@ -50,7 +50,7 @@ def test_both_halves_proposal_budget_and_merges_candidates(monkeypatch):
     monkeypatch.setattr(us, '_local_search', fake_search)
     found, evaluations, searches = _search_stage(level, source, stage,
         RandomSpliceConfig(search_backend='both', iterations=101), random.Random(4))
-    assert calls == [('local', 51, True, 12), ('endpoint-auto', 50, True, 12)]
+    assert calls == [('endpoint-auto', 50, True, 12), ('local', 51, True, 12)]
     assert evaluations == 40
     assert searches == 2
     assert [candidate for candidate, _ in found] == [alternative, source]
@@ -162,3 +162,93 @@ def test_both_real_backends_keep_completed_route_safe():
     assert completed.valid and completed.finish_tick == len(result.frames)
     if checkpoints:
         assert checkpoints[-1] == result.frames
+
+
+def test_both_seeds_local_from_best_auto_result_not_first_survivor(monkeypatch):
+    import nv14_user_splice as us
+    from types import SimpleNamespace
+
+    level, source, _ = _baseline()
+    stage = UserSpliceStage('test', EndpointGoal(12, 'min-x'), 0, 12)
+    weaker = (InputFrame(left=True),) + source[1:]
+    stronger = (InputFrame(jump=True),) + source[1:]
+    local_result = (InputFrame(right=True, jump=True),) + source[1:]
+    calls = []
+
+    class FakeEvaluator:
+        def __init__(self, level, goal):
+            pass
+
+        def evaluate(self, frames):
+            rank = {weaker: (0, 2), stronger: (0, 1), source: (0, 3)}
+            return SimpleNamespace(progress_key=rank[frames])
+
+    def fake_search(level, branch, goal, *, config, iterations, **kwargs):
+        calls.append((config.search_backend, branch, iterations, kwargs['rounds']))
+        if config.search_backend == 'endpoint-auto':
+            # The returned frontier is not necessarily ordered by goal rank.
+            return ((weaker, 12), (stronger, 12)), 23
+        assert branch == stronger, 'Local must start from Auto\'s highest-ranked candidate'
+        return ((local_result, 12),), 17
+
+    monkeypatch.setattr(us, 'EndpointEvaluator', FakeEvaluator)
+    monkeypatch.setattr(us, '_local_search', fake_search)
+    found, evaluations, searches = _search_stage(
+        level, source, stage,
+        RandomSpliceConfig(search_backend='both', iterations=101, splice_rounds=3),
+        random.Random(4))
+    assert [c[0] for c in calls] == ['endpoint-auto', 'local']
+    assert [c[2:] for c in calls] == [(50, 3), (51, 3)]
+    assert evaluations == 40 and searches == 2
+    assert [candidate for candidate, _ in found] == [weaker, stronger, local_result]
+
+
+def test_both_retains_feasible_incumbent_when_auto_only_has_near_misses(monkeypatch):
+    import nv14_user_splice as us
+    from types import SimpleNamespace
+
+    level, source, _ = _baseline()
+    stage = UserSpliceStage('test', EndpointGoal(12, 'min-x'), 0, 12)
+    near_miss = (InputFrame(left=True),) + source[1:]
+    starts = []
+
+    class FakeEvaluator:
+        def __init__(self, level, goal):
+            pass
+
+        def evaluate(self, frames):
+            return SimpleNamespace(progress_key=(0, 10) if frames == source else (1, 0))
+
+    def fake_search(level, branch, goal, *, config, **kwargs):
+        starts.append((config.search_backend, branch))
+        if config.search_backend == 'endpoint-auto':
+            return ((near_miss, 12),), 2
+        return (), 3
+
+    monkeypatch.setattr(us, 'EndpointEvaluator', FakeEvaluator)
+    monkeypatch.setattr(us, '_local_search', fake_search)
+    found, evaluations, searches = _search_stage(
+        level, source, stage,
+        RandomSpliceConfig(search_backend='both', iterations=12), random.Random(3))
+    assert starts == [('endpoint-auto', source), ('local', source)]
+    assert found == ((near_miss, 12),)
+    assert evaluations == 5 and searches == 2
+
+
+def test_both_local_uses_original_seed_if_auto_returns_nothing(monkeypatch):
+    import nv14_user_splice as us
+
+    level, source, _ = _baseline()
+    stage = UserSpliceStage('test', EndpointGoal(12, 'min-x'), 0, 12)
+    starts = []
+
+    def fake_search(level, branch, goal, *, config, **kwargs):
+        starts.append((config.search_backend, branch))
+        return (), 1
+
+    monkeypatch.setattr(us, '_local_search', fake_search)
+    found, evaluations, searches = _search_stage(
+        level, source, stage,
+        RandomSpliceConfig(search_backend='both', iterations=12), random.Random(3))
+    assert starts == [('endpoint-auto', source), ('local', source)]
+    assert not found and evaluations == searches == 2
