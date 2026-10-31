@@ -1767,7 +1767,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_local_stagnation_rounds",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_stage_lookback", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_directory",
-    "auto_splice_start", "auto_splice_stop",
+    "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
 })
 
 
@@ -1792,8 +1792,10 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
         raise SystemExit("user splice mode requires --auto-splice-files or [auto] splice-files")
     if args.auto_random_splice and args.auto_splice_files and args.auto_splice_mode != "user":
         raise SystemExit("splice-files requires --auto-splice-mode user")
-    if args.auto_random_splice and (args.auto_splice_start or args.auto_splice_stop) and args.auto_splice_mode != "user":
-        raise SystemExit("--splice-start/--splice-stop require named user splice mode")
+    if (args.auto_random_splice and
+            (args.auto_splice_start or args.auto_splice_stop or args.auto_splice_from_best)
+            and args.auto_splice_mode != "user"):
+        raise SystemExit("--splice-start/--splice-stop/--splice-from-best require named user splice mode")
     if args.auto_random_splice and args.auto_splice_search == "both" and args.auto_splice_mode != "user":
         raise SystemExit("splice-search=both requires user mode with splice-files")
     if (args.auto_random_splice and args.auto_splice_mode != "user" and
@@ -2291,6 +2293,11 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-stop", "--auto-splice-stop", dest="auto_splice_stop",
                          modes=auto_modes, metavar="NAME",
                          help="last named splice to optimise (inclusive; full-run outputs require all goals)")
+    command.add_argument("--splice-from-best", dest="auto_splice_from_best",
+                         modes=auto_modes, metavar="NAME",
+                         help="seed from the best saved LTM/TXT for NAME and, by default, "
+                              "search from the next splice; preserve the current verified "
+                              "run as the final-score baseline")
     command.add_argument("--auto-splice-interactions", modes=auto_modes,
                          type=parse_splice_interactions,
                          default=("switch", "walljump", "landing"),
@@ -3920,6 +3927,7 @@ def main() -> None:
                     level, replay.frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
                     start_at=args.auto_splice_start, stop_at=args.auto_splice_stop,
+                    from_best=args.auto_splice_from_best,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path, encode_complex_replay(frames)),
                     stage_best_callback=save_stage_best,

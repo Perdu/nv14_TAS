@@ -472,6 +472,7 @@ def optimise_user_splices(
     progress: Callable[[str], None] | None = None,
     completion_policy: str = "complete",
     start_at: str | None = None, stop_at: str | None = None,
+    from_best: str | None = None,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
 ) -> UserSpliceResult:
     """Optimise named goals in order, retaining diverse feasible continuations.
@@ -498,7 +499,14 @@ def optimise_user_splices(
             raise ValueError(f"{label} splice {requested!r} is not a unique name "
                              f"in splice-files: {[s.name for s in stages]}")
         return matches[0]
-    first_stage = stage_index(start_at, 0, "start")
+    from_best_index = (stage_index(from_best, -1, "saved best")
+                       if from_best is not None else None)
+    if from_best_index == len(stages) - 1 and start_at is None:
+        raise ValueError(f"saved best splice {from_best!r} has no later stage to propagate; "
+                         "use --splice-start to explicitly search a stage")
+    # By default, propagate an existing splice best to the *following* stage.
+    # An explicit --splice-start may instead retry the source stage itself.
+    first_stage = stage_index(start_at, from_best_index + 1 if from_best_index is not None else 0, "start")
     last_stage = stage_index(stop_at, len(stages) - 1, "stop")
     if first_stage > last_stage:
         raise ValueError("splice start must not be after splice stop")
@@ -601,6 +609,21 @@ def optimise_user_splices(
                 stage_best[i] = score.objective_key
                 stage_best_evaluation[i] = score
                 restored_stage_frames[i] = replay
+    # Choose only a previously saved, validated best for explicit propagation.
+    # Do this before writing initial source checkpoints, so --splice-from-best
+    # never silently falls back to an unsaved current-run baseline.
+    propagation_seed = current
+    if from_best_index is not None:
+        propagation_seed = stage_checkpoints[from_best_index]
+        if propagation_seed is None:
+            raise ValueError(f"no valid saved checkpoint for splice {from_best!r}; "
+                             "a saved stage LTM/TXT must exist and satisfy all "
+                             "preceding named goals")
+        if progress:
+            evaluation = stage_checkpoint_evals[from_best_index]
+            progress(f"[auto:user-splice:from-best] {from_best!r}: "
+                     f"starting at stage {stages[first_stage].name!r} from saved "
+                     f"checkpoint; {_stage_improvement_text(stages[from_best_index].goal, None, evaluation)}")
     # Create the initial stage checkpoints as well as subsequent new bests.
     # Compare against validated on-disk checkpoints first: an existing better
     # movie must never be overwritten by a weaker starting replay.
@@ -729,7 +752,11 @@ def optimise_user_splices(
     elites: list[list[tuple[InputFrame, ...]]] = [[] for _ in stages]
     for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
         begun = time.monotonic()
-        history: list[list[tuple[InputFrame, ...]]] = [[current]]
+        # A propagation run deliberately retries the archived splice-best
+        # path on every outer round, rather than restarting only from the best
+        # fully completed run. Completion ranking still uses the original
+        # source, and all preceding named goals remain mandatory.
+        history: list[list[tuple[InputFrame, ...]]] = [[propagation_seed]]
         improved = False
         unfulfilled: list[str] = []
         for index in range(first_stage, last_stage + 1):

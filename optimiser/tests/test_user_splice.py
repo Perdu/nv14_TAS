@@ -247,7 +247,7 @@ def test_unmet_intermediate_checkpoint_does_not_skip_end(monkeypatch):
         UserSpliceStage('end', EndpointGoal(15, 'max-x'), 0, 15),
     )
     visited = []
-    def fake_search(level, branch, stage, config, rng):
+    def fake_search(level, branch, stage, config, rng, **kwargs):
         visited.append((stage.name, branch))
         return (((branch, stage.goal.target_frame),), 1, 1)
     monkeypatch.setattr(us, '_search_stage', fake_search)
@@ -282,7 +282,7 @@ def test_failed_stage_keeps_two_back_fallback_branches(monkeypatch):
         UserSpliceStage('end', EndpointGoal(15, 'max-x'), 0, 15),
     )
     visited = []
-    def fake_search(level, branch, stage, config, rng):
+    def fake_search(level, branch, stage, config, rng, **kwargs):
         visited.append((stage.name, branch))
         if stage.name == 'first':
             return (((branch, 10), (alt, 10)), 1, 1)

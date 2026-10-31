@@ -531,7 +531,7 @@ def test_local_population_receives_nested_round_count(monkeypatch):
     level, source, _reference = _baseline()
     calls = []
 
-    def fake_population(level, frames, *, goal, frame_ranges, config, progress=None):
+    def fake_population(level, frames, *, goal, frame_ranges, config, progress=None, best_callback=None):
         calls.append((config.rounds, config.iterations, frame_ranges))
         return SimpleNamespace(candidates=(), evaluations=5)
 
