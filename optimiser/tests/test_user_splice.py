@@ -234,3 +234,65 @@ def test_cli_user_splicer_accepts_target_after_finish(tmp_path, monkeypatch):
         candidate = decode_complex_replay(rendered.replay_string).frames
         verified = evaluate_replay_with_sentinel(level, candidate)
         assert verified.valid and verified.finish_tick == len(candidate)
+
+
+def test_unmet_intermediate_checkpoint_does_not_skip_end(monkeypatch):
+    """A failed stage must not silently discard the final end search."""
+    import nv14_user_splice as us
+    level, source, _ = _baseline()
+    stages = (
+        UserSpliceStage('556', EndpointGoal(10, 'max-x'), 0, 10),
+        UserSpliceStage('739', EndpointGoal(12, 'earliest-arrival',
+            target_region=(100000, 100010, 100000, 100010)), 0, 12),
+        UserSpliceStage('end', EndpointGoal(15, 'max-x'), 0, 15),
+    )
+    visited = []
+    def fake_search(level, branch, stage, config, rng):
+        visited.append((stage.name, branch))
+        return (((branch, stage.goal.target_frame),), 1, 1)
+    monkeypatch.setattr(us, '_search_stage', fake_search)
+    messages, saved = [], []
+    result = us.optimise_user_splices(
+        level, source, stages, RandomSpliceConfig(
+            iterations=6, rounds=1, workers=1, frontier=2, seed=3),
+        progress=messages.append, best_callback=saved.append,
+        completion_policy='complete')
+    assert [name for name, _ in visited] == ['556', '739', 'end']
+    assert visited[-1][1] == tuple(source)
+    assert any("'739': no candidate met all goals" in line for line in messages)
+    assert any("'end' seed 1/1" in line for line in messages)
+    assert any('unmet checkpoints: 739, end' in line for line in messages)
+    assert result.attempts == 3 and result.evaluations == 3
+    assert result.frames == tuple(source) and result.improvements == 0
+    assert not saved
+
+
+def test_failed_stage_keeps_two_back_fallback_branches(monkeypatch):
+    """An infeasible checkpoint must not erase distinct older seed replays."""
+    import nv14_user_splice as us
+    level, source, _ = _baseline()
+    alt = list(source)
+    alt[4] = InputFrame(right=not source[4].right)
+    alt = tuple(alt)
+    stages = (
+        UserSpliceStage('first', EndpointGoal(10, 'max-x'), 0, 10),
+        UserSpliceStage('second', EndpointGoal(11, 'max-x'), 0, 11),
+        UserSpliceStage('unreachable', EndpointGoal(12, 'earliest-arrival',
+            target_region=(100000, 100010, 100000, 100010)), 0, 12),
+        UserSpliceStage('end', EndpointGoal(15, 'max-x'), 0, 15),
+    )
+    visited = []
+    def fake_search(level, branch, stage, config, rng):
+        visited.append((stage.name, branch))
+        if stage.name == 'first':
+            return (((branch, 10), (alt, 10)), 1, 1)
+        return (((branch, stage.goal.target_frame),), 1, 1)
+    monkeypatch.setattr(us, '_search_stage', fake_search)
+    logs = []
+    result = us.optimise_user_splices(
+        level, source, stages, RandomSpliceConfig(
+            iterations=6, rounds=1, workers=1, frontier=2, seed=3),
+        progress=logs.append)
+    assert any(stage == 'end' for stage, branch in visited)
+    assert any("'unreachable': no candidate met all goals" in line for line in logs)
+    assert result.frames == tuple(source) and result.improvements == 0
