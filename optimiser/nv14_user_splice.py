@@ -187,6 +187,11 @@ def optimise_user_splices(
     best_rank = baseline[0] if baseline is not None else None
     best_output = source
     improvements = attempts = evaluations = stagnant = 0
+    stage_best: list[tuple | None] = []
+    for i, endpoint in enumerate(original_endpoints):
+        # The baseline is a real stage reference, not a reported improvement.
+        stage_best.append(endpoint.evaluate(current).objective_key
+                          if valid_stages(current, i + 1) else None)
     if progress:
         if len(current) > len(source):
             progress(f"[auto:user-splice] appended {len(current) - len(source)} "
@@ -197,9 +202,15 @@ def optimise_user_splices(
         progress(f"[auto:user-splice:baseline] {text}; {len(stages)} named goals; "
                  f"{'full completion' if require_complete else 'endpoint checkpoint'} required")
         if config.search_backend == "both":
-            progress(f"[auto:user-splice] Local + endpoint Auto: "
-                     f"{(config.iterations + 1) // 2} + {config.iterations // 2} "
-                     f"proposals per worker, per stage-seed search")
+            allocation = (f"Local {(config.iterations + 1) // 2} + "
+                          f"endpoint Auto {config.iterations // 2}")
+        else:
+            allocation = f"{config.search_backend} {config.iterations}"
+        progress(f"[auto:user-splice:budget] {allocation} proposals per worker "
+                 f"per internal round, for every stage seed; "
+                 f"{config.splice_rounds} internal round(s) per seed; "
+                 f"{config.workers} worker(s); "
+                 f"{config.rounds or 'unlimited'} outer multi-splice round(s)")
 
     # Elites are retained across rounds as well as across stage boundaries.
     # Their rank is the objective of the stage that produced them; do not
@@ -212,6 +223,10 @@ def optimise_user_splices(
         improved = False
         unfulfilled: list[str] = []
         for index, stage in enumerate(stages):
+            stage_started = time.monotonic()
+            evaluations_before_stage = evaluations
+            attempts_before_stage = attempts
+            temp_gains = 0
             branches = _stage_sources(previous, two_back, config.frontier)
             if progress and index >= 2:
                 progress(f"[auto:user-splice] {stage.name!r}: "
@@ -229,7 +244,10 @@ def optimise_user_splices(
                              f"stage {index+1}/{len(stages)} {stage.name!r} "
                              f"seed {seed_index}/{len(branches)}; "
                              f"range {stage.start}:{stage.end}, target {stage.goal.target_frame}; "
-                             f"search={config.search_backend}")
+                             f"search={config.search_backend}; "
+                             f"{config.iterations * config.workers * config.splice_rounds} "
+                             "nominal proposal slots for this seed "
+                             "(shared by the two backends when search=both)")
                 found, used, calls = _search_stage(level, branch, stage, config, rng)
                 attempts += calls
                 evaluations += used
@@ -242,16 +260,31 @@ def optimise_user_splices(
                         encode_complex_replay(candidate)).frames))
                     if not valid_stages(normalized, index + 1):
                         continue
-                    rank = original_endpoints[index].evaluate(normalized).objective_key
+                    evaluation = original_endpoints[index].evaluate(normalized)
+                    rank = evaluation.objective_key
                     if normalized not in eligible or rank < eligible[normalized]:
                         eligible[normalized] = rank
-                    if index == len(stages) - 1:
-                        candidate_final = final_rank(normalized)
-                        if candidate_final is None:
-                            continue
+                    # Stage-only improvements are useful for debugging but
+                    # never publish a replay without all final verifications.
+                    candidate_final = (final_rank(normalized)
+                                       if index == len(stages) - 1 else None)
+                    is_final_gain = (candidate_final is not None
+                                     and (best_rank is None
+                                          or candidate_final[0] < best_rank))
+                    old_stage_rank = stage_best[index]
+                    if old_stage_rank is None or rank < old_stage_rank:
+                        stage_best[index] = rank
+                        temp_gains += 1
+                        if progress and not is_final_gain:
+                            label = ("first feasible" if old_stage_rank is None
+                                     else "new stage best")
+                            progress(f"[auto:user-splice:temporary] "
+                                     f"round {round_no+1} stage {index+1}/{len(stages)} "
+                                     f"{stage.name!r}: {label}; "
+                                     f"frame {evaluation.frame}; score {evaluation.score:.9g}; "
+                                     f"rank {rank}; NOT verified as a full-run gain")
+                    if is_final_gain:
                         candidate_rank, completed_frames = candidate_final
-                        if best_rank is not None and not candidate_rank < best_rank:
-                            continue
                         current = normalized
                         best_output = completed_frames
                         best_rank = candidate_rank
@@ -262,6 +295,14 @@ def optimise_user_splices(
                         if progress:
                             progress(f"[auto:user-splice] improved verified final replay "
                                      f"({stage.name}); rank {candidate_rank}; saved")
+            if progress:
+                progress(f"[auto:user-splice:stage] round {round_no+1} "
+                         f"{stage.name!r}: {attempts - attempts_before_stage} "
+                         f"backend search(es), {evaluations - evaluations_before_stage} "
+                         f"distinct evaluations, {len(eligible)} eligible replay(s), "
+                         f"{temp_gains} stage-best update(s); "
+                         f"stage best {stage_best[index]}; "
+                         f"{time.monotonic() - stage_started:.1f}s")
             if not eligible:
                 # A temporarily infeasible intermediate checkpoint must not
                 # silently abort the remaining named stages. Later edits may
