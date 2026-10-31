@@ -1759,7 +1759,7 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
     if args.auto_random_splice and args.auto_splice_files and args.auto_splice_mode != "user":
         raise SystemExit("splice-files requires --auto-splice-mode user")
     if args.auto_random_splice and (args.auto_splice_start or args.auto_splice_stop) and args.auto_splice_mode != "user":
-        raise SystemExit("--auto-splice-start/stop require named user splice mode")
+        raise SystemExit("--splice-start/--splice-stop require named user splice mode")
     if args.auto_random_splice and args.auto_splice_search == "both" and args.auto_splice_mode != "user":
         raise SystemExit("splice-search=both requires user mode with splice-files")
     if args.auto_random_splice and args.auto_objective == AUTO_OBJECTIVE_HIGHSCORE:
@@ -2206,9 +2206,11 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-directory", modes=auto_modes,
                          type=Path, metavar="DIR",
                          help="directory containing named .txt/.toml goals (default: ../splices/LEVEL relative to input)")
-    command.add_argument("--auto-splice-start", modes=auto_modes, metavar="NAME",
+    command.add_argument("--splice-start", "--auto-splice-start", dest="auto_splice_start",
+                         modes=auto_modes, metavar="NAME",
                          help="first named splice to optimise (inclusive; preceding goals still enforced)")
-    command.add_argument("--auto-splice-stop", modes=auto_modes, metavar="NAME",
+    command.add_argument("--splice-stop", "--auto-splice-stop", dest="auto_splice_stop",
+                         modes=auto_modes, metavar="NAME",
                          help="last named splice to optimise (inclusive; full-run outputs require all goals)")
     command.add_argument("--auto-splice-interactions", modes=auto_modes,
                          type=parse_splice_interactions,
