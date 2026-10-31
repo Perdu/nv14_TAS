@@ -31,7 +31,7 @@ def test_path_names_and_collision_protection(tmp_path):
                                   protected_paths=[('input', out.with_name('optim_230.ltm'))])
 
 
-def test_stage_best_checkpoint_includes_baseline_and_strict_updates(monkeypatch):
+def test_stage_best_checkpoint_only_strict_updates(monkeypatch):
     level, source, _ = _baseline()
     alternative = (InputFrame(left=True),) + source[1:]
     stage = UserSpliceStage('230', EndpointGoal(10, 'min-x'), 0, 10)
@@ -49,9 +49,7 @@ def test_stage_best_checkpoint_includes_baseline_and_strict_updates(monkeypatch)
                           best_callback=finals.append,
                           stage_best_callback=lambda name, frames:
                           stage_saves.append((name, frames)))
-    assert stage_saves[0] == ('230', source)
-    assert stage_saves[1] == ('230', alternative)
-    assert len(stage_saves) == 2, 'no duplicate baseline / no repeats on later rounds'
+    assert stage_saves == [('230', alternative)], 'save only strict stage improvements'
     assert not finals, 'a stage-only gain may not overwrite the final completed replay'
 
 
@@ -74,6 +72,10 @@ def test_cli_writes_named_stage_replays_beside_main_outputs(tmp_path, monkeypatc
         'optimize_replay.py', 'auto', str(source_file),
         '--config', str(config), '--auto-splice-directory', str(goals),
         '--output', str(output), '--replay-output', str(replay), '--workers', '1'])
+    import nv14_user_splice as us
+    candidate = (InputFrame(left=True),) + source[1:]
+    monkeypatch.setattr(us, '_search_stage', lambda lvl, branch, stage, config, rng:
+                        (((candidate, stage.goal.target_frame),), 1, 1))
     main()
     for name in ('230', 'end'):
         stage_main = tmp_path / f'optim_{name}.txt'

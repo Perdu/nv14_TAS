@@ -150,7 +150,7 @@ def optimise_user_splices(
     Use identical endpoint evaluation and Local/Hybrid search as random splicing.
     Only independently verified full-run results reach best_callback. Optional
     stage_best_callback receives each stage's best *feasible intermediate* replay
-    (which need not finish the level), including a feasible starting baseline.
+    (which need not finish the level), only after a genuine improvement.
     An existing completed final result is never replaced by an incomplete route.
     """
     if not stages:
@@ -228,10 +228,6 @@ def optimise_user_splices(
         # The baseline is a real stage reference, not a reported improvement.
         feasible = valid_stages(current, i + 1)
         stage_best.append(endpoint.evaluate(current).objective_key if feasible else None)
-        if feasible and stage_best_callback:
-            # A useful checkpoint exists even when a stage never improves.
-            # The original completed replay must not acquire search-only tail.
-            stage_best_callback(stages[i].name, stage_export(source))
     if progress:
         if len(current) > len(source):
             progress(f"[auto:user-splice] appended {len(current) - len(source)} "
