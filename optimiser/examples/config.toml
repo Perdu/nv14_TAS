@@ -91,6 +91,5 @@ search = "both"
 auto-stagnation-rounds = 10
 local-stagnation-rounds = 50
 lookback = 2
-rounds = 1
 frontier = 3
 runs = 5
