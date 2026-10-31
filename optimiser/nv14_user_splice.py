@@ -189,6 +189,33 @@ def _stage_improvement_text(goal: EndpointGoal,
     return result
 
 
+def _stage_summary_text(goal: EndpointGoal, evaluation: EndpointEvaluation) -> str:
+    """Show coordinate objectives once in summaries, without duplicate positions.
+
+    Temporary improvement logs still retain the full physical position; the
+    per-round propagation summary only needs the objective being compared.
+    """
+    objective = goal.objective
+    if objective in ("min-x", "max-x", "min-y", "max-y"):
+        coordinate = evaluation.x if objective.endswith("-x") else evaluation.y
+        result = f"frame {evaluation.frame}; {objective} {coordinate:.9g}"
+        if goal.secondary_objective is not None:
+            result += f"; {goal.secondary_objective} {evaluation.secondary_value:.9g}"
+        elif (goal.exit_distance_tiebreak and
+              evaluation.pre_finish_exit_distance is not None):
+            result += f"; exit proximity {evaluation.pre_finish_exit_distance:.9g}"
+        return result
+    # Earliest-arrival / earliest-interaction goals can rank tied frames by
+    # a coordinate *secondary* objective.  In that case the primary objective
+    # is not min-x/min-y, but displaying the whole position still repeats the
+    # coordinate printed as the secondary value.  The evaluator already
+    # provides this value in physical (non-negated) units.
+    if goal.secondary_objective in ("min-x", "max-x", "min-y", "max-y"):
+        return (f"frame {evaluation.frame}; {goal.secondary_objective} "
+                f"{evaluation.secondary_value:.9g}")
+    return _stage_improvement_text(goal, None, evaluation)
+
+
 def optimise_user_splices(
     level: Level, source_frames: Sequence[InputFrame],
     stages: Sequence[UserSpliceStage], config: RandomSpliceConfig,
@@ -382,10 +409,10 @@ def optimise_user_splices(
             best_workspace = _materialise_splice_tail(best_output, len(current) - 1)
             if best_rank is not None and valid_stages(best_workspace, i + 1):
                 best_stage = original_endpoints[i].evaluate(best_workspace)
-            detail = _stage_improvement_text(stage.goal, None, candidate)
+            detail = _stage_summary_text(stage.goal, candidate)
             if best_stage is None or candidate.objective_key < best_stage.objective_key:
                 against = ("best run has no feasible checkpoint" if best_stage is None
-                           else "full run: " + _stage_improvement_text(stage.goal, None, best_stage))
+                           else "full run: " + _stage_summary_text(stage.goal, best_stage))
                 progress(f"[auto:user-splice:summary:pending] {stage.name!r}: "
                          f"pending ({stage_checkpoint_origin[i]}); "
                          f"splice: {detail}; {against}")
@@ -401,7 +428,7 @@ def optimise_user_splices(
                 progress(f"[auto:user-splice:summary:propagated] {stage.name!r}: "
                          f"{state} ({stage_checkpoint_origin[i]}); "
                          f"splice: {detail}; full run: "
-                         f"{_stage_improvement_text(stage.goal, None, best_stage)}")
+                         f"{_stage_summary_text(stage.goal, best_stage)}")
 
     report_checkpoint_summary("startup")
 
