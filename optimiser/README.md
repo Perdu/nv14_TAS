@@ -1418,6 +1418,20 @@ Feasible candidates outrank partial near-misses; the original stage seed is
 retained as a fallback, and both backend results remain available to later
 stages. This is sequential cooperation, not simultaneous execution.
 
+Named multi-splice searches also write **playable per-stage best checkpoints**
+next to the normal `--output` and `--replay-output` files. For example,
+`--output wip/optim.ltm --replay-output wip/97-2.txt` with a splice file
+`230.txt` saves `wip/optim_230.ltm` and `wip/97-2_230.txt` (likewise
+`optim_switch.ltm` and `97-2_switch.txt` for `switch`). Files are created
+when the initial route already satisfies a stage, and replaced only when that
+stage's verified objective strictly improves. They retain their best value
+across all outer rounds; existing stage files are not treated as resume inputs.
+Stage checkpoints are **trial replays**, possibly incomplete and not necessarily
+valid for the full route. The unsuffixed `optim.ltm` / `97-2.txt` remain
+reserved for improvements that satisfy the full final verification.
+Input, goal, config and final output filename collisions are rejected before
+starting the search.
+
 A `[auto:user-splice:temporary]` line is **yellow** on a terminal and signals
 a new stage-only best, not a verified improvement to the completed run. Only
 `[auto:user-splice] improved verified final replay` is green and saved.

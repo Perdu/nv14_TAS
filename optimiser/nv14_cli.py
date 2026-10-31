@@ -3035,6 +3035,48 @@ def _ranked_output_path(path: Path, rank: int) -> Path:
     return path if rank == 1 else path.with_name(f"{path.stem}.rank{rank:02d}{path.suffix}")
 
 
+
+def _user_splice_output_paths(
+    stage_names: Sequence[str],
+    output_path: Path,
+    replay_output_path: Path | None,
+    *,
+    protected_paths: Sequence[tuple[str, Path | None]] = (),
+) -> dict[str, tuple[Path, Path | None]]:
+    """Separate trial checkpoints beside final output, one per named splice.
+
+    Names may explicitly include .txt/.toml, but the output label always uses
+    the filename's stem. Detect collisions before running any searches, so a
+    stage checkpoint cannot overwrite the input, config, or main result.
+    """
+    destinations: dict[str, tuple[Path, Path | None]] = {}
+    occupied: list[tuple[str, Path | None]] = [
+        ("final output", output_path),
+        ("final replay output", replay_output_path),
+        *protected_paths,
+    ]
+    for name in stage_names:
+        label = Path(name).stem if Path(name).suffix.lower() in (".txt", ".toml") else name
+        if not label or label in (".", "..") or "/" in label or "\\" in label:
+            raise ValueError(f"invalid named splice output label: {name!r}")
+        main_path = output_path.with_name(f"{output_path.stem}_{label}{output_path.suffix}")
+        replay_path = (replay_output_path.with_name(
+            f"{replay_output_path.stem}_{label}{replay_output_path.suffix}")
+            if replay_output_path is not None else None)
+        for title, candidate in ((f"splice {name!r} output", main_path),
+                                 (f"splice {name!r} replay output", replay_path)):
+            if candidate is None:
+                continue
+            if candidate.exists() and candidate.is_dir():
+                raise ValueError(f"{title} must be a file: {candidate}")
+            for other_title, other_path in occupied:
+                if other_path is not None and _paths_alias(candidate, other_path):
+                    raise ValueError(f"{title} and {other_title} must be different files: {candidate}")
+            occupied.append((title, candidate))
+        destinations[name] = main_path, replay_path
+    return destinations
+
+
 def _population_output_paths(
     config: LocalConfig,
     *,
@@ -3605,6 +3647,35 @@ def main() -> None:
                              else input_path.parent.parent / "splices" / input_path.stem)
                 stages = _load_named_splice_stages(level, replay.frames, args,
                                                    directory, args.auto_splice_files)
+                stage_outputs = _user_splice_output_paths(
+                    [stage.name for stage in stages], output_path, replay_output_path,
+                    protected_paths=(("input", input_path),
+                                     ("TOML config", args.config),
+                                     ("levels file", source.levels_file_path),
+                                     *((f"splice goal {name}", path) for name, path in
+                                       _resolve_named_splice_files(directory, args.auto_splice_files))),
+                )
+
+                def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
+                    main_path, packed_path = stage_outputs[name]
+                    replay_text = encode_complex_replay(frames)
+                    if source.ltm_movie is not None and packed_path is not None:
+                        # An LTM may regard trailing neutral ticks as implicit
+                        # post-roll. Save the plain replay as it will actually
+                        # load from the new movie, not as the search workspace.
+                        _write_result(source, main_path, None, replay_text)
+                        loaded = LtmMovie.load(main_path)
+                        try:
+                            _atomic_write_text(packed_path, encode_complex_replay(
+                                loaded.replay_frames) + "\n")
+                        except OSError as exc:
+                            raise SystemExit(f"could not write stage replay output {packed_path}: {exc}") from exc
+                    else:
+                        _write_result(source, main_path, packed_path, replay_text)
+                    print(f"[auto:user-splice:stage-checkpoint] {name!r}: saved "
+                          f"{main_path}" + (f" and {packed_path}" if packed_path else "") +
+                          " (stage-feasible; full-run completion not required)", flush=True)
+
                 splice_config = RandomSpliceConfig(
                     iterations=args.auto_splice_iterations,
                     splice_rounds=args.auto_splice_rounds,
@@ -3625,6 +3696,7 @@ def main() -> None:
                     completion_policy=args.auto_completion_policy,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path, encode_complex_replay(frames)),
+                    stage_best_callback=save_stage_best,
                     progress=lambda message: (
                         _print_baseline_line(message, color=common_config.color)
                         if message.startswith("[auto:user-splice:baseline]")
