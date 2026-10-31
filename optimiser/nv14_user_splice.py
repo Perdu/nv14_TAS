@@ -141,14 +141,17 @@ def optimise_user_splices(
     level: Level, source_frames: Sequence[InputFrame],
     stages: Sequence[UserSpliceStage], config: RandomSpliceConfig,
     *, best_callback: Callable[[tuple[InputFrame, ...]], None] | None = None,
+    stage_best_callback: Callable[[str, tuple[InputFrame, ...]], None] | None = None,
     progress: Callable[[str], None] | None = None,
     completion_policy: str = "complete",
 ) -> UserSpliceResult:
     """Optimise named goals in order, retaining diverse feasible continuations.
 
     Use identical endpoint evaluation and Local/Hybrid search as random splicing.
-    No partial result is written. An existing completed source is never replaced
-    by an incomplete route or by one that loses reference control interactions.
+    Only independently verified full-run results reach best_callback. Optional
+    stage_best_callback receives each stage's best *feasible intermediate* replay
+    (which need not finish the level), including a feasible starting baseline.
+    An existing completed final result is never replaced by an incomplete route.
     """
     if not stages:
         raise ValueError("user splice requires at least one named goal")
@@ -198,6 +201,24 @@ def optimise_user_splices(
             return (target_rank, _completed_rank(completed, length)), tuple(frames[:length])
         return (target_rank,), tuple(frames)
 
+    def stage_export(frames: tuple[InputFrame, ...]) -> tuple[InputFrame, ...]:
+        """Keep trial replays playable and trim only verified early finishes.
+
+        The search workspace may extend past a completed replay's sentinel.
+        Its neutral tail is not part of the movie and should not appear in
+        the companion plain-text replay checkpoint either.
+        """
+        checked = evaluate_replay_with_sentinel(level, frames)
+        if checked.valid and checked.finish_tick is not None:
+            trimmed = tuple(frames[:checked.finish_tick])
+            try:
+                verify_trimmed_replay(level, trimmed)
+            except ValueError:
+                pass
+            else:
+                return trimmed
+        return frames
+
     baseline = final_rank(current)
     best_rank = baseline[0] if baseline is not None else None
     best_output = source
@@ -205,8 +226,12 @@ def optimise_user_splices(
     stage_best: list[tuple | None] = []
     for i, endpoint in enumerate(original_endpoints):
         # The baseline is a real stage reference, not a reported improvement.
-        stage_best.append(endpoint.evaluate(current).objective_key
-                          if valid_stages(current, i + 1) else None)
+        feasible = valid_stages(current, i + 1)
+        stage_best.append(endpoint.evaluate(current).objective_key if feasible else None)
+        if feasible and stage_best_callback:
+            # A useful checkpoint exists even when a stage never improves.
+            # The original completed replay must not acquire search-only tail.
+            stage_best_callback(stages[i].name, stage_export(source))
     if progress:
         if len(current) > len(source):
             progress(f"[auto:user-splice] appended {len(current) - len(source)} "
@@ -290,6 +315,10 @@ def optimise_user_splices(
                     if old_stage_rank is None or rank < old_stage_rank:
                         stage_best[index] = rank
                         temp_gains += 1
+                        if stage_best_callback:
+                            # Stage checkpoints are intentionally independent
+                            # of the fully verified final-run checkpoint.
+                            stage_best_callback(stage.name, stage_export(normalized))
                         if progress and not is_final_gain:
                             label = ("first feasible" if old_stage_rank is None
                                      else "new stage best")
