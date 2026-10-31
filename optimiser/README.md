@@ -1469,6 +1469,93 @@ complete passes across all named splice files, and is independent of
 seeds from its previous stage or two-back frontier. Actual distinct evaluations
 can differ from proposal counts because of caching and Local repair steps.
 
+#### Independent Auto and Local stagnation phases (named multi-splicer)
+
+For each named splice seed, Auto runs until its **own** configured number of
+consecutive non-improving backend rounds, then Local starts from Auto's best
+admissible result and runs until **its own** separate stagnation limit. If
+**either** phase improved the admissible stage objective, the pair of phases
+restarts with Auto from the best candidate. The search advances to the next
+seed/stage **only when an entire Auto -> Local pair finds no improvement**.
+Each phase's counter resets on improvement in that phase, independently of the
+other phase. Later stage constraints are still checked before a result may be
+published. A route that improves only a partial progress key does not reset
+stagnation; the saved stage comparison and full-run completion checks remain
+strict. The best of every backend turn remains available to downstream stages.
+
+In the shared `examples/config.toml`:
+
+```toml
+[multi-splicer]
+search = "both"
+iterations = 400
+auto-stagnation-rounds = 10  # Auto's own consecutive unsuccessful rounds
+local-stagnation-rounds = 50 # Local's own consecutive unsuccessful rounds
+frontier = 3
+runs = 5                     # full passes through all named splices
+```
+
+Keep level-specific `multi-splicer.toml` limited to `files = [...]`.
+`iterations` is the number of proposals per worker per backend round, split
+50/50 in `both` mode. Each Auto phase uses **one continuous Auto campaign**
+and retains its survivor population across every round until its own
+`auto-stagnation-rounds` limit. Each Local phase likewise uses **one continuous
+Local population search** until its own `local-stagnation-rounds` limit.
+No backend is restarted within its phase. If either phase improves the
+admissible splice objective, repeat the pair from the updated candidate.
+The `rounds` setting is **not used** in independent backend stagnation mode;
+remove it from `[multi-splicer]`. It still controls fixed-round searches
+when backend-specific stagnation is disabled. `runs` controls complete passes
+through all named splices. Total computation varies with improvements.
+
+Command-line overrides are `--splice-auto-stagnation-rounds N` and
+`--splice-local-stagnation-rounds N`. Both must be positive for `search="both"`.
+The older `stagnation-rounds` setting (shared full-cycle limit) is supported
+for existing configurations only; remove it when using the two new settings,
+since mixing old and new stagnation controls is an error. With all three set
+zero, the original fixed `splice-rounds` behavior remains unchanged.
+
+#### Stage search until stagnation (named multi-splicer)
+
+To let each named splice continue until Auto and Local have exhausted the
+improvements they can find, set the following shared configuration (the level's
+`[multi-splicer]` file can still contain **only** `files = [...]`):
+
+```toml
+[multi-splicer]
+search = "both"
+iterations = 400            # proposals per worker per cycle, split Auto/Local
+rounds = 1                 # backend campaign rounds per Auto or Local turn
+stagnation-rounds = 5      # stop a stage seed after 5 full cycles with no gain
+frontier = 3
+runs = 5                   # complete passes through the named stages
+```
+
+Each **cycle** runs Auto, then Local starting from Auto's best admissible
+candidate; the next cycle starts Auto from Local's best admissible candidate.
+If either backend improves that seed's valid stage objective, the no-improvement
+counter resets. Otherwise, it increments after *both* backends have tried.
+The search moves to the next seed/stage after `stagnation-rounds` consecutive
+cycles without an eligible improvement. Near misses can guide the search but
+do not reset stagnation unless they satisfy all earlier required goals and the
+current stage's goal. A newly discovered route is measured against its own
+starting candidate, not a possibly better historical checkpoint, so new routes
+still have an opportunity to propagate. The regular `n-1` / `n-2` frontiers,
+full-route verification, and stage checkpoint protection remain unchanged.
+
+`iterations` and `rounds` are **per-turn granularities**, not fixed caps on
+how many cycles a stage can run. With `search = "both"`, every full cycle has
+up to `iterations * workers * rounds` nominal proposal slots, divided between
+Auto and Local. Extra Local repair evaluations may occur. More than one seed
+can be searched at the same stage, so total work is variable and potentially
+much larger than before. For small passes, prefer `rounds = 1` initially.
+
+`stagnation-rounds = 0` preserves the previous fixed-search implementation;
+this makes adoption opt-in and leaves random, complexity, and physics splicing
+unchanged. Use `--splice-stagnation-rounds N` to override it on the command
+line. `--auto-runs` still controls full multi-splicer passes, not adaptive
+cycles within a named splice.
+
 With `splice-search = "both"`, Auto's returned candidates are ranked using the
 named stage's endpoint objective before choosing Local's starting replay.
 Feasible candidates outrank partial near-misses; the original stage seed is

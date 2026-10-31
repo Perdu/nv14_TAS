@@ -87,7 +87,9 @@ top-results = 10
 
 [multi-splicer]
 search = "both"
-iterations = 10000
-rounds = 10
+# iterations = 10000
+auto-stagnation-rounds = 10
+local-stagnation-rounds = 50
+rounds = 1
 frontier = 3
 runs = 5

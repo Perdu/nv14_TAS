@@ -1656,6 +1656,9 @@ def _load_config_defaults(
         "search": "auto_splice_search",
         "iterations": "auto_splice_iterations",
         "rounds": "auto_splice_rounds",
+        "stagnation_rounds": "auto_splice_stagnation_rounds",
+        "auto_stagnation_rounds": "auto_splice_auto_stagnation_rounds",
+        "local_stagnation_rounds": "auto_splice_local_stagnation_rounds",
         "frontier": "auto_splice_frontier",
     })
     # The dedicated table is last within its file: a splice override wins over
@@ -1759,6 +1762,8 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_lookback", "auto_splice_iterations",
     "auto_splice_repair_iterations", "auto_splice_repair_anchors",
     "auto_splice_repair_searches", "auto_splice_rounds",
+    "auto_splice_stagnation_rounds", "auto_splice_auto_stagnation_rounds",
+    "auto_splice_local_stagnation_rounds",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_directory",
     "auto_splice_start", "auto_splice_stop",
@@ -1790,6 +1795,10 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
         raise SystemExit("--splice-start/--splice-stop require named user splice mode")
     if args.auto_random_splice and args.auto_splice_search == "both" and args.auto_splice_mode != "user":
         raise SystemExit("splice-search=both requires user mode with splice-files")
+    if (args.auto_random_splice and
+            (args.auto_splice_stagnation_rounds or args.auto_splice_auto_stagnation_rounds
+             or args.auto_splice_local_stagnation_rounds) and args.auto_splice_mode != "user"):
+        raise SystemExit("splice stagnation options require named user splice mode")
     if args.auto_random_splice and args.auto_objective == AUTO_OBJECTIVE_HIGHSCORE:
         raise SystemExit("--auto-random-splice requires --objective speedrun or an endpoint objective (not highscore)")
     if args.auto_objective not in AUTO_OBJECTIVES:
@@ -2301,7 +2310,19 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-repair-iterations", modes=auto_modes, type=int, default=250,
                          metavar="N", help="proposals per worker per continuation repair round (default 250)")
     command.add_argument("--auto-splice-rounds", modes=auto_modes, type=int, default=1,
-                         metavar="N", help="backend search rounds PER waypoint (default 1); [auto] rounds alias")
+                         metavar="N", help="fixed backend search rounds per waypoint (default 1); ignored when named-splice Auto/Local stagnation limits are set")
+    command.add_argument("--splice-stagnation-rounds", "--auto-splice-stagnation-rounds",
+                         dest="auto_splice_stagnation_rounds", modes=auto_modes,
+                         type=int, default=0, metavar="N",
+                         help="named multi-splicer: alternate Auto/Local until N consecutive cycles have no eligible stage improvement (0=legacy fixed rounds)")
+    command.add_argument("--splice-auto-stagnation-rounds", "--auto-splice-auto-stagnation-rounds",
+                         dest="auto_splice_auto_stagnation_rounds", modes=auto_modes,
+                         type=int, default=0, metavar="N",
+                         help="named multi-splicer: Auto phase stops after N consecutive Auto backend rounds without an eligible improvement")
+    command.add_argument("--splice-local-stagnation-rounds", "--auto-splice-local-stagnation-rounds",
+                         dest="auto_splice_local_stagnation_rounds", modes=auto_modes,
+                         type=int, default=0, metavar="N",
+                         help="named multi-splicer: Local phase stops after N consecutive Local backend rounds without an eligible improvement")
     command.add_argument("--auto-splice-repair-rounds", modes=auto_modes, type=int, default=1,
                          metavar="N", help="backend search rounds PER continuation repair (default 1)")
     command.add_argument("--auto-splice-repair-anchors", modes=auto_modes, type=int, default=2,
@@ -3871,6 +3892,9 @@ def main() -> None:
                 splice_config = RandomSpliceConfig(
                     iterations=args.auto_splice_iterations,
                     splice_rounds=args.auto_splice_rounds,
+                    splice_stagnation_rounds=args.auto_splice_stagnation_rounds,
+                    splice_auto_stagnation_rounds=args.auto_splice_auto_stagnation_rounds,
+                    splice_local_stagnation_rounds=args.auto_splice_local_stagnation_rounds,
                     search_backend=args.auto_splice_search,
                     endpoint_max_retime=args.max_retime,
                     endpoint_mutation_span=args.auto_mutation_span,

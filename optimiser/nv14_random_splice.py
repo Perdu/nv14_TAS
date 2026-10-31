@@ -54,7 +54,10 @@ class RandomSpliceConfig:
     endpoint_shared_refinement_proposals: int = 0
     endpoint_performance_stats: bool = False
     repair_iterations: int = 250  # Local proposals per subsequent anchor and worker per round
-    splice_rounds: int = 1  # backend search rounds PER waypoint, not global Auto runs
+    splice_rounds: int = 1  # backend search rounds PER waypoint / adaptive turn
+    splice_stagnation_rounds: int = 0  # legacy: shared cycle-level stagnation stop
+    splice_auto_stagnation_rounds: int = 0  # named stages: consecutive stagnant Auto backend rounds
+    splice_local_stagnation_rounds: int = 0  # named stages: consecutive stagnant Local backend rounds
     repair_rounds: int = 1  # backend search rounds PER continuation repair
     repair_anchors: int = 2
     beam: int = 16
@@ -99,6 +102,21 @@ class RandomSpliceConfig:
         for field in ("lookback", "iterations", "repair_iterations", "beam", "workers"):
             if type(getattr(self, field)) is not int or getattr(self, field) < 1:
                 raise ValueError(f"random splice {field} must be positive")
+        for field in ("splice_stagnation_rounds", "splice_auto_stagnation_rounds",
+                      "splice_local_stagnation_rounds"):
+            if type(getattr(self, field)) is not int or getattr(self, field) < 0:
+                raise ValueError(f"{field} must be a nonnegative integer")
+        phase_mode = (self.splice_auto_stagnation_rounds > 0 or
+                      self.splice_local_stagnation_rounds > 0)
+        if phase_mode and self.splice_stagnation_rounds:
+            raise ValueError("use auto-stagnation-rounds/local-stagnation-rounds OR "
+                             "legacy stagnation-rounds, not both")
+        if phase_mode and ((self.search_backend in ("both", "endpoint-auto") and
+                            not self.splice_auto_stagnation_rounds) or
+                           (self.search_backend in ("both", "local") and
+                            not self.splice_local_stagnation_rounds)):
+            raise ValueError("each selected splice backend needs its own positive "
+                             "stagnation-rounds setting")
         for field in ("splice_rounds", "repair_rounds"):
             if type(getattr(self, field)) is not int or getattr(self, field) < 1:
                 raise ValueError(f"random splice {field} must be a positive integer")
@@ -477,7 +495,14 @@ def _event_confirmed(level: Level, candidate: AutoEvaluation, anchor: Waypoint,
 def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGoal,
                   *, start: int, config: RandomSpliceConfig, iterations: int,
                   rounds: int, seed: int, progress: Callable[[str], None] | None = None,
-                  editable_end: int | None = None, include_partial: bool = False):
+                  editable_end: int | None = None, include_partial: bool = False,
+                  stagnation_rounds: int | None = None):
+    # With a backend-specific patience, a single uninterrupted search owns
+    # its evolving population and applies stagnation after each *real* round.
+    if stagnation_rounds is not None and (
+        type(stagnation_rounds) is not int or stagnation_rounds < 1 or rounds != 0
+    ):
+        raise ValueError("continuous splice search needs rounds=0 and positive stagnation_rounds")
     if start > (goal.target_frame if editable_end is None else editable_end) or goal.target_frame >= len(frames):
         return (), 0
     if config.search_backend == "both":
@@ -511,6 +536,7 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             level, frames, goal, auto_config, workers=config.workers, runs=rounds,
             progress=progress, frontier_callback=survivors.extend,
             frontier_limit=min(max(6, config.frontier * 3), config.beam),
+            stagnation_rounds=stagnation_rounds or 0,
         )
         # Normal seam searches only offer feasible endpoints. Progressive
         # frontier searches may also carry live near-misses into the next
@@ -537,6 +563,7 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             mutation_span=min(config.lookback, 32), seed=seed,
             repair_steps=min(64, iterations // 4),
             repair_lookback=min(config.lookback, 32),
+            stagnation_rounds=stagnation_rounds if stagnation_rounds is not None else 20,
         ),
         progress=progress,
     )

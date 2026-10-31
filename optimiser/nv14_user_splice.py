@@ -41,7 +41,10 @@ class UserSpliceResult:
 
 def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                   stage: UserSpliceStage, config: RandomSpliceConfig,
-                  rng: random.Random) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
+                  rng: random.Random,
+                  *, stage_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
+                  progress: Callable[[str], None] | None = None,
+                  ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Run the requested backends with one shared per-branch proposal budget.
 
     With ``both``, endpoint Auto runs first. Local then starts from the
@@ -51,6 +54,12 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
     The odd proposal goes to Local, so the combined backend budget remains
     exactly config.iterations per worker and internal round.
     """
+    if (config.splice_auto_stagnation_rounds or config.splice_local_stagnation_rounds):
+        return _search_stage_backend_phases(
+            level, branch, stage, config, rng, stage_rank=stage_rank, progress=progress)
+    if config.splice_stagnation_rounds:
+        return _search_stage_until_stagnant(
+            level, branch, stage, config, rng, stage_rank=stage_rank, progress=progress)
     if config.search_backend == "both":
         if config.iterations < 2:
             raise ValueError("splice-search=both requires splice-iterations >= 2")
@@ -90,6 +99,197 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
             search_seed = min(auto_seeds,
                               key=lambda frames: evaluator.evaluate(frames).progress_key)
     return tuple(merged.items()), evaluations, searches
+
+
+
+def _search_stage_backend_phases(
+    level: Level, branch: tuple[InputFrame, ...], stage: UserSpliceStage,
+    config: RandomSpliceConfig, rng: random.Random,
+    *, stage_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
+    progress: Callable[[str], None] | None = None,
+) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
+    """Run each backend continuously until its own stagnant-round limit.
+
+    One Auto or Local invocation retains its native population throughout the
+    phase.  If either phase improves an admissible stage candidate, another
+    Auto -> Local cycle begins.  ``splice_rounds`` is intentionally irrelevant
+    here; that legacy batch setting is only used without phase stagnation.
+    """
+    if config.search_backend == "both":
+        if config.iterations < 2:
+            raise ValueError("splice-search=both requires splice-iterations >= 2")
+        phases = (("endpoint-auto", config.iterations // 2,
+                   config.splice_auto_stagnation_rounds),
+                  ("local", (config.iterations + 1) // 2,
+                   config.splice_local_stagnation_rounds))
+    elif config.search_backend == "endpoint-auto":
+        phases = (("endpoint-auto", config.iterations,
+                   config.splice_auto_stagnation_rounds),)
+    else:
+        phases = (("local", config.iterations,
+                   config.splice_local_stagnation_rounds),)
+
+    evaluator = EndpointEvaluator(level, stage.goal)
+
+    def rank(frames: tuple[InputFrame, ...]) -> tuple | None:
+        if stage_rank is not None:
+            return stage_rank(frames)
+        evaluation = evaluator.evaluate(frames)
+        return evaluation.objective_key if evaluation.feasible else None
+
+    merged: dict[tuple[InputFrame, ...], int] = {}
+    incumbent = search_seed = tuple(branch)
+    best_rank = rank(incumbent)
+    best_progress = evaluator.evaluate(incumbent).progress_key
+    evaluations = calls = cycle = 0
+    while True:
+        cycle += 1
+        cycle_improved = False
+        for backend, iterations, patience in phases:
+            if progress:
+                progress(f"[auto:user-splice:refine] {stage.name!r}: "
+                         f"cycle {cycle}, starting continuous {backend} phase "
+                         f"(stop after {patience} stagnant rounds)")
+            try:
+                found, used = _local_search(
+                    level, search_seed, stage.goal, start=stage.start,
+                    editable_end=stage.end,
+                    config=replace(config, search_backend=backend),
+                    iterations=iterations, rounds=0,
+                    stagnation_rounds=patience,
+                    seed=rng.getrandbits(63), include_partial=True)
+            except ValueError as exc:
+                if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
+                    raise
+                found, used = (), 0
+            evaluations += used
+            calls += 1
+            phase_improved = False
+            near_miss = search_seed
+            near_progress = best_progress
+            for candidate, frame in found:
+                candidate = tuple(candidate)
+                merged.setdefault(candidate, frame)
+                candidate_rank = rank(candidate)
+                if candidate_rank is not None and (
+                    best_rank is None or candidate_rank < best_rank
+                ):
+                    incumbent, best_rank = candidate, candidate_rank
+                    phase_improved = cycle_improved = True
+                candidate_progress = evaluator.evaluate(candidate).progress_key
+                if candidate_progress < near_progress:
+                    near_miss, near_progress = candidate, candidate_progress
+            if best_rank is not None:
+                search_seed = incumbent
+                best_progress = evaluator.evaluate(incumbent).progress_key
+            else:
+                search_seed, best_progress = near_miss, near_progress
+            if progress:
+                progress(f"[auto:user-splice:refine] {stage.name!r}: "
+                         f"cycle {cycle}, {backend} phase finished at "
+                         f"its own stagnation limit {patience}; "
+                         f"{'stage improved' if phase_improved else 'no stage gain'}; "
+                         f"{used} distinct evaluations")
+        if progress:
+            progress(f"[auto:user-splice:refine] {stage.name!r}: "
+                     f"cycle {cycle} "
+                     f"{'improved; restarting Auto' if cycle_improved else 'no improvement; advancing'}; "
+                     f"{calls} backend phase(s), {evaluations} distinct evaluations")
+        if not cycle_improved:
+            break
+    return tuple(merged.items()), evaluations, calls
+
+
+def _search_stage_until_stagnant(
+    level: Level, branch: tuple[InputFrame, ...], stage: UserSpliceStage,
+    config: RandomSpliceConfig, rng: random.Random,
+    *, stage_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
+    progress: Callable[[str], None] | None = None,
+) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
+    """Alternate backend turns until N full cycles make no stage improvement.
+
+    A *cycle* comprises Auto then Local in `both` mode. A successful turn
+    immediately seeds the next backend, and the next cycle can refine Local's
+    result with Auto. A cycle is stagnant only if neither backend beats the
+    best admissible objective for *this seed*, irrespective of historical
+    bests from earlier outer rounds. Thus a fresh route is not penalised for
+    having had less optimization than a previously archived route.
+
+    Each turn uses the existing per-worker iteration count and `splice_rounds`.
+    The total number of cycles is determined by improvement/stagnation, not
+    a fixed number of turns. Candidates remain available for the usual
+    n-1/n-2 frontier selection and final verification.
+    """
+    if config.search_backend == "both":
+        if config.iterations < 2:
+            raise ValueError("splice-search=both requires splice-iterations >= 2")
+        turns = (("endpoint-auto", config.iterations // 2),
+                 ("local", (config.iterations + 1) // 2))
+    else:
+        turns = ((config.search_backend, config.iterations),)
+    evaluator = EndpointEvaluator(level, stage.goal)
+
+    def rank(frames: tuple[InputFrame, ...]) -> tuple | None:
+        if stage_rank is not None:
+            return stage_rank(frames)
+        evaluation = evaluator.evaluate(frames)
+        return evaluation.objective_key if evaluation.feasible else None
+
+    merged: dict[tuple[InputFrame, ...], int] = {}
+    search_seed = tuple(branch)
+    incumbent = search_seed
+    best_rank = rank(incumbent)
+    best_progress = evaluator.evaluate(incumbent).progress_key
+    used = calls = stagnant = cycle = 0
+    while stagnant < config.splice_stagnation_rounds:
+        cycle += 1
+        improved = False
+        for backend, iterations in turns:
+            try:
+                found, count = _local_search(
+                    level, search_seed, stage.goal, start=stage.start,
+                    editable_end=stage.end,
+                    config=replace(config, search_backend=backend),
+                    iterations=iterations, rounds=config.splice_rounds,
+                    seed=rng.getrandbits(63), include_partial=True)
+            except ValueError as exc:
+                if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
+                    raise
+                found, count = (), 0
+            used += count
+            calls += 1
+            turn_improved = False
+            # A higher-scoring partial state can help reach an initially
+            # infeasible checkpoint, but cannot count as a valid improvement.
+            best_near_miss = search_seed
+            near_miss_rank = best_progress
+            for candidate, frame in found:
+                candidate = tuple(candidate)
+                merged.setdefault(candidate, frame)
+                candidate_rank = rank(candidate)
+                if candidate_rank is not None and (best_rank is None or candidate_rank < best_rank):
+                    incumbent, best_rank = candidate, candidate_rank
+                    improved = True
+                    turn_improved = True
+                candidate_progress = evaluator.evaluate(candidate).progress_key
+                if candidate_progress < near_miss_rank:
+                    best_near_miss, near_miss_rank = candidate, candidate_progress
+            if progress and turn_improved:
+                progress(f"[auto:user-splice:refine] {stage.name!r}: "
+                         f"cycle {cycle} {backend} improved the stage objective")
+            # Never replace a feasible incumbent with an infeasible near-miss.
+            if best_rank is not None:
+                search_seed = incumbent
+                best_progress = evaluator.evaluate(incumbent).progress_key
+            else:
+                search_seed, best_progress = best_near_miss, near_miss_rank
+        stagnant = 0 if improved else stagnant + 1
+        if progress:
+            progress(f"[auto:user-splice:refine] {stage.name!r}: cycle {cycle}; "
+                     f"{'improved' if improved else 'no gain'}; "
+                     f"stagnant {stagnant}/{config.splice_stagnation_rounds}; "
+                     f"{calls} backend turns, {used} distinct evaluations")
+    return tuple(merged.items()), used, calls
 
 
 def _stage_sources(recent: Sequence[tuple[InputFrame, ...]],
@@ -373,11 +573,35 @@ def optimise_user_splices(
                           f"Local {(config.iterations + 1) // 2} (seeded from Auto best)")
         else:
             allocation = f"{config.search_backend} {config.iterations}"
-        progress(f"[auto:user-splice:budget] {allocation} proposals per worker "
-                 f"per internal round, for every stage seed; "
-                 f"{config.splice_rounds} internal round(s) per seed; "
-                 f"{config.workers} worker(s); "
-                 f"{config.rounds or 'unlimited'} outer multi-splice round(s)")
+        if config.splice_auto_stagnation_rounds or config.splice_local_stagnation_rounds:
+            parts = []
+            if config.search_backend in ("both", "endpoint-auto"):
+                parts.append(f"Auto: {config.splice_auto_stagnation_rounds} stagnant backend rounds")
+            if config.search_backend in ("both", "local"):
+                parts.append(f"Local: {config.splice_local_stagnation_rounds} stagnant backend rounds")
+            progress(f"[auto:user-splice:budget] {allocation} proposals per worker "
+                     f"per continuous backend round; {'; '.join(parts)}; "
+                     "each backend retains its population until stagnant; "
+                     "repeat Auto -> Local phases if either improves; "
+                     f"{config.workers} worker(s); "
+                     f"{config.rounds or 'unlimited'} outer multi-splice round(s)")
+            if config.splice_rounds != 1:
+                progress(f"[auto:user-splice] ignoring [multi-splicer] rounds="
+                         f"{config.splice_rounds} in independent backend stagnation mode; "
+                         "remove the setting from your TOML")
+        elif config.splice_stagnation_rounds:
+            progress(f"[auto:user-splice:budget] {allocation} proposals per worker "
+                     f"per backend turn; {config.splice_rounds} internal round(s) "
+                     "per turn; adaptive stage search stops after "
+                     f"{config.splice_stagnation_rounds} consecutive non-improving "
+                     f"cycle(s) per seed; {config.workers} worker(s); "
+                     f"{config.rounds or 'unlimited'} outer multi-splice round(s)")
+        else:
+            progress(f"[auto:user-splice:budget] {allocation} proposals per worker "
+                     f"per internal round, for every stage seed; "
+                     f"{config.splice_rounds} internal round(s) per seed; "
+                     f"{config.workers} worker(s); "
+                     f"{config.rounds or 'unlimited'} outer multi-splice round(s)")
 
     if progress and (first_stage or last_stage != len(stages) - 1):
         progress(f"[auto:user-splice] selected stages "
@@ -461,15 +685,37 @@ def optimise_user_splices(
                     eligible[saved] = original_endpoints[index].evaluate(saved).objective_key
             for seed_index, branch in enumerate(branches, 1):
                 if progress:
+                    phase_mode = (config.splice_auto_stagnation_rounds or
+                                  config.splice_local_stagnation_rounds)
+                    if phase_mode:
+                        allocation = (f"up to {config.iterations * config.workers * config.splice_rounds} "
+                                      "nominal proposal slots per backend batch; "
+                                      "total depends on independent Auto/Local stagnation limits")
+                    elif config.splice_stagnation_rounds:
+                        allocation = (f"{config.iterations * config.workers * config.splice_rounds} "
+                                      "nominal proposal slots per cycle for this seed "
+                                      "(shared by backends when search=both)")
+                    else:
+                        allocation = (f"{config.iterations * config.workers * config.splice_rounds} "
+                                      "nominal proposal slots for this seed "
+                                      "(shared by the two backends when search=both)")
                     progress(f"[auto:user-splice] round {round_no+1}/{config.rounds or chr(8734)} "
                              f"stage {index+1}/{len(stages)} {stage.name!r} "
                              f"seed {seed_index}/{len(branches)}; "
                              f"range {stage.start}:{stage.end}, target {stage.goal.target_frame}; "
                              f"search={'Auto -> Local' if config.search_backend == 'both' else config.search_backend}; "
-                             f"{config.iterations * config.workers * config.splice_rounds} "
-                             "nominal proposal slots for this seed "
-                             "(shared by the two backends when search=both)")
-                found, used, calls = _search_stage(level, branch, stage, config, rng)
+                             f"{allocation}")
+                if (config.splice_stagnation_rounds or config.splice_auto_stagnation_rounds
+                        or config.splice_local_stagnation_rounds):
+                    def admissible_rank(candidate, through=index + 1):
+                        if not valid_stages(candidate, through):
+                            return None
+                        return original_endpoints[through - 1].evaluate(candidate).objective_key
+                    found, used, calls = _search_stage(
+                        level, branch, stage, config, rng,
+                        stage_rank=admissible_rank, progress=progress)
+                else:
+                    found, used, calls = _search_stage(level, branch, stage, config, rng)
                 attempts += calls
                 evaluations += used
                 for candidate, _ in (*found, (branch, stage.goal.target_frame)):

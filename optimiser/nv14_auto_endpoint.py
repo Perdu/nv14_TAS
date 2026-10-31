@@ -9,6 +9,7 @@ and repair coordinator.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace, field
+import itertools
 import math
 from bisect import insort
 import random
@@ -1150,6 +1151,7 @@ def optimise_auto_endpoint_campaign(
     progress: Callable[[str], None] | None = None,
     frontier_callback: Callable[[tuple[AutoEndpointCandidate, ...]], None] | None = None,
     frontier_limit: int = 0,
+    stagnation_rounds: int = 0,
 ) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Run seeded Auto-style endpoint beams in independent processes.
 
@@ -1157,8 +1159,12 @@ def optimise_auto_endpoint_campaign(
     from every worker, rather than restarting only from the global best.
     Incomplete endpoints never enter the complete-run coordinator.
     """
-    if workers < 1 or runs < 1:
-        raise ValueError("endpoint workers and runs must be positive")
+    if workers < 1 or type(runs) is not int or runs < 0:
+        raise ValueError("endpoint workers must be positive and runs nonnegative")
+    if type(stagnation_rounds) is not int or stagnation_rounds < 0:
+        raise ValueError("endpoint stagnation_rounds must be nonnegative")
+    if runs == 0 and stagnation_rounds == 0:
+        raise ValueError("unlimited endpoint rounds require a stagnation limit")
     initial = tuple(editable_frames(source_frames))
     # Evaluate the reference exactly once in the parent, before launching
     # workers, so all rounds compare against a genuine baseline.  Evaluating
@@ -1177,9 +1183,12 @@ def optimise_auto_endpoint_campaign(
     inherited_population: tuple[AutoEndpointCandidate, ...] = ()
     # Request a small frontier from each worker when there will be a next
     # round. This is independent of frontier export to random splicing.
-    carry_limit = min(config.beam_width, 16) if runs > 1 else 0
+    carry_limit = min(config.beam_width, 16) if runs == 0 or runs > 1 else 0
     worker_frontier_limit = max(export_limit, carry_limit)
     round_donors: dict[bytes, AutoEndpointCandidate] = {}
+    round_improved = False
+    stagnant = 0
+    round_label = str(runs) if runs else "until stagnant"
 
     def absorb_frontier(candidates: Sequence[AutoEndpointCandidate]) -> None:
         if not worker_frontier_limit:
@@ -1242,7 +1251,7 @@ def optimise_auto_endpoint_campaign(
                 f"{secondary_status(result)}{suffix}")
 
     def absorb(candidate: AutoEndpointCandidate | None) -> bool:
-        nonlocal best
+        nonlocal best, round_improved
         if candidate is None:
             return False
         # Revalidate the cross-process result independently in the parent.
@@ -1258,6 +1267,7 @@ def optimise_auto_endpoint_campaign(
         # tie-breaks are useful for beam diversity, but not for announcing or
         # writing a supposed new best with an identical endpoint score.
         if best is None or checked.objective_key < best.evaluation.objective_key:
+            round_improved = True
             best = candidate
             if shared_best is not None:
                 shared_best['best'] = candidate
@@ -1273,7 +1283,8 @@ def optimise_auto_endpoint_campaign(
     pool = None
     shared_best = None
     try:
-        for round_index in range(runs):
+        for round_index in (itertools.count() if runs == 0 else range(runs)):
+            round_improved = False
             round_donors.clear()
             if shared_best is not None:
                 shared_best.clear()
@@ -1281,7 +1292,7 @@ def optimise_auto_endpoint_campaign(
                     shared_best['best'] = best
             if progress:
                 progress(
-                    f"round {round_index + 1}/{runs}: starting {workers} worker(s) "
+                    f"round {round_index + 1}/{round_label}: starting {workers} worker(s) "
                     f"x {config.iterations:,} proposals "
                     f"({workers * config.iterations:,} total budget); "
                     f"{len(inherited_population)} inherited candidates"
@@ -1300,7 +1311,7 @@ def optimise_auto_endpoint_campaign(
                                      proposals == config.iterations):
                         elapsed = max(0.001, now - started)
                         progress(
-                            f"round {round_index + 1}/{runs}: worker 1/1; "
+                            f"round {round_index + 1}/{round_label}: worker 1/1; "
                             f"{proposals:,}/{config.iterations:,} proposals "
                             f"({100 * proposals / max(1, config.iterations):.0f}%); "
                             f"{evaluations:,} distinct evaluations; "
@@ -1410,7 +1421,7 @@ def optimise_auto_endpoint_campaign(
                         if index not in finished
                     )
                     progress(
-                        f"round {round_index + 1}/{runs}: "
+                        f"round {round_index + 1}/{round_label}: "
                         f"{len(finished)}/{workers} workers finished; "
                         f"{proposals:,}/{workers * config.iterations:,} proposals "
                         f"({100 * proposals / max(1, workers * config.iterations):.0f}%); "
@@ -1438,7 +1449,7 @@ def optimise_auto_endpoint_campaign(
                         absorb(winner)
                         if progress:
                             progress(
-                                f"round {round_index + 1}/{runs}: "
+                                f"round {round_index + 1}/{round_label}: "
                                 f"worker {index + 1}/{workers} finished; "
                                 f"{evaluated:,} distinct evaluations"
                             )
@@ -1448,7 +1459,7 @@ def optimise_auto_endpoint_campaign(
 
             if best is not None:
                 current = best.frames
-            if carry_limit and round_index + 1 < runs:
+            if carry_limit and (runs == 0 or round_index + 1 < runs):
                 # Preserve the current winner plus diverse survivors from all
                 # workers and earlier rounds. Select with the same feasible /
                 # near-miss niche policy used inside each worker's beam.
@@ -1461,10 +1472,15 @@ def optimise_auto_endpoint_campaign(
                                 if not c.evaluation.dead)
                 chosen = _select_ranked_endpoint_beam(ranked, config.beam_width)
                 inherited_population = tuple(entry.candidate for entry in chosen)
+            stagnant = 0 if round_improved else stagnant + 1
             if progress:
-                progress(f"round {round_index + 1}/{runs} complete: "
+                progress(f"round {round_index + 1}/{round_label} complete: "
                          f"{total:,} distinct evaluations total; "
-                         f"{len(inherited_population)} candidates available for next round")
+                         f"{len(inherited_population)} candidates available for next round"
+                         + (f"; stagnant {stagnant}/{stagnation_rounds}"
+                            if stagnation_rounds else ""))
+            if stagnation_rounds and stagnant >= stagnation_rounds:
+                break
     finally:
         if pool is not None:
             pool.shutdown(wait=True)
