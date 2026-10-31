@@ -210,6 +210,7 @@ def optimise_user_splices(
         previous: list[tuple[InputFrame, ...]] = [current]
         two_back: list[tuple[InputFrame, ...]] = []
         improved = False
+        unfulfilled: list[str] = []
         for index, stage in enumerate(stages):
             branches = _stage_sources(previous, two_back, config.frontier)
             if progress and index >= 2:
@@ -222,10 +223,11 @@ def optimise_user_splices(
             for saved in elites[index]:
                 if valid_stages(saved, index + 1):
                     eligible[saved] = original_endpoints[index].evaluate(saved).objective_key
-            for branch in branches:
+            for seed_index, branch in enumerate(branches, 1):
                 if progress:
                     progress(f"[auto:user-splice] round {round_no+1}/{config.rounds or chr(8734)} "
                              f"stage {index+1}/{len(stages)} {stage.name!r} "
+                             f"seed {seed_index}/{len(branches)}; "
                              f"range {stage.start}:{stage.end}, target {stage.goal.target_frame}; "
                              f"search={config.search_backend}")
                 found, used, calls = _search_stage(level, branch, stage, config, rng)
@@ -261,9 +263,23 @@ def optimise_user_splices(
                             progress(f"[auto:user-splice] improved verified final replay "
                                      f"({stage.name}); rank {candidate_rank}; saved")
             if not eligible:
-                # Failure to satisfy this stage must never bypass the goal.
-                previous = []
-                break
+                # A temporarily infeasible intermediate checkpoint must not
+                # silently abort the remaining named stages. Later edits may
+                # recover it, and the unchanged (possibly completed) source
+                # remains a useful seed for an independently searched final
+                # stage. Keep the two-back branches rather than discarding
+                # them on a failed waypoint. Crucially, final_rank STILL
+                # requires every named goal and canonical completion: these
+                # fallbacks are search seeds, not accepted results.
+                unfulfilled.append(stage.name)
+                fallbacks = list(dict.fromkeys((current, *branches)))[:max(2, config.frontier)]
+                if progress:
+                    progress(f"[auto:user-splice] stage {index+1}/{len(stages)} "
+                             f"{stage.name!r}: no candidate met all goals through this stage; "
+                             f"continuing with {len(fallbacks)} fallback seed(s) "
+                             "(final verification still requires all named goals)")
+                two_back, previous = previous, fallbacks
+                continue
             ordered = sorted(eligible.items(), key=lambda item: item[1])
             # Preserve at least the top n-2 option independent of whether an
             # n-1 candidate later wins its own stage ranking.
@@ -274,7 +290,9 @@ def optimise_user_splices(
         if progress:
             progress(f"[auto:user-splice] round {round_no+1} complete in "
                      f"{time.monotonic()-begun:.1f}s; {evaluations} evaluations; "
-                     f"{improvements} saved improvement(s); stagnant {stagnant}")
+                     f"{improvements} saved improvement(s); stagnant {stagnant}"
+                     + (f"; unmet checkpoints: {', '.join(unfulfilled)}"
+                        if unfulfilled else ""))
         if config.stagnation_rounds and stagnant >= config.stagnation_rounds:
             break
     return UserSpliceResult(best_output, improvements, attempts, evaluations)
