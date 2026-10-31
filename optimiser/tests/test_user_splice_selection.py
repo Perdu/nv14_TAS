@@ -116,3 +116,26 @@ def test_skip_early_stage_does_not_waive_earlier_goal(monkeypatch):
         start_at='end', completion_policy='checkpoint',
         stage_best_callback=lambda name, frames: saved.append((name,frames)))
     assert not saved
+
+
+def test_progress_reports_previous_score_position_and_no_baseline_write(monkeypatch):
+    level, source, _ = _baseline()
+    stage = UserSpliceStage('230', EndpointGoal(10, 'min-x'), 0, 10)
+    candidate = (InputFrame(left=True),) + source[1:]
+    baseline = EndpointEvaluator(level, stage.goal).evaluate(source)
+    improved = EndpointEvaluator(level, stage.goal).evaluate(candidate)
+    assert improved.objective_key < baseline.objective_key
+    monkeypatch.setattr(us, '_search_stage', lambda *a, **kw: (((candidate, 10),), 1, 1))
+    reports, checkpoints = [], []
+    optimise_user_splices(level, source, [stage],
+        RandomSpliceConfig(rounds=1, workers=1, iterations=2),
+        completion_policy='complete', progress=reports.append,
+        stage_best_callback=lambda name, frames: checkpoints.append((name, frames)))
+    assert checkpoints == [('230', candidate)]
+    temporary = next(line for line in reports if '[auto:user-splice:temporary]' in line)
+    assert 'position' in temporary
+    assert f'{baseline.x:.9g}' in temporary
+    assert f'{improved.x:.9g}' in temporary
+    assert 'min-x' in temporary
+    assert 'rank (' not in temporary
+    assert 'NOT verified' not in temporary

@@ -10,11 +10,12 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from collections.abc import Callable, Sequence
 import itertools
+import math
 import random
 import time
 
 from nv14_auto import evaluate_replay_with_sentinel
-from nv14_endpoint import EndpointGoal, EndpointEvaluator
+from nv14_endpoint import EndpointGoal, EndpointEvaluator, EndpointEvaluation
 from nv14_engine import InputFrame, Level
 from nv14_random_splice import (RandomSpliceConfig, _control_preserved,
                                 _local_search, _completed_rank)
@@ -137,6 +138,57 @@ def _materialise_splice_tail(frames: Sequence[InputFrame], target_frame: int
     return body + (InputFrame(),) * max(0, target_frame + 1 - len(body))
 
 
+def _stage_improvement_text(goal: EndpointGoal,
+                            previous: EndpointEvaluation | None,
+                            current: EndpointEvaluation) -> str:
+    """Human-readable *physical* results, never internal sorting keys.
+
+    A ranking key like (832.0, -90.067) encodes a minimisation order: its
+    negative component is NOT a negative player position.  Format actual
+    frames, coordinates and secondary values instead.
+    """
+    def coords(value: EndpointEvaluation) -> str:
+        return f"({value.x:.9g}, {value.y:.9g})"
+
+    def metric(value: EndpointEvaluation) -> float | None:
+        if goal.objective in ("min-x", "max-x"):
+            return value.x
+        if goal.objective in ("min-y", "max-y"):
+            return value.y
+        if goal.objective == "min-distance":
+            return math.sqrt(max(0.0, -value.score))
+        return None
+
+    if previous is None:
+        result = f"frame {current.frame}; position {coords(current)}"
+    else:
+        frame_text = (f"frame {current.frame}"
+                      if previous.frame == current.frame else
+                      f"frame {previous.frame} -> {current.frame}")
+        result = (f"{frame_text}; position {coords(previous)} -> "
+                  f"{coords(current)}")
+    if not goal.is_earliest:
+        label = "distance" if goal.objective == "min-distance" else goal.objective
+        new = metric(current)
+        old = metric(previous) if previous is not None else None
+        if new is not None:
+            result += (f"; {label} {new:.9g}" if old is None else
+                       f"; {label} {old:.9g} -> {new:.9g}")
+    if goal.secondary_objective is not None:
+        label = goal.secondary_objective
+        result += (f"; {label} {current.secondary_value:.9g}"
+                   if previous is None else
+                   f"; {label} {previous.secondary_value:.9g} -> "
+                   f"{current.secondary_value:.9g}")
+    elif goal.exit_distance_tiebreak and current.pre_finish_exit_distance is not None:
+        gap = current.pre_finish_exit_distance
+        old_gap = previous.pre_finish_exit_distance if previous is not None else None
+        result += (f"; exit proximity {gap:.9g}"
+                   if old_gap is None else
+                   f"; exit proximity {old_gap:.9g} -> {gap:.9g}")
+    return result
+
+
 def optimise_user_splices(
     level: Level, source_frames: Sequence[InputFrame],
     stages: Sequence[UserSpliceStage], config: RandomSpliceConfig,
@@ -241,10 +293,13 @@ def optimise_user_splices(
     best_output = source
     improvements = attempts = evaluations = stagnant = 0
     stage_best: list[tuple | None] = []
+    stage_best_evaluation: list[EndpointEvaluation | None] = []
     for i, endpoint in enumerate(original_endpoints):
         # The baseline is a real stage reference, not a reported improvement.
         feasible = valid_stages(current, i + 1)
-        stage_best.append(endpoint.evaluate(current).objective_key if feasible else None)
+        evaluation = endpoint.evaluate(current) if feasible else None
+        stage_best.append(evaluation.objective_key if evaluation is not None else None)
+        stage_best_evaluation.append(evaluation)
     if progress:
         if len(current) > len(source):
             progress(f"[auto:user-splice] appended {len(current) - len(source)} "
@@ -333,8 +388,10 @@ def optimise_user_splices(
                                      and (best_rank is None
                                           or candidate_final[0] < best_rank))
                     old_stage_rank = stage_best[index]
+                    old_evaluation = stage_best_evaluation[index]
                     if old_stage_rank is None or rank < old_stage_rank:
                         stage_best[index] = rank
+                        stage_best_evaluation[index] = evaluation
                         temp_gains += 1
                         if stage_best_callback:
                             # Stage checkpoints are intentionally independent
@@ -346,8 +403,7 @@ def optimise_user_splices(
                             progress(f"[auto:user-splice:temporary] "
                                      f"round {round_no+1} stage {index+1}/{len(stages)} "
                                      f"{stage.name!r}: {label}; "
-                                     f"frame {evaluation.frame}; score {evaluation.score:.9g}; "
-                                     f"rank {rank}; NOT verified as a full-run gain")
+                                     f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}")
                     if is_final_gain:
                         candidate_rank, completed_frames = candidate_final
                         current = normalized
@@ -359,14 +415,17 @@ def optimise_user_splices(
                             best_callback(best_output)
                         if progress:
                             progress(f"[auto:user-splice] improved verified final replay "
-                                     f"({stage.name}); rank {candidate_rank}; saved")
+                                     f"({stage.name}); "
+                                     f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}; "
+                                     "saved")
             if progress:
                 progress(f"[auto:user-splice:stage] round {round_no+1} "
                          f"{stage.name!r}: {attempts - attempts_before_stage} "
                          f"backend search(es), {evaluations - evaluations_before_stage} "
                          f"distinct evaluations, {len(eligible)} eligible replay(s), "
                          f"{temp_gains} stage-best update(s); "
-                         f"stage best {stage_best[index]}; "
+                         f"stage best "
+                         f"{_stage_improvement_text(stage.goal, None, stage_best_evaluation[index]) if stage_best_evaluation[index] is not None else 'none'}; "
                          f"{time.monotonic() - stage_started:.1f}s")
             if not eligible:
                 # A temporarily infeasible intermediate checkpoint must not

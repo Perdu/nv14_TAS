@@ -3056,6 +3056,10 @@ def _user_splice_output_paths(
     the filename's stem. Detect collisions before running any searches, so a
     stage checkpoint cannot overwrite the input, config, or main result.
     """
+    # When --replay-output is not specified, keep the LTM movie AND a TXT
+    # companion for each temporary checkpoint; don't alter final output.
+    if replay_output_path is None and output_path.suffix.lower() == ".ltm":
+        replay_output_path = output_path.with_suffix(".txt")
     destinations: dict[str, tuple[Path, Path | None]] = {}
     occupied: list[tuple[str, Path | None]] = [
         ("final output", output_path),

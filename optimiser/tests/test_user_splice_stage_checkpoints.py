@@ -24,6 +24,8 @@ def test_path_names_and_collision_protection(tmp_path):
                                    tmp_path/'wip'/'97-2_230.txt')
     assert destinations['switch.txt'][0].name == 'optim_switch.ltm'
     assert destinations['end.toml'][1].name == '97-2_end.txt'
+    fallback = _user_splice_output_paths(['230'], out, None)
+    assert fallback['230'] == (tmp_path/'wip'/'optim_230.ltm', tmp_path/'wip'/'optim_230.txt')
     with pytest.raises(ValueError, match='different files'):
         _user_splice_output_paths(['230', '230.txt'], out, packed)
     with pytest.raises(ValueError, match='different files'):
@@ -87,7 +89,8 @@ def test_cli_writes_named_stage_replays_beside_main_outputs(tmp_path, monkeypatc
     # There may be no full-run improvement, so the main file isn't required.
 
 
-def test_cli_stage_outputs_are_loadable_ltm_movies(tmp_path, monkeypatch):
+@pytest.mark.parametrize('explicit_replay', [True, False])
+def test_cli_stage_outputs_are_loadable_ltm_movies(tmp_path, monkeypatch, explicit_replay):
     from nv14_ltm import LtmMovie, LEVEL_DATABASE_NAME
     from tests.test_ltm import _write_ltm, _basic_config, _level_record
 
@@ -108,13 +111,16 @@ def test_cli_stage_outputs_are_loadable_ltm_movies(tmp_path, monkeypatch):
                    'splice-iterations=4\nsplice-rounds=1\nruns=1\nbeam=4\nseed=0\n')
     destination = tmp_path/'optim.ltm'
     packed = tmp_path/'00-0.txt'
-    monkeypatch.setattr(sys, 'argv', [
+    cli_args = [
         'optimize_replay.py', 'auto', str(source_ltm), '--config', str(cfg),
         '--levels-file', str(database), '--auto-splice-directory', str(goals),
-        '--output', str(destination), '--replay-output', str(packed), '--workers', '1'])
+        '--output', str(destination), '--workers', '1']
+    if explicit_replay:
+        cli_args.extend(('--replay-output', str(packed)))
+    monkeypatch.setattr(sys, 'argv', cli_args)
     main()
     stage_ltm = tmp_path/'optim_230.ltm'
-    stage_txt = tmp_path/'00-0_230.txt'
+    stage_txt = tmp_path/('00-0_230.txt' if explicit_replay else 'optim_230.txt')
     assert stage_ltm.exists() and stage_txt.exists()
     loaded = LtmMovie.load(stage_ltm)
     packed_frames = decode_complex_replay(stage_txt.read_text().strip()).frames
