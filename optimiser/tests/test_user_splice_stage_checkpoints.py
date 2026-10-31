@@ -121,7 +121,11 @@ def test_cli_stage_outputs_are_loadable_ltm_movies(tmp_path, monkeypatch, explic
     main()
     stage_ltm = tmp_path/'optim_230.ltm'
     stage_txt = tmp_path/('00-0_230.txt' if explicit_replay else 'optim_230.txt')
+    alias_ltm = tmp_path/'00-0_230.ltm' if explicit_replay else None
     assert stage_ltm.exists() and stage_txt.exists()
+    if alias_ltm is not None:
+        assert alias_ltm.exists()
+        assert alias_ltm.read_bytes() == stage_ltm.read_bytes()
     loaded = LtmMovie.load(stage_ltm)
     packed_frames = decode_complex_replay(stage_txt.read_text().strip()).frames
     assert tuple(loaded.replay_frames) == tuple(packed_frames)

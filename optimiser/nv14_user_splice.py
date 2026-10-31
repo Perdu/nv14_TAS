@@ -8,7 +8,7 @@ source) remain canonically complete.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 import itertools
 import math
 import random
@@ -197,6 +197,7 @@ def optimise_user_splices(
     progress: Callable[[str], None] | None = None,
     completion_policy: str = "complete",
     start_at: str | None = None, stop_at: str | None = None,
+    saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
 ) -> UserSpliceResult:
     """Optimise named goals in order, retaining diverse feasible continuations.
 
@@ -300,6 +301,28 @@ def optimise_user_splices(
         evaluation = endpoint.evaluate(current) if feasible else None
         stage_best.append(evaluation.objective_key if evaluation is not None else None)
         stage_best_evaluation.append(evaluation)
+    restored_stage_frames: list[tuple[InputFrame, ...] | None] = [None] * len(stages)
+    for i, stage in enumerate(stages):
+        for archived in (saved_stage_candidates or {}).get(stage.name, ()):
+            # Saved movies may have been trimmed to an earlier finish.  Apply
+            # the same implicit-neutral-tail convention as the active replay.
+            replay = _materialise_splice_tail(archived, len(current) - 1)
+            if not valid_stages(replay, i + 1):
+                if progress:
+                    progress(f"[auto:user-splice:resume] {stage.name!r}: "
+                             "ignored checkpoint failing the named goals")
+                continue
+            score = original_endpoints[i].evaluate(replay)
+            if stage_best[i] is None or score.objective_key < stage_best[i]:
+                stage_best[i] = score.objective_key
+                stage_best_evaluation[i] = score
+                restored_stage_frames[i] = replay
+    if progress:
+        for i, replay in enumerate(restored_stage_frames):
+            if replay is not None:
+                progress(f"[auto:user-splice:resume] {stages[i].name!r}: "
+                         "restored a strictly better historical checkpoint; "
+                         f"{_stage_improvement_text(stages[i].goal, None, stage_best_evaluation[i])}")
     if progress:
         if len(current) > len(source):
             progress(f"[auto:user-splice] appended {len(current) - len(source)} "

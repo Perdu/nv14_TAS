@@ -3090,6 +3090,74 @@ def _user_splice_output_paths(
     return destinations
 
 
+def _atomic_write_binary(path: Path, data: bytes) -> None:
+    """Atomically copy an already-serialized LTM to an alias checkpoint."""
+    import tempfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.",
+                                         suffix=".tmp", delete=False) as file:
+            temp = Path(file.name)
+            file.write(data)
+        os.replace(temp, path)
+    finally:
+        if temp is not None:
+            temp.unlink(missing_ok=True)
+
+
+def _user_splice_alias_ltm_path(
+    output_path: Path, replay_output_path: Path | None, name: str,
+) -> Path | None:
+    """An LTM named like the TXT companion, in addition to optim_STAGE.ltm."""
+    if output_path.suffix.lower() != ".ltm" or replay_output_path is None:
+        return None
+    label = Path(name).stem if Path(name).suffix.lower() in (".txt", ".toml") else name
+    alias = replay_output_path.with_name(f"{replay_output_path.stem}_{label}.ltm")
+    primary = output_path.with_name(f"{output_path.stem}_{label}.ltm")
+    return None if _paths_alias(alias, primary) else alias
+
+
+def _load_user_splice_checkpoints(
+    stage_outputs: dict[str, tuple[Path, Path | None]],
+    output_path: Path,
+    replay_output_path: Path | None,
+) -> dict[str, tuple[tuple[InputFrame, ...], ...]]:
+    """Read all existing stage files, allowing older and newer output names.
+
+    An unreadable existing checkpoint is an error: overwriting an unknown
+    previous score would violate the never-regress checkpoint guarantee.
+    """
+    checkpoints: dict[str, tuple[tuple[InputFrame, ...], ...]] = {}
+    for name, (main, replay) in stage_outputs.items():
+        alias = _user_splice_alias_ltm_path(output_path, replay_output_path, name)
+        candidates: list[tuple[InputFrame, ...]] = []
+        seen_paths: set[Path] = set()
+        for path in (main, alias, replay):
+            if path is None or not path.exists() or path.resolve() in seen_paths:
+                continue
+            seen_paths.add(path.resolve())
+            try:
+                if path.suffix.lower() == ".ltm":
+                    frames = LtmMovie.load(path).replay_frames
+                else:
+                    text = path.read_text(encoding="utf-8").strip()
+                    try:
+                        frames = decode_complex_replay(text).frames
+                    except (ValueError, TypeError):
+                        frames = decode_complex_replay(
+                            parse_combined_level_replay(text).replay_string).frames
+            except (OSError, UnicodeError, ValueError, LtmError) as exc:
+                raise ValueError(f"cannot read existing splice checkpoint {path}: {exc}; "
+                                 "refusing to overwrite an unverified best") from exc
+            canonical = tuple(editable_frames(frames))
+            if canonical not in candidates:
+                candidates.append(canonical)
+        if candidates:
+            checkpoints[name] = tuple(candidates)
+    return checkpoints
+
+
 def _population_output_paths(
     config: LocalConfig,
     *,
@@ -3669,6 +3737,31 @@ def main() -> None:
                                        _resolve_named_splice_files(directory, args.auto_splice_files))),
                 )
 
+                # Load before searching.  Existing stage files are comparison
+                # baselines, not automatically promoted to final-run results.
+                saved_stage_candidates = _load_user_splice_checkpoints(
+                    stage_outputs, output_path, replay_output_path)
+                for stage_name, candidates in saved_stage_candidates.items():
+                    print(f"[auto:user-splice:resume] {stage_name!r}: "
+                          f"read {len(candidates)} distinct saved replay(s)", flush=True)
+                # The alternate LTM name shares the replay output basename.
+                # Collision checks cover it before the first checkpoint write.
+                alias_outputs = {}
+                for stage_name in stage_outputs:
+                    alias = _user_splice_alias_ltm_path(
+                        output_path, replay_output_path, stage_name)
+                    if alias is not None and source.ltm_movie is not None:
+                        for label, protected in (("input", input_path),
+                                                 ("config", args.config),
+                                                 ("final output", output_path),
+                                                 ("final replay", replay_output_path),
+                                                 *((f"splice {key} output", path)
+                                                   for key, pair in stage_outputs.items()
+                                                   for path in pair if path is not None)):
+                            if protected is not None and _paths_alias(alias, protected):
+                                raise ValueError(f"splice LTM alias {alias} conflicts with {label}")
+                        alias_outputs[stage_name] = alias
+
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
                     replay_text = encode_complex_replay(frames)
@@ -3685,6 +3778,12 @@ def main() -> None:
                             raise SystemExit(f"could not write stage replay output {packed_path}: {exc}") from exc
                     else:
                         _write_result(source, main_path, packed_path, replay_text)
+                    alias = alias_outputs.get(name)
+                    if alias is not None:
+                        # Copy the exact movie that was just written, rather
+                        # than reserializing frames and risking LTM differences.
+                        alias.parent.mkdir(parents=True, exist_ok=True)
+                        _atomic_write_binary(alias, main_path.read_bytes())
                     print(f"[auto:user-splice:stage-checkpoint] {name!r}: saved "
                           f"{main_path}" + (f" and {packed_path}" if packed_path else "") +
                           " (stage-feasible; full-run completion not required)", flush=True)
@@ -3711,6 +3810,7 @@ def main() -> None:
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path, encode_complex_replay(frames)),
                     stage_best_callback=save_stage_best,
+                    saved_stage_candidates=saved_stage_candidates,
                     progress=lambda message: (
                         _print_baseline_line(message, color=common_config.color)
                         if message.startswith("[auto:user-splice:baseline]")
