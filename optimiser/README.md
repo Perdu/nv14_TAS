@@ -1408,12 +1408,29 @@ Then each level's file needs only the ordered splice names:
 ```toml
 # ../splices/97-2/multi-splicer.toml
 [multi-splicer]
+# Route-scale Auto mutation presets: low (default), medium, high, or an array
+# naming only selected operators (see examples/config.toml for explanations).
+mutations = "low"
 files = ["203", "408", "switch", "end"]
 # Optional: allow the next splice to reuse seeds from n-1, n-2, n-3, etc.
 lookback = 3
 save-frontier = 64          # persist alternatives; does NOT increase search seeds
 # `frontier = 3` in the shared configuration still controls actual searches.
 ```
+
+`mutations` enables additional route-scale operators in endpoint Auto only (not
+Local). `low` uses long `direction-flip`, short neutral `gap-repair`, and
+`direction-simplify` (removing brief reversals); `medium` adds large
+`boundary-shift`, jump-pulse `jump-rewrite`, and between-jumps
+`passage-rewrite`. `high` also uses costly physics-aware `state-crossover`
+between candidates with similar position and velocity at the seam. An explicit
+TOML array such as `mutations = ["direction-flip", "gap-repair"]` uses exactly
+those operators; `mutations = []` disables all new route-scale edits for
+an A/B comparison against the previous Hybrid behavior. These proposals
+consume part of Auto's existing evaluation budget (roughly 10%/20%/30% in
+low/medium/high); their usefulness should be
+benchmarked at equal evaluation count, since broad edits often fail. CLI:
+`--auto-mutations high` or `--auto-mutations direction-flip,gap-repair`.
 
 `lookback` is the **number of preceding splice frontiers**, not a count of
 skipped stages: `2` (default) keeps the previous n-1/n-2 behavior; `3`

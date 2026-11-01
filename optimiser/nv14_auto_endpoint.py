@@ -31,6 +31,7 @@ from nv14_population import (
     _rank as _population_rank,
 )
 from nv14_search import ALL_INPUT_CHOICES
+from nv14_route_mutations import parse_operators, operators as route_operators, propose as route_propose
 from nv14_native import require_native
 from nv14_replay import (
     RetimeMutation, apply_single_transition_retime, apply_suffix_retime,
@@ -47,6 +48,7 @@ class AutoEndpointConfig:
     range_start: int = 0
     range_end: int | None = None
     mutation_span: int = 24
+    route_mutations: str | tuple[str, ...] = "low"  # low/medium/high or explicit operator names
     completion_policy: str = "checkpoint"
     repair_steps: int = 32
     repair_lookback: int = 40
@@ -71,6 +73,7 @@ class AutoEndpointConfig:
             raise ValueError("invalid editable range")
         if self.mutation_span < 1:
             raise ValueError("mutation-span must be positive")
+        object.__setattr__(self, "route_mutations", parse_operators(self.route_mutations))
         if self.completion_policy not in ("checkpoint", "complete"):
             raise ValueError("completion-policy must be checkpoint or complete")
         if type(self.repair_steps) is not int or self.repair_steps < 0:
@@ -296,6 +299,7 @@ def _proposal(
 def _hybrid_proposal(
     parent: AutoEndpointCandidate, donor: AutoEndpointCandidate, *,
     rng: random.Random, config: AutoEndpointConfig, start: int, end: int,
+    level: Level | None = None,
 ) -> tuple[tuple[InputFrame, ...], int]:
     """Mix Auto retiming/jump macros with Local's richer pulse/jump/crossover ops.
 
@@ -303,7 +307,22 @@ def _hybrid_proposal(
     require a completed level. Using Local's actual mutation implementation
     prevents the endpoint path from drifting into a weaker copy of its tools.
     """
-    # Preserve the historical RNG sequence for the default 50/50 mixture.
+    # Dedicate a bounded *fraction* of existing Auto proposals to structurally
+    # different routes; no additional native evaluations are allocated. Failed
+    # structural attempts fall through to the established Hybrid path.
+    available = route_operators(config.route_mutations)
+    share = (0.10 if config.route_mutations == "low" else
+             0.20 if config.route_mutations == "medium" else
+             0.30 if config.route_mutations == "high" else 0.20)
+    if available and rng.random() < share:
+        name = rng.choice(available)
+        broad = route_propose(name, parent.frames, rng=rng, start=start, end=end,
+                              donor=donor.frames, level=level)
+        if broad is not None:
+            first_changed = next(i for i in range(start, end + 1)
+                                 if broad[i] != parent.frames[i])
+            return broad, first_changed
+    # Preserve the original Auto/Local 50/50 mix for ordinary proposals.
     use_auto = (bool(rng.randrange(2)) if config.auto_mutation_share == 0.5
                 else rng.random() < config.auto_mutation_share)
     if use_auto:
@@ -983,7 +1002,8 @@ def optimise_auto_endpoint(
             parent = parent_entry.candidate
             donor = rng.choice(beam.entries).candidate
             proposed, anchor = _hybrid_proposal(parent, donor, rng=rng,
-                                                config=config, start=start, end=end)
+                                                config=config, start=start, end=end,
+                                                level=level)
         if config.performance_stats:
             mutation_seconds += time.perf_counter() - mutation_start
         previous_best = best
@@ -1157,13 +1177,14 @@ def _auto_round_identity(level: Level, source: tuple[InputFrame, ...],
     if not level_string:
         raise ValueError("Auto round checkpoints require the original level string")
     build = hashlib.sha256()
-    for filename in ("nv14_auto_endpoint.py", "nv14_endpoint.py", "nv14_population.py"):
+    for filename in ("nv14_auto_endpoint.py", "nv14_route_mutations.py", "nv14_endpoint.py", "nv14_population.py"):
         build.update((Path(__file__).with_name(filename)).read_bytes())
     return {"format": 1, "build_sha256": build.hexdigest(),
             "level_sha256": hashlib.sha256(level_string.encode()).hexdigest(),
             "enemies": bool(level.simulate_enemies),
             "source_sha256": hashlib.sha256(encode_complex_replay(source).encode()).hexdigest(),
-            "goal": repr(goal), "config": asdict(config), "workers": workers}
+            "goal": repr(goal), "config": json.loads(json.dumps(asdict(config))),
+            "workers": workers}
 
 
 def _write_auto_round(path: Path, identity: dict[str, object],

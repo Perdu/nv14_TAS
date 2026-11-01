@@ -45,6 +45,15 @@ adaptive-refinement = true
 refinement-polish = true
 refinement-cycle = 128
 refinement-chain-steps = 32
+# Auto structural mutations: low (default, cheap), medium (adds larger rewrites),
+# or high (adds costly physics-aligned crossover). Explicit list is also allowed:
+# mutations = ["direction-flip", "gap-repair", "direction-simplify", "boundary-shift",
+#              "jump-rewrite", "passage-rewrite", "state-crossover"]
+# direction-flip: invert a long L/R hold; gap-repair: join short neutral gaps;
+# direction-simplify: remove short reversals; boundary-shift: move a direction change;
+# jump-rewrite: shift/remove jump pulses; passage-rewrite: change direction between jumps;
+# state-crossover: splice donor routes where player physics states nearly match (costly).
+mutations = "low"
 
 [local]
 local-inputs = "direction"
@@ -88,8 +97,8 @@ top-results = 10
 [multi-splicer]
 search = "both"
 # iterations = 10000
-auto-stagnation-rounds = 10
-local-stagnation-rounds = 50
+auto-stagnation-rounds = 5
+local-stagnation-rounds = 20
 lookback = 2
 frontier = 3
 # Number of candidates to save per splice on disk

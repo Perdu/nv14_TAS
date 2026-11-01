@@ -541,6 +541,15 @@ def build_mode_configs(args: argparse.Namespace) -> ModeConfigs:
     return ModeConfigs(common=CommonConfig.from_namespace(args))
 
 
+def parse_auto_mutations(value: str) -> str | tuple[str, ...]:
+    """Parse low/medium/high or comma-separated route-scale operator names."""
+    from nv14_route_mutations import parse_operators
+    try:
+        return parse_operators(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 def parse_seed(text: str) -> int | str:
     """Parse an explicit RNG seed or the auto-mode ``random`` sentinel."""
     if text == "random":
@@ -1431,6 +1440,9 @@ def _format_config_value_for_type(
     if not isinstance(value, (list, tuple)):
         return value
 
+    if action_type is parse_auto_mutations:
+        from nv14_route_mutations import parse_operators
+        return ",".join(parse_operators(value))
     if action_type is parse_target_region:
         if len(value) != 4:
             raise ValueError("target-region arrays must contain XMIN, XMAX, YMIN, YMAX")
@@ -1664,6 +1676,7 @@ def _load_config_defaults(
         "frontier": "auto_splice_frontier",
         "save_frontier": "auto_splice_save_frontier",
         "lookback": "auto_splice_stage_lookback",
+        "mutations": "auto_mutations",  # endpoint Auto, not Local mutation selection
     })
     # The dedicated table is last within its file: a splice override wins over
     # a general [auto] value, but any explicit CLI flag still wins later.
@@ -2507,6 +2520,11 @@ def build_parser() -> argparse.ArgumentParser:
                          help="endpoint search: allow a partial route or require a full verified finish")
     command.add_argument("--auto-mutation-span", modes=auto_modes, type=int,
                          default=24, help="maximum endpoint macro edit span")
+    command.add_argument("--auto-mutations", "--splice-mutations", dest="auto_mutations",
+                         modes=auto_modes, type=parse_auto_mutations, default="low",
+                         metavar="PRESET|NAMES",
+                         help="Auto route-scale operators: low (default), medium, high, "
+                              "or comma-separated operator names; TOML arrays accepted")
     # Backward compatibility for existing TOMLs. Endpoint Auto always runs the
     # hybrid algorithm; the former legacy beam is no longer selectable.
     command.add_argument("--auto-endpoint-strategy", modes=auto_modes,
@@ -4161,6 +4179,7 @@ def main() -> None:
                     search_backend=args.auto_splice_search,
                     endpoint_max_retime=args.max_retime,
                     endpoint_mutation_span=args.auto_mutation_span,
+                    endpoint_route_mutations=args.auto_mutations,
                     endpoint_repair_steps=args.auto_endpoint_repair_steps,
                     endpoint_repair_lookback=args.auto_endpoint_repair_lookback,
                     endpoint_auto_mutation_share=args.auto_endpoint_auto_mutation_share,
@@ -4312,6 +4331,7 @@ def main() -> None:
                 search_backend=args.auto_splice_search,
                 endpoint_max_retime=args.max_retime,
                 endpoint_mutation_span=args.auto_mutation_span,
+                endpoint_route_mutations=args.auto_mutations,
                 endpoint_repair_steps=args.auto_endpoint_repair_steps,
                 endpoint_repair_lookback=args.auto_endpoint_repair_lookback,
                 endpoint_auto_mutation_share=args.auto_endpoint_auto_mutation_share,
@@ -4465,6 +4485,7 @@ def main() -> None:
                       else 0 if args.seed is None else int(args.seed)),
                 range_start=start, range_end=end,
                 mutation_span=args.auto_mutation_span,
+                route_mutations=args.auto_mutations,
                 completion_policy=args.auto_completion_policy,
                 repair_steps=args.auto_endpoint_repair_steps,
                 repair_lookback=args.auto_endpoint_repair_lookback,

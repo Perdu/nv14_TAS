@@ -41,6 +41,7 @@ class RandomSpliceConfig:
     search_backend: str = "local"  # local population or endpoint Auto hybrid
     endpoint_max_retime: int = 3
     endpoint_mutation_span: int = 24
+    endpoint_route_mutations: str | tuple[str, ...] = "low"
     endpoint_repair_steps: int = 32
     endpoint_repair_lookback: int = 40
     local_mutation_span: int | None = None  # explicit per-stage Local overrides
@@ -131,6 +132,9 @@ class RandomSpliceConfig:
             raise ValueError("random splice search_backend must be local, endpoint-auto or both")
         if not 1 <= self.endpoint_max_retime <= 3:
             raise ValueError("random splice endpoint_max_retime must be between 1 and 3")
+        from nv14_route_mutations import parse_operators
+        object.__setattr__(self, "endpoint_route_mutations",
+                           parse_operators(self.endpoint_route_mutations))
         if self.endpoint_mutation_span < 1 or self.endpoint_repair_lookback < 1 or self.endpoint_repair_steps < 0:
             raise ValueError("invalid random splice endpoint mutation/repair parameters")
         for field, minimum in (("local_mutation_span", 1), ("local_repair_steps", 0),
@@ -536,6 +540,7 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             range_end=goal.target_frame if editable_end is None else editable_end,
             max_retime=config.endpoint_max_retime,
             mutation_span=config.endpoint_mutation_span,
+            route_mutations=config.endpoint_route_mutations,
             completion_policy="checkpoint",
             repair_steps=config.endpoint_repair_steps,
             repair_lookback=config.endpoint_repair_lookback,

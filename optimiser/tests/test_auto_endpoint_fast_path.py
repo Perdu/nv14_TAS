@@ -93,7 +93,7 @@ def test_seeded_search_retains_exact_best_and_evaluation_count():
             level, source, goal,
             AutoEndpointConfig(iterations=260, beam_width=16, seed=17,
                                range_start=4, range_end=24, repair_steps=0,
-                               progressive_refinement=progressive),
+                               progressive_refinement=progressive, route_mutations=()),
             best_callback=lambda candidate: callbacks.append(candidate.evaluation.objective_key),
         )
         assert evaluations == expected
