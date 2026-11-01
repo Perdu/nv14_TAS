@@ -1422,8 +1422,12 @@ save-frontier = 64          # persist alternatives; does NOT increase search see
 Local). `low` uses long `direction-flip`, short neutral `gap-repair`, and
 `direction-simplify` (removing brief reversals); `medium` adds large
 `boundary-shift`, jump-pulse `jump-rewrite`, and between-jumps
-`passage-rewrite`. `high` also uses costly physics-aware `state-crossover`
-between candidates with similar position and velocity at the seam. An explicit
+`passage-rewrite`. `high` also uses physics-aware `state-crossover`
+between candidates with similar position and velocity at the seam. The
+structural operators now scan compact inputs in the Cython native module,
+and crossover compares native replay traces rather than repeatedly invoking
+Python physics. Rebuild with `python build_native.py` after applying this patch.
+The Python reference remains available when the native extension is absent. An explicit
 TOML array such as `mutations = ["direction-flip", "gap-repair"]` uses exactly
 those operators; `mutations = []` disables all new route-scale edits for
 an A/B comparison against the previous Hybrid behavior. These proposals

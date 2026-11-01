@@ -4227,6 +4227,171 @@ cdef extern from "nv14_endpoint.h":
     ) noexcept nogil
 
 
+
+# Route-scale Auto mutations run in the same Cython module as input packing.
+# Random decisions still use the caller's Python Random object so native and
+# reference searches consume the same random stream and remain reproducible.
+def route_structural_propose(str name, tuple parent, object rng, int start, int end):
+    """Return a route-scale candidate, or None (zero extra simulations)."""
+    cdef Py_ssize_t count = len(parent), i, j, k, left, right, seam, new_seam
+    cdef int d, direction, shift, width, destination, length, limit
+    cdef bytes packed
+    cdef const unsigned char[:] src
+    cdef unsigned char[:] dst
+    cdef object choices = [], chosen, obj
+    cdef list result
+    cdef bytearray updated
+    cdef bint modified = False
+    if not (0 <= start <= end < count):
+        raise ValueError('invalid route mutation range')
+    packed, _ = population_input_key(parent)
+    src = packed
+    updated = bytearray(packed)
+    dst = updated
+    if name == 'direction-flip':
+        i = start
+        while i <= end:
+            d = (1 if src[i] & 2 else 0) - (1 if src[i] & 1 else 0)
+            j = i + 1
+            while j <= end and (1 if src[j] & 2 else 0) - (1 if src[j] & 1 else 0) == d:
+                j += 1
+            if d != 0 and j - i >= 8:
+                choices.append((i, j, d))
+            i = j
+        if not choices:
+            return None
+        left, right, direction = rng.choice(choices)
+        if right - left > 32 and rng.randrange(2):
+            length = rng.randint(16, right - left)
+            left = rng.randint(left, right - length)
+            right = left + length
+        for i in range(left, right):
+            dst[i] = (src[i] & 4) | (1 if direction > 0 else 2) | 16
+    elif name in ('gap-repair', 'direction-simplify'):
+        limit = 6 if name == 'gap-repair' else 12
+        for i in range(start + 1, end):
+            direction = (1 if src[i-1] & 2 else 0) - (1 if src[i-1] & 1 else 0)
+            if direction == 0 or (1 if src[i] & 2 else 0) - (1 if src[i] & 1 else 0) == direction:
+                continue
+            j = i + 1
+            while j <= end and ((1 if src[j] & 2 else 0) - (1 if src[j] & 1 else 0)) != direction and j - i < limit:
+                j += 1
+            if j <= end and (1 if src[j] & 2 else 0) - (1 if src[j] & 1 else 0) == direction and j > i:
+                if name == 'gap-repair':
+                    modified = False
+                    for k in range(i, j):
+                        if (1 if src[k] & 2 else 0) - (1 if src[k] & 1 else 0) != 0:
+                            modified = True
+                            break
+                    if modified:
+                        continue
+                choices.append((i, j, direction))
+        if not choices:
+            return None
+        left, right, direction = rng.choice(choices)
+        for i in range(left, right):
+            dst[i] = (src[i] & 4) | (1 if direction < 0 else 2) | 16
+    elif name == 'boundary-shift':
+        for i in range(start + 1, end + 1):
+            if ((1 if src[i-1] & 2 else 0) - (1 if src[i-1] & 1 else 0)) != ((1 if src[i] & 2 else 0) - (1 if src[i] & 1 else 0)):
+                choices.append(i)
+        if not choices:
+            return None
+        seam = rng.choice(choices)
+        shift = rng.choice((-96, -64, -32, -16, -8, 8, 16, 32, 64, 96))
+        new_seam = max(start + 1, min(end + 1, seam + shift))
+        if new_seam == seam:
+            return None
+        k = seam - 1 if new_seam > seam else seam
+        direction = (1 if src[k] & 2 else 0) - (1 if src[k] & 1 else 0)
+        for i in range(min(seam, new_seam), max(seam, new_seam)):
+            dst[i] = (src[i] & 4) | (1 if direction < 0 else 2 if direction > 0 else 0) | 16
+    elif name == 'jump-rewrite':
+        i = start
+        while i <= end:
+            if not src[i] & 4 or (i > 0 and src[i-1] & 4):
+                i += 1
+                continue
+            j = i + 1
+            while j <= end and src[j] & 4:
+                j += 1
+            choices.append((i, j))
+            i = j
+        if not choices:
+            return None
+        left, right = rng.choice(choices)
+        if rng.randrange(4) == 0:
+            for i in range(left, right):
+                dst[i] = (src[i] & 3) | 16
+        else:
+            width = right - left
+            destination = max(start, min(end + 1 - width,
+                                         left + rng.choice((-32, -16, -8, 8, 16, 32))))
+            if destination == left:
+                return None
+            for i in range(left, right):
+                dst[i] = (src[i] & 3) | 16
+            for i in range(destination, destination + width):
+                dst[i] = (dst[i] & 3) | 4 | 16
+    elif name == 'passage-rewrite':
+        for i in range(start, end + 1):
+            if src[i] & 4 and (i == 0 or not src[i - 1] & 4):
+                choices.append(i)
+        if len(choices) < 2:
+            return None
+        left, right = sorted(rng.sample(choices, 2))
+        if right - left < 8:
+            return None
+        d = rng.choice((-1, 0, 1))
+        for i in range(left, right):
+            dst[i] = (src[i] & 4) | (1 if d < 0 else 2 if d > 0 else 0) | 16
+    else:
+        raise ValueError('unknown native route mutation operator')
+    if updated == packed:
+        return None
+    from nv14_engine import InputFrame
+    result = list(parent)
+    for i in range(start, end + 1):
+        if src[i] != dst[i]:
+            result[i] = InputFrame(bool(dst[i] & 1), bool(dst[i] & 2), bool(dst[i] & 4), None)
+    return tuple(result)
+
+
+def route_crossover_seam(NativeTrace parent, NativeTrace donor, object seams):
+    """Find the same closest compatible seam as the Python reference in C."""
+    cdef size_t pi, di
+    cdef int pa_status, pb_status
+    cdef nv14_replay_trace_point pa, pb
+    cdef double dx, dy, dvx, dvy, distance, velocity, score
+    cdef double best_score = 1e300
+    cdef object best_seam = None
+    cdef object seam
+    cdef uint64_t tick
+    for seam in seams:
+        tick = <uint64_t>seam - 1
+        with nogil:
+            pa_status = nv14_replay_trace_find_point_index(&parent._result, tick, &pi)
+            pb_status = nv14_replay_trace_find_point_index(&donor._result, tick, &di)
+        if pa_status != 1 or pb_status != 1:
+            continue
+        pa = parent._result.trace[pi]
+        pb = donor._result.trace[di]
+        if pa.dead or pb.dead or pa.in_air != pb.in_air or pa.player_state != pb.player_state:
+            continue
+        dx = pa.x - pb.x
+        dy = pa.y - pb.y
+        distance = dx * dx + dy * dy
+        dvx = pa.vx - pb.vx
+        dvy = pa.vy - pb.vy
+        velocity = dvx * dvx + dvy * dvy
+        if distance > 576.0 or velocity > 2.25:
+            continue
+        score = distance + 20.0 * velocity
+        if score < best_score:
+            best_score = score
+            best_seam = seam
+    return best_seam
+
 def population_input_key(tuple frames, tuple source=(), bytes mutable=b""):
     """Pack inputs and, when supplied, validate bounds/count edits in one pass.
 

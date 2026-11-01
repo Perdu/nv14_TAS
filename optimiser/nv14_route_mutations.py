@@ -7,10 +7,35 @@ caller then uses its established Auto/Local proposal path.
 from __future__ import annotations
 
 import random
+from contextvars import ContextVar
 from collections.abc import Sequence
 
 from nv14_engine import InputFrame, Level
 from nv14_replay import simulate_through_frame
+from nv14_native import require_native
+
+
+_CROSSOVER_SESSION: ContextVar[tuple[Level, object] | None] = ContextVar(
+    "route_crossover_native_session", default=None)
+
+
+def _crossover_session(level: Level):
+    existing = _CROSSOVER_SESSION.get()
+    if existing is not None and existing[0] is level:
+        return existing[1]
+    from nv14_search import NativeSearchSession
+    session = NativeSearchSession(level)
+    _CROSSOVER_SESSION.set((level, session))
+    return session
+
+
+def _native_route_module():
+    """Do not run the slower Python operator when this build supports Cython."""
+    try:
+        extension = require_native()
+    except RuntimeError:
+        return None
+    return extension if hasattr(extension, "route_structural_propose") else None
 
 LOW = ("direction-flip", "gap-repair", "direction-simplify")
 MEDIUM = LOW + ("boundary-shift", "jump-rewrite", "passage-rewrite")
@@ -155,6 +180,23 @@ def _state_crossover(parent: Sequence[InputFrame], donor: Sequence[InputFrame],
     count = min(4, end - start - 1)
     seams = rng.sample(range(start + 1, end), count)
     scored = []
+    native = _native_route_module()
+    if (native is not None and hasattr(native, "route_crossover_seam")
+            and getattr(level, "source_level_string", None) is not None):
+        # The native replay analyser computes *both* trajectories once, then
+        # checks all candidate join points in C. The Python reference below is
+        # retained for platforms without the compiled extension.
+        session = _crossover_session(level)
+        # Only simulate through the latest requested seam; later replay frames
+        # cannot affect any physical state being considered.
+        needed = max(seams)
+        pa = session.evaluate_replay(parent[:needed], trace_stride=1)
+        pb = session.evaluate_replay(donor[:needed], trace_stride=1)
+        seam = native.route_crossover_seam(pa, pb, seams)
+        if seam is None or _direction(parent[seam - 1]) != _direction(donor[seam - 1]):
+            return False
+        result[seam:end + 1] = donor[seam:end + 1]
+        return True
     for seam in seams:
         pa = simulate_through_frame(level, parent, seam - 1).player
         pb = simulate_through_frame(level, donor, seam - 1).player
@@ -184,6 +226,9 @@ def propose(name: str, parent: tuple[InputFrame, ...], *, rng: random.Random,
     """One route-scale proposal, bound to the original editable interval."""
     if not 0 <= start <= end < len(parent):
         raise ValueError("invalid route mutation range")
+    native = _native_route_module() if name != "state-crossover" else None
+    if native is not None:
+        return native.route_structural_propose(name, parent, rng, start, end)
     result = list(parent)
     if name == "direction-flip":
         runs = _matching_runs(parent, start, end)
