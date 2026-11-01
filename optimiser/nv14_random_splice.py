@@ -42,6 +42,10 @@ class RandomSpliceConfig:
     endpoint_mutation_span: int = 24
     endpoint_repair_steps: int = 32
     endpoint_repair_lookback: int = 40
+    local_mutation_span: int | None = None  # explicit per-stage Local overrides
+    local_repair_steps: int | None = None
+    local_repair_lookback: int | None = None
+    backend_top_results: int | None = None
     # Forward the regular endpoint Auto refinement settings when it is used
     # as a splice backend. Defaults preserve the existing search behavior.
     endpoint_auto_mutation_share: float = 0.5
@@ -127,6 +131,11 @@ class RandomSpliceConfig:
             raise ValueError("random splice endpoint_max_retime must be between 1 and 3")
         if self.endpoint_mutation_span < 1 or self.endpoint_repair_lookback < 1 or self.endpoint_repair_steps < 0:
             raise ValueError("invalid random splice endpoint mutation/repair parameters")
+        for field, minimum in (("local_mutation_span", 1), ("local_repair_steps", 0),
+                               ("local_repair_lookback", 1), ("backend_top_results", 1)):
+            value = getattr(self, field)
+            if value is not None and (type(value) is not int or value < minimum):
+                raise ValueError(f"splice {field} must be >= {minimum}")
         if type(self.rounds) is not int or self.rounds < 0:
             raise ValueError("random splice rounds must be nonnegative (0 means continuous)")
         if type(self.stagnation_rounds) is not int or self.stagnation_rounds < 0:
@@ -539,7 +548,8 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
         baseline, winner, evaluations = optimise_auto_endpoint_campaign(
             level, frames, goal, auto_config, workers=config.workers, runs=rounds,
             progress=progress, frontier_callback=survivors.extend,
-            frontier_limit=min(max(6, config.frontier * 3), config.beam),
+            frontier_limit=min((config.backend_top_results if config.backend_top_results is not None
+                                else max(6, config.frontier * 3)), config.beam),
             stagnation_rounds=stagnation_rounds or 0,
             best_callback=(lambda candidate: best_callback(candidate.frames, candidate.evaluation.frame))
             if best_callback is not None else None,
@@ -565,10 +575,14 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             goal.target_frame if editable_end is None else editable_end),),
         config=PopulationConfig(
             iterations=iterations, beam=config.beam, rounds=rounds,
-            top_results=min(max(6, config.frontier * 3), config.beam), workers=config.workers,
-            mutation_span=min(config.lookback, 32), seed=seed,
-            repair_steps=min(64, iterations // 4),
-            repair_lookback=min(config.lookback, 32),
+            top_results=min((config.backend_top_results if config.backend_top_results is not None
+                             else max(6, config.frontier * 3)), config.beam), workers=config.workers,
+            mutation_span=(config.local_mutation_span if config.local_mutation_span is not None
+                           else min(config.lookback, 32)), seed=seed,
+            repair_steps=(config.local_repair_steps if config.local_repair_steps is not None
+                          else min(64, iterations // 4)),
+            repair_lookback=(config.local_repair_lookback if config.local_repair_lookback is not None
+                             else min(config.lookback, 32)),
             stagnation_rounds=stagnation_rounds if stagnation_rounds is not None else 20,
         ),
         progress=progress,

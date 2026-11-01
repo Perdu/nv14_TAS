@@ -1462,6 +1462,32 @@ interaction constraints are interpreted by the same goal parser as
 `--goal-config`. Splice names are not sorted and no automatic waypoints are
 added. Use `splice-files = ["203.txt", "end.toml"]` to disambiguate extensions.
 
+**Per-stage override precedence.** `[common]` and `[auto]` in the shared
+config supply defaults. The level's `[multi-splicer]` overrides the shared
+multi-splicer defaults. Each named `[local]` file overrides the goal fields
+and applicable search settings **for that stage and for both backends**.
+`[multi-splicer] search = "both"` remains authoritative: a stage file's
+`search = "population"` does not disable Auto. An explicit CLI setting takes
+precedence over the corresponding backend setting in the stage file.
+
+Besides endpoint constraints (`target-frame`, `range`, `objective`, `region`,
+`secondary-objective`, interactions, jumps and velocity windows), each stage
+can override `iterations`, `beam`, `mutation-span`, `repair-steps`,
+`repair-lookback`, `top-results` and `stagnation-rounds`. These configure both
+Auto and Local as appropriate: e.g. `mutation-span = 64` sets both backends'
+mutation spans, and `stagnation-rounds = 7` gives each selected backend a
+seven-round patience (instead of the per-level Auto/Local limits). `rounds`
+is supported only without independent Auto/Local stagnation, where it controls
+the fixed internal search batch size. Stage-specific checkpoint/resume and
+Local windows-only settings cannot be honored by a managed population search
+and now fail explicitly instead of being silently ignored.
+
+`simulate-enemies` is special: the engine builds one physics world, reused
+by Auto, Local, checkpoint validation and final verification. An explicit
+stage flag overrides the shared `[common]` default; multiple explicit stage
+flags must agree, or the run fails early. An explicit CLI
+`--simulate-enemies`/`--no-simulate-enemies` overrides these flags.
+
 To use **both** Local population and endpoint Auto Hybrid at each named
 checkpoint, set `splice-search = "both"`. **Endpoint Auto runs first**;
 Local then starts from Auto's best stage candidate, or the original seed if

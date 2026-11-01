@@ -1807,6 +1807,10 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
         raise SystemExit("splice stagnation options require named user splice mode")
     if args.auto_random_splice and args.auto_objective == AUTO_OBJECTIVE_HIGHSCORE:
         raise SystemExit("--auto-random-splice requires --objective speedrun or an endpoint objective (not highscore)")
+    if args.auto_random_splice and args.auto_splice_mode == "user":
+        # These shared endpoint fields are defaults for each named Local goal,
+        # even when Auto itself has the ordinary speedrun objective.
+        return
     if args.auto_objective not in AUTO_OBJECTIVES:
         return
     incompatible = sorted(_AUTO_ENDPOINT_ONLY_OPTIONS & explicit)
@@ -1940,6 +1944,7 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
         _validate_local_strategy(result, explicit)
         _validate_auto_goal_strategy(result, explicit)
         result._explicit_options = frozenset(explicit)
+        result._cli_explicit_options = frozenset(cli_explicit)
         return result
 
 
@@ -1971,35 +1976,123 @@ def _resolve_named_splice_files(directory: Path, names: Sequence[str]) -> tuple[
     return tuple(resolved)
 
 
+# These are the population-level knobs that can be applied to BOTH Auto and
+# Local inside an individual named splice. The stage goal and the backend's
+# optimization settings are independent of [multi-splicer] search="both".
+_SPLICE_LOCAL_BACKEND_OPTIONS: dict[str, tuple[str, ...]] = {
+    "iterations": ("iterations",),
+    "beam": ("beam",),
+    "mutation_span": ("endpoint_mutation_span", "local_mutation_span"),
+    "repair_steps": ("endpoint_repair_steps", "local_repair_steps"),
+    "repair_lookback": ("endpoint_repair_lookback", "local_repair_lookback"),
+    "top_results": ("backend_top_results",),
+    "workers": ("workers",),
+}
+
+
+def _named_splice_directory(args: argparse.Namespace) -> Path:
+    """Use the identical directory for pre-level physics and stage goal loading."""
+    explicit_directory = getattr(args, "auto_splice_directory", None)
+    if explicit_directory is not None:
+        return Path(explicit_directory)
+    splice_config = getattr(args, "splice_config", None)
+    if splice_config is None:
+        option_paths = (_find_option_paths(sys.argv[1:], "--splice-config") or
+                        _find_option_paths(sys.argv[1:], "--auto-splice-config"))
+        splice_config = option_paths[-1] if option_paths else None
+    if splice_config is not None:
+        return Path(splice_config).parent
+    input_value = getattr(args, "input", None)
+    if input_value is None:  # lightweight unit-test namespaces
+        return Path.cwd()
+    input_path = Path(input_value)
+    return input_path.parent.parent / "splices" / input_path.stem
+
+
 def _load_named_splice_stages(level, frames, args, directory: Path, names: Sequence[str]):
-    """Translate each existing Local goal file with the shared Auto goal parser."""
+    """Apply a Local file's goal and meaningful search overrides to each stage.
+
+    Per-stage constraints are shared by Auto and Local. A Local file's
+    ``search=population`` only documents its standalone Local strategy; it
+    never overrides [multi-splicer] search="both". Options that cannot be
+    honored by this managed search are rejected, not silently discarded.
+    """
     from nv14_user_splice import UserSpliceStage, _materialise_splice_tail
     parser = build_parser()._command_parsers["local"]
     stages = []
+    cli_explicit = getattr(args, "_cli_explicit_options", frozenset())
     for name, path in _resolve_named_splice_files(directory, names):
-        values = _load_local_goal_defaults(path, parser)
+        with path.open("rb") as stream:
+            raw = tomllib.load(stream)
+        for section in ("auto", "multi-splicer", "jump-pattern", "dump-player", "encode-video"):
+            if section in raw and raw[section]:
+                raise ValueError(f"splice {name!r} ({path}): [{section}] is not a Local stage; "
+                                 "use [local] and the per-level [multi-splicer] file")
+        local_values, _ = _load_config_defaults(path, parser, "local")
+        values = {auto_key: local_values[local_key]
+                  for local_key, auto_key in _LOCAL_GOAL_TO_AUTO.items()
+                  if local_key in local_values}
         if "auto_objective" not in values or "auto_target_frame" not in values:
             raise ValueError(f"splice {name!r} ({path}) requires objective and target-frame")
+        search = local_values.get("search", "population")
+        if search != "population":
+            raise ValueError(f"splice {name!r} ({path}): search={search!r} is not supported "
+                             "in the named Auto/Local population multi-splicer")
+        permitted = (set(_LOCAL_GOAL_TO_AUTO) | set(_SPLICE_LOCAL_BACKEND_OPTIONS) |
+                     {"search", "rounds", "stagnation_rounds"})
+        unsupported = sorted(set(local_values) - permitted)
+        if unsupported:
+            raise ValueError(f"splice {name!r} ({path}): unsupported per-splice "
+                             f"option(s): {', '.join(unsupported)}; these cannot be "
+                             "applied to both managed backends")
         stage_args = argparse.Namespace(**vars(args))
-        for local_key, auto_key in _LOCAL_GOAL_TO_AUTO.items():
-            if hasattr(stage_args, auto_key):
-                # Local file goals must not inherit unrelated Auto endpoint
-                # options from the current campaign's global goal.
-                setattr(stage_args, auto_key, None if auto_key not in (
-                    "auto_require_interaction", "auto_avoid_interaction", "auto_require_jumps",
-                    "auto_require_reference_interactions") else
-                    (() if auto_key != "auto_require_reference_interactions" else False))
-        stage_args.frame_range = None
+        # Shared values are defaults, not unrelated goals to be discarded.
+        # Explicit stage options override inherited shared Auto goal values.
         vars(stage_args).update(values)
+        overrides: dict[str, object] = {}
+        for local_key, config_fields in _SPLICE_LOCAL_BACKEND_OPTIONS.items():
+            if local_key not in local_values:
+                continue
+            # Explicit CLI backend options have higher precedence than TOML.
+            cli_destinations = {
+                "iterations": {"auto_splice_iterations"},
+                "beam": {"beam"},
+                "mutation_span": {"auto_mutation_span"},
+                "repair_steps": {"auto_endpoint_repair_steps"},
+                "repair_lookback": {"auto_endpoint_repair_lookback"},
+                "workers": {"workers"},
+            }.get(local_key, set())
+            if cli_destinations & cli_explicit:
+                continue
+            for field in config_fields:
+                overrides[field] = local_values[local_key]
+        if "rounds" in local_values:
+            if args.auto_splice_auto_stagnation_rounds or args.auto_splice_local_stagnation_rounds:
+                raise ValueError(f"splice {name!r} ({path}): rounds is unused with "
+                                 "independent Auto/Local stagnation; remove it")
+            if "auto_splice_rounds" not in cli_explicit:
+                overrides["splice_rounds"] = local_values["rounds"]
+        if "stagnation_rounds" in local_values:
+            # An explicit per-stage population patience overrides both backend
+            # patience limits when [multi-splicer] search="both". This remains
+            # a backend-round threshold, NEVER the older whole-cycle limit.
+            patience = local_values["stagnation_rounds"]
+            if "auto_splice_stagnation_rounds" not in cli_explicit:
+                overrides["splice_stagnation_rounds"] = 0
+            if (args.auto_splice_search in ("both", "endpoint-auto") and
+                    "auto_splice_auto_stagnation_rounds" not in cli_explicit):
+                overrides["splice_auto_stagnation_rounds"] = patience
+            if (args.auto_splice_search in ("both", "local") and
+                    "auto_splice_local_stagnation_rounds" not in cli_explicit):
+                overrides["splice_local_stagnation_rounds"] = patience
         try:
-            # A named goal may extend beyond an already completed input body.
-            # Like Local and ordinary endpoint Auto, evaluate it against an
-            # implicit neutral tail without changing the source replay length.
             goal_frames = _materialise_splice_tail(frames, values["auto_target_frame"])
             goal, start, end = _auto_goal_from_options(level, goal_frames, stage_args)
         except (ValueError, RuntimeError) as exc:
             raise ValueError(f"invalid splice {name!r} ({path}): {exc}") from exc
-        stages.append(UserSpliceStage(name, goal, start, goal.target_frame if end is None else end))
+        stages.append(UserSpliceStage(name, goal, start,
+                                      goal.target_frame if end is None else end,
+                                      config_overrides=overrides))
     return tuple(stages)
 
 
@@ -3561,6 +3654,41 @@ def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
     return goal, start, end
 
 
+def _named_splice_enemy_simulation(args: argparse.Namespace, default: bool) -> bool:
+    """Resolve actual named Local files before constructing the shared Level.
+
+    Every backend and verifier in the multi-splicer uses the same Level. If
+    splice files explicitly disagree about physics, refuse to search rather
+    than allowing an invalid completed run to be published.
+    """
+    if (getattr(args, "mode", None) != "auto" or
+            getattr(args, "auto_splice_mode", None) != "user"):
+        return default
+    names = getattr(args, "auto_splice_files", ()) or ()
+    if not names:
+        return default
+    explicit_flags = getattr(args, "_cli_explicit_options", None)
+    if explicit_flags is None:
+        explicit_flags = ("simulate_enemies",) if any(
+            arg.split("=", 1)[0] in ("--simulate-enemies", "--no-simulate-enemies")
+            for arg in sys.argv[1:]) else ()
+    if "simulate_enemies" in explicit_flags:  # CLI wins
+        return default
+    parser = build_parser()._command_parsers["local"]
+    overrides: dict[str, bool] = {}
+    for name, path in _resolve_named_splice_files(_named_splice_directory(args), names):
+        values, _ = _load_config_defaults(path, parser, "local")
+        if "simulate_enemies" in values:
+            overrides[name] = values["simulate_enemies"]
+    explicit = set(overrides.values())
+    if len(explicit) > 1:
+        raise ValueError("named splices request incompatible simulate-enemies settings "
+                         f"({', '.join(f'{key}={value}' for key, value in overrides.items())}). "
+                         "The multi-splicer has one shared physics world; "
+                         "use the same setting in each explicit goal file.")
+    return explicit.pop() if explicit else default
+
+
 def main() -> None:
     args = parse_arguments()
     if args.mode == "dump-player":
@@ -3598,10 +3726,22 @@ def main() -> None:
         if common_config.simulate_enemies is None
         else common_config.simulate_enemies
     )
+    # The named stage files may override the shared [common] default.
+    # Resolve this before constructing the Level: enemy objects are created
+    # (or omitted) by parse_level_string, not by EndpointGoal.
+    try:
+        simulate_enemies = _named_splice_enemy_simulation(args, simulate_enemies)
+    except (ValueError, OSError, tomllib.TOMLDecodeError) as exc:
+        raise SystemExit(str(exc)) from exc
     level = parse_level_string(
         combined.level_string,
         simulate_enemies=simulate_enemies,
     )
+    if (args.mode == "auto" and
+            getattr(args, "auto_splice_mode", None) == "user"):
+        print(f"[auto:user-splice:physics] simulate-enemies="
+              f"{str(simulate_enemies).lower()} (resolved before level initialization)",
+              flush=True)
 
     if args.list_objects:
         print(format_level_objects(level))
@@ -3837,9 +3977,7 @@ def main() -> None:
         try:
             if args.auto_splice_mode == "user":
                 from nv14_user_splice import optimise_user_splices
-                directory = (args.auto_splice_directory if args.auto_splice_directory is not None
-                             else args.splice_config.parent if args.splice_config is not None
-                             else input_path.parent.parent / "splices" / input_path.stem)
+                directory = _named_splice_directory(args)
                 stages = _load_named_splice_stages(level, replay.frames, args,
                                                    directory, args.auto_splice_files)
                 stage_outputs = _user_splice_output_paths(
@@ -3915,6 +4053,15 @@ def main() -> None:
                     endpoint_mutation_span=args.auto_mutation_span,
                     endpoint_repair_steps=args.auto_endpoint_repair_steps,
                     endpoint_repair_lookback=args.auto_endpoint_repair_lookback,
+                    endpoint_auto_mutation_share=args.auto_endpoint_auto_mutation_share,
+                    endpoint_progressive_refinement=args.auto_progressive_refinement,
+                    endpoint_refinement_share=args.auto_refinement_share,
+                    endpoint_adaptive_refinement=args.auto_adaptive_refinement,
+                    endpoint_refinement_cycle=args.auto_refinement_cycle,
+                    endpoint_refinement_polish=args.auto_refinement_polish,
+                    endpoint_refinement_chain_steps=args.auto_refinement_chain_steps,
+                    endpoint_shared_refinement_proposals=args.auto_shared_refinement_proposals,
+                    endpoint_performance_stats=args.auto_performance_stats,
                     lookback=args.auto_splice_lookback,
                     beam=args.beam, workers=max(1, args.workers),
                     rounds=args.auto_runs, stagnation_rounds=args.auto_stagnation_runs,

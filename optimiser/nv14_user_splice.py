@@ -7,7 +7,7 @@ source) remain canonically complete.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from collections.abc import Callable, Mapping, Sequence
 import itertools
 import math
@@ -29,6 +29,7 @@ class UserSpliceStage:
     goal: EndpointGoal
     start: int
     end: int
+    config_overrides: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -761,6 +762,14 @@ def optimise_user_splices(
         unfulfilled: list[str] = []
         for index in range(first_stage, last_stage + 1):
             stage = stages[index]
+            # Stage-specific Local TOML is an override for both Auto and Local
+            # search backends, not a new choice of search backend.
+            stage_config = replace(config, **stage.config_overrides)
+            if progress and stage.config_overrides:
+                progress(f"[auto:user-splice:config] {stage.name!r}: "
+                         + ", ".join(f"{key}={value}" for key, value in
+                                     sorted(stage.config_overrides.items()))
+                         + f"; search={stage_config.search_backend}")
             stage_started = time.monotonic()
             evaluations_before_stage = evaluations
             attempts_before_stage = attempts
@@ -780,25 +789,25 @@ def optimise_user_splices(
                     eligible[saved] = original_endpoints[index].evaluate(saved).objective_key
             for seed_index, branch in enumerate(branches, 1):
                 if progress:
-                    phase_mode = (config.splice_auto_stagnation_rounds or
-                                  config.splice_local_stagnation_rounds)
+                    phase_mode = (stage_config.splice_auto_stagnation_rounds or
+                                  stage_config.splice_local_stagnation_rounds)
                     if phase_mode:
-                        allocation = (f"up to {config.iterations * config.workers * config.splice_rounds} "
+                        allocation = (f"up to {stage_config.iterations * stage_config.workers * stage_config.splice_rounds} "
                                       "nominal proposal slots per backend batch; "
                                       "total depends on independent Auto/Local stagnation limits")
-                    elif config.splice_stagnation_rounds:
-                        allocation = (f"{config.iterations * config.workers * config.splice_rounds} "
+                    elif stage_config.splice_stagnation_rounds:
+                        allocation = (f"{stage_config.iterations * stage_config.workers * stage_config.splice_rounds} "
                                       "nominal proposal slots per cycle for this seed "
                                       "(shared by backends when search=both)")
                     else:
-                        allocation = (f"{config.iterations * config.workers * config.splice_rounds} "
+                        allocation = (f"{stage_config.iterations * stage_config.workers * stage_config.splice_rounds} "
                                       "nominal proposal slots for this seed "
                                       "(shared by the two backends when search=both)")
                     progress(f"[auto:user-splice] round {round_no+1}/{config.rounds or chr(8734)} "
                              f"stage {index+1}/{len(stages)} {stage.name!r} "
                              f"seed {seed_index}/{len(branches)}; "
                              f"range {stage.start}:{stage.end}, target {stage.goal.target_frame}; "
-                             f"search={'Auto -> Local' if config.search_backend == 'both' else config.search_backend}; "
+                             f"search={'Auto -> Local' if stage_config.search_backend == 'both' else stage_config.search_backend}; "
                              f"{allocation}")
                 def accept_stage_candidate(candidate: tuple[InputFrame, ...]) -> None:
                     nonlocal current, best_output, best_rank, improvements, improved, temp_gains
@@ -857,19 +866,19 @@ def optimise_user_splices(
                 def live_candidate(candidate: tuple[InputFrame, ...], frame: int) -> None:
                     accept_stage_candidate(candidate)
 
-                if (config.splice_stagnation_rounds or config.splice_auto_stagnation_rounds
-                        or config.splice_local_stagnation_rounds):
+                if (stage_config.splice_stagnation_rounds or stage_config.splice_auto_stagnation_rounds
+                        or stage_config.splice_local_stagnation_rounds):
                     def admissible_rank(candidate, through=index + 1):
                         if not valid_stages(candidate, through):
                             return None
                         return original_endpoints[through - 1].evaluate(candidate).objective_key
                     found, used, calls = _search_stage(
-                        level, branch, stage, config, rng,
+                        level, branch, stage, stage_config, rng,
                         stage_rank=admissible_rank, progress=progress,
                         candidate_callback=live_candidate)
                 else:
                     found, used, calls = _search_stage(
-                        level, branch, stage, config, rng,
+                        level, branch, stage, stage_config, rng,
                         candidate_callback=live_candidate)
                 attempts += calls
                 evaluations += used

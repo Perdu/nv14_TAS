@@ -26,7 +26,7 @@ def test_only_inclusive_selected_stages_are_searched(monkeypatch):
     stages = [UserSpliceStage(name, EndpointGoal(frame, 'max-x'), 0, frame)
               for name, frame in [('556', 10), ('628', 11), ('739', 12), ('end', 13)]]
     visited, progress, checkpoints = [], [], []
-    def fake_search(level, branch, stage, config, rng):
+    def fake_search(level, branch, stage, config, rng, **kwargs):
         visited.append(stage.name)
         return (), 0, 1
     monkeypatch.setattr(us, '_search_stage', fake_search)
@@ -36,7 +36,7 @@ def test_only_inclusive_selected_stages_are_searched(monkeypatch):
         stage_best_callback=lambda name, frames: checkpoints.append(name),
         progress=progress.append)
     assert visited and set(visited) == {'628', '739'}
-    assert not checkpoints  # Baseline should never be written.
+    assert set(checkpoints) == {'556', '628', '739', 'end'}  # Initial checkpoints (patch 16)
     assert result.improvements == 0
     assert any('selected stages 2-3/4' in line for line in progress)
     with pytest.raises(ValueError, match='start must not be after'):
@@ -60,7 +60,7 @@ def test_progress_reports_previous_score_position_and_no_baseline_write(monkeypa
         RandomSpliceConfig(rounds=1, workers=1, iterations=2),
         completion_policy='complete', progress=reports.append,
         stage_best_callback=lambda name, frames: checkpoints.append((name, frames)))
-    assert checkpoints == [('230', candidate)]
+    assert checkpoints == [('230', source), ('230', candidate)]
     temporary = next(line for line in reports if '[auto:user-splice:temporary]' in line)
     assert 'position' in temporary
     assert f'{baseline.x:.9g}' in temporary
@@ -86,7 +86,7 @@ def test_cli_start_stop_executes_only_requested_stages(tmp_path, monkeypatch, ca
     config.write_text('[auto]\nsplice-files=["203","408","end"]\n'
                       'splice-iterations=2\nsplice-rounds=1\nruns=1\nseed=0\n')
     seen=[]
-    monkeypatch.setattr(us, '_search_stage', lambda level, branch, stage, config, rng:
+    monkeypatch.setattr(us, '_search_stage', lambda level, branch, stage, config, rng, **kwargs:
                         (seen.append(stage.name) or ((), 0, 1)))
     monkeypatch.setattr(sys, 'argv', [
         'optimize_replay.py', 'auto', str(source_file), '--config', str(config),
@@ -98,7 +98,7 @@ def test_cli_start_stop_executes_only_requested_stages(tmp_path, monkeypatch, ca
     out = capsys.readouterr().out
     assert 'selected stages 2-2/3' in out
     assert not (tmp_path/'optim.txt').exists()
-    assert not (tmp_path/'optim_203.txt').exists()
+    assert (tmp_path/'optim_203.txt').exists()  # initial checkpoint
 
 
 def test_skip_early_stage_does_not_waive_earlier_goal(monkeypatch):
@@ -115,7 +115,7 @@ def test_skip_early_stage_does_not_waive_earlier_goal(monkeypatch):
         RandomSpliceConfig(rounds=1, iterations=2, workers=1),
         start_at='end', completion_policy='checkpoint',
         stage_best_callback=lambda name, frames: saved.append((name,frames)))
-    assert not saved
+    assert saved and all(frames != altered for _, frames in saved)
 
 
 def test_progress_reports_previous_score_position_and_no_baseline_write(monkeypatch):
@@ -131,7 +131,7 @@ def test_progress_reports_previous_score_position_and_no_baseline_write(monkeypa
         RandomSpliceConfig(rounds=1, workers=1, iterations=2),
         completion_policy='complete', progress=reports.append,
         stage_best_callback=lambda name, frames: checkpoints.append((name, frames)))
-    assert checkpoints == [('230', candidate)]
+    assert checkpoints == [('230', source), ('230', candidate)]
     temporary = next(line for line in reports if '[auto:user-splice:temporary]' in line)
     assert 'position' in temporary
     assert f'{baseline.x:.9g}' in temporary
