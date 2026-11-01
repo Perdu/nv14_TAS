@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from collections.abc import Callable, Mapping, Sequence
 import itertools
+import hashlib
+import json
 import math
 import random
 import time
@@ -47,6 +49,9 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                   *, stage_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
                   progress: Callable[[str], None] | None = None,
                   candidate_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
+                  resume_phase: Mapping[str, object] | None = None,
+                  phase_started: Callable[[dict[str, object]], None] | None = None,
+                  backend_checkpoint_path: Callable[[str], str] | None = None,
                   ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Run the requested backends with one shared per-branch proposal budget.
 
@@ -60,7 +65,9 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
     if (config.splice_auto_stagnation_rounds or config.splice_local_stagnation_rounds):
         return _search_stage_backend_phases(
             level, branch, stage, config, rng, stage_rank=stage_rank,
-            progress=progress, candidate_callback=candidate_callback)
+            progress=progress, candidate_callback=candidate_callback,
+            resume_phase=resume_phase, phase_started=phase_started,
+            backend_checkpoint_path=backend_checkpoint_path)
     if config.splice_stagnation_rounds:
         return _search_stage_until_stagnant(
             level, branch, stage, config, rng, stage_rank=stage_rank,
@@ -114,6 +121,9 @@ def _search_stage_backend_phases(
     *, stage_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
     progress: Callable[[str], None] | None = None,
     candidate_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
+    resume_phase: Mapping[str, object] | None = None,
+    phase_started: Callable[[dict[str, object]], None] | None = None,
+    backend_checkpoint_path: Callable[[str], str] | None = None,
 ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Run each backend continuously until its own stagnant-round limit.
 
@@ -148,16 +158,39 @@ def _search_stage_backend_phases(
     incumbent = search_seed = tuple(branch)
     best_rank = rank(incumbent)
     best_progress = evaluator.evaluate(incumbent).progress_key
-    evaluations = calls = cycle = 0
+    evaluations = calls = 0
+    cycle = int(resume_phase["cycle"]) - 1 if resume_phase is not None else 0
     while True:
         cycle += 1
-        cycle_improved = False
+        cycle_improved = (bool(resume_phase["cycle_improved"])
+                          if resume_phase is not None else False)
+        start_backend = str(resume_phase["backend"]) if resume_phase is not None else None
         for backend, iterations, patience in phases:
+            if start_backend is not None and backend != start_backend:
+                continue
             if progress:
                 progress(f"[auto:user-splice:refine] {stage.name!r}: "
                          f"cycle {cycle}, starting continuous {backend} phase "
                          f"(stop after {patience} stagnant rounds)")
             phase_improved = False
+            checkpoint = backend_checkpoint_path(backend) if backend_checkpoint_path else None
+            if start_backend is not None:
+                search_seed = tuple(editable_frames(decode_complex_replay(
+                    resume_phase["search_seed"]).frames))
+                incumbent = search_seed
+                best_rank = rank(incumbent)
+                best_progress = evaluator.evaluate(incumbent).progress_key
+                seed = int(resume_phase["seed"])
+                # Restore the RNG position from just after the backend seed
+                # was allocated, so subsequent phases stay deterministic.
+                rng.setstate((3, tuple(resume_phase["rng_state"]), None))
+            else:
+                seed = rng.getrandbits(63)
+            if phase_started is not None:
+                phase_started({"backend": backend, "cycle": cycle,
+                               "seed": seed, "rng_state": list(rng.getstate()[1]),
+                               "search_seed": encode_complex_replay(search_seed),
+                               "cycle_improved": cycle_improved})
 
             def on_live_best(frames: tuple[InputFrame, ...], frame: int) -> None:
                 nonlocal incumbent, best_rank, phase_improved, cycle_improved
@@ -181,14 +214,18 @@ def _search_stage_backend_phases(
                     config=replace(config, search_backend=backend),
                     iterations=iterations, rounds=0,
                     stagnation_rounds=patience,
-                    seed=rng.getrandbits(63), include_partial=True,
-                    best_callback=on_live_best if candidate_callback is not None else None)
+                    seed=seed, include_partial=True,
+                    best_callback=on_live_best if candidate_callback is not None else None,
+                    **({"checkpoint_path": checkpoint, "resume": bool(start_backend)}
+                       if checkpoint else {}))
             except ValueError as exc:
                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
                     raise
                 found, used = (), 0
             evaluations += used
             calls += 1
+            resume_phase = None
+            start_backend = None
             near_miss = search_seed
             near_progress = best_progress
             for candidate, frame in found:
@@ -377,6 +414,48 @@ def _stage_sources_history(history: Sequence[Sequence[tuple[InputFrame, ...]]],
     return selected
 
 
+def _diverse_saved_archive(
+    pool: Mapping[tuple[InputFrame, ...], tuple],
+    evaluator: EndpointEvaluator, limit: int,
+) -> list[tuple[InputFrame, ...]]:
+    """Preserve quality *and* distinct physical endpoint niches on disk.
+
+    A modest elite quota stays ranked by the actual stage objective. Other
+    slots first cover position/velocity niches, with remaining capacity filled
+    by the strongest candidates. This affects persistence only, not beam size.
+    """
+    ordered = sorted(pool, key=pool.__getitem__)
+    if len(ordered) <= limit:
+        return ordered
+    elites = min(len(ordered), max(1, limit // 4))
+    selected = list(ordered[:elites])
+    seen = set(selected)
+    niches: set[tuple[int, int, int, int]] = set()
+    def niche(candidate: tuple[InputFrame, ...]) -> tuple[int, int, int, int]:
+        sample = evaluator.evaluate(candidate)
+        return (round(sample.x / 4), round(sample.y / 4),
+                round(sample.vx * 4), round(sample.vy * 4))
+    for candidate in selected:
+        niches.add(niche(candidate))
+    for candidate in ordered[elites:]:
+        if len(selected) >= limit:
+            break
+        category = niche(candidate)
+        if category not in niches:
+            selected.append(candidate)
+            seen.add(candidate)
+            niches.add(category)
+    for candidate in ordered:
+        if len(selected) >= limit:
+            break
+        if candidate not in seen:
+            selected.append(candidate)
+            seen.add(candidate)
+    # Present the archive in stage-score order, preserving old ranking rules
+    # when it is used to recover an active frontier.
+    return sorted(selected, key=pool.__getitem__)
+
+
 def _materialise_splice_tail(frames: Sequence[InputFrame], target_frame: int
                              ) -> tuple[InputFrame, ...]:
     """Materialise the neutral inputs implicit past a recorded replay's end.
@@ -480,6 +559,11 @@ def optimise_user_splices(
     saved_final_frames: Sequence[InputFrame] | None = None,
     frontier_callback: Callable[[str, tuple[tuple[InputFrame, ...], ...]], None] | None = None,
     summary_only: bool = False,
+    resume_state: Mapping[str, object] | None = None,
+    save_resume_state: Callable[[dict[str, object] | None], None] | None = None,
+    backend_checkpoint_path: Callable[[str, str], str] | None = None,
+    resume_outer_round: int = 0,
+    save_outer_round: Callable[[int | None], None] | None = None,
 ) -> UserSpliceResult:
     """Optimise named goals in order, retaining diverse feasible continuations.
 
@@ -665,10 +749,12 @@ def optimise_user_splices(
             if valid_stages(replay, i + 1):
                 pool[replay] = original_endpoints[i].evaluate(replay).objective_key
         ranked = sorted(pool, key=pool.__getitem__)
-        archived_frontiers.append(ranked[:max(1, config.frontier)])
+        archived_frontiers.append(_diverse_saved_archive(
+            pool, original_endpoints[i], config.save_frontier))
         if progress and ranked and not summary_only:
             progress(f"[auto:user-splice:resume] {stage.name!r}: "
-                     f"restored {len(archived_frontiers[-1])} validated frontier seed(s)")
+                     f"restored {len(archived_frontiers[-1])} validated archive candidate(s); "
+                     f"up to {config.frontier} actively searched per source")
 
     def publish_frontier(i: int, candidates: Sequence[tuple[InputFrame, ...]]) -> None:
         if frontier_callback is None or summary_only:
@@ -677,10 +763,38 @@ def optimise_user_splices(
         for candidate in (*archived_frontiers[i], *candidates):
             if valid_stages(candidate, i + 1):
                 pool[candidate] = original_endpoints[i].evaluate(candidate).objective_key
-        selected = sorted(pool, key=pool.__getitem__)[:max(1, config.frontier)]
+        selected = _diverse_saved_archive(pool, original_endpoints[i], config.save_frontier)
         if selected != archived_frontiers[i]:
             frontier_callback(stages[i].name, tuple(selected))
             archived_frontiers[i] = selected
+
+    # An in-flight backend phase is separate from the saved stage bests.
+    # It can resume the last *completed backend round*, even if previous
+    # stage passes were interrupted. Reject ambiguous incompatible snapshots.
+    active_phase = None
+    if resume_state is not None and not summary_only:
+        try:
+            wanted = {
+                "version": 1,
+                "level_sha256": hashlib.sha256(level.source_level_string.encode()).hexdigest(),
+                "source_sha256": hashlib.sha256(encode_complex_replay(source).encode()).hexdigest(),
+                "stages": [stage.name for stage in stages],
+                "stage_settings": [repr(stage) for stage in stages],
+                "config": repr(config),
+                "from_best": from_best,
+                "start_at": start_at, "stop_at": stop_at,
+            }
+            if any(resume_state.get(k) != value for k, value in wanted.items()):
+                raise ValueError("named splice search checkpoint no longer matches level, "
+                                 "input, splice configuration, or requested stages")
+            active_phase = resume_state
+            if progress:
+                progress(f"[auto:user-splice:resume] restoring outer round "
+                         f"{int(active_phase['round_no']) + 1}, splice "
+                         f"{active_phase['stage']!r}, backend "
+                         f"{active_phase['phase']['backend']} from last completed round")
+        except (KeyError, TypeError) as exc:
+            raise ValueError("invalid named splice search checkpoint") from exc
 
     # Summary-only mode reports on disk checkpoints without changing them.
     # There must be no baseline checkpoint writes or Auto/Local searches.
@@ -835,8 +949,13 @@ def optimise_user_splices(
     # Elites are retained across rounds as well as across stage boundaries.
     # Their rank is the objective of the stage that produced them; do not
     # promote a local improvement if its mandatory earlier goals were lost.
-    elites: list[list[tuple[InputFrame, ...]]] = [list(frontier) for frontier in archived_frontiers]
-    for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
+    elites: list[list[tuple[InputFrame, ...]]] = [list(pool[:config.frontier]) for pool in archived_frontiers]
+    if type(resume_outer_round) is not int or resume_outer_round < 0:
+        raise ValueError("invalid saved outer-round progress")
+    first_round = (int(active_phase["round_no"]) if active_phase is not None
+                   else resume_outer_round)
+    for round_no in (itertools.count(first_round) if config.rounds == 0
+                     else range(first_round, config.rounds)):
         begun = time.monotonic()
         # A propagation run deliberately retries the archived splice-best
         # path on every outer round, rather than restarting only from the best
@@ -847,23 +966,25 @@ def optimise_user_splices(
             # A normal restart can search from saved alternatives immediately,
             # rather than merely comparing their scores after the search.
             history[0] = list(dict.fromkeys((propagation_seed,
-                                             *archived_frontiers[0])))
-        # Reload the actual preceding stage frontiers on every outer pass.
-        # In particular --splice-from-best N resumes at N+1 with n-2/n-3
-        # still available. Old one-best LTM/TXT checkpoints are fallbacks.
-        if first_stage > 0:
-            if from_best_index is None and archived_frontiers[first_stage - 1]:
+                                             *archived_frontiers[0][:config.frontier])))
+        # Reconstruct lookback at the interrupted stage, not only at the
+        # originally requested start. Other routes remain on disk while the
+        # interrupted backend's own seed is resumed first.
+        restore_index = int(active_phase["stage_index"]) if active_phase is not None else first_stage
+        if restore_index > 0:
+            if from_best_index is None and archived_frontiers[restore_index - 1]:
                 history[0] = list(dict.fromkeys(
-                    (*archived_frontiers[first_stage - 1], propagation_seed)))
-            for prior in range(first_stage - 2, max(-1, first_stage - config.stage_lookback - 1), -1):
+                    (*archived_frontiers[restore_index - 1][:config.frontier], propagation_seed)))
+            for prior in range(restore_index - 2, max(-1, restore_index - config.stage_lookback - 1), -1):
                 if archived_frontiers[prior]:
-                    history.append(archived_frontiers[prior])
+                    history.append(archived_frontiers[prior][:config.frontier])
                 else:
                     history.append([])
             history = history[:config.stage_lookback]
         improved = False
         unfulfilled: list[str] = []
-        for index in range(first_stage, last_stage + 1):
+        stage_begin = int(active_phase["stage_index"]) if active_phase is not None else first_stage
+        for index in range(stage_begin, last_stage + 1):
             stage = stages[index]
             # Stage-specific Local TOML is an override for both Auto and Local
             # search backends, not a new choice of search backend.
@@ -878,6 +999,12 @@ def optimise_user_splices(
             attempts_before_stage = attempts
             temp_gains = 0
             branches = _stage_sources_history(history, config.frontier)
+            if active_phase is not None and index == stage_begin:
+                # Never search another route before recovering the interrupted
+                # backend. The other viable routes remain archived separately.
+                resumed_branch = tuple(editable_frames(decode_complex_replay(
+                    active_phase["branch"]).frames))
+                branches = [resumed_branch, *(b for b in branches if b != resumed_branch)]
             if progress and len(history) > 1:
                 labels = "/".join(f"n-{i}" for i in range(1, len(history) + 1))
                 counts = "/".join(str(len(source)) for source in history)
@@ -927,6 +1054,12 @@ def optimise_user_splices(
                     rank = evaluation.objective_key
                     if normalized not in eligible or rank < eligible[normalized]:
                         eligible[normalized] = rank
+                        if len(eligible) % 32 == 0:
+                            # Persist broad route diversity periodically, not
+                            # after every native proposal (which would trigger
+                            # thousands of redundant physical re-evaluations).
+                            publish_frontier(index, tuple(sorted(
+                                eligible, key=eligible.__getitem__)[:config.save_frontier]))
                     candidate_final = (final_rank(normalized)
                                        if index == len(stages) - 1 else None)
                     is_final_gain = (candidate_final is not None
@@ -945,7 +1078,7 @@ def optimise_user_splices(
                         if stage_best_callback:
                             stage_best_callback(stage.name, exported)
                         publish_frontier(index, tuple(sorted(
-                            eligible, key=eligible.__getitem__)[:max(1, config.frontier)]))
+                            eligible, key=eligible.__getitem__)[:config.save_frontier]))
                         if progress and not is_final_gain:
                             label = ("first feasible" if old_stage_rank is None
                                      else "new stage best")
@@ -971,6 +1104,24 @@ def optimise_user_splices(
                 def live_candidate(candidate: tuple[InputFrame, ...], frame: int) -> None:
                     accept_stage_candidate(candidate)
 
+                def save_phase(state: dict[str, object]) -> None:
+                    if save_resume_state is None:
+                        return
+                    envelope = {"version": 1,
+                                "level_sha256": hashlib.sha256(level.source_level_string.encode()).hexdigest(),
+                                "source_sha256": hashlib.sha256(encode_complex_replay(source).encode()).hexdigest(),
+                                "stages": [item.name for item in stages],
+                                "stage_settings": [repr(item) for item in stages],
+                                "config": repr(config), "from_best": from_best,
+                                "start_at": start_at, "stop_at": stop_at,
+                                "round_no": round_no, "stage_index": index,
+                                "stage": stage.name,
+                                "branch": encode_complex_replay(branch),
+                                "phase": state}
+                    save_resume_state(envelope)
+
+                resuming_this_seed = (active_phase is not None and
+                                      index == stage_begin and seed_index == 1)
                 if (stage_config.splice_stagnation_rounds or stage_config.splice_auto_stagnation_rounds
                         or stage_config.splice_local_stagnation_rounds):
                     def admissible_rank(candidate, through=index + 1):
@@ -980,11 +1131,21 @@ def optimise_user_splices(
                     found, used, calls = _search_stage(
                         stage_levels[index], branch, stage, stage_config, rng,
                         stage_rank=admissible_rank, progress=progress,
-                        candidate_callback=live_candidate)
+                        candidate_callback=live_candidate,
+                        **({"resume_phase": active_phase["phase"] if resuming_this_seed else None,
+                            "phase_started": save_phase,
+                            "backend_checkpoint_path":
+                                (lambda backend, name=stage.name:
+                                 backend_checkpoint_path(name, backend))}
+                           if save_resume_state is not None and backend_checkpoint_path is not None
+                           else {}))
                 else:
                     found, used, calls = _search_stage(
                         stage_levels[index], branch, stage, stage_config, rng,
                         candidate_callback=live_candidate)
+                if save_resume_state is not None:
+                    save_resume_state(None)
+                active_phase = None
                 attempts += calls
                 evaluations += used
                 for candidate, _ in (*found, (branch, stage.goal.target_frame)):
@@ -1021,7 +1182,7 @@ def optimise_user_splices(
             # more recent stage wins its own intermediate ranking.
             selected = [candidate for candidate, _ in ordered[:max(1, config.frontier)]]
             elites[index] = selected
-            publish_frontier(index, selected)
+            publish_frontier(index, [candidate for candidate, _ in ordered[:config.save_frontier]])
             history = [selected, *history][:config.stage_lookback]
         stagnant = 0 if improved else stagnant + 1
         if progress:
@@ -1031,7 +1192,11 @@ def optimise_user_splices(
                      + (f"; unmet checkpoints: {', '.join(unfulfilled)}"
                         if unfulfilled else ""))
         report_checkpoint_summary(f"after round {round_no+1}")
+        if save_outer_round is not None:
+            save_outer_round(round_no + 1)
         if config.stagnation_rounds and stagnant >= config.stagnation_rounds:
             break
+    if save_outer_round is not None:
+        save_outer_round(None)
     report_checkpoint_summary("final")
     return UserSpliceResult(best_output, improvements, attempts, evaluations)

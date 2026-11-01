@@ -168,6 +168,16 @@ def test_checkpoint_resume_matches_uninterrupted_and_checks_identity(tmp_path):
     envelope = json.loads(path.read_text())
     envelope["payload"]["rounds"] += 1
     path.write_text(json.dumps(envelope))
+    # A corrupt latest checkpoint recovers the preceding completed round.
+    backup = path.with_suffix(path.suffix + ".prev")
+    assert backup.is_file()
+    restored = optimise_local_population(level(), source, goal=goal,
+        frame_ranges=((2, 8),), config=replace(config, checkpoint_path=path, resume=True))
+    assert restored.rounds == full.rounds
+    for location in (path, backup):
+        envelope = json.loads(location.read_text())
+        envelope["payload"]["rounds"] += 1
+        location.write_text(json.dumps(envelope))
     with pytest.raises(ValueError, match="integrity"):
         optimise_local_population(level(), source, goal=goal, frame_ranges=((2, 8),),
             config=replace(config, checkpoint_path=path, resume=True))

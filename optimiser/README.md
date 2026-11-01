@@ -1411,6 +1411,8 @@ Then each level's file needs only the ordered splice names:
 files = ["203", "408", "switch", "end"]
 # Optional: allow the next splice to reuse seeds from n-1, n-2, n-3, etc.
 lookback = 3
+save-frontier = 64          # persist alternatives; does NOT increase search seeds
+# `frontier = 3` in the shared configuration still controls actual searches.
 ```
 
 `lookback` is the **number of preceding splice frontiers**, not a count of
@@ -1443,6 +1445,28 @@ search. An existing `--output` replay is independently verified and used as
 the final-score baseline, preventing a restart with an older input from
 overwriting a better completed replay. Changed or invalid existing final
 outputs are rejected rather than overwritten. `--ls-splices` remains read-only.
+
+Set `save-frontier = 64` in either the shared or per-level `[multi-splicer]`
+configuration (default 64; maximum 256). Unlike `frontier`, which controls
+how many routes are *searched*, `save-frontier` only limits the on-disk
+`.frontier.json` archive. Saved candidates are reverified on restore; a mix
+of strong scores and physically different endpoint position/velocity niches
+is retained. The CLI equivalent is `--splice-save-frontier 64`.
+
+For named splices using independent Auto/Local stagnation limits, the current
+backend additionally saves a round-boundary checkpoint after every completed
+backend round, with a previous-round `.prev` backup. Auto retains its verified
+best and inherited population; Local retains its candidate population and
+its round/evaluation/stagnation counters. A small `.splice-search.json`
+sidecar beside the final `--output` remembers the interrupted splice, backend,
+source seed, outer pass and random state. Re-running the **same** command
+resumes the last completed backend round if that state remains compatible.
+The physics level, goals, search settings, input and code build must match.
+Use a different `--output` directory for an independent search. Ctrl+C in the
+middle of a round discards only that partial round. Once a phase completes,
+its next phase starts with a fresh backend checkpoint. The sidecar is removed
+after an interrupted phase finally completes; normal completed runs do not
+retain a pointer to an active phase. `--ls-splices` remains read-only.
 
 The CLI equivalent is `--splice-stage-lookback 3`.
 

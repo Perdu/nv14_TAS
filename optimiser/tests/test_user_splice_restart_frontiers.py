@@ -63,8 +63,8 @@ def test_frontier_multiple_candidates_are_reused(monkeypatch):
                           frontier_callback=lambda name, frames: saved.append((name, frames)))
     assert saved
     assert saved[-1][0] == 'a'
-    assert len(saved[-1][1]) == 3
-    assert len(set(saved[-1][1])) == 3
+    assert 3 <= len(saved[-1][1]) <= 64
+    assert len(set(saved[-1][1])) == len(saved[-1][1])
 
     calls = []
     monkeypatch.setattr(us, '_search_stage', lambda _level, branch, stage, *args, **kw:
@@ -75,7 +75,7 @@ def test_frontier_multiple_candidates_are_reused(monkeypatch):
                           completion_policy='checkpoint', start_at='end',
                           saved_stage_frontiers={'a': saved[-1][1]})
     # All three from the archived frontier are tried before falling back to source.
-    assert {frames for name, frames in calls if name == 'end'} >= set(saved[-1][1])
+    assert {frames for name, frames in calls if name == 'end'} >= set(saved[-1][1][:3])
 
 
 def test_sidecar_checks_stage_and_level_identity(tmp_path):
@@ -161,7 +161,7 @@ def test_cli_atomic_frontier_persists_and_is_read_only_for_ls(tmp_path, monkeypa
     path = tmp_path/'optim_a.frontier.json'
     assert path.is_file()
     document = json.loads(path.read_text())
-    assert len(document['replays']) == 3
+    assert 3 <= len(document['replays']) <= 64
     original = path.read_bytes()
     monkeypatch.setattr(us, '_search_stage', lambda *a, **kw:
                         pytest.fail('search while listing'))
@@ -236,7 +236,7 @@ def test_frontier_durable_after_ctrl_c_during_next_stage(tmp_path, monkeypatch):
     assert interrupted_exit.value.code == 130
     archive = tmp_path/'optim_a.frontier.json'
     assert archive.is_file()
-    assert len(json.loads(archive.read_text())['replays']) == 3
+    assert 3 <= len(json.loads(archive.read_text())['replays']) <= 64
     observed = []
     monkeypatch.setattr(us, '_search_stage', lambda _level, branch, stage, *a, **kw:
                         (observed.append((stage.name, tuple(branch))) or (), 0, 1))

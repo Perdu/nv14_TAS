@@ -92,4 +92,6 @@ auto-stagnation-rounds = 10
 local-stagnation-rounds = 50
 lookback = 2
 frontier = 3
+# Number of candidates to save per splice on disk
+save-frontier = 64
 runs = 3

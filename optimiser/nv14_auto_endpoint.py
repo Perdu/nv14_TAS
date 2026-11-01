@@ -8,8 +8,13 @@ and repair coordinator.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace, field
+from dataclasses import dataclass, replace, field, asdict
 import itertools
+import json
+import os
+import hashlib
+import tempfile
+from pathlib import Path
 import math
 from bisect import insort
 import random
@@ -29,7 +34,7 @@ from nv14_search import ALL_INPUT_CHOICES
 from nv14_native import require_native
 from nv14_replay import (
     RetimeMutation, apply_single_transition_retime, apply_suffix_retime,
-    editable_frames, input_transition_frames,
+    editable_frames, input_transition_frames, encode_complex_replay, decode_complex_replay,
 )
 
 
@@ -1144,6 +1149,89 @@ def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpoin
     return result
 
 
+def _auto_round_identity(level: Level, source: tuple[InputFrame, ...],
+                         goal: EndpointGoal, config: AutoEndpointConfig,
+                         workers: int) -> dict[str, object]:
+    """Refuse stale checkpoints after a change in physics or search semantics."""
+    level_string = getattr(level, "source_level_string", None)
+    if not level_string:
+        raise ValueError("Auto round checkpoints require the original level string")
+    build = hashlib.sha256()
+    for filename in ("nv14_auto_endpoint.py", "nv14_endpoint.py", "nv14_population.py"):
+        build.update((Path(__file__).with_name(filename)).read_bytes())
+    return {"format": 1, "build_sha256": build.hexdigest(),
+            "level_sha256": hashlib.sha256(level_string.encode()).hexdigest(),
+            "enemies": bool(level.simulate_enemies),
+            "source_sha256": hashlib.sha256(encode_complex_replay(source).encode()).hexdigest(),
+            "goal": repr(goal), "config": asdict(config), "workers": workers}
+
+
+def _write_auto_round(path: Path, identity: dict[str, object],
+                      population: tuple[AutoEndpointCandidate, ...],
+                      best: AutoEndpointCandidate | None,
+                      rounds: int, evaluations: int, stagnant: int,
+                      *, complete: bool) -> None:
+    def export(candidate: AutoEndpointCandidate) -> dict[str, object]:
+        return {"replay": encode_complex_replay(candidate.frames),
+                "frame": candidate.evaluation.frame,
+                "score": repr(candidate.evaluation.objective_key),
+                "feasible": candidate.evaluation.feasible}
+    data = {"kind": "nv14-auto-round", "identity": identity,
+            "rounds": rounds, "evaluations": evaluations, "stagnant": stagnant,
+            "population": [export(c) for c in population],
+            "best": export(best) if best is not None else None,
+            "complete": complete}
+    body = json.dumps(data, sort_keys=True, allow_nan=False, separators=(",", ":"))
+    checksum = hashlib.sha256(body.encode()).hexdigest()
+    envelope = json.dumps({"payload": data, "sha256": checksum},
+                          sort_keys=True, separators=(",", ":")) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=f".{path.name}.", suffix=".tmp", delete=False) as file:
+            temporary = Path(file.name)
+            file.write(envelope)
+            file.flush()
+            os.fsync(file.fileno())
+        if path.exists():
+            # Keep the latest two valid completed-round snapshots. This backup
+            # is the last *complete* one, not an in-flight worker result.
+            os.replace(path, path.with_suffix(path.suffix + ".prev"))
+        os.replace(temporary, path)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _read_auto_round(path: Path, identity: dict[str, object],
+                     level: Level, goal: EndpointGoal,
+                     ) -> tuple[tuple[AutoEndpointCandidate, ...],
+                                AutoEndpointCandidate | None, int, int, int, bool]:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    data = document["payload"]
+    serialized = json.dumps(data, sort_keys=True, allow_nan=False, separators=(",", ":"))
+    if hashlib.sha256(serialized.encode()).hexdigest() != document["sha256"]:
+        raise ValueError("Auto checkpoint integrity checksum differs")
+    if data["kind"] != "nv14-auto-round" or data["identity"] != identity:
+        raise ValueError("Auto checkpoint level, physics, source, goal, workers or build differs")
+    def restore(record: dict[str, object]) -> AutoEndpointCandidate:
+        frames = tuple(editable_frames(decode_complex_replay(record["replay"]).frames))
+        evaluation = verify_endpoint(level, frames, goal)
+        if (evaluation.frame != record["frame"] or
+                evaluation.feasible != record["feasible"] or
+                repr(evaluation.objective_key) != record["score"]):
+            raise ValueError("Auto checkpoint candidate failed physical re-verification")
+        return AutoEndpointCandidate(frames, evaluation)
+    population = tuple(restore(item) for item in data["population"])
+    best = restore(data["best"]) if data["best"] is not None else None
+    for key in ("rounds", "evaluations", "stagnant"):
+        if type(data[key]) is not int or data[key] < 0:
+            raise ValueError(f"Auto checkpoint invalid {key}")
+    return population, best, data["rounds"], data["evaluations"], data["stagnant"], data["complete"]
+
+
 def optimise_auto_endpoint_campaign(
     level: Level, source_frames: Sequence[InputFrame], goal: EndpointGoal,
     config: AutoEndpointConfig, *, workers: int = 1, runs: int = 1,
@@ -1152,6 +1240,8 @@ def optimise_auto_endpoint_campaign(
     frontier_callback: Callable[[tuple[AutoEndpointCandidate, ...]], None] | None = None,
     frontier_limit: int = 0,
     stagnation_rounds: int = 0,
+    checkpoint_path: str | Path | None = None,
+    resume: bool = False,
 ) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Run seeded Auto-style endpoint beams in independent processes.
 
@@ -1189,6 +1279,43 @@ def optimise_auto_endpoint_campaign(
     round_improved = False
     stagnant = 0
     round_label = str(runs) if runs else "until stagnant"
+    checkpoint_file = Path(checkpoint_path) if checkpoint_path is not None else None
+    identity = (_auto_round_identity(level, initial, goal, config, workers)
+                if checkpoint_file is not None else None)
+    first_round = 0
+    if resume:
+        if checkpoint_file is None:
+            raise ValueError("Auto resume requires a checkpoint file")
+        # Atomic replacement can be interrupted after rotating the previous
+        # checkpoint. Recover the newest *verified* of the last two snapshots.
+        saved = None
+        errors = []
+        for filename in (checkpoint_file,
+                         checkpoint_file.with_suffix(checkpoint_file.suffix + ".prev")):
+            if filename.exists():
+                try:
+                    saved = _read_auto_round(filename, identity, level, goal)
+                    break
+                except (ValueError, KeyError, TypeError, UnicodeError, OSError) as exc:
+                    errors.append(f"{filename}: {exc}")
+        if saved is None and errors:
+            raise ValueError("no valid Auto round checkpoint: " + "; ".join(errors))
+        if saved is not None:
+            (inherited_population, saved_best, first_round, total, stagnant,
+             complete) = saved
+            if complete:
+                first_round = 0
+                total = stagnant = 0
+                inherited_population = ()
+            else:
+                if saved_best is not None and (best is None or
+                     saved_best.evaluation.objective_key < best.evaluation.objective_key):
+                    best = saved_best
+                    current = saved_best.frames
+                if progress:
+                    progress(f"[auto:resume] loaded completed round {first_round}, "
+                             f"{len(inherited_population)} inherited candidates; "
+                             f"stagnant {stagnant}/{stagnation_rounds}")
 
     def absorb_frontier(candidates: Sequence[AutoEndpointCandidate]) -> None:
         if not worker_frontier_limit:
@@ -1283,7 +1410,9 @@ def optimise_auto_endpoint_campaign(
     pool = None
     shared_best = None
     try:
-        for round_index in (itertools.count() if runs == 0 else range(runs)):
+        for round_index in (() if stagnation_rounds and stagnant >= stagnation_rounds
+                            else itertools.count(first_round) if runs == 0
+                            else range(first_round, runs)):
             round_improved = False
             round_donors.clear()
             if shared_best is not None:
@@ -1473,6 +1602,10 @@ def optimise_auto_endpoint_campaign(
                 chosen = _select_ranked_endpoint_beam(ranked, config.beam_width)
                 inherited_population = tuple(entry.candidate for entry in chosen)
             stagnant = 0 if round_improved else stagnant + 1
+            if checkpoint_file is not None:
+                _write_auto_round(checkpoint_file, identity, inherited_population,
+                                  best, round_index + 1, total, stagnant,
+                                  complete=False)
             if progress:
                 progress(f"round {round_index + 1}/{round_label} complete: "
                          f"{total:,} distinct evaluations total; "
@@ -1486,6 +1619,10 @@ def optimise_auto_endpoint_campaign(
             pool.shutdown(wait=True)
         if manager is not None:
             manager.shutdown()
+    if checkpoint_file is not None:
+        _write_auto_round(checkpoint_file, identity, inherited_population,
+                          best, round_index + 1 if 'round_index' in locals() else first_round,
+                          total, stagnant, complete=True)
     if export_limit:
         ranked = sorted(_ranked_candidate(c, _key(initial), identity)
                         for identity, c in survivors.items())

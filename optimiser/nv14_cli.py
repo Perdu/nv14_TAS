@@ -1662,6 +1662,7 @@ def _load_config_defaults(
         "auto_stagnation_rounds": "auto_splice_auto_stagnation_rounds",
         "local_stagnation_rounds": "auto_splice_local_stagnation_rounds",
         "frontier": "auto_splice_frontier",
+        "save_frontier": "auto_splice_save_frontier",
         "lookback": "auto_splice_stage_lookback",
     })
     # The dedicated table is last within its file: a splice override wins over
@@ -1767,7 +1768,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_searches", "auto_splice_rounds",
     "auto_splice_stagnation_rounds", "auto_splice_auto_stagnation_rounds",
     "auto_splice_local_stagnation_rounds",
-    "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_stage_lookback", "auto_splice_exit_lookback",
+    "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_directory",
     "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
 })
@@ -2452,6 +2453,10 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-frontier", modes=auto_modes, type=int,
                          default=3, metavar="N",
                          help="max partial routes carried across waypoint segments (default 3, 0 disables)")
+    command.add_argument("--splice-save-frontier", "--auto-splice-save-frontier",
+                         dest="auto_splice_save_frontier", modes=auto_modes,
+                         type=parse_positive_int, default=64, metavar="N",
+                         help="named splices: persist up to N stage routes independently of active frontier (default 64, maximum 256)")
     command.add_argument("--splice-stage-lookback", "--auto-splice-stage-lookback",
                          dest="auto_splice_stage_lookback", modes=auto_modes,
                          type=parse_positive_int, default=2, metavar="N",
@@ -4171,6 +4176,7 @@ def main() -> None:
                     beam=args.beam, workers=max(1, args.workers),
                     rounds=args.auto_runs, stagnation_rounds=args.auto_stagnation_runs,
                     frontier=max(1, args.auto_splice_frontier),
+                    save_frontier=args.auto_splice_save_frontier,
                     stage_lookback=args.auto_splice_stage_lookback,
                     seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
                           else 0 if args.seed is None else int(args.seed)),
@@ -4193,6 +4199,71 @@ def main() -> None:
                         decode_complex_replay(saved_final.combined.replay_string).frames))
                     if args.auto_ls_splice:
                         summary_frames = saved_final_frames
+                resume_state_path = output_path.with_suffix(".splice-search.json")
+                resume_state = None
+                if not args.auto_ls_splice and resume_state_path.is_file():
+                    try:
+                        if resume_state_path.stat().st_size > 128 * 1024:
+                            raise ValueError("named splice resume state exceeds 128 KiB")
+                        resume_state = json.loads(resume_state_path.read_text(encoding="utf-8"))
+                    except (OSError, ValueError, UnicodeError) as exc:
+                        raise ValueError(f"cannot read active named splice search "
+                                         f"state {resume_state_path}: {exc}") from exc
+                def persist_resume_state(state):
+                    if state is None:
+                        resume_state_path.unlink(missing_ok=True)
+                    else:
+                        # Begin a fresh campaign with a clean backend checkpoint;
+                        # otherwise stale results from an earlier source seed
+                        # could be accepted after a crash before round one.
+                        if (resume_state is None or
+                                state.get("phase") != resume_state.get("phase")):
+                            name = state["stage"]
+                            backend = state["phase"]["backend"]
+                            path = stage_outputs[name][0].with_suffix(
+                                f".{backend}.round.json")
+                            path.unlink(missing_ok=True)
+                            path.with_suffix(path.suffix + ".prev").unlink(missing_ok=True)
+                        _atomic_write_text(resume_state_path, json.dumps(
+                            state, separators=(",", ":"), sort_keys=True) + "\n")
+
+                # Save the completed outer-pass number separately from the
+                # in-flight backend state. This covers Ctrl+C between phases.
+                progress_file = output_path.with_suffix(".splice-progress.json")
+                progress_identity = {
+                    "level": hashlib.sha256(level.source_level_string.encode()).hexdigest(),
+                    "source": hashlib.sha256(encode_complex_replay(tuple(
+                        editable_frames(replay.frames))).encode()).hexdigest(),
+                    "stages": [repr(stage) for stage in stages],
+                    "config": repr(splice_config),
+                    "from_best": args.auto_splice_from_best,
+                    "start_at": args.auto_splice_start,
+                    "stop_at": args.auto_splice_stop,
+                }
+                completed_passes = 0
+                if not args.auto_ls_splice and progress_file.is_file():
+                    try:
+                        record = json.loads(progress_file.read_text(encoding="utf-8"))
+                        if record["identity"] != progress_identity or (
+                                type(record["next_round"]) is not int or
+                                record["next_round"] < 0 or
+                                (splice_config.rounds and record["next_round"] > splice_config.rounds)):
+                            raise ValueError("incompatible completed-pass checkpoint")
+                        completed_passes = record["next_round"]
+                    except (OSError, ValueError, KeyError, TypeError) as exc:
+                        raise ValueError(f"cannot restore completed-pass state {progress_file}: {exc}") from exc
+                def persist_outer_round(round_no):
+                    if round_no is None:
+                        progress_file.unlink(missing_ok=True)
+                    else:
+                        _atomic_write_text(progress_file, json.dumps(
+                            {"identity": progress_identity, "next_round": round_no},
+                            separators=(",", ":"), sort_keys=True) + "\n")
+
+                def backend_round_path(name: str, backend: str) -> str:
+                    return str(stage_outputs[name][0].with_suffix(
+                        f".{backend}.round.json"))
+
                 result = optimise_user_splices(
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
@@ -4206,6 +4277,11 @@ def main() -> None:
                     saved_stage_frontiers=saved_stage_frontiers,
                     saved_final_frames=(None if args.auto_ls_splice else saved_final_frames),
                     frontier_callback=save_frontier,
+                    resume_state=resume_state,
+                    save_resume_state=(None if args.auto_ls_splice else persist_resume_state),
+                    backend_checkpoint_path=backend_round_path,
+                    resume_outer_round=(0 if args.auto_ls_splice else completed_passes),
+                    save_outer_round=(None if args.auto_ls_splice else persist_outer_round),
                     progress=lambda message: (
                         _print_baseline_line(message, color=common_config.color)
                         if message.startswith("[auto:user-splice:baseline]")

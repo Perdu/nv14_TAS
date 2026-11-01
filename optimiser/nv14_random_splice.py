@@ -15,6 +15,7 @@ import random
 import time
 from collections.abc import Callable, Sequence
 from collections import Counter
+from pathlib import Path
 
 from nv14_auto import (AutoEvaluation, CompactTracePoint, evaluate_replay_with_sentinel,
                        pre_finish_exit_edge_distance, verify_trimmed_replay)
@@ -71,6 +72,7 @@ class RandomSpliceConfig:
     max_repair_searches: int = 8
     frontier: int = 0  # additional cross-waypoint partial beam; CLI defaults to 3
     stage_lookback: int = 2  # named splices: use frontiers n-1 through n-N
+    save_frontier: int = 64  # persisted per-stage candidates; separate from active frontier
     exit_lookback: int = 96  # minimum editable horizon of the exit approach
     seed: int = 0
 
@@ -144,6 +146,8 @@ class RandomSpliceConfig:
             raise ValueError("random splice exit_lookback must be positive")
         if type(self.frontier) is not int or self.frontier < 0:
             raise ValueError("random splice frontier must be nonnegative")
+        if type(self.save_frontier) is not int or not 1 <= self.save_frontier <= 256:
+            raise ValueError("named splice save_frontier must be between 1 and 256")
         if type(self.stage_lookback) is not int or self.stage_lookback < 1:
             raise ValueError("named splice stage_lookback must be a positive integer")
         if type(self.max_repair_searches) is not int or self.max_repair_searches < 0:
@@ -509,7 +513,8 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
                   rounds: int, seed: int, progress: Callable[[str], None] | None = None,
                   editable_end: int | None = None, include_partial: bool = False,
                   stagnation_rounds: int | None = None,
-                  best_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None):
+                  best_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
+                  checkpoint_path: str | Path | None = None, resume: bool = False):
     # With a backend-specific patience, a single uninterrupted search owns
     # its evolving population and applies stagnation after each *real* round.
     if stagnation_rounds is not None and (
@@ -551,6 +556,7 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             frontier_limit=min((config.backend_top_results if config.backend_top_results is not None
                                 else max(6, config.frontier * 3)), config.beam),
             stagnation_rounds=stagnation_rounds or 0,
+            checkpoint_path=checkpoint_path, resume=resume,
             best_callback=(lambda candidate: best_callback(candidate.frames, candidate.evaluation.frame))
             if best_callback is not None else None,
         )
@@ -570,6 +576,12 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
                 selected.append((candidate.frames, candidate.evaluation.frame))
                 seen.add(candidate.frames)
         return tuple(selected), evaluations
+    if resume and checkpoint_path is not None:
+        from pathlib import Path as _Path
+        _path = _Path(checkpoint_path)
+        if not _path.exists() and not _path.with_suffix(_path.suffix + ".prev").exists():
+            # Interrupted before the first complete round: restart the phase.
+            resume = False
     result = optimise_local_population(
         level, frames, goal=goal, frame_ranges=((start,
             goal.target_frame if editable_end is None else editable_end),),
@@ -584,6 +596,7 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             repair_lookback=(config.local_repair_lookback if config.local_repair_lookback is not None
                              else min(config.lookback, 32)),
             stagnation_rounds=stagnation_rounds if stagnation_rounds is not None else 20,
+            checkpoint_path=checkpoint_path, resume=resume,
         ),
         progress=progress,
         best_callback=(lambda candidate: best_callback(candidate.frames, candidate.evaluation.frame))

@@ -506,6 +506,11 @@ def _write_checkpoint(path: str | Path, identity: dict[str, object], seed: int,
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
+        if path.exists():
+            # The previous fully written round remains available if an atomic
+            # replacement is interrupted or the newest snapshot is damaged.
+            import shutil
+            shutil.copy2(path, path.with_suffix(path.suffix + ".prev"))
         os.replace(temporary, path)
         temporary = None
         if os.name != "nt":
@@ -629,7 +634,22 @@ def optimise_local_population(
         raise ValueError("population seed must be a nonnegative integer or 'random'")
     identity = _identity(level, source, goal, ranges, config, worker_count) if config.checkpoint_path else None
     if config.resume:
-        seed, population, rounds, evaluations, stagnant = _read_checkpoint(config.checkpoint_path, identity, context)
+        try:
+            seed, population, rounds, evaluations, stagnant = _read_checkpoint(
+                config.checkpoint_path, identity, context)
+        except (ValueError, KeyError, TypeError, OSError) as error:
+            backup = Path(config.checkpoint_path).with_suffix(
+                Path(config.checkpoint_path).suffix + ".prev")
+            if not backup.exists():
+                raise
+            try:
+                seed, population, rounds, evaluations, stagnant = _read_checkpoint(
+                    backup, identity, context)
+            except (ValueError, KeyError, TypeError, OSError):
+                raise error
+            if progress:
+                progress(f"[local:population:resume] recovered previous valid round "
+                         f"snapshot {backup}")
         if type(config.seed) is int and config.seed != seed:
             raise ValueError("population checkpoint seed differs from the explicitly configured seed")
     if progress:
