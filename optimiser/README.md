@@ -1428,6 +1428,22 @@ its best saved checkpoint with the saved final replay, and exits. When the
 final output file is absent, the input replay serves as the comparison baseline.
 `--output` is required to locate the checkpoint filenames; no file is created.
 
+Interrupted named multi-splicer runs now retain a small validated **frontier
+archive** beside each stage's best LTM/TXT, named `optim_STAGE.frontier.json`
+(or the corresponding `--output` stem). Archives are atomically rewritten with
+the top `frontier` distinct stage-feasible candidates, checked against the
+level and stage settings on the next run. The old best stage LTM/TXT files
+remain compatible and serve as fallback seeds when no archive exists.
+`--splice-from-best STAGE` starts from that saved best and additionally
+restores the preceding n-2, n-3, etc. frontiers up to `lookback`; a normal
+restart also reuses saved frontiers. Each completed stage saves its updated
+frontier, and a newly discovered stage best updates the archive immediately,
+so Ctrl+C may discard only the live backend population/current unfinished
+search. An existing `--output` replay is independently verified and used as
+the final-score baseline, preventing a restart with an older input from
+overwriting a better completed replay. Changed or invalid existing final
+outputs are rejected rather than overwritten. `--ls-splices` remains read-only.
+
 The CLI equivalent is `--splice-stage-lookback 3`.
 
 Options from the two `[multi-splicer]` tables merge by key: the level file

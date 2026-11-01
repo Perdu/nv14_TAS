@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import math
 import multiprocessing
 import os
@@ -3340,6 +3342,60 @@ def _user_splice_alias_ltm_path(
     return None if _paths_alias(alias, primary) else alias
 
 
+def _user_splice_frontier_path(main_path: Path) -> Path:
+    """Compact, atomic sidecar beside the existing best-stage checkpoint."""
+    return main_path.with_suffix(".frontier.json")
+
+
+def _user_splice_frontier_identity(level: Level, stage) -> dict[str, object]:
+    enabled = level.simulate_enemies if stage.simulate_enemies is None else stage.simulate_enemies
+    return {
+        "version": 1,
+        "level_sha256": hashlib.sha256(
+            (level.source_level_string or "").encode("utf-8")).hexdigest(),
+        "stage": stage.name,
+        "range": [stage.start, stage.end],
+        "goal": repr(stage.goal),
+        "simulate_enemies": enabled,
+    }
+
+
+def _load_user_splice_frontiers(
+    level: Level, stages, stage_outputs: Mapping[str, tuple[Path, Path | None]],
+) -> dict[str, tuple[tuple[InputFrame, ...], ...]]:
+    """Restore only matching stage/level populations, never trust raw scores."""
+    restored = {}
+    for stage in stages:
+        path = _user_splice_frontier_path(stage_outputs[stage.name][0])
+        if not path.exists():
+            continue
+        try:
+            if path.stat().st_size > 16 * 1024 * 1024:
+                raise ValueError("frontier checkpoint exceeds 16 MiB")
+            document = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(document, dict) or document.get("version") != 1:
+                raise ValueError("unknown frontier checkpoint format")
+            expected = _user_splice_frontier_identity(level, stage)
+            if any(document.get(key) != value for key, value in expected.items()):
+                print(f"[auto:user-splice:resume] {stage.name!r}: "
+                      "skipped frontier for changed level or splice settings", flush=True)
+                continue
+            replay_strings = document.get("replays")
+            if not isinstance(replay_strings, list) or len(replay_strings) > 256 or not all(
+                    isinstance(value, str) for value in replay_strings):
+                raise ValueError("invalid frontier replay list")
+            entries = []
+            for record in replay_strings:
+                frames = tuple(editable_frames(decode_complex_replay(record).frames))
+                if frames not in entries:
+                    entries.append(frames)
+            restored[stage.name] = tuple(entries)
+        except (OSError, UnicodeError, ValueError, TypeError) as exc:
+            raise ValueError(f"cannot read saved splice frontier {path}: {exc}; "
+                             "refusing to overwrite an unverified population") from exc
+    return restored
+
+
 def _load_user_splice_checkpoints(
     stage_outputs: dict[str, tuple[Path, Path | None]],
     output_path: Path,
@@ -4014,10 +4070,34 @@ def main() -> None:
                                        _resolve_named_splice_files(directory, args.auto_splice_files))),
                 )
 
-                # Load before searching.  Existing stage files are comparison
-                # baselines, not automatically promoted to final-run results.
+                # Restore best stage checkpoints and their small diverse frontier
+                # sidecars before searching. Every stored replay is reverified
+                # under the current stage goals in optimise_user_splices.
                 saved_stage_candidates = _load_user_splice_checkpoints(
                     stage_outputs, output_path, replay_output_path)
+                saved_stage_frontiers = ({} if args.auto_ls_splice else
+                                         _load_user_splice_frontiers(
+                                             level, stages, stage_outputs))
+                for stage_name, main_pair in stage_outputs.items():
+                    archive_path = _user_splice_frontier_path(main_pair[0])
+                    for title, protected in (("input", input_path),
+                                             ("output", output_path),
+                                             ("replay output", replay_output_path),
+                                             ("config", args.config),
+                                             ("splice config", args.splice_config),
+                                             ("levels file", source.levels_file_path),
+                                             *((f"stage {name}", path)
+                                               for name, pair in stage_outputs.items()
+                                               for path in pair if path is not None)):
+                        if protected is not None and _paths_alias(archive_path, protected):
+                            raise ValueError(f"frontier path {archive_path} conflicts with {title}")
+
+                def save_frontier(name: str, frames: tuple[tuple[InputFrame, ...], ...]) -> None:
+                    path = _user_splice_frontier_path(stage_outputs[name][0])
+                    stage = next(item for item in stages if item.name == name)
+                    document = _user_splice_frontier_identity(level, stage)
+                    document["replays"] = [encode_complex_replay(item) for item in frames]
+                    _atomic_write_text(path, json.dumps(document, separators=(",", ":")) + "\n")
                 if not args.auto_ls_splice:
                     for stage_name, candidates in saved_stage_candidates.items():
                         print(f"[auto:user-splice:resume] {stage_name!r}: "
@@ -4096,7 +4176,8 @@ def main() -> None:
                           else 0 if args.seed is None else int(args.seed)),
                 )
                 summary_frames = replay.frames
-                if args.auto_ls_splice and output_path.is_file():
+                saved_final_frames = None
+                if output_path.is_file():
                     # A named-splice summary compares saved intermediate bests
                     # against the *saved final replay*, not the original input.
                     try:
@@ -4108,7 +4189,10 @@ def main() -> None:
                         raise ValueError(f"cannot read saved final replay {output_path}: {exc}") from exc
                     if saved_final.combined.level_string != combined.level_string:
                         raise ValueError(f"saved final replay {output_path} belongs to a different level")
-                    summary_frames = decode_complex_replay(saved_final.combined.replay_string).frames
+                    saved_final_frames = tuple(editable_frames(
+                        decode_complex_replay(saved_final.combined.replay_string).frames))
+                    if args.auto_ls_splice:
+                        summary_frames = saved_final_frames
                 result = optimise_user_splices(
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
@@ -4119,6 +4203,9 @@ def main() -> None:
                         source, output_path, replay_output_path, encode_complex_replay(frames)),
                     stage_best_callback=save_stage_best,
                     saved_stage_candidates=saved_stage_candidates,
+                    saved_stage_frontiers=saved_stage_frontiers,
+                    saved_final_frames=(None if args.auto_ls_splice else saved_final_frames),
+                    frontier_callback=save_frontier,
                     progress=lambda message: (
                         _print_baseline_line(message, color=common_config.color)
                         if message.startswith("[auto:user-splice:baseline]")

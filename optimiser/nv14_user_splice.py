@@ -476,6 +476,9 @@ def optimise_user_splices(
     start_at: str | None = None, stop_at: str | None = None,
     from_best: str | None = None,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
+    saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
+    saved_final_frames: Sequence[InputFrame] | None = None,
+    frontier_callback: Callable[[str, tuple[tuple[InputFrame, ...], ...]], None] | None = None,
     summary_only: bool = False,
 ) -> UserSpliceResult:
     """Optimise named goals in order, retaining diverse feasible continuations.
@@ -520,7 +523,10 @@ def optimise_user_splices(
     source_eval = evaluate_replay_with_sentinel(level, source)
     source_complete = bool(source_eval.valid and source_eval.finish_tick == len(source))
     current = _materialise_splice_tail(source, max(s.goal.target_frame for s in stages))
-    require_complete = completion_policy == "complete" or source_complete
+    # A completed saved final output must never be displaced by an incomplete
+    # checkpoint, even when the new input is incomplete and policy=checkpoint.
+    require_complete = (completion_policy == "complete" or source_complete
+                        or saved_final_frames is not None)
     if completion_policy == "complete" and not source_complete:
         raise ValueError("user splice requires a canonically completed source for completion-policy=complete")
     for stage in stages:
@@ -595,7 +601,24 @@ def optimise_user_splices(
 
     baseline = final_rank(current)
     best_rank = baseline[0] if baseline is not None else None
-    best_output = source
+    best_output = baseline[1] if baseline is not None else source
+    if saved_final_frames is not None:
+        saved_final = tuple(editable_frames(saved_final_frames))
+        # Never let an older input replay overwrite an already verified final
+        # result. Check the archived movie using *current* stage requirements.
+        physical = evaluate_replay_with_sentinel(level, saved_final)
+        if not physical.valid or physical.finish_tick != len(saved_final):
+            raise ValueError("saved final output is not a verified completed replay; "
+                             "refusing to overwrite it")
+        saved_rank = final_rank(_materialise_splice_tail(saved_final, len(current) - 1))
+        if saved_rank is None:
+            raise ValueError("saved final output fails current splice requirements; "
+                             "refusing to overwrite it")
+        if best_rank is None or saved_rank[0] < best_rank:
+            best_rank, best_output = saved_rank
+        if progress:
+            progress("[auto:user-splice:resume] verified saved final replay; "
+                     "protected as the final-score baseline")
     improvements = attempts = evaluations = stagnant = 0
     stage_best: list[tuple | None] = []
     stage_best_evaluation: list[EndpointEvaluation | None] = []
@@ -630,12 +653,45 @@ def optimise_user_splices(
                 stage_best[i] = score.objective_key
                 stage_best_evaluation[i] = score
                 restored_stage_frames[i] = replay
+    # Restore top stage populations separately from the single best LTM/TXT.
+    # The old one-best checkpoints are also valid fallbacks for archives that
+    # predate this feature. Re-check all entries under each stage's physics.
+    archived_frontiers: list[list[tuple[InputFrame, ...]]] = []
+    for i, stage in enumerate(stages):
+        pool: dict[tuple[InputFrame, ...], tuple] = {}
+        for raw in (*((saved_stage_frontiers or {}).get(stage.name, ())),
+                    *((saved_stage_candidates or {}).get(stage.name, ()))):
+            replay = _materialise_splice_tail(raw, len(current) - 1)
+            if valid_stages(replay, i + 1):
+                pool[replay] = original_endpoints[i].evaluate(replay).objective_key
+        ranked = sorted(pool, key=pool.__getitem__)
+        archived_frontiers.append(ranked[:max(1, config.frontier)])
+        if progress and ranked and not summary_only:
+            progress(f"[auto:user-splice:resume] {stage.name!r}: "
+                     f"restored {len(archived_frontiers[-1])} validated frontier seed(s)")
+
+    def publish_frontier(i: int, candidates: Sequence[tuple[InputFrame, ...]]) -> None:
+        if frontier_callback is None or summary_only:
+            return
+        pool: dict[tuple[InputFrame, ...], tuple] = {}
+        for candidate in (*archived_frontiers[i], *candidates):
+            if valid_stages(candidate, i + 1):
+                pool[candidate] = original_endpoints[i].evaluate(candidate).objective_key
+        selected = sorted(pool, key=pool.__getitem__)[:max(1, config.frontier)]
+        if selected != archived_frontiers[i]:
+            frontier_callback(stages[i].name, tuple(selected))
+            archived_frontiers[i] = selected
+
     # Summary-only mode reports on disk checkpoints without changing them.
     # There must be no baseline checkpoint writes or Auto/Local searches.
     # Choose only a previously saved, validated best for explicit propagation.
     # Do this before writing initial source checkpoints, so --splice-from-best
     # never silently falls back to an unsaved current-run baseline.
     propagation_seed = current
+    if from_best_index is None and saved_final_frames is not None and best_output != source:
+        # Use the previously verified best completed replay for normal search,
+        # not only as a score threshold. Explicit --splice-from-best still wins.
+        propagation_seed = _materialise_splice_tail(best_output, len(current) - 1)
     if from_best_index is not None:
         propagation_seed = stage_checkpoints[from_best_index]
         if propagation_seed is None:
@@ -779,7 +835,7 @@ def optimise_user_splices(
     # Elites are retained across rounds as well as across stage boundaries.
     # Their rank is the objective of the stage that produced them; do not
     # promote a local improvement if its mandatory earlier goals were lost.
-    elites: list[list[tuple[InputFrame, ...]]] = [[] for _ in stages]
+    elites: list[list[tuple[InputFrame, ...]]] = [list(frontier) for frontier in archived_frontiers]
     for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
         begun = time.monotonic()
         # A propagation run deliberately retries the archived splice-best
@@ -787,6 +843,24 @@ def optimise_user_splices(
         # fully completed run. Completion ranking still uses the original
         # source, and all preceding named goals remain mandatory.
         history: list[list[tuple[InputFrame, ...]]] = [[propagation_seed]]
+        if first_stage == 0 and archived_frontiers[0]:
+            # A normal restart can search from saved alternatives immediately,
+            # rather than merely comparing their scores after the search.
+            history[0] = list(dict.fromkeys((propagation_seed,
+                                             *archived_frontiers[0])))
+        # Reload the actual preceding stage frontiers on every outer pass.
+        # In particular --splice-from-best N resumes at N+1 with n-2/n-3
+        # still available. Old one-best LTM/TXT checkpoints are fallbacks.
+        if first_stage > 0:
+            if from_best_index is None and archived_frontiers[first_stage - 1]:
+                history[0] = list(dict.fromkeys(
+                    (*archived_frontiers[first_stage - 1], propagation_seed)))
+            for prior in range(first_stage - 2, max(-1, first_stage - config.stage_lookback - 1), -1):
+                if archived_frontiers[prior]:
+                    history.append(archived_frontiers[prior])
+                else:
+                    history.append([])
+            history = history[:config.stage_lookback]
         improved = False
         unfulfilled: list[str] = []
         for index in range(first_stage, last_stage + 1):
@@ -870,6 +944,8 @@ def optimise_user_splices(
                         temp_gains += 1
                         if stage_best_callback:
                             stage_best_callback(stage.name, exported)
+                        publish_frontier(index, tuple(sorted(
+                            eligible, key=eligible.__getitem__)[:max(1, config.frontier)]))
                         if progress and not is_final_gain:
                             label = ("first feasible" if old_stage_rank is None
                                      else "new stage best")
@@ -945,6 +1021,7 @@ def optimise_user_splices(
             # more recent stage wins its own intermediate ranking.
             selected = [candidate for candidate, _ in ordered[:max(1, config.frontier)]]
             elites[index] = selected
+            publish_frontier(index, selected)
             history = [selected, *history][:config.stage_lookback]
         stagnant = 0 if improved else stagnant + 1
         if progress:
