@@ -475,6 +475,7 @@ def optimise_user_splices(
     start_at: str | None = None, stop_at: str | None = None,
     from_best: str | None = None,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
+    summary_only: bool = False,
 ) -> UserSpliceResult:
     """Optimise named goals in order, retaining diverse feasible continuations.
 
@@ -610,6 +611,8 @@ def optimise_user_splices(
                 stage_best[i] = score.objective_key
                 stage_best_evaluation[i] = score
                 restored_stage_frames[i] = replay
+    # Summary-only mode reports on disk checkpoints without changing them.
+    # There must be no baseline checkpoint writes or Auto/Local searches.
     # Choose only a previously saved, validated best for explicit propagation.
     # Do this before writing initial source checkpoints, so --splice-from-best
     # never silently falls back to an unsaved current-run baseline.
@@ -628,29 +631,30 @@ def optimise_user_splices(
     # Create the initial stage checkpoints as well as subsequent new bests.
     # Compare against validated on-disk checkpoints first: an existing better
     # movie must never be overwritten by a weaker starting replay.
-    for i, stage in enumerate(stages):
-        baseline_evaluation = original_endpoints[i].evaluate(current) if valid_stages(current, i + 1) else None
-        archived_evaluation = stage_checkpoint_evals[i]
-        if (baseline_evaluation is not None and
-                (archived_evaluation is None or
-                 baseline_evaluation.objective_key < archived_evaluation.objective_key)):
-            exported = stage_export(current)
-            stage_checkpoints[i] = exported
-            stage_checkpoint_evals[i] = baseline_evaluation
-            stage_checkpoint_origin[i] = "baseline"
-            if stage_best_callback is not None:
-                stage_best_callback(stage.name, exported)
-            if progress:
-                progress(f"[auto:user-splice:initial] {stage.name!r}: "
-                         "saved starting stage result; "
-                         f"{_stage_improvement_text(stage.goal, None, baseline_evaluation)}")
-    if progress:
+    if not summary_only:
+        for i, stage in enumerate(stages):
+            baseline_evaluation = original_endpoints[i].evaluate(current) if valid_stages(current, i + 1) else None
+            archived_evaluation = stage_checkpoint_evals[i]
+            if (baseline_evaluation is not None and
+                    (archived_evaluation is None or
+                     baseline_evaluation.objective_key < archived_evaluation.objective_key)):
+                exported = stage_export(current)
+                stage_checkpoints[i] = exported
+                stage_checkpoint_evals[i] = baseline_evaluation
+                stage_checkpoint_origin[i] = "baseline"
+                if stage_best_callback is not None:
+                    stage_best_callback(stage.name, exported)
+                if progress:
+                    progress(f"[auto:user-splice:initial] {stage.name!r}: "
+                             "saved starting stage result; "
+                             f"{_stage_improvement_text(stage.goal, None, baseline_evaluation)}")
+    if progress and not summary_only:
         for i, replay in enumerate(restored_stage_frames):
             if replay is not None:
                 progress(f"[auto:user-splice:resume] {stages[i].name!r}: "
                          "restored a strictly better historical checkpoint; "
                          f"{_stage_improvement_text(stages[i].goal, None, stage_best_evaluation[i])}")
-    if progress:
+    if progress and not summary_only:
         if len(current) > len(source):
             progress(f"[auto:user-splice] appended {len(current) - len(source)} "
                      f"neutral search frame(s) through frame {len(current) - 1}; "
@@ -745,7 +749,9 @@ def optimise_user_splices(
                          f"splice: {detail}; full run: "
                          f"{_stage_summary_text(stage.goal, best_stage)}")
 
-    report_checkpoint_summary("startup")
+    report_checkpoint_summary("saved checkpoints" if summary_only else "startup")
+    if summary_only:
+        return UserSpliceResult(best_output, 0, 0, 0)
 
     # Elites are retained across rounds as well as across stage boundaries.
     # Their rank is the objective of the stage that produced them; do not

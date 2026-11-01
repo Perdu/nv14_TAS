@@ -2391,6 +2391,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="seed from the best saved LTM/TXT for NAME and, by default, "
                               "search from the next splice; preserve the current verified "
                               "run as the final-score baseline")
+    command.add_argument("-l", "--ls-splice", dest="auto_ls_splice",
+                         modes=auto_modes, action="store_true",
+                         help="show saved named-splice checkpoint propagation summary and exit; "
+                              "do not optimize, create or overwrite replay files")
     command.add_argument("--auto-splice-interactions", modes=auto_modes,
                          type=parse_splice_interactions,
                          default=("switch", "walljump", "landing"),
@@ -3708,6 +3712,12 @@ def main() -> None:
     input_path = common_config.input_path
     output_path = common_config.output_path
     replay_output_path = common_config.replay_output_path
+    if getattr(args, "auto_ls_splice", False) and not (
+        args.mode == "auto" and args.auto_random_splice and args.auto_splice_mode == "user"
+    ):
+        raise SystemExit("-l/--ls-splice requires named multi-splicer Auto mode with splice files")
+    if getattr(args, "auto_ls_splice", False) and args.auto_splice_from_best:
+        raise SystemExit("--ls-splice cannot be combined with --splice-from-best")
     try:
         source = _load_source(
             input_path,
@@ -3738,7 +3748,8 @@ def main() -> None:
         simulate_enemies=simulate_enemies,
     )
     if (args.mode == "auto" and
-            getattr(args, "auto_splice_mode", None) == "user"):
+            getattr(args, "auto_splice_mode", None) == "user" and
+            not getattr(args, "auto_ls_splice", False)):
         print(f"[auto:user-splice:physics] simulate-enemies="
               f"{str(simulate_enemies).lower()} (resolved before level initialization)",
               flush=True)
@@ -3748,6 +3759,9 @@ def main() -> None:
         return
 
     if common_config.output_path is None:
+        if getattr(args, "auto_ls_splice", False):
+            raise SystemExit("--ls-splice requires --output (the existing final-replay path) "
+                             "to locate saved splice checkpoints")
         raise SystemExit("--output is required unless --list-objects is used")
     assert output_path is not None
     if source.ltm_movie is not None and output_path.suffix.lower() != ".ltm":
@@ -3758,7 +3772,7 @@ def main() -> None:
         )
 
     auto_parent_sources: list[tuple[Path, _LoadedSource]] = []
-    if args.mode == "auto":
+    if args.mode == "auto" and not getattr(args, "auto_ls_splice", False):
         for parent_number, parent_path in enumerate(args.auto_parents, start=2):
             try:
                 parent_source = _load_source(
@@ -3877,7 +3891,8 @@ def main() -> None:
     source_frames = editable_frames(replay.frames)
     retimed_frames = source_frames
     applied_retimes: list[RetimeMutation] = []
-    for spec_index, (start_spec, delta) in enumerate(common_config.retime, start=1):
+    for spec_index, (start_spec, delta) in enumerate(
+            () if getattr(args, "auto_ls_splice", False) else common_config.retime, start=1):
         transitions = input_transition_frames(retimed_frames)
         if not transitions:
             raise SystemExit("cannot retime a replay with no input transitions")
@@ -3972,7 +3987,7 @@ def main() -> None:
                     level, replay.frames, args)
             except (ValueError, RuntimeError) as exc:
                 raise SystemExit(str(exc)) from exc
-        if args.auto_parents or args.auto_checkpoint or args.auto_resume:
+        if not args.auto_ls_splice and (args.auto_parents or args.auto_checkpoint or args.auto_resume):
             raise SystemExit("random splice does not support auto parents or checkpoint/resume")
         try:
             if args.auto_splice_mode == "user":
@@ -3994,9 +4009,10 @@ def main() -> None:
                 # baselines, not automatically promoted to final-run results.
                 saved_stage_candidates = _load_user_splice_checkpoints(
                     stage_outputs, output_path, replay_output_path)
-                for stage_name, candidates in saved_stage_candidates.items():
-                    print(f"[auto:user-splice:resume] {stage_name!r}: "
-                          f"read {len(candidates)} distinct saved replay(s)", flush=True)
+                if not args.auto_ls_splice:
+                    for stage_name, candidates in saved_stage_candidates.items():
+                        print(f"[auto:user-splice:resume] {stage_name!r}: "
+                              f"read {len(candidates)} distinct saved replay(s)", flush=True)
                 # The alternate LTM name shares the replay output basename.
                 # Collision checks cover it before the first checkpoint write.
                 alias_outputs = {}
@@ -4070,11 +4086,26 @@ def main() -> None:
                     seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
                           else 0 if args.seed is None else int(args.seed)),
                 )
+                summary_frames = replay.frames
+                if args.auto_ls_splice and output_path.is_file():
+                    # A named-splice summary compares saved intermediate bests
+                    # against the *saved final replay*, not the original input.
+                    try:
+                        saved_final = _load_source(
+                            output_path, levels_file_path=source.levels_file_path,
+                            explicit_level_id=common_config.level_id,
+                            ltm_postroll=common_config.ltm_postroll)
+                    except (LtmError, OSError, ValueError) as exc:
+                        raise ValueError(f"cannot read saved final replay {output_path}: {exc}") from exc
+                    if saved_final.combined.level_string != combined.level_string:
+                        raise ValueError(f"saved final replay {output_path} belongs to a different level")
+                    summary_frames = decode_complex_replay(saved_final.combined.replay_string).frames
                 result = optimise_user_splices(
-                    level, replay.frames, stages, splice_config,
+                    level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
                     start_at=args.auto_splice_start, stop_at=args.auto_splice_stop,
                     from_best=args.auto_splice_from_best,
+                    summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path, encode_complex_replay(frames)),
                     stage_best_callback=save_stage_best,
@@ -4090,6 +4121,8 @@ def main() -> None:
                                                "[auto:user-splice:summary:propagated]"))
                         else print(message, flush=True)),
                 )
+                if args.auto_ls_splice:
+                    return
                 if not result.improvements:
                     print("[auto:user-splice] no verified improvement; existing output retained")
                 print(f"[auto:user-splice] {result.attempts} stage searches; "

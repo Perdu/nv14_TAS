@@ -1420,6 +1420,14 @@ includes n-3, and `1` only uses n-1. This is independent of the existing
 from each older frontier is appended. Extra historical seeds increase the
 search budget because each seed runs its own backend search. Put `lookback` in the
 per-level file when different levels need different amounts of bypassing.
+To inspect **only the saved splice propagation summary** without searching or
+writing checkpoints, use `-l` or `--ls-splice` with the normal `auto` command,
+`--splice-config`, `--output`, and (if used for checkpoint names) `--replay-output`.
+The report lists each named stage as pending, propagated, or missing, compares
+its best saved checkpoint with the saved final replay, and exits. When the
+final output file is absent, the input replay serves as the comparison baseline.
+`--output` is required to locate the checkpoint filenames; no file is created.
+
 The CLI equivalent is `--splice-stage-lookback 3`.
 
 Options from the two `[multi-splicer]` tables merge by key: the level file
