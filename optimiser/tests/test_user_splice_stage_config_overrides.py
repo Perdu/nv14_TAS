@@ -147,15 +147,18 @@ simulate-enemies=true
     assert cli._named_splice_enemy_simulation(args, False) is True
 
 
-def test_conflicting_simulate_enemies_is_rejected(tmp_path):
+def test_conflicting_simulate_enemies_are_per_stage(tmp_path):
     args, directory = _setup(tmp_path, '''objective="min-x"
 target-frame=10
 simulate-enemies=true
-''')
+''', base='[common]\nsimulate-enemies=false\n')
     (directory / 'end.txt').write_text('[local]\nobjective="min-x"\n'
                                        'target-frame=10\nsimulate-enemies=false\n')
-    with pytest.raises(ValueError, match='incompatible simulate-enemies'):
-        cli._named_splice_enemy_simulation(args, False)
+    assert cli._named_splice_enemy_simulation(args, False) is True
+    from tests.test_random_splice import _baseline
+    level, frames, _ = _baseline()
+    stages = cli._load_named_splice_stages(level, frames, args, directory, args.auto_splice_files)
+    assert [stage.simulate_enemies for stage in stages] == [True, False]
 
 
 def test_explicit_simulation_cli_flag_overrides_splices(tmp_path):

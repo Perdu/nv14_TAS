@@ -88,12 +88,13 @@ def test_cli_short_flag_reads_saved_final_and_never_writes(tmp_path, monkeypatch
     assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == initial
 
 
+@pytest.mark.parametrize("flag", ["--ls-splice", "--ls-splices"])
 def test_long_flag_works_without_saved_final_and_does_not_create_baseline(
-        tmp_path, monkeypatch, capsys):
+        tmp_path, monkeypatch, capsys, flag):
     _level, _source, _saved, output, _packed, argv = _setup(tmp_path)
     assert not output.exists()
     monkeypatch.setattr(us, '_search_stage', lambda *a, **kw: pytest.fail('started search'))
-    monkeypatch.setattr(sys, 'argv', [*argv, '--ls-splice'])
+    monkeypatch.setattr(sys, 'argv', [*argv, flag])
     main()
     stdout = capsys.readouterr().out
     assert stdout.count('[auto:user-splice:summary:empty]') == 2
@@ -105,8 +106,9 @@ def test_long_flag_works_without_saved_final_and_does_not_create_baseline(
 
 def test_flag_requires_named_user_mode_and_output(tmp_path, monkeypatch):
     _level, _source, _saved, _out, _packed, argv = _setup(tmp_path)
-    args = parse_arguments([*argv[1:], '--ls-splice'])
-    assert args.auto_ls_splice is True
+    for flag in ('-l', '--ls-splice', '--ls-splices'):
+        args = parse_arguments([*argv[1:], flag])
+        assert args.auto_ls_splice is True
     monkeypatch.setattr(sys, 'argv', [*argv[:3], '-l'])
     with pytest.raises(SystemExit, match='requires named multi-splicer'):
         main()

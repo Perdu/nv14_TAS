@@ -2021,6 +2021,11 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
     parser = build_parser()._command_parsers["local"]
     stages = []
     cli_explicit = getattr(args, "_cli_explicit_options", frozenset())
+    # The full-run Level can have guards enabled for safety even when one
+    # particular stage disables them. Each stage gets its own physics Level.
+    shared_enemies = (True if getattr(args, "simulate_enemies", None) is None
+                      else args.simulate_enemies)
+    worlds = {level.simulate_enemies: level}
     for name, path in _resolve_named_splice_files(directory, names):
         with path.open("rb") as stream:
             raw = tomllib.load(stream)
@@ -2045,6 +2050,12 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
             raise ValueError(f"splice {name!r} ({path}): unsupported per-splice "
                              f"option(s): {', '.join(unsupported)}; these cannot be "
                              "applied to both managed backends")
+        stage_enemies = (shared_enemies if _splice_enemy_cli_explicit(args)
+                         else local_values.get("simulate_enemies", shared_enemies))
+        if stage_enemies not in worlds:
+            worlds[stage_enemies] = parse_level_string(
+                level.source_level_string, simulate_enemies=stage_enemies)
+        stage_level = worlds[stage_enemies]
         stage_args = argparse.Namespace(**vars(args))
         # Shared values are defaults, not unrelated goals to be discarded.
         # Explicit stage options override inherited shared Auto goal values.
@@ -2087,12 +2098,13 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
                 overrides["splice_local_stagnation_rounds"] = patience
         try:
             goal_frames = _materialise_splice_tail(frames, values["auto_target_frame"])
-            goal, start, end = _auto_goal_from_options(level, goal_frames, stage_args)
+            goal, start, end = _auto_goal_from_options(stage_level, goal_frames, stage_args)
         except (ValueError, RuntimeError) as exc:
             raise ValueError(f"invalid splice {name!r} ({path}): {exc}") from exc
         stages.append(UserSpliceStage(name, goal, start,
                                       goal.target_frame if end is None else end,
-                                      config_overrides=overrides))
+                                      config_overrides=overrides,
+                                      simulate_enemies=stage_enemies))
     return tuple(stages)
 
 
@@ -2391,7 +2403,7 @@ def build_parser() -> argparse.ArgumentParser:
                          help="seed from the best saved LTM/TXT for NAME and, by default, "
                               "search from the next splice; preserve the current verified "
                               "run as the final-score baseline")
-    command.add_argument("-l", "--ls-splice", dest="auto_ls_splice",
+    command.add_argument("-l", "--ls-splice", "--ls-splices", dest="auto_ls_splice",
                          modes=auto_modes, action="store_true",
                          help="show saved named-splice checkpoint propagation summary and exit; "
                               "do not optimize, create or overwrite replay files")
@@ -3659,11 +3671,12 @@ def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
 
 
 def _named_splice_enemy_simulation(args: argparse.Namespace, default: bool) -> bool:
-    """Resolve actual named Local files before constructing the shared Level.
+    """Choose safe physics for full-run verification, not per-stage search.
 
-    Every backend and verifier in the multi-splicer uses the same Level. If
-    splice files explicitly disagree about physics, refuse to search rather
-    than allowing an invalid completed run to be published.
+    Individual named splices may enable or disable enemies independently.
+    Search and checkpoint evaluation use each stage's own physics world;
+    final run verification keeps enemies enabled if ANY stage needs them.
+    Explicit CLI flags override both the default and all stage flags.
     """
     if (getattr(args, "mode", None) != "auto" or
             getattr(args, "auto_splice_mode", None) != "user"):
@@ -3671,26 +3684,23 @@ def _named_splice_enemy_simulation(args: argparse.Namespace, default: bool) -> b
     names = getattr(args, "auto_splice_files", ()) or ()
     if not names:
         return default
-    explicit_flags = getattr(args, "_cli_explicit_options", None)
-    if explicit_flags is None:
-        explicit_flags = ("simulate_enemies",) if any(
-            arg.split("=", 1)[0] in ("--simulate-enemies", "--no-simulate-enemies")
-            for arg in sys.argv[1:]) else ()
-    if "simulate_enemies" in explicit_flags:  # CLI wins
+    if _splice_enemy_cli_explicit(args):
         return default
     parser = build_parser()._command_parsers["local"]
-    overrides: dict[str, bool] = {}
-    for name, path in _resolve_named_splice_files(_named_splice_directory(args), names):
+    any_enabled = False
+    for _, path in _resolve_named_splice_files(_named_splice_directory(args), names):
         values, _ = _load_config_defaults(path, parser, "local")
-        if "simulate_enemies" in values:
-            overrides[name] = values["simulate_enemies"]
-    explicit = set(overrides.values())
-    if len(explicit) > 1:
-        raise ValueError("named splices request incompatible simulate-enemies settings "
-                         f"({', '.join(f'{key}={value}' for key, value in overrides.items())}). "
-                         "The multi-splicer has one shared physics world; "
-                         "use the same setting in each explicit goal file.")
-    return explicit.pop() if explicit else default
+        any_enabled |= bool(values.get("simulate_enemies", default))
+    return default or any_enabled
+
+
+def _splice_enemy_cli_explicit(args: argparse.Namespace) -> bool:
+    """Recognize a real CLI flag rather than a default loaded from TOML."""
+    explicit = getattr(args, "_cli_explicit_options", None)
+    if explicit is not None:
+        return "simulate_enemies" in explicit
+    return any(arg.split("=", 1)[0] in ("--simulate-enemies", "--no-simulate-enemies")
+               for arg in sys.argv[1:])
 
 
 def main() -> None:
@@ -3715,7 +3725,7 @@ def main() -> None:
     if getattr(args, "auto_ls_splice", False) and not (
         args.mode == "auto" and args.auto_random_splice and args.auto_splice_mode == "user"
     ):
-        raise SystemExit("-l/--ls-splice requires named multi-splicer Auto mode with splice files")
+        raise SystemExit("-l/--ls-splice/--ls-splices requires named multi-splicer Auto mode with splice files")
     if getattr(args, "auto_ls_splice", False) and args.auto_splice_from_best:
         raise SystemExit("--ls-splice cannot be combined with --splice-from-best")
     try:
@@ -3736,9 +3746,8 @@ def main() -> None:
         if common_config.simulate_enemies is None
         else common_config.simulate_enemies
     )
-    # The named stage files may override the shared [common] default.
-    # Resolve this before constructing the Level: enemy objects are created
-    # (or omitted) by parse_level_string, not by EndpointGoal.
+    # Full-run verification retains guards when any named splice needs them.
+    # Each named stage separately constructs its selected physics world.
     try:
         simulate_enemies = _named_splice_enemy_simulation(args, simulate_enemies)
     except (ValueError, OSError, tomllib.TOMLDecodeError) as exc:
@@ -3750,8 +3759,8 @@ def main() -> None:
     if (args.mode == "auto" and
             getattr(args, "auto_splice_mode", None) == "user" and
             not getattr(args, "auto_ls_splice", False)):
-        print(f"[auto:user-splice:physics] simulate-enemies="
-              f"{str(simulate_enemies).lower()} (resolved before level initialization)",
+        print(f"[auto:user-splice:physics] final-run simulate-enemies="
+              f"{str(simulate_enemies).lower()} (individual stages may differ)",
               flush=True)
 
     if args.list_objects:

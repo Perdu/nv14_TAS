@@ -28,10 +28,10 @@ def test_true_stage_flag_overrides_global_false(tmp_path, monkeypatch):
     assert any(type(obj).__name__ == 'FloorGuard' for obj in enabled_level.objects)
 
 
-def test_false_stage_flag_overrides_global_true(tmp_path, monkeypatch):
+def test_false_stage_flag_does_not_disable_full_run_safety(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, 'argv', ['optimise.py'])
     (tmp_path/'639.toml').write_text('[local]\nsimulate-enemies=false\n')
-    assert _named_splice_enemy_simulation(opts(tmp_path, names=('639',)), True) is False
+    assert _named_splice_enemy_simulation(opts(tmp_path, names=('639',)), True) is True
 
 
 def test_no_stage_flag_inherits_global(tmp_path, monkeypatch):
@@ -41,12 +41,11 @@ def test_no_stage_flag_inherits_global(tmp_path, monkeypatch):
     assert _named_splice_enemy_simulation(opts(tmp_path, ('639',)), True) is True
 
 
-def test_conflicting_explicit_flags_are_rejected(tmp_path, monkeypatch):
+def test_conflicting_explicit_flags_are_allowed_with_strict_final_verification(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, 'argv', ['optimise.py'])
     (tmp_path/'639.txt').write_text('[local]\nsimulate-enemies=false\n')
     (tmp_path/'686.txt').write_text('[local]\nsimulate-enemies=true\n')
-    with pytest.raises(ValueError, match='incompatible simulate-enemies'):
-        _named_splice_enemy_simulation(opts(tmp_path), False)
+    assert _named_splice_enemy_simulation(opts(tmp_path), False) is True
 
 
 def test_cli_explicit_override_has_last_word(tmp_path, monkeypatch):

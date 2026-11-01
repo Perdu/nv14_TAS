@@ -1490,11 +1490,22 @@ the fixed internal search batch size. Stage-specific checkpoint/resume and
 Local windows-only settings cannot be honored by a managed population search
 and now fail explicitly instead of being silently ignored.
 
-`simulate-enemies` is special: the engine builds one physics world, reused
-by Auto, Local, checkpoint validation and final verification. An explicit
-stage flag overrides the shared `[common]` default; multiple explicit stage
-flags must agree, or the run fails early. An explicit CLI
-`--simulate-enemies`/`--no-simulate-enemies` overrides these flags.
+`simulate-enemies` is **per named splice**. Each `[local]` goal may set it
+independently (`true` or `false`): Auto and Local search, checkpoint scoring,
+loading saved checkpoints and enforcement of that stage's goal all run in its
+selected physics world. An absent stage value inherits `[common]` (Auto's
+usual default is enabled); an explicit CLI `--simulate-enemies` or
+`--no-simulate-enemies` forces that choice for every stage. Both physics models
+are built once and reused as needed; different stage settings do not conflict.
+
+**Final replay safety:** the fully saved run is independently evaluated with
+enemies enabled whenever any stage uses them (or the shared setting enables
+them). A candidate that dies there cannot be published as a final improvement,
+even if it was discovered by an enemy-disabled stage. Intermediate stage
+checkpoints remain subject to their **own** stage setting, so an intentionally
+enemy-disabled checkpoint may still be unsuitable for real playback until a
+later stage successfully repairs the route.
+
 
 To use **both** Local population and endpoint Auto Hybrid at each named
 checkpoint, set `splice-search = "both"`. **Endpoint Auto runs first**;

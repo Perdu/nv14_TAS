@@ -16,7 +16,7 @@ import time
 
 from nv14_auto import evaluate_replay_with_sentinel
 from nv14_endpoint import EndpointGoal, EndpointEvaluator, EndpointEvaluation
-from nv14_engine import InputFrame, Level
+from nv14_engine import InputFrame, Level, parse_level_string
 from nv14_random_splice import (RandomSpliceConfig, _control_preserved,
                                 _local_search, _completed_rank)
 from nv14_auto import verify_trimmed_replay
@@ -30,6 +30,7 @@ class UserSpliceStage:
     start: int
     end: int
     config_overrides: Mapping[str, object] = field(default_factory=dict)
+    simulate_enemies: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -526,7 +527,20 @@ def optimise_user_splices(
         if not (0 <= stage.start <= stage.end <= stage.goal.target_frame < len(current)):
             raise ValueError(f"invalid range/target-frame for splice {stage.name!r}")
     rng = random.Random(config.seed)
-    original_endpoints = tuple(EndpointEvaluator(level, s.goal) for s in stages)
+    # Cache the two possible physics worlds. Stage feasibility and search use
+    # the world selected by that named splice, even when its neighbors differ.
+    worlds = {level.simulate_enemies: level}
+    for stage in stages:
+        enabled = level.simulate_enemies if stage.simulate_enemies is None else stage.simulate_enemies
+        if enabled not in worlds:
+            if level.source_level_string is None:
+                raise ValueError("per-stage simulate-enemies requires original level source")
+            worlds[enabled] = parse_level_string(
+                level.source_level_string, simulate_enemies=enabled)
+    stage_levels = tuple(worlds[level.simulate_enemies if s.simulate_enemies is None
+                                else s.simulate_enemies] for s in stages)
+    original_endpoints = tuple(EndpointEvaluator(stage_level, stage.goal)
+                               for stage_level, stage in zip(stage_levels, stages))
     # Stage goals are intentionally checked independently. Later edits must not
     # silently undo an earlier switch, jump, or arrival requirement.
     def valid_stages(frames, through: int) -> bool:
@@ -540,6 +554,11 @@ def optimise_user_splices(
             return None
         target_rank = original_endpoints[-1].evaluate(frames).objective_key
         evaluated = evaluate_replay_with_sentinel(level, frames)
+        # A stage searched without enemies may reach its endpoint but die in
+        # the physical world when replayed. Never publish that dead replay as
+        # a final best, even in checkpoint completion policy.
+        if level.simulate_enemies and evaluated.dead_tick is not None:
+            return None
         if require_complete:
             if not evaluated.valid or evaluated.finish_tick is None:
                 return None
@@ -655,6 +674,10 @@ def optimise_user_splices(
                          "restored a strictly better historical checkpoint; "
                          f"{_stage_improvement_text(stages[i].goal, None, stage_best_evaluation[i])}")
     if progress and not summary_only:
+        for i, stage in enumerate(stages):
+            progress(f"[auto:user-splice:physics] {stage.name!r}: "
+                     f"simulate-enemies={str(stage_levels[i].simulate_enemies).lower()} "
+                     "(Auto, Local, and stage verification)")
         if len(current) > len(source):
             progress(f"[auto:user-splice] appended {len(current) - len(source)} "
                      f"neutral search frame(s) through frame {len(current) - 1}; "
@@ -879,12 +902,12 @@ def optimise_user_splices(
                             return None
                         return original_endpoints[through - 1].evaluate(candidate).objective_key
                     found, used, calls = _search_stage(
-                        level, branch, stage, stage_config, rng,
+                        stage_levels[index], branch, stage, stage_config, rng,
                         stage_rank=admissible_rank, progress=progress,
                         candidate_callback=live_candidate)
                 else:
                     found, used, calls = _search_stage(
-                        level, branch, stage, stage_config, rng,
+                        stage_levels[index], branch, stage, stage_config, rng,
                         candidate_callback=live_candidate)
                 attempts += calls
                 evaluations += used
