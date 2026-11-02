@@ -96,7 +96,7 @@ top-results = 10
 
 [multi-splicer]
 search = "both"
-# iterations = 10000
+iterations = 10000
 auto-stagnation-rounds = 5
 local-stagnation-rounds = 20
 lookback = 2
