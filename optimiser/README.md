@@ -90,6 +90,7 @@ campaigns. See `docs/CONFIGURATION.md`.
 
 - Python **3.11 or newer**.
 - On Debian, the following packages are required to build the optimiser: python3-setuptools, python3-dev and gcc.
+- Building the native engine also requires Cython (`python3 -m pip install "Cython>=3.2.4,<4"`). The generated C is not stored in Git.
 - No third-party Python packages are required to run the optimiser.
 - Auto, Local and jump-pattern require the bundled native extension to be
   built with a C11 compiler and Python development headers. Fixed-replay tools
@@ -449,8 +450,12 @@ compare both using identical seeds and simulation budgets. Increasing width
 increases the memory used for saved native states.
 
 Rebuild the native module after switching versions (`python build_native.py`).
-The generated `native/_nv14_native.c` is committed alongside its `.pyx`
-source so a build does not require Cython.
+`build_native.py` automatically regenerates `native/_nv14_native.c` from
+`native/_nv14_native.pyx` when missing or stale; the generated C is ignored by
+Git. Builds are incremental by default (`python build_native.py`); use
+`python build_native.py --force` for a full native rebuild or
+`python build_native.py --force-cython` to regenerate the C wrapper explicitly.
+The old `--no-force` option remains accepted for compatibility.
 
 The total nominal macro budget for a bounded campaign is
 `iterations * workers * auto-runs`. Local repair simulations are reported

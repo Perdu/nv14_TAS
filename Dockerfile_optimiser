@@ -1,7 +1,7 @@
 FROM libtas_n
 
 # recording tool + git for github action
-  RUN apt-get update && apt-get install -y python3-setuptools python3-dev gcc
+  RUN apt-get update && apt-get install -y python3-setuptools python3-dev gcc cython3
 
 RUN groupadd -g 1000 user && \
     useradd -m -u 1000 -g 1000 -s /bin/bash user

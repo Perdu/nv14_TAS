@@ -20,6 +20,7 @@ import tempfile
 
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
+from Cython.Build import cythonize
 
 
 def _repair_missing_configured_compiler() -> None:
@@ -136,7 +137,7 @@ native_core_depends = [
 native_extension = Extension(
     "_nv14_native",
     sources=[
-        "native/_nv14_native.c",
+        "native/_nv14_native.pyx",
         "native/nv14_auto.c",
         "native/nv14_patch.c",
         "native/nv14_search.c",
@@ -168,6 +169,9 @@ render_extension = Extension(
 
 
 setup(
-    ext_modules=[native_extension, render_extension],
+    ext_modules=[
+        *cythonize([native_extension], compiler_directives={"language_level": 3}),
+        render_extension,
+    ],
     cmdclass={"build_ext": StrictFloatingPointBuildExt},
 )

@@ -6,7 +6,8 @@ recursive-include docs *.md *.json
 recursive-include examples *.txt *.toml
 recursive-include tests *.py *.txt *.csv
 recursive-include tools *.py
-include native/_nv14_native.c
+# The C wrapper is generated at build time from the included .pyx source.
+exclude native/_nv14_native.c
 include native/_nv14_native.pyx
 include native/nv14_auto.c
 include native/nv14_auto.h

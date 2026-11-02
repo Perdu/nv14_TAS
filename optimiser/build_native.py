@@ -14,6 +14,30 @@ import sys
 ROOT = Path(__file__).resolve().parent
 
 
+def _regenerate_cython_source(*, force: bool = False) -> None:
+    """Produce the untracked C wrapper when its Cython source has changed."""
+    source = ROOT / "native" / "_nv14_native.pyx"
+    generated = source.with_suffix(".c")
+    if (
+        not force
+        and generated.is_file()
+        and generated.stat().st_mtime_ns >= source.stat().st_mtime_ns
+    ):
+        return
+
+    command = [
+        sys.executable, "-m", "cython", "-3", "-o",
+        str(generated), str(source),
+    ]
+    try:
+        subprocess.run(command, cwd=ROOT, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(
+            "Cython regeneration failed. Install the build dependency with "
+            "'python -m pip install Cython>=3.2.4' and retry."
+        ) from exc
+
+
 def _extension_candidates(module_name: str) -> tuple[Path, ...]:
     return tuple(
         ROOT / f"{module_name}{suffix}"
@@ -54,21 +78,33 @@ def main() -> None:
         action="store_true",
         help="report the current backend without compiling",
     )
-    parser.add_argument(
+    rebuild = parser.add_mutually_exclusive_group()
+    rebuild.add_argument(
+        "--force",
+        action="store_true",
+        help="force a full native rebuild (incremental builds are the default)",
+    )
+    rebuild.add_argument(
         "--no-force",
         action="store_true",
-        help="allow setuptools to reuse an up-to-date object file",
+        help="legacy alias for the default incremental-build behavior",
+    )
+    parser.add_argument(
+        "--force-cython",
+        action="store_true",
+        help="regenerate the Cython C wrapper even when it looks up to date",
     )
     args = parser.parse_args()
 
     if not args.check:
+        _regenerate_cython_source(force=args.force_cython)
         candidates = tuple(path for name in ("_nv14_native", "_nv14_render_native")
                            for path in _extension_candidates(name))
         before = {
             path: path.stat().st_mtime_ns for path in candidates if path.is_file()
         }
         command = [sys.executable, "setup.py", "build_ext", "--inplace"]
-        if not args.no_force:
+        if args.force:
             command.append("--force")
         environment = os.environ.copy()
         # Some embedded Python distributions retain the compiler used to
@@ -92,7 +128,7 @@ def main() -> None:
                 raise SystemExit(
                     f"native build did not produce the required {name} extension"
                 )
-            if not args.no_force and all(
+            if args.force and all(
                     path in before and before[path] == after[path]
                     for path in module_candidates if path in after):
                 raise SystemExit(f"native build did not refresh required extension: {name}")
