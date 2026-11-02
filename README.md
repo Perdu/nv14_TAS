@@ -346,4 +346,4 @@ Jumping gives slightly more speed than running. As I was not aware that this kin
 - 5: manual TAS optimized by the optimizer
 - 5.5: manually run optimizer that still requires more work
 - 6: manually run optimizer (cross-splice etc.)
-- 6.5: bruteforced using the multi-splicer
+- 7: bruteforced using the multi-splicer
