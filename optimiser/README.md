@@ -1415,6 +1415,10 @@ files = ["203", "408", "switch", "end"]
 # Optional: allow the next splice to reuse seeds from n-1, n-2, n-3, etc.
 lookback = 3
 save-frontier = 64          # persist alternatives; does NOT increase search seeds
+# Multi-worker splicing coalesces live best updates (up to ~30 s per worker)
+# and saves the diverse frontier at stage boundaries. This avoids serial
+# validation and disk writes stalling active search workers. Backend round
+# checkpoints still protect completed rounds from Ctrl+C.
 # `frontier = 3` in the shared configuration still controls actual searches.
 ```
 

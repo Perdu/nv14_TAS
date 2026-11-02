@@ -91,6 +91,7 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                 config=replace(config, search_backend=backend),
                 iterations=iterations, rounds=config.splice_rounds,
                 seed=rng.getrandbits(63), include_partial=True,
+                live_update_interval=30.0 if config.workers > 1 else 0.75,
                 **({"best_callback": candidate_callback} if candidate_callback else {}))
         except ValueError as exc:
             if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
@@ -192,8 +193,17 @@ def _search_stage_backend_phases(
                                "search_seed": encode_complex_replay(search_seed),
                                "cycle_improved": cycle_improved})
 
+            last_live_check = float("-inf")
             def on_live_best(frames: tuple[InputFrame, ...], frame: int) -> None:
-                nonlocal incumbent, best_rank, phase_improved, cycle_improved
+                nonlocal incumbent, best_rank, phase_improved, cycle_improved, last_live_check
+                # Parent-side checks of all earlier named goals are expensive.
+                # In a multi-worker run, process at most one live candidate per
+                # interval. The backend's final winner/frontier is still
+                # processed in full after the phase, without being dropped.
+                now = time.monotonic()
+                if config.workers > 1 and now - last_live_check < 30.0:
+                    return
+                last_live_check = now
                 candidate = tuple(frames)
                 merged.setdefault(candidate, frame)
                 # A backend improvement is not necessarily admissible at this
@@ -215,6 +225,7 @@ def _search_stage_backend_phases(
                     iterations=iterations, rounds=0,
                     stagnation_rounds=patience,
                     seed=seed, include_partial=True,
+                    live_update_interval=30.0 if config.workers > 1 else 0.75,
                     best_callback=on_live_best if candidate_callback is not None else None,
                     **({"checkpoint_path": checkpoint, "resume": bool(start_backend)}
                        if checkpoint else {}))
@@ -314,6 +325,7 @@ def _search_stage_until_stagnant(
                     config=replace(config, search_backend=backend),
                     iterations=iterations, rounds=config.splice_rounds,
                     seed=rng.getrandbits(63), include_partial=True,
+                    live_update_interval=30.0 if config.workers > 1 else 0.75,
                     **({"best_callback": candidate_callback} if candidate_callback else {}))
             except ValueError as exc:
                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
@@ -1041,27 +1053,32 @@ def optimise_user_splices(
                              f"{allocation}")
                 def accept_stage_candidate(candidate: tuple[InputFrame, ...]) -> None:
                     nonlocal current, best_output, best_rank, improvements, improved, temp_gains
-                    # Validate in the same way as the post-search frontier.
-                    # Native backend callbacks can arrive before the phase
-                    # ends, so stage checkpoints are now durable immediately.
-                    if not valid_stages(candidate, index + 1):
-                        return
-                    normalized = tuple(editable_frames(decode_complex_replay(
-                        encode_complex_replay(candidate)).frames))
-                    if not valid_stages(normalized, index + 1):
+                    # Verify promising live candidates without making every
+                    # worker wait for repeated stage/archive simulations.
+                    # The encode/decode round trip only rebuilds trigger bits;
+                    # editable_frames drops them again. Normalise directly and
+                    # validate each previous goal only once per candidate.
+                    normalized = tuple(editable_frames(candidate))
+                    if normalized in eligible:
+                        # Duplicate live notifications and returned winners are
+                        # common; their verified stage score cannot change.
                         return
                     evaluation = original_endpoints[index].evaluate(normalized)
+                    if not evaluation.feasible or not all(
+                        endpoint.evaluate(normalized).feasible
+                        for endpoint in original_endpoints[:index]
+                    ):
+                        return
                     rank = evaluation.objective_key
-                    if normalized not in eligible or rank < eligible[normalized]:
-                        eligible[normalized] = rank
-                        if len(eligible) % 32 == 0:
-                            # Persist broad route diversity periodically, not
-                            # after every native proposal (which would trigger
-                            # thousands of redundant physical re-evaluations).
-                            publish_frontier(index, tuple(sorted(
-                                eligible, key=eligible.__getitem__)[:config.save_frontier]))
-                    candidate_final = (final_rank(normalized)
-                                       if index == len(stages) - 1 else None)
+                    eligible[normalized] = rank
+                    # Frontier archives are persistence, not the active search
+                    # population. Flush them at stage boundaries instead of
+                    # repeatedly simulating 64 routes while workers wait.
+                    candidate_final = (
+                        final_rank(normalized)
+                        if index == len(stages) - 1 and
+                        (best_rank is None or rank <= best_rank[0]) else None
+                    )
                     is_final_gain = (candidate_final is not None
                                      and (best_rank is None
                                           or candidate_final[0] < best_rank))
@@ -1077,8 +1094,6 @@ def optimise_user_splices(
                         temp_gains += 1
                         if stage_best_callback:
                             stage_best_callback(stage.name, exported)
-                        publish_frontier(index, tuple(sorted(
-                            eligible, key=eligible.__getitem__)[:config.save_frontier]))
                         if progress and not is_final_gain:
                             label = ("first feasible" if old_stage_rank is None
                                      else "new stage best")
@@ -1101,7 +1116,13 @@ def optimise_user_splices(
                                      f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}; "
                                      "saved")
 
+                last_live_accept = float("-inf")
                 def live_candidate(candidate: tuple[InputFrame, ...], frame: int) -> None:
+                    nonlocal last_live_accept
+                    now = time.monotonic()
+                    if stage_config.workers > 1 and now - last_live_accept < 30.0:
+                        return
+                    last_live_accept = now
                     accept_stage_candidate(candidate)
 
                 def save_phase(state: dict[str, object]) -> None:

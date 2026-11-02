@@ -1102,6 +1102,7 @@ def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpoin
     frontier_limit = payload[7] if len(payload) > 7 else 0
     initial_population = payload[8] if len(payload) > 8 else ()
     shared_best = payload[9] if len(payload) > 9 else None
+    best_update_interval = payload[10] if len(payload) > 10 else 0.75
     survivor_batches: list[tuple[AutoEndpointCandidate, ...]] = []
     from nv14_engine import parse_level_string
     local_level = parse_level_string(level_string, simulate_enemies=simulate_enemies)
@@ -1111,7 +1112,10 @@ def _endpoint_worker(payload: tuple) -> tuple[AutoEndpointCandidate, AutoEndpoin
     def send(candidate: AutoEndpointCandidate) -> None:
         nonlocal last_sent
         now = time.monotonic()
-        if updates is not None and now - last_sent >= 0.75:
+        # Multi-splicer verification can be much slower than worker search.
+        # Coalesce interim best notifications; every worker still returns its
+        # actual winner at round completion, so no search result is discarded.
+        if updates is not None and now - last_sent >= best_update_interval:
             updates.put(candidate)
             last_sent = now
 
@@ -1263,6 +1267,7 @@ def optimise_auto_endpoint_campaign(
     stagnation_rounds: int = 0,
     checkpoint_path: str | Path | None = None,
     resume: bool = False,
+    best_update_interval: float = 0.75,
 ) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Run seeded Auto-style endpoint beams in independent processes.
 
@@ -1270,6 +1275,9 @@ def optimise_auto_endpoint_campaign(
     from every worker, rather than restarting only from the global best.
     Incomplete endpoints never enter the complete-run coordinator.
     """
+    if (not isinstance(best_update_interval, (int, float))
+            or not math.isfinite(best_update_interval) or best_update_interval < 0):
+        raise ValueError("best_update_interval must be a nonnegative finite number")
     if workers < 1 or type(runs) is not int or runs < 0:
         raise ValueError("endpoint workers must be positive and runs nonnegative")
     if type(stagnation_rounds) is not int or stagnation_rounds < 0:
@@ -1298,6 +1306,30 @@ def optimise_auto_endpoint_campaign(
     worker_frontier_limit = max(export_limit, carry_limit)
     round_donors: dict[bytes, AutoEndpointCandidate] = {}
     round_improved = False
+    # Worker survivors are *proposals*, never trusted completed checkpoints.
+    # Verify only the short list selected for inheritance/export. Replaying
+    # every worker's donors on the coordinator each short splice round kept
+    # the coordinator busy while search workers waited for the next round.
+    verified_survivors: dict[bytes, AutoEndpointCandidate] = {}
+
+    def verified_survivor(candidate: AutoEndpointCandidate) -> AutoEndpointCandidate:
+        identity = _key(candidate.frames)
+        previous = verified_survivors.get(identity)
+        if previous is not None:
+            if (previous.evaluation.objective_key != candidate.evaluation.objective_key
+                    or previous.evaluation.state_key != candidate.evaluation.state_key
+                    or previous.evaluation.feasible != candidate.evaluation.feasible):
+                raise ValueError("worker survivor disagrees with previously verified physics")
+            return previous
+        checked = verify_endpoint(level, candidate.frames, goal,
+                                  expected=candidate.evaluation)
+        result = AutoEndpointCandidate(candidate.frames, checked, candidate.complete)
+        # Bound the cache independently of an unlimited stagnation campaign.
+        if len(verified_survivors) >= 256:
+            verified_survivors.clear()
+        verified_survivors[identity] = result
+        return result
+
     stagnant = 0
     round_label = str(runs) if runs else "until stagnant"
     checkpoint_file = Path(checkpoint_path) if checkpoint_path is not None else None
@@ -1349,17 +1381,15 @@ def optimise_auto_endpoint_campaign(
             identity = _key(candidate.frames)
             if identity == _key(initial):
                 continue
-            # Re-score in the parent: non-feasible states are NEVER sent to
-            # the checkpoint publisher, but still must agree with native
-            # physics before they can become splice donors.
-            checked = verify_endpoint(level, candidate.frames, goal,
-                                      expected=candidate.evaluation)
-            checked_candidate = AutoEndpointCandidate(candidate.frames, checked,
-                                                       candidate.complete)
+            # Stage an untrusted worker candidate. The bounded survivors and
+            # inherited population are independently verified *after* niche
+            # selection, before any candidate crosses into the next round or
+            # the caller. Verifying all workers' rejected candidates here is
+            # prohibitively expensive for small multi-splicer search rounds.
             if export_limit:
-                survivors[identity] = checked_candidate
+                survivors[identity] = candidate
             if carry_limit:
-                round_donors[identity] = checked_candidate
+                round_donors[identity] = candidate
         # Keep the optional cross-campaign export pool bounded too.
         if export_limit and len(survivors) > export_limit * 2:
             ranked = sorted(_ranked_candidate(c, _key(initial), identity)
@@ -1402,7 +1432,13 @@ def optimise_auto_endpoint_campaign(
         nonlocal best, round_improved
         if candidate is None:
             return False
-        # Revalidate the cross-process result independently in the parent.
+        # Discard dominated worker winners before a second, full reference
+        # simulation. They can never trigger a best callback or checkpoint.
+        if not candidate.evaluation.feasible:
+            raise ValueError("worker supplied an infeasible endpoint")
+        if best is not None and candidate.evaluation.objective_key >= best.evaluation.objective_key:
+            return False
+        # Revalidate every potentially publishable winner independently.
         checked = verify_endpoint(level, candidate.frames, goal, expected=candidate.evaluation)
         if not checked.feasible:
             raise ValueError("worker supplied an infeasible endpoint")
@@ -1513,7 +1549,8 @@ def optimise_auto_endpoint_campaign(
                     (source_string, level.simulate_enemies, current, goal,
                      replace(config, seed=config.seed + round_index * 1000003
                              + worker_index * 104729), updates, worker_index,
-                     worker_frontier_limit, inherited_population, shared_best)
+                     worker_frontier_limit, inherited_population, shared_best,
+                     best_update_interval)
                     for worker_index in range(workers)
                 ]
                 futures = {pool.submit(_endpoint_worker, task): index
@@ -1621,7 +1658,8 @@ def optimise_auto_endpoint_campaign(
                                 for key, c in carry.items()
                                 if not c.evaluation.dead)
                 chosen = _select_ranked_endpoint_beam(ranked, config.beam_width)
-                inherited_population = tuple(entry.candidate for entry in chosen)
+                inherited_population = tuple(verified_survivor(entry.candidate)
+                                             for entry in chosen)
             stagnant = 0 if round_improved else stagnant + 1
             if checkpoint_file is not None:
                 _write_auto_round(checkpoint_file, identity, inherited_population,
@@ -1648,5 +1686,6 @@ def optimise_auto_endpoint_campaign(
         ranked = sorted(_ranked_candidate(c, _key(initial), identity)
                         for identity, c in survivors.items())
         chosen = _select_ranked_endpoint_beam(ranked, export_limit)
-        frontier_callback(tuple(entry.candidate for entry in chosen))
+        frontier_callback(tuple(verified_survivor(entry.candidate)
+                                for entry in chosen))
     return baseline, best, total

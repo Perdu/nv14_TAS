@@ -518,7 +518,8 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
                   editable_end: int | None = None, include_partial: bool = False,
                   stagnation_rounds: int | None = None,
                   best_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
-                  checkpoint_path: str | Path | None = None, resume: bool = False):
+                  checkpoint_path: str | Path | None = None, resume: bool = False,
+                  live_update_interval: float = 0.75):
     # With a backend-specific patience, a single uninterrupted search owns
     # its evolving population and applies stagnation after each *real* round.
     if stagnation_rounds is not None and (
@@ -562,6 +563,7 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
                                 else max(6, config.frontier * 3)), config.beam),
             stagnation_rounds=stagnation_rounds or 0,
             checkpoint_path=checkpoint_path, resume=resume,
+            best_update_interval=live_update_interval,
             best_callback=(lambda candidate: best_callback(candidate.frames, candidate.evaluation.frame))
             if best_callback is not None else None,
         )
