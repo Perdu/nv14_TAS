@@ -53,7 +53,7 @@ refinement-chain-steps = 32
 # direction-simplify: remove short reversals; boundary-shift: move a direction change;
 # jump-rewrite: shift/remove jump pulses; passage-rewrite: change direction between jumps;
 # state-crossover: splice donor routes where player physics states nearly match (costly).
-mutations = "low"
+mutations = "high"
 
 [local]
 local-inputs = "direction"
