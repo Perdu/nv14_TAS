@@ -193,6 +193,35 @@ def test_explicit_rounds_use_full_budget_without_default_stagnation():
     assert (continuous.rounds, continuous.stagnation_rounds) == (0, 20)
 
 
+def test_stagnation_alone_removes_implicit_one_round_cap():
+    for options in (("--stagnation-rounds", "50"), ("--stagnation-rounds=50",)):
+        args = parse("--search", "population", *options)
+        assert (args.rounds, args.stagnation_rounds) == (0, 50)
+        assert (args._mode_configs.local.rounds,
+                args._mode_configs.local.stagnation_rounds) == (0, 50)
+    # Disabling stagnation alone must not inadvertently run forever.
+    local = parse("--search", "population", "--stagnation-rounds", "0")._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (1, 0)
+
+
+def test_stagnation_toml_alone_is_unlimited_and_cli_precedence(tmp_path):
+    config = tmp_path / "local.toml"
+    config.write_text('[local]\nsearch = "population"\nstagnation-rounds = 50\n')
+    local = parse("--config", str(config))._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (0, 50)
+    local = parse("--config", str(config), "--rounds", "7")._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (7, 0)
+    config.write_text('[local]\nsearch = "population"\nrounds = 7\n')
+    local = parse("--config", str(config), "--stagnation-rounds", "50")._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (0, 50)
+    config.write_text('[local]\nsearch = "population"\nrounds = 7\nstagnation-rounds = 50\n')
+    local = parse("--config", str(config))._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (7, 50)
+    local = parse("--config", str(config), "--rounds", "3",
+                  "--stagnation-rounds", "50")._mode_configs.local
+    assert (local.rounds, local.stagnation_rounds) == (3, 50)
+
+
 def test_stagnation_limit_remains_available_when_explicitly_requested():
     local = parse("--search", "population", "--rounds", "500",
                   "--stagnation-rounds", "7")._mode_configs.local

@@ -1959,14 +1959,24 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
                     if len(matches) == 1:
                         explicit.update(matches)
                         cli_explicit.update(matches)
-        # An explicit finite round count is a requested search budget, not
-        # merely a ceiling silently truncated by the default 20-round
-        # stagnation limit.  Keep stagnation stopping for --rounds 0, or when
-        # a limit is explicitly selected at the same configuration level.
-        if mode == "local" and result.search == "population" and result.rounds > 0:
-            if ("rounds" in cli_explicit and "stagnation_rounds" not in cli_explicit
-                    or "rounds" in defaults and "rounds" not in cli_explicit
-                    and "stagnation_rounds" not in defaults):
+        # A requested stagnation stop must not silently inherit the default
+        # one-round cap.  A CLI stagnation limit overrides TOML rounds; an
+        # explicit --rounds still caps the run when both CLI flags are given.
+        # The same rule applies to a TOML-only stagnation limit without rounds.
+        if mode == "local" and result.search == "population":
+            if result.stagnation_rounds > 0 and (
+                ("stagnation_rounds" in cli_explicit and "rounds" not in cli_explicit)
+                or ("stagnation_rounds" in defaults and "rounds" not in defaults
+                    and "rounds" not in cli_explicit)
+            ):
+                result.rounds = 0
+            # An explicitly requested finite round count uses its full budget
+            # unless stagnation is also explicitly selected at that level.
+            elif result.rounds > 0 and (
+                ("rounds" in cli_explicit and "stagnation_rounds" not in cli_explicit)
+                or ("rounds" in defaults and "rounds" not in cli_explicit
+                    and "stagnation_rounds" not in defaults)
+            ):
                 result.stagnation_rounds = 0
         if mode == "auto" and result.auto_splice_files:
             # A named file list is sufficient to activate the integrated

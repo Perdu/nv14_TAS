@@ -320,13 +320,16 @@ the file in the usual way. The input filename remains positional.
 | `--iterations N` | `iterations` | `10000` | Proposal budget per worker per round, including repair proposals. |
 | `--beam N` | `beam` | `32` | Bound on retained candidates per search beam; must be at least top-results. |
 | `--rounds N` | `rounds` | `1` | Total round limit; zero removes the round limit. Explicitly requesting a positive N disables *implicit* stagnation stopping so the search can use all N rounds. |
-| `--stagnation-rounds N` | `stagnation_rounds` | `20` | Stop after N rounds without a better feasible primary objective or a secondary gain at tied arrival time. Edit-only gains do not reset it. Zero disables this limit. The default 20 only applies when a finite round count was not explicitly requested. Explicitly supplying both limits enables both stopping conditions. Both stop limits zero runs until Ctrl+C. |
+| `--stagnation-rounds N` | `stagnation_rounds` | `20` | Stop after N rounds without a better feasible primary objective or a secondary gain at tied arrival time. Edit-only gains do not reset it. Zero disables this limit. Explicitly setting a positive stagnation limit without `rounds` removes the implicit one-round cap. Explicitly supplying both limits enables both stopping conditions. Both stop limits zero runs until Ctrl+C. |
 
-If `--rounds 500` appears on the command line, it takes precedence over the
-stagnation limit loaded from TOML unless `--stagnation-rounds` is **also**
-provided on the command line. In TOML alone, setting `rounds = 500` disables
-the default stagnation limit, but an explicit `stagnation_rounds = 20` still
-activates early stopping. The startup line displays both effective limits.
+`--stagnation-rounds 50` by itself means **unlimited total rounds**, stopping
+after 50 consecutive non-improving rounds. The equivalent TOML setting is
+`stagnation_rounds = 50` with no `rounds` key. Setting `--rounds 500` alone
+instead uses the full 500-round budget (default stagnation stopping disabled).
+Supplying both CLI flags activates both limits. A CLI `--rounds` overrides a
+TOML stagnation limit, and a CLI `--stagnation-rounds` overrides a TOML round
+limit. If both are explicit in TOML, both apply. The startup line displays
+both effective limits.
 
 | `--repair-steps N` | `repair_steps` | `64` | Maximum proposals in a bounded refinement/repair attempt; zero disables it. |
 | `--repair-lookback N` | `repair_lookback` | `32` | Maximum backward repair reach, clipped to mutable frames. |
