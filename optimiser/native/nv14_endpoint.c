@@ -1,6 +1,7 @@
 #include "nv14_endpoint.h"
 #include "nv14_internal.h"
 #include "nv14_objects_basic.h"
+#include "nv14_objects_drones.h"
 
 #include <float.h>
 #include <math.h>
@@ -90,11 +91,14 @@ nv14_status nv14_endpoint_scan(
     uint8_t *previous = NULL, *events = NULL;
     endpoint_rank best_rank = {0};
     nv14_endpoint_jump jump = {-1, 0.0, 0.0};
+    int64_t *seen_drones = NULL;
+    nv14_drone_snapshot *before = NULL;
     nv14_error error = {0};
     nv14_status status = NV14_STATUS_OK;
     int ambiguous = 0, overflow = 0;
     if (!p || !prefix || !out || !inputs || p->target_frame >= input_count ||
-        prefix->frame > p->target_frame + 1 || (p->target_count && !out->events))
+        prefix->frame > p->target_frame + 1 || (p->target_count && !out->events) ||
+        (p->required_drone_count && (!out->drone_frames || !p->required_drones)))
         return NV14_STATUS_INVALID_ARGUMENT;
     if (p->has_jump_region) jump = p->prefix_jump;
     out->jump = jump;
@@ -108,6 +112,13 @@ nv14_status nv14_endpoint_scan(
         for (size_t i = 0; i < p->target_count; ++i)
             previous[i] = (uint8_t)satisfied(prefix, &p->targets[i], 1);
     }
+    if (p->required_drone_count) {
+        seen_drones = malloc(p->required_drone_count * sizeof(*seen_drones));
+        before = calloc(p->required_drone_count, sizeof(*before));
+        if (!seen_drones || !before) { status = NV14_STATUS_OUT_OF_MEMORY; goto done; }
+        for (size_t i = 0; i < p->required_drone_count; ++i)
+            out->drone_frames[i] = seen_drones[i] = -1;
+    }
     state = nv14_state_clone(prefix, &error);
     if (!state) { status = error.code; goto done; }
     for (size_t frame = (size_t)state->frame; frame <= p->target_frame && !state->player.dead; ++frame) {
@@ -119,7 +130,28 @@ nv14_status nv14_endpoint_scan(
         nv14_input input = {code & 1, (code >> 1) & 1, (code >> 2) & 1,
                             (int8_t)((code & 16) ? -1 : ((code >> 3) & 1))};
         nv14_step_result step;
+        /* Cache only the two scalar detection signals for unsatisfied drones.
+           The source drone's targeting thinker can run inside this tick. */
+        if (seen_drones && frame >= p->drone_start && frame <= p->drone_end) {
+            for (size_t i = 0; i < p->required_drone_count; ++i) {
+                if (seen_drones[i] >= 0) continue;
+                status = nv14_objects_drones_snapshot(state, p->required_drones[i], &before[i]);
+                if (status != NV14_STATUS_OK) goto done;
+            }
+        }
         status = nv14_state_step(state, input, &step);
+        if (status == NV14_STATUS_OK && before &&
+            frame >= p->drone_start && frame <= p->drone_end) {
+            for (size_t i = 0; i < p->required_drone_count; ++i) {
+                nv14_drone_snapshot after;
+                if (seen_drones[i] >= 0) continue;
+                status = nv14_objects_drones_snapshot(state, p->required_drones[i], &after);
+                if (status != NV14_STATUS_OK) break;
+                if ((before[i].mode == 0 && after.mode == 1) ||
+                    (!before[i].is_chasing && after.is_chasing))
+                    seen_drones[i] = (int64_t)frame;
+            }
+        }
         if (status != NV14_STATUS_OK) goto done;
         if (step.unsupported) { status = NV14_STATUS_UNSUPPORTED_OBJECTS; goto done; }
         /* Track before endpoint eligibility filtering, including fixed-frame goals. */
@@ -162,6 +194,12 @@ nv14_status nv14_endpoint_scan(
         rank.exhausted = (p->target_count && !rank.events && !rank.pending) ||
                          (missing_jump && frame >= p->jump_end);
         rank.missing += missing_jump;
+        for (size_t i = 0; i < p->required_drone_count; ++i) {
+            if (seen_drones[i] < 0) {
+                ++rank.missing;
+                if (frame >= p->drone_end) rank.exhausted = 1;
+            }
+        }
         if (!p->target_count || rank.events) target_distance = 0.0;
         double missing_distance = 0.0;
         for (size_t i = 0; i < p->required_count; ++i) {
@@ -233,13 +271,19 @@ nv14_status nv14_endpoint_scan(
             out->jump = jump;
             out->eligible = 1;
             if (p->target_count) memcpy(out->events, events, p->target_count);
+            if (seen_drones)
+                memcpy(out->drone_frames, seen_drones, p->required_drone_count * sizeof(*seen_drones));
         }
         if (feasible) { ambiguous = 0; break; }
     }
     out->terminal_frame = (int64_t)state->frame - 1;
     out->terminal_dead = state->player.dead;
     out->needs_reference = (uint8_t)(ambiguous || overflow);
-    if (!best) { best = state; state = NULL; out->jump = jump; }
+    if (!best) {
+        best = state; state = NULL; out->jump = jump;
+        if (seen_drones)
+            memcpy(out->drone_frames, seen_drones, p->required_drone_count * sizeof(*seen_drones));
+    }
     out->state = best;
     best = NULL;
 done:
@@ -247,5 +291,7 @@ done:
     nv14_state_destroy(best);
     free(previous);
     free(events);
+    free(seen_drones);
+    free(before);
     return status;
 }

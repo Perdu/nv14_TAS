@@ -4213,12 +4213,15 @@ cdef extern from "nv14_endpoint.h":
         double jump_region[4]
         size_t jump_start, jump_end
         nv14_endpoint_jump prefix_jump
+        uint32_t *required_drones
+        size_t required_drone_count, drone_start, drone_end
     ctypedef struct nv14_endpoint_result:
         nv14_state *state
         uint8_t *events
         int64_t terminal_frame
         uint8_t terminal_dead, eligible, needs_reference
         nv14_endpoint_jump jump
+        int64_t *drone_frames
         double pre_x, pre_y
         uint8_t has_pre_position
     nv14_status nv14_endpoint_scan(
@@ -4450,7 +4453,8 @@ cdef class NativeEndpointPlan:
 
     def __init__(self, *, target_frame, arrival_start=0, earliest=False,
                  windows, region=None, required=(), avoided=(), targets=(),
-                 jump_region=None, jump_frames=None):
+                 jump_region=None, jump_frames=None,
+                 required_drones=(), drone_frames=None):
         cdef Py_ssize_t i
         cdef size_t cursor = 0
         cdef nv14_endpoint_group *group
@@ -4490,6 +4494,23 @@ cdef class NativeEndpointPlan:
             _as_size(jump_frames[1], &self._plan.jump_end, "jump end")
             if self._plan.jump_start > self._plan.jump_end or self._plan.jump_end > self._plan.target_frame:
                 raise ValueError("jump frames must be ordered and within the deadline")
+        required_drones = tuple(required_drones)
+        if drone_frames is not None and not required_drones:
+            raise ValueError("drone detection frames require a drone")
+        if required_drones:
+            if drone_frames is None: drone_frames = (0, target_frame)
+            if len(drone_frames) != 2:
+                raise ValueError("drone detection frames need two bounds")
+            _as_size(drone_frames[0], &self._plan.drone_start, "drone start")
+            _as_size(drone_frames[1], &self._plan.drone_end, "drone end")
+            if self._plan.drone_start > self._plan.drone_end or self._plan.drone_end > self._plan.target_frame:
+                raise ValueError("drone detection frames outside endpoint")
+            self._plan.required_drone_count = len(required_drones)
+            self._plan.required_drones = <uint32_t *>_checked_alloc(len(required_drones), sizeof(uint32_t), "drone requirements")
+            for i in range(len(required_drones)):
+                if not isinstance(required_drones[i], int) or required_drones[i] < 0 or required_drones[i] > 0xffffffff:
+                    raise ValueError("invalid drone load index")
+                self._plan.required_drones[i] = required_drones[i]
         required = tuple(tuple(items) for items in required)
         avoided = tuple(tuple(items) for items in avoided)
         targets = tuple(targets)
@@ -4522,9 +4543,11 @@ cdef class NativeEndpointPlan:
         PyMem_Free(self._plan.required)
         PyMem_Free(self._plan.avoided)
         PyMem_Free(self._plan.targets)
+        PyMem_Free(self._plan.required_drones)
 
     def scan(self, NativeState prefix not None, bytes inputs not None,
-             jump_event=None, prefix_frames=None, with_pre_position=False):
+             jump_event=None, prefix_frames=None, with_pre_position=False,
+             with_drone_detection=False):
         cdef nv14_endpoint_plan plan = self._plan
         cdef nv14_endpoint_result result
         cdef nv14_status status
@@ -4555,6 +4578,8 @@ cdef class NativeEndpointPlan:
         for i in range(count):
             if data[i] > 31:
                 raise ValueError("invalid packed endpoint input")
+        if self._plan.required_drone_count:
+            result.drone_frames = <int64_t *>_checked_alloc(self._plan.required_drone_count, sizeof(int64_t), "drone events")
         if self._plan.target_count:
             result.events = <uint8_t *>_checked_alloc(self._plan.target_count, 1, "endpoint events")
         try:
@@ -4572,10 +4597,13 @@ cdef class NativeEndpointPlan:
                       None if result.jump.frame < 0 else (result.jump.frame, result.jump.x, result.jump.y),
                       bool(result.needs_reference))
             if with_pre_position:
-                # Opt-in return shape keeps existing native scan callers compatible.
-                return output + (((result.pre_x, result.pre_y),)
-                                 if result.has_pre_position else (None,))
+                output += (((result.pre_x, result.pre_y),)
+                           if result.has_pre_position else (None,))
+            if with_drone_detection:
+                output += (tuple(None if result.drone_frames[i] < 0 else result.drone_frames[i]
+                                 for i in range(self._plan.required_drone_count)),)
             return output
         finally:
             nv14_state_destroy(result.state)
             PyMem_Free(result.events)
+            PyMem_Free(result.drone_frames)

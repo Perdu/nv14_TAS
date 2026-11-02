@@ -36,6 +36,10 @@ typedef struct nv14_endpoint_plan {
     double jump_region[4];
     size_t jump_start, jump_end;
     nv14_endpoint_jump prefix_jump;
+    /* Each selected drone must transition to PREFIRE or begin chasing during
+       [drone_start,drone_end]. Indices are serialized level load indices. */
+    uint32_t *required_drones;
+    size_t required_drone_count, drone_start, drone_end;
 } nv14_endpoint_plan;
 
 typedef struct nv14_endpoint_result {
@@ -44,6 +48,7 @@ typedef struct nv14_endpoint_result {
     int64_t terminal_frame;
     uint8_t terminal_dead, eligible, needs_reference;
     nv14_endpoint_jump jump; /* history at the selected state, not the terminal state */
+    int64_t *drone_frames; /* caller allocated required_drone_count items, -1 means missing */
     /* Position immediately BEFORE the selected tick, exact native double. */
     double pre_x, pre_y;
     uint8_t has_pre_position;

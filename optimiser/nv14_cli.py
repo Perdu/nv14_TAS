@@ -184,6 +184,8 @@ class LocalConfig:
     require_jump_region: tuple[float, float, float, float] | None = None
     require_jump_frames: tuple[int, int] | None = None
     required_jumps: tuple[RequiredJump, ...] = ()
+    require_drone_detection: tuple[str, ...] = ()
+    require_drone_detection_frames: tuple[int, int] | None = None
     top_results: int = 1
     iterations: int = 10000
     beam: int = 32
@@ -392,6 +394,8 @@ class LocalConfig:
             require_jump_region=args.require_jump_region,
             require_jump_frames=args.require_jump_frames,
             required_jumps=tuple(args.require_jumps),
+            require_drone_detection=tuple(args.require_drone_detection),
+            require_drone_detection_frames=args.require_drone_detection_frames,
             top_results=args.top_results,
             iterations=args.iterations,
             beam=args.beam,
@@ -1186,6 +1190,15 @@ def parse_required_jump_frames(text: str) -> tuple[int, int]:
     return start, end
 
 
+def parse_drone_detection_frames(text: str) -> tuple[int, int]:
+    """Inclusive zero-based interval in which acquisition must begin."""
+    try:
+        return parse_required_jump_frames(text)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("require-drone-detection-frames must be START:END "
+                         "with ordered non-negative bounds") from exc
+
+
 def parse_required_jump_spec(value: object) -> RequiredJump:
     """Parse CLI REGION@FRAMES or a TOML {region=...,frames=...} table."""
     if isinstance(value, Mapping):
@@ -1320,6 +1333,7 @@ _CONFIG_APPEND_DESTS = frozenset(
     {"retime", "auto_parents", "require_interaction", "avoid_interaction",
      "auto_require_interaction", "auto_avoid_interaction",
      "require_jumps", "auto_require_jumps",
+     "require_drone_detection", "auto_require_drone_detection",
      "secondary_replays", "secondary_colors", "secondary_labels"}
 )
 _CONFIG_RESERVED_DESTS = frozenset({"config", "goal_config", "splice_config", "input", "mode"})
@@ -1447,7 +1461,7 @@ def _format_config_value_for_type(
         if len(value) != 4:
             raise ValueError("target-region arrays must contain XMIN, XMAX, YMIN, YMAX")
         return f"{value[0]}:{value[1]},{value[2]}:{value[3]}"
-    if action_type is parse_required_jump_frames:
+    if action_type in (parse_required_jump_frames, parse_drone_detection_frames):
         if len(value) != 2 or any(type(v) is not int for v in value):
             raise ValueError("require-jump-frames arrays must contain two integer bounds")
         return f"{value[0]}:{value[1]}"
@@ -1722,6 +1736,8 @@ _LOCAL_GOAL_TO_AUTO = {
     "require_jump_region": "auto_require_jump_region",
     "require_jump_frames": "auto_require_jump_frames",
     "require_jumps": "auto_require_jumps",
+    "require_drone_detection": "auto_require_drone_detection",
+    "require_drone_detection_frames": "auto_require_drone_detection_frames",
     "simulate_enemies": "simulate_enemies",
 }
 
@@ -1753,6 +1769,7 @@ _LOCAL_POPULATION_OPTIONS = frozenset({
     "repair_lookback", "mutation_span", "checkpoint", "resume", "top_results",
     "target_region", "arrival_start",
     "require_jump_region", "require_jump_frames", "require_jumps",
+    "require_drone_detection", "require_drone_detection_frames",
     "secondary_objective",
 })
 
@@ -1792,7 +1809,8 @@ _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
     "auto_arrival_start", "auto_secondary_objective", "auto_x_window", "auto_y_window",
     "auto_vx_window", "auto_vy_window", "auto_require_interaction", "auto_avoid_interaction",
     "auto_require_reference_interactions", "auto_require_jump_region",
-    "auto_require_jump_frames", "auto_require_jumps", "auto_completion_policy", "auto_mutation_span",
+    "auto_require_jump_frames", "auto_require_jumps",
+    "auto_require_drone_detection", "auto_require_drone_detection_frames", "auto_completion_policy", "auto_mutation_span",
 })
 
 
@@ -2515,6 +2533,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-require-jumps", "--require-jumps", modes=auto_modes,
                          action="append", type=parse_required_jump_spec, default=[],
                          metavar="REGION@START:END", help="repeatable required actual jump (also TOML require-jumps list)")
+    command.add_argument("--auto-require-drone-detection", "--require-drone-detection", modes=auto_modes,
+                         action="append", default=[], metavar="drone:INDEX",
+                         help="require the named drone to detect the player (repeatable)")
+    command.add_argument("--auto-require-drone-detection-frames", "--require-drone-detection-frames", modes=auto_modes,
+                         type=parse_drone_detection_frames, metavar="START:END",
+                         help="inclusive detection interval for all required drones")
     command.add_argument("--auto-completion-policy", modes=auto_modes,
                          choices=("checkpoint", "complete"), default="checkpoint",
                          help="endpoint search: allow a partial route or require a full verified finish")
@@ -2906,6 +2930,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--require-jumps", modes=local_modes, action="append",
                          type=parse_required_jump_spec, default=[], metavar="REGION@START:END",
                          help="population only: repeatable actual jump constraints (also TOML require-jumps list)")
+    command.add_argument("--require-drone-detection", modes=local_modes,
+                         action="append", default=[], metavar="drone:INDEX",
+                         help="population only: require named drone acquisition (repeatable)")
+    command.add_argument("--require-drone-detection-frames", modes=local_modes,
+                         type=parse_drone_detection_frames, metavar="START:END",
+                         help="population only: inclusive required detection interval")
     command.add_argument("--arrival-start", modes=local_modes, type=parse_nonnegative_int,
                          metavar="FRAME", help="first eligible arrival or interaction frame (default: first editable frame)")
     command.add_argument("--secondary-objective", modes=local_modes,
@@ -3548,6 +3578,8 @@ def _run_local_population(
             secondary_objective=config.secondary_objective,
             interaction_target=interaction_target,
             required_jumps=config.required_jumps,
+            required_drone_detections=_resolve_drone_detection(level, config.require_drone_detection),
+            require_drone_detection_frames=config.require_drone_detection_frames,
             require_jump_region=config.require_jump_region,
             require_jump_frames=(config.require_jump_frames or (ranges[0][0], target_frame))
             if config.require_jump_region is not None else None,
@@ -3692,6 +3724,35 @@ def _run_local_population(
         raise SystemExit(130)
 
 
+def _resolve_drone_detection(level, selectors: Sequence[str]) -> tuple[int, ...]:
+    """Resolve drone:N as the Nth type-6 object, not a native scene id."""
+    if not selectors:
+        return ()
+    if not getattr(level, "simulate_enemies", False):
+        raise ValueError("require-drone-detection needs simulate-enemies = true for this stage")
+    descriptors = (level.object_descriptors() if hasattr(level, "object_descriptors") else
+                   ({"object_type": spec.obj_type, "load_index": spec.load_index}
+                    for spec in level.all_specs))
+    drones = [int(item["load_index"]) for item in descriptors if item["object_type"] == 6]
+    result = []
+    for selector in selectors:
+        selector = selector.strip().lower()
+        if selector == "drone":
+            if len(drones) != 1:
+                raise ValueError("drone is ambiguous: use drone:N")
+            index = 0
+        elif selector.startswith("drone:") and selector[6:].isdigit():
+            index = int(selector[6:])
+        else:
+            raise ValueError(f"require-drone-detection needs a drone:N selector, got {selector!r}")
+        if index >= len(drones):
+            raise ValueError(f"drone:{index} does not exist (level has {len(drones)} drones)")
+        result.append(drones[index])
+    if len(result) != len(set(result)):
+        raise ValueError("require-drone-detection contains duplicate drones")
+    return tuple(result)
+
+
 def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
                             args: argparse.Namespace) -> tuple[EndpointGoal, int, int | None]:
     """Resolve Auto/--goal-config endpoint options identically for all searches."""
@@ -3742,6 +3803,8 @@ def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
         vx_window=args.auto_vx_window, vy_window=args.auto_vy_window,
         required_interactions=required, avoided_interactions=avoided,
         required_jumps=tuple(args.auto_require_jumps),
+        required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
+        require_drone_detection_frames=args.auto_require_drone_detection_frames,
         require_jump_region=args.auto_require_jump_region,
         require_jump_frames=(args.auto_require_jump_frames or (start, frame))
         if args.auto_require_jump_region is not None else None,
@@ -4467,6 +4530,8 @@ def main() -> None:
                 vx_window=args.auto_vx_window, vy_window=args.auto_vy_window,
                 required_interactions=required, avoided_interactions=avoided,
                 required_jumps=tuple(args.auto_require_jumps),
+                required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
+                require_drone_detection_frames=args.auto_require_drone_detection_frames,
                 require_jump_region=args.auto_require_jump_region,
                 require_jump_frames=(args.auto_require_jump_frames or (start, frame))
                 if args.auto_require_jump_region is not None else None,
