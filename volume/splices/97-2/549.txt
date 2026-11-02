@@ -8,3 +8,5 @@ target_region = "208:248,155:175"
 secondary_objective = "max-y"
 require-interaction = ["testdoor:0"]
 
+require-drone-detection = ["drone:0"]
+require-drone-detection-frames = "430:440"

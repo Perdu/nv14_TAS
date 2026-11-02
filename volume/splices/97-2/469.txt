@@ -2,9 +2,11 @@
 search = "population"
 target_frame = 469
 range = "345:469"
-simulate-enemies = false
+simulate-enemies = true
 objective = "earliest-arrival"
 target_region = "318:338,158:198"
 secondary_objective = "min-x"
 # require-interaction = ["testdoor:0"]
 
+require-drone-detection = ["drone:0"]
+require-drone-detection-frames = "430:440"
