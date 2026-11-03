@@ -23,6 +23,7 @@ from nv14_random_splice import (RandomSpliceConfig, _control_preserved,
                                 _local_search, _completed_rank)
 from nv14_auto import verify_trimmed_replay
 from nv14_replay import editable_frames, decode_complex_replay, encode_complex_replay
+from nv14_splice_merge import verified_suffix_grafts
 
 
 @dataclass(frozen=True)
@@ -567,6 +568,7 @@ def optimise_user_splices(
     start_at: str | None = None, stop_at: str | None = None,
     from_best: str | None = None,
     start_from_stage_bests: bool = False,
+    reference_frames: Sequence[InputFrame] | None = None,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
@@ -614,6 +616,12 @@ def optimise_user_splices(
     if first_stage > last_stage:
         raise ValueError("splice start must not be after splice stop")
     source = tuple(editable_frames(source_frames))
+    reference = (tuple(editable_frames(reference_frames))
+                 if reference_frames is not None else None)
+    if reference is not None:
+        reference_eval = evaluate_replay_with_sentinel(level, reference)
+        if not reference_eval.valid or reference_eval.finish_tick != len(reference):
+            raise ValueError("splice reference must be a verified completed replay")
     # Check canonical completion *before* materialising any neutral search
     # inputs. Otherwise a completed source looks incomplete merely because
     # the last named target-frame is later than its real finish tick.
@@ -724,6 +732,28 @@ def optimise_user_splices(
                      "completion; treating it as an obsolete search artifact, "
                      "not a barrier to a new run")
     improvements = attempts = evaluations = stagnant = 0
+
+    def accept_merged_completion(prefix, seam, label):
+        """Publish an improved reference suffix only after all named goals pass."""
+        nonlocal best_output, best_rank, improvements, current
+        if reference is None:
+            return
+        for joined in verified_suffix_grafts(
+                level, prefix, reference, seam_frame=seam,
+                lookback=config.lookback):
+            padded = _materialise_splice_tail(joined, len(current)-1)
+            scored = final_rank(padded)
+            if scored is None or (best_rank is not None and scored[0] >= best_rank):
+                continue
+            best_rank, best_output = scored
+            current = padded
+            improvements += 1
+            if best_callback:
+                best_callback(best_output)
+            if progress:
+                progress(f"[auto:user-splice:merge] {label}: verified reference "
+                         f"suffix propagated; complete at frame {len(best_output)}; saved")
+
     stage_best: list[tuple | None] = []
     stage_best_evaluation: list[EndpointEvaluation | None] = []
     for i, endpoint in enumerate(original_endpoints):
@@ -803,6 +833,7 @@ def optimise_user_splices(
                 "config": repr(config),
                 "from_best": from_best,
                 "start_from_stage_bests": start_from_stage_bests,
+                "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
                 "start_at": start_at, "stop_at": stop_at,
             }
             if any(resume_state.get(k) != value for k, value in wanted.items()):
@@ -1176,6 +1207,7 @@ def optimise_user_splices(
                                 "stage_settings": [repr(item) for item in stages],
                                 "config": repr(config), "from_best": from_best,
                                 "start_from_stage_bests": start_from_stage_bests,
+                                "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
                                 "start_at": start_at, "stop_at": stop_at,
                                 "round_no": round_no, "stage_index": index,
                                 "stage": stage.name,
@@ -1249,6 +1281,10 @@ def optimise_user_splices(
             publish_frontier(index, [candidate for candidate, _ in ordered[:config.save_frontier]])
             history = [selected, *history][:config.stage_lookback]
             history_origins = [index, *history_origins][:config.stage_lookback]
+            if reference is not None and selected:
+                # Use the best eligible checkpoint at this stage as a prefix;
+                # the reference supplies a known completed route suffix.
+                accept_merged_completion(selected[0], stage.end, stage.name)
         stagnant = 0 if improved else stagnant + 1
         if progress:
             progress(f"[auto:user-splice] round {round_no+1} complete in "

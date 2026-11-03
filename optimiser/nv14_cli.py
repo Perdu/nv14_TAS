@@ -2451,6 +2451,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="seed from the best saved LTM/TXT for NAME and, by default, "
                               "search from the next splice; preserve the current verified "
                               "run as the final-score baseline")
+    command.add_argument("--splice-reference", dest="auto_splice_reference",
+                         modes=auto_modes, type=Path, metavar="FILE",
+                         help="completed same-level replay to use as a reference suffix "
+                              "for verified merging of earlier gains")
     command.add_argument("--splice-each-best", dest="auto_splice_each_best",
                          modes=auto_modes, action="store_true",
                          help="also start every named splice from its own saved best checkpoint")
@@ -4335,6 +4339,26 @@ def main() -> None:
                             decode_complex_replay(saved_final.combined.replay_string).frames))
                         if args.auto_ls_splice:
                             summary_frames = saved_final_frames
+                reference_frames = None
+                if args.auto_splice_reference is not None and not args.auto_ls_splice:
+                    ref_path = args.auto_splice_reference
+                    try:
+                        ref_source = _load_source(
+                            ref_path, levels_file_path=source.levels_file_path,
+                            explicit_level_id=common_config.level_id,
+                            ltm_postroll=common_config.ltm_postroll)
+                        if ref_source.combined.level_string != combined.level_string:
+                            raise ValueError("reference replay is for a different level")
+                        reference_frames = tuple(editable_frames(decode_complex_replay(
+                            ref_source.combined.replay_string).frames))
+                    except (LtmError, OSError, ValueError) as exc:
+                        # Bare complex replay .txt files are also supported.
+                        if ref_path.suffix.lower() != '.txt':
+                            raise ValueError(f"cannot load splice reference {ref_path}: {exc}") from exc
+                        reference_frames = tuple(editable_frames(
+                            decode_complex_replay(ref_path.read_text(encoding='utf-8')).frames))
+                    print(f"[auto:user-splice:reference] loaded {ref_path}; "
+                          f"{len(reference_frames)} frames; full replay will be verified", flush=True)
                 resume_state_path = output_path.with_suffix(".splice-search.json")
                 resume_state = None
                 if not args.auto_ls_splice and resume_state_path.is_file():
@@ -4374,6 +4398,8 @@ def main() -> None:
                     "config": repr(splice_config),
                     "from_best": args.auto_splice_from_best,
                     "start_from_stage_bests": args.auto_splice_each_best,
+                    "reference_sha256": (hashlib.sha256(encode_complex_replay(reference_frames).encode()).hexdigest()
+                                          if reference_frames is not None else None),
                     "start_at": args.auto_splice_start,
                     "stop_at": args.auto_splice_stop,
                 }
@@ -4408,6 +4434,7 @@ def main() -> None:
                     start_at=args.auto_splice_start, stop_at=args.auto_splice_stop,
                     from_best=args.auto_splice_from_best,
                     start_from_stage_bests=args.auto_splice_each_best,
+                    reference_frames=reference_frames,
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path,
