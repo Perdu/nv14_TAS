@@ -205,6 +205,11 @@ def test_secondary_search_saves_improvements_and_resumes_exactly(tmp_path, worke
         tampered["payload"]["population"][0][field] += 1
         tampered["sha256"] = hashlib.sha256(canonical_json_bytes(tampered["payload"])).hexdigest()
         path.write_text(json.dumps(tampered))
+        # Resume may recover from a verified .prev round. Corrupt both
+        # snapshots here to exercise the rejection path specifically.
+        backup = path.with_suffix(path.suffix + ".prev")
+        assert backup.is_file()
+        backup.write_text(json.dumps(tampered))
         with pytest.raises(ValueError, match="endpoint re-verification"):
             population.optimise_local_population(level, source, goal=goal, frame_ranges=((2, 8),),
                 config=replace(config, checkpoint_path=path, resume=True))

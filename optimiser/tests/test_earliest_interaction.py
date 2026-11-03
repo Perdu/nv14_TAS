@@ -319,6 +319,11 @@ def test_checkpoint_resume_matches_uninterrupted_and_verifies_event_metadata(tmp
     winner["interaction_events"] = []
     envelope["sha256"] = hashlib.sha256(canonical_json_bytes(envelope["payload"])).hexdigest()
     path.write_text(json.dumps(envelope))
+    # Both primary and recoverable previous snapshots must fail validation;
+    # an intact .prev is intentionally accepted as a safe recovery route.
+    backup = path.with_suffix(path.suffix + ".prev")
+    assert backup.is_file()
+    backup.write_text(json.dumps(envelope))
     with pytest.raises(ValueError, match="re-verification"):
         optimise_local_population(source, frames, goal=target, frame_ranges=((0, 16),),
                                   config=replace(cfg, checkpoint_path=path, resume=True))

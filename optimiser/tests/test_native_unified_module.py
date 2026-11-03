@@ -21,7 +21,8 @@ def test_build_defines_unified_engine_and_optional_renderer_links_core_once() ->
     assert 'sources=["native/nv14_render_native.c"]' in setup_source
     assert setup_source.count('"native/nv14_core.c"') == 1
     assert '"_nv14_search"' not in setup_source
-    assert '"native/_nv14_native.c"' in setup_source
+    assert '"native/_nv14_native.pyx"' in setup_source
+    assert "cythonize([native_extension]" in setup_source
     assert not (ROOT / "native" / "_nv14_search_module.c").exists()
 
 

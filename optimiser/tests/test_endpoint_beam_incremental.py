@@ -148,6 +148,7 @@ def test_search_proposals_and_best_are_identical_with_old_beam(monkeypatch):
             self.source_key = source_key
             self.candidates = [first]
             self.entries = [endpoint._ranked_candidate(first, source_key)]
+            self.identities = {entry.identity for entry in self.entries}
 
         def add(self, candidate, identity):
             self.candidates = _reference_beam(
@@ -155,6 +156,7 @@ def test_search_proposals_and_best_are_identical_with_old_beam(monkeypatch):
             )
             self.entries = [endpoint._ranked_candidate(item, self.source_key)
                             for item in self.candidates]
+            self.identities = {entry.identity for entry in self.entries}
 
     for seed in (3, 19, 71):
         cfg = endpoint.AutoEndpointConfig(
