@@ -54,6 +54,7 @@ refinement-chain-steps = 32
 # jump-rewrite: shift/remove jump pulses; passage-rewrite: change direction between jumps;
 # state-crossover: splice donor routes where player physics states nearly match (costly).
 mutations = "high"
+clean-air-jumps = true
 
 [local]
 local-inputs = "direction"
@@ -79,6 +80,7 @@ window-span = 15
 # immutable-jumps = ["21:start", "73:length", "105:both"]
 # physics-prune = false
 # minimum-improvement = 0.0
+clean-air-jumps = true
 
 [jump-pattern]
 target-frame = 100
