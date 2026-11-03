@@ -1178,6 +1178,15 @@ def optimise_user_splices(
                                      f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}")
                     if is_final_gain:
                         candidate_rank, completed_frames = candidate_final
+                        # Compare final best vs final best. old_evaluation
+                        # belongs to the *stage checkpoint*, which may be a
+                        # different, incomplete route with a better x/frame.
+                        previous_best_rank = best_rank
+                        previous_best_output = best_output
+                        previous_final = (
+                            original_endpoints[index].evaluate(
+                                _materialise_splice_tail(previous_best_output, len(current)-1))
+                            if previous_best_rank is not None else None)
                         current = normalized
                         best_output = completed_frames
                         best_rank = candidate_rank
@@ -1186,9 +1195,15 @@ def optimise_user_splices(
                         if best_callback:
                             best_callback(best_output)
                         if progress:
+                            completed_text = (
+                                f"verified completed frames {len(previous_best_output)} "
+                                f"-> {len(best_output)}"
+                                if previous_best_rank is not None else
+                                f"first eligible verified completion at frame {len(best_output)}")
                             progress(f"[auto:user-splice] improved verified final replay "
-                                     f"({stage.name}); "
-                                     f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}; "
+                                     f"({stage.name}); {completed_text}; "
+                                     f"final-goal comparison: "
+                                     f"{_stage_improvement_text(stage.goal, previous_final, evaluation)}; "
                                      "saved")
 
                 last_live_accept = float("-inf")
