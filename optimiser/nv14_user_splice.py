@@ -1,9 +1,9 @@
 """Ordered, user-defined multi-splicing using existing Local/Auto endpoint search.
 
 Unlike stochastic waypoints, every stage is an explicitly named Local goal file.
-Partial branches may pass between stages, but a published result must satisfy all
-configured goals, preserve pre-existing route controls, and (for a completed
-source) remain canonically complete.
+Partial branches may pass between stages. Each splice is an independent search
+objective, not a required waypoint for later stages. Completed results must be
+canonically verified and preserve pre-existing route controls.
 """
 from __future__ import annotations
 
@@ -61,8 +61,8 @@ def _stage_sources(recent: Sequence[tuple[InputFrame, ...]],
     Both lists are already sorted by *their own* stage objective, so the
     n-2 candidates are not spuriously ranked by the n-1 objective. Reserve at
     least one slot for each distinct source, even with frontier=1. Seeds need
-    not be feasible at n-1 yet; all preceding goals are checked when an output
-    is admitted, and every published result is independently verified.
+    not be feasible at n-1; later checkpoints are checked against their own
+    goal, while completed results are independently verified.
     """
     limit = max(2, frontier) if two_back else max(1, frontier)
     if not two_back:
@@ -310,7 +310,7 @@ def optimise_user_splices(
 
     Use identical endpoint evaluation and Local/Hybrid search as random splicing.
     Only independently verified full-run results reach best_callback. Optional
-    stage_best_callback receives each stage's best *feasible intermediate* replay
+    stage_best_callback receives each stage's independently feasible intermediate replay
     (which need not finish the level), only after a genuine improvement.
     An existing completed final result is never replaced by an incomplete route.
     """
@@ -320,7 +320,7 @@ def optimise_user_splices(
         raise ValueError("invalid user splice completion policy")
     if merge_only and (not merge_stage_bests or summary_only or from_best is not None):
         raise ValueError("merge-only requires merge_stage_bests, without summary-only or from-best")
-    # Selection does not waive requirements of earlier goals.
+    # Named goals are independent helpers, not route requirements.
     def stage_index(requested: str | None, default: int, label: str) -> int:
         if requested is None:
             return default
@@ -389,25 +389,27 @@ def optimise_user_splices(
                                for stage_level, stage in zip(stage_levels, stages))
     reporting_workspace = _materialise_splice_tail(
         reporting_input, max(s.goal.target_frame for s in stages))
-    # Stage goals are intentionally checked independently. Later edits must not
-    # silently undo an earlier switch, jump, or arrival requirement.
-    def valid_stages(frames, through: int) -> bool:
-        return all(evaluate.evaluate(frames).feasible for evaluate in original_endpoints[:through])
+    # Feasibility is local to each named stage. A later route can bypass a
+    # previous helper region without losing a valid new checkpoint. Real game
+    # controls are checked by the canonical replay / control-preservation gate.
+    def stage_feasible(frames, index: int) -> bool:
+        return original_endpoints[index].evaluate(frames).feasible
 
     # Reporting must not add simulation work to headless searches.
     input_stage_evals = (tuple(
         endpoint.evaluate(reporting_workspace)
-        if valid_stages(reporting_workspace, i + 1) else None
+        if stage_feasible(reporting_workspace, i) else None
         for i, endpoint in enumerate(original_endpoints)
     ) if progress is not None else (None,) * len(stages))
 
     def final_rank(frames):
-        # A named stage's goal is the user's optimisation objective. Finishing
-        # early and preserving the full route are safety/secondary constraints,
-        # not replacements for the explicitly requested end goal.
-        if not valid_stages(frames, len(stages)):
+        # The named goals are search hints, NOT finish requirements. Once a
+        # completed replay is required, rank it by actual completion time and
+        # exit proximity, independently of every named endpoint objective.
+        # Checkpoint-policy campaigns without a completed baseline still use
+        # the final named goal to rank their provisional (incomplete) outputs.
+        if not require_complete and not stage_feasible(frames, len(stages) - 1):
             return None
-        target_rank = original_endpoints[-1].evaluate(frames).objective_key
         evaluated = evaluate_replay_with_sentinel(level, frames)
         # A stage searched without enemies may reach its endpoint but die in
         # the physical world when replayed. Never publish that dead replay as
@@ -427,8 +429,8 @@ def optimise_user_splices(
                 return None
             if source_complete and not _control_preserved(source_eval, completed):
                 return None
-            return (target_rank, _completed_rank(completed, length)), tuple(frames[:length])
-        return (target_rank,), tuple(frames)
+            return (_completed_rank(completed, length),), tuple(frames[:length])
+        return (original_endpoints[-1].evaluate(frames).objective_key,), tuple(frames)
 
     def stage_export(frames: tuple[InputFrame, ...]) -> tuple[InputFrame, ...]:
         """Keep trial replays playable and trim only verified early finishes.
@@ -451,10 +453,12 @@ def optimise_user_splices(
     baseline = final_rank(current)
     best_rank = baseline[0] if baseline is not None else None
     best_output = baseline[1] if baseline is not None else source
+    saved_rank = None
+    saved_final = None
     if saved_final_frames is not None:
         saved_final = tuple(editable_frames(saved_final_frames))
-        # Never let an older input replay overwrite an already verified final
-        # result. Check the archived movie using *current* stage requirements.
+        # Never let an older input replay overwrite a faster verified final
+        # result. Independently verify the archived movie in real physics.
         physical = evaluate_replay_with_sentinel(level, saved_final)
         saved_complete = physical.valid and physical.finish_tick == len(saved_final)
         if saved_complete:
@@ -474,17 +478,33 @@ def optimise_user_splices(
                     progress("[auto:user-splice:resume] verified compatible saved final "
                              "replay; retained as the score baseline")
             elif progress:
-                progress("[auto:user-splice:resume] saved completed replay no longer "
-                         "satisfies the current splice goals; retaining on disk "
-                         "until a newly verified completion is found")
+                progress("[auto:user-splice:resume] saved completed replay fails "
+                         "current route-control or completion verification; "
+                         "retaining on disk until a new verified completion is found")
         elif progress:
             progress("[auto:user-splice:resume] saved final is not a verified "
                      "completion; treating it as an obsolete search artifact, "
                      "not a barrier to a new run")
     improvements = attempts = evaluations = stagnant = 0
+    # A manually edited completed input is authoritative when it is faster
+    # than the older output on disk. Previously it became the in-memory best
+    # without being persisted, leaving the saved final file stale on reruns.
+    # Summary and merge-only modes must remain read-only except for merges.
+    if (not summary_only and not merge_only and source_complete and
+            saved_final_frames is not None and baseline is not None and
+            (saved_rank is None or baseline[0] < saved_rank[0])):
+        if best_callback:
+            best_callback(baseline[1])
+        improvements += 1
+        if progress:
+            previous = (f"{len(saved_final)} -> {len(source)} frames"
+                        if saved_rank is not None else
+                        f"replacing unverified saved output with {len(source)}-frame completion")
+            progress("[auto:user-splice] improved verified final replay "
+                     f"(current input); {previous}; saved manually edited replay")
 
     def accept_merged_completion(prefix, seam, label):
-        """Publish an improved reference suffix only after all named goals pass."""
+        """Publish a reference suffix only after final replay verification."""
         nonlocal best_output, best_rank, improvements, current
         if reference is None:
             return
@@ -508,7 +528,7 @@ def optimise_user_splices(
     stage_best_evaluation: list[EndpointEvaluation | None] = []
     for i, endpoint in enumerate(original_endpoints):
         # The baseline is a real stage reference, not a reported improvement.
-        feasible = valid_stages(current, i + 1)
+        feasible = stage_feasible(current, i)
         evaluation = endpoint.evaluate(current) if feasible else None
         stage_best.append(evaluation.objective_key if evaluation is not None else None)
         stage_best_evaluation.append(evaluation)
@@ -521,10 +541,10 @@ def optimise_user_splices(
             # Saved movies may have been trimmed to an earlier finish.  Apply
             # the same implicit-neutral-tail convention as the active replay.
             replay = _materialise_splice_tail(archived, len(current) - 1)
-            if not valid_stages(replay, i + 1):
+            if not stage_feasible(replay, i):
                 if progress:
                     progress(f"[auto:user-splice:resume] {stage.name!r}: "
-                             "ignored checkpoint failing the named goals")
+                             "ignored checkpoint failing its own goal")
                 continue
             score = original_endpoints[i].evaluate(replay)
             # Keep the best validated on-disk candidate independently of the
@@ -546,7 +566,7 @@ def optimise_user_splices(
         for raw in (*((saved_stage_frontiers or {}).get(stage.name, ())),
                     *((saved_stage_candidates or {}).get(stage.name, ()))):
             replay = _materialise_splice_tail(raw, len(current) - 1)
-            if valid_stages(replay, i + 1):
+            if stage_feasible(replay, i):
                 pool[replay] = original_endpoints[i].evaluate(replay).objective_key
         ranked = sorted(pool, key=pool.__getitem__)
         archived_frontiers.append(_diverse_saved_archive(
@@ -561,7 +581,7 @@ def optimise_user_splices(
             return
         pool: dict[tuple[InputFrame, ...], tuple] = {}
         for candidate in (*archived_frontiers[i], *candidates):
-            if valid_stages(candidate, i + 1):
+            if stage_feasible(candidate, i):
                 pool[candidate] = original_endpoints[i].evaluate(candidate).objective_key
         selected = _diverse_saved_archive(pool, original_endpoints[i], config.save_frontier)
         if selected != archived_frontiers[i]:
@@ -613,7 +633,7 @@ def optimise_user_splices(
         """Savings against both independent input and verified completed best."""
         best_workspace = _materialise_splice_tail(best_output, len(current) - 1)
         best_eval = (original_endpoints[i].evaluate(best_workspace)
-                     if best_rank is not None and valid_stages(best_workspace, i + 1)
+                     if best_rank is not None and stage_feasible(best_workspace, i)
                      else None)
         return ('; ' + _stage_savings_text(stages[i].goal, candidate,
                                            input_stage_evals[i], 'input run') +
@@ -633,8 +653,8 @@ def optimise_user_splices(
         propagation_seed = stage_checkpoints[from_best_index]
         if propagation_seed is None:
             raise ValueError(f"no valid saved checkpoint for splice {from_best!r}; "
-                             "a saved stage LTM/TXT must exist and satisfy all "
-                             "preceding named goals")
+                             "a saved stage LTM/TXT must exist and satisfy "
+                             "that splice's own goal")
         if progress:
             evaluation = stage_checkpoint_evals[from_best_index]
             progress(f"[auto:user-splice:from-best] {from_best!r}: "
@@ -645,7 +665,7 @@ def optimise_user_splices(
     # movie must never be overwritten by a weaker starting replay.
     if not (summary_only or merge_only):
         for i, stage in enumerate(stages):
-            baseline_evaluation = original_endpoints[i].evaluate(current) if valid_stages(current, i + 1) else None
+            baseline_evaluation = original_endpoints[i].evaluate(current) if stage_feasible(current, i) else None
             archived_evaluation = stage_checkpoint_evals[i]
             if (baseline_evaluation is not None and
                     (archived_evaluation is None or
@@ -720,7 +740,7 @@ def optimise_user_splices(
         progress(f"[auto:user-splice] selected stages "
                  f"{first_stage+1}-{last_stage+1}/{len(stages)} "
                  f"({stages[first_stage].name!r} through {stages[last_stage].name!r}); "
-                 "earlier named goals remain mandatory; "
+                 "earlier named goals are non-binding helpers; "
                  "partial-run outputs remain stage checkpoints")
 
     def report_checkpoint_summary(label: str) -> None:
@@ -744,7 +764,7 @@ def optimise_user_splices(
                 continue
             best_stage = None
             best_workspace = _materialise_splice_tail(best_output, len(current) - 1)
-            if best_rank is not None and valid_stages(best_workspace, i + 1):
+            if best_rank is not None and stage_feasible(best_workspace, i):
                 best_stage = original_endpoints[i].evaluate(best_workspace)
             detail = _stage_summary_text(stage.goal, candidate)
             if best_stage is None or candidate.objective_key < best_stage.objective_key:
@@ -775,8 +795,8 @@ def optimise_user_splices(
         return UserSpliceResult(best_output, 0, 0, 0)
 
     # Elites are retained across rounds as well as across stage boundaries.
-    # Their rank is the objective of the stage that produced them; do not
-    # promote a local improvement if its mandatory earlier goals were lost.
+    # Their rank is the objective of the stage that produced them; earlier
+    # helper objectives do not veto a different route at a later stage.
     elites: list[list[tuple[InputFrame, ...]]] = [list(pool[:config.frontier]) for pool in archived_frontiers]
     def run_saved_merge_pass(phase: str) -> None:
         """Graft saved stage bests at startup and after fresh discoveries.
@@ -796,8 +816,8 @@ def optimise_user_splices(
                      f"{config.lookback} frame(s)" +
                      ("; no search" if merge_only else ""))
         # Try grafting each saved earlier-stage best onto later saved routes.
-        # An incomplete graft is only a *stage seed*; only final_rank may
-        # promote it to the completed result. No branch bypasses past goals.
+        # The destination goal is the only stage feasibility requirement;
+        # final_rank independently verifies any completed result.
         for later in range(1, len(stages)):
             # Merge pairing is intentionally independent of search seed history.
             # Include old pending gains without forcing an excessive normal
@@ -819,6 +839,7 @@ def optimise_user_splices(
                 attempted += 1
                 physically_verified = 0
                 accepted = False
+                completion_only = False
                 for graft in verified_suffix_grafts(
                         level, _materialise_splice_tail(prefix, len(current)-1),
                         _materialise_splice_tail(suffix, len(current)-1),
@@ -826,7 +847,26 @@ def optimise_user_splices(
                         lookback=config.lookback, completion_required=False):
                     physically_verified += 1
                     candidate = _materialise_splice_tail(graft, len(current)-1)
-                    if not valid_stages(candidate, later+1):
+                    if not stage_feasible(candidate, later):
+                        # An otherwise verified faster completed replay is not
+                        # disqualified by the destination's helper goal. It
+                        # does NOT become a saved destination checkpoint.
+                        complete = final_rank(candidate) if require_complete else None
+                        if complete is not None and (best_rank is None or complete[0] < best_rank):
+                            best_rank, best_output = complete
+                            current = candidate
+                            improvements += 1
+                            completed += 1
+                            joined += 1
+                            accepted = True
+                            completion_only = True
+                            if best_callback:
+                                best_callback(best_output)
+                            if progress:
+                                progress("[auto:user-splice:merge] improved verified "
+                                         f"completed replay at {len(best_output)} frames; "
+                                         "destination helper missed; saved")
+                            break
                         continue
                     accepted = True
                     joined += 1
@@ -857,7 +897,7 @@ def optimise_user_splices(
                     if progress:
                         progress(f"[auto:user-splice:merge] splice "
                                  f"{stages[earlier].name} -> {stages[later].name}: "
-                                 "verified graft satisfies all goals through destination; "
+                                 "verified graft satisfies destination goal; "
                                  "stored as stage seed (not yet a final win)")
                     complete = final_rank(candidate)
                     if complete is not None and (best_rank is None or complete[0] < best_rank):
@@ -873,11 +913,13 @@ def optimise_user_splices(
                     break
                 if merge_only and progress:
                     if accepted:
-                        progress(f"[auto:user-splice:merge-only] {label}: "
-                                 "verified join accepted (stage candidate checked)")
+                        reason = ("verified completed join accepted despite missing "
+                                  "destination helper" if completion_only else
+                                  "verified join accepted (stage candidate checked)")
+                        progress(f"[auto:user-splice:merge-only] {label}: {reason}")
                     else:
                         reason = ("no physically compatible seam" if not physically_verified
-                                  else "joined replay fails preceding/destination goals")
+                                  else "joined replay fails destination goal")
                         progress(f"[auto:user-splice:merge-only] {label}: "
                                  f"rejected ({reason})")
 
@@ -903,8 +945,8 @@ def optimise_user_splices(
         begun = time.monotonic()
         # A propagation run deliberately retries the archived splice-best
         # path on every outer round, rather than restarting only from the best
-        # fully completed run. Completion ranking still uses the original
-        # source, and all preceding named goals remain mandatory.
+        # fully completed run. Completed replay verification remains strict,
+        # but preceding helper objectives do not constrain later stages.
         history: list[list[tuple[InputFrame, ...]]] = [[propagation_seed]]
         history_origins: list[int | None] = [from_best_index]
         if first_stage == 0 and archived_frontiers[0]:
@@ -990,7 +1032,7 @@ def optimise_user_splices(
             # spending more simulation proposals to rediscover them.
             eligible: dict[tuple[InputFrame, ...], tuple] = {}
             for saved in elites[index]:
-                if valid_stages(saved, index + 1):
+                if stage_feasible(saved, index):
                     eligible[saved] = original_endpoints[index].evaluate(saved).objective_key
             for seed_index, branch in enumerate(branches, 1):
                 # Sources are ranked *within* their own checkpoint objective,
@@ -1040,52 +1082,55 @@ def optimise_user_splices(
                     # Verify promising live candidates without making every
                     # worker wait for repeated stage/archive simulations.
                     # The encode/decode round trip only rebuilds trigger bits;
-                    # editable_frames drops them again. Normalise directly and
-                    # validate each previous goal only once per candidate.
+                    # editable_frames drops them again. Check this stage alone.
                     normalized = tuple(editable_frames(candidate))
                     if normalized in eligible:
                         # Duplicate live notifications and returned winners are
                         # common; their verified stage score cannot change.
                         return
                     evaluation = original_endpoints[index].evaluate(normalized)
-                    if not evaluation.feasible or not all(
-                        endpoint.evaluate(normalized).feasible
-                        for endpoint in original_endpoints[:index]
-                    ):
-                        return
-                    rank = evaluation.objective_key
-                    eligible[normalized] = rank
-                    # Frontier archives are persistence, not the active search
-                    # population. Flush them at stage boundaries instead of
-                    # repeatedly simulating 64 routes while workers wait.
+                    # A faster canonical completion is valid even if this
+                    # *helper* goal is infeasible. Such a route must never be
+                    # discarded before independently checking the finish.
                     candidate_final = (
                         final_rank(normalized)
-                        if index == len(stages) - 1 and
-                        (best_rank is None or rank <= best_rank[0]) else None
+                        if require_complete or
+                        (evaluation.feasible and index == len(stages) - 1)
+                        else None
                     )
                     is_final_gain = (candidate_final is not None
                                      and (best_rank is None
                                           or candidate_final[0] < best_rank))
-                    old_stage_rank = stage_best[index]
-                    old_evaluation = stage_best_evaluation[index]
-                    if old_stage_rank is None or rank < old_stage_rank:
-                        stage_best[index] = rank
-                        stage_best_evaluation[index] = evaluation
-                        exported = stage_export(normalized)
-                        stage_checkpoints[index] = exported
-                        stage_checkpoint_evals[index] = evaluation
-                        stage_checkpoint_origin[index] = "this run"
-                        temp_gains += 1
-                        if stage_best_callback:
-                            stage_best_callback(stage.name, exported)
-                        if progress and not is_final_gain:
-                            label = ("first feasible" if old_stage_rank is None
-                                     else "new stage best")
-                            progress(f"[auto:user-splice:temporary] "
-                                     f"round {round_no+1} stage {index+1}/{len(stages)} "
-                                     f"{stage.name!r}: {label}; "
-                                     f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}"
-                                     f"{reported_savings(index, evaluation)}")
+                    if not evaluation.feasible:
+                        if not is_final_gain:
+                            return
+                    else:
+                        # Earlier goals may be bypassed. Only the current
+                        # goal selects stage improvements and backend leaders.
+                        rank = evaluation.objective_key
+                        eligible[normalized] = rank
+                        # Frontier archives are persistence, not the active
+                        # population. Flush them at stage boundaries.
+                        old_stage_rank = stage_best[index]
+                        old_evaluation = stage_best_evaluation[index]
+                        if old_stage_rank is None or rank < old_stage_rank:
+                            stage_best[index] = rank
+                            stage_best_evaluation[index] = evaluation
+                            exported = stage_export(normalized)
+                            stage_checkpoints[index] = exported
+                            stage_checkpoint_evals[index] = evaluation
+                            stage_checkpoint_origin[index] = "this run"
+                            temp_gains += 1
+                            if stage_best_callback:
+                                stage_best_callback(stage.name, exported)
+                            if progress and not is_final_gain:
+                                label = ("first feasible" if old_stage_rank is None
+                                         else "new stage best")
+                                progress(f"[auto:user-splice:temporary] "
+                                         f"round {round_no+1} stage {index+1}/{len(stages)} "
+                                         f"{stage.name!r}: {label}; "
+                                         f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}"
+                                         f"{reported_savings(index, evaluation)}")
                     if is_final_gain:
                         candidate_rank, completed_frames = candidate_final
                         # Compare final best vs final best. old_evaluation
@@ -1115,7 +1160,7 @@ def optimise_user_splices(
                                 f"first eligible verified completion at frame {len(best_output)}")
                             progress(f"[auto:user-splice] improved verified final replay "
                                      f"({stage.name}); {completed_text}; "
-                                     f"final-goal comparison: "
+                                     f"{'final-goal' if index == len(stages)-1 else 'stage-goal'} comparison (informational): "
                                      f"{_stage_improvement_text(stage.goal, previous_final, evaluation)}; "
                                      f"{_stage_savings_text(stage.goal, evaluation, input_stage_evals[index], 'input run')}; "
                                      f"{previous_savings}; saved")
@@ -1152,10 +1197,11 @@ def optimise_user_splices(
                                       index == stage_begin and seed_index == 1)
                 if (stage_config.splice_stagnation_rounds or stage_config.splice_auto_stagnation_rounds
                         or stage_config.splice_local_stagnation_rounds):
-                    def admissible_rank(candidate, through=index + 1):
-                        if not valid_stages(candidate, through):
-                            return None
-                        return original_endpoints[through - 1].evaluate(candidate).objective_key
+                    def admissible_rank(candidate, at=index):
+                        # The Auto/Local leader must use the same acceptance
+                        # rule as standalone Auto: this named goal only.
+                        evaluation = original_endpoints[at].evaluate(candidate)
+                        return evaluation.objective_key if evaluation.feasible else None
                     found, used, calls = _search_stage(
                         stage_levels[index], branch, stage, stage_config, rng,
                         stage_rank=admissible_rank, progress=progress,
@@ -1201,9 +1247,9 @@ def optimise_user_splices(
                 fallbacks = list(dict.fromkeys((current, *branches)))[:max(2, config.frontier)]
                 if progress:
                     progress(f"[auto:user-splice] stage {index+1}/{len(stages)} "
-                             f"{stage.name!r}: no candidate met all goals through this stage; "
+                             f"{stage.name!r}: no candidate met its own goal; "
                              f"continuing with {len(fallbacks)} fallback seed(s) "
-                             "(final verification still requires all named goals)")
+                             "(completed replay verification remains strict)")
                 history = [fallbacks, *history][:config.stage_lookback]
                 history_origins = [index, *history_origins][:config.stage_lookback]
                 continue

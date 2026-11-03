@@ -77,7 +77,7 @@ def test_enemy_disabled_final_stage_cannot_publish_dead_best(monkeypatch):
     assert published == []
 
 
-def test_earlier_enemy_enabled_goal_remains_mandatory_for_later_disabled_stage(monkeypatch):
+def test_earlier_enemy_enabled_helper_does_not_block_later_enemy_free_checkpoint(monkeypatch):
     strict = parse_level_string(_guarded_level(), simulate_enemies=True)
     source = (InputFrame(right=True),) * 29
     stages = [UserSpliceStage('guard', EndpointGoal(10, 'max-x'), 0, 10,
@@ -92,6 +92,7 @@ def test_earlier_enemy_enabled_goal_remains_mandatory_for_later_disabled_stage(m
                           completion_policy='checkpoint',
                           stage_best_callback=lambda stage, frames:
                               checkpointed.append(stage))
-    # Passing a later enemy-free stage does not waive the mandatory earlier
-    # enemy-enabled goal, which the same replay fails due to a floor guard.
-    assert checkpointed == []
+    # An earlier helper in another physics world must not veto the later
+    # stage. It remains only a stage checkpoint; no dead replay is published
+    # as a verified completed run in the real enemy-enabled physics world.
+    assert checkpointed == ['safe']

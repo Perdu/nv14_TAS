@@ -171,14 +171,10 @@ def test_cli_merge_only_writes_only_genuinely_improved_saved_stages(tmp_path, mo
     assert '1 stage best(s) improved' in stdout
     assert first.read_bytes() == old_first
     assert last.read_bytes() != old_last
-    # This example genuinely improves the completed route. Only the verified
-    # result is published; the operation must never pretend a stage-only gain
-    # is a completed best.
-    assert output.exists()
-    completed = decode_complex_replay(
-        parse_combined_level_replay(output.read_text()).replay_string).frames
-    result = evaluate_replay_with_sentinel(level, completed)
-    assert result.valid and result.finish_tick == len(completed)
+    # The graft is better at min-x but does not finish earlier. Helper-only
+    # gains are saved to the stage file, not misreported as completed wins.
+    assert not output.exists()
+    assert '0 completed best(s) improved' in stdout
     assert not (tmp_path / 'optim.splice-search.json').exists()
     assert not (tmp_path / 'optim.splice-progress.json').exists()
     assert not any('stage searches' in line for line in stdout.splitlines())
@@ -191,10 +187,12 @@ def test_merge_only_keeps_better_verified_final(tmp_path, monkeypatch):
     (tmp_path / '97-1_end.txt').write_text(encode_complex_replay(source) + '\n')
     monkeypatch.setattr(us, '_search_stage', _forbid_search)
     monkeypatch.setattr(sys, 'argv', [*argv, '--splice-merge-only'])
-    # First one-shot pass produces a verified completion. A second pass must
-    # use that completed replay as the ranking baseline and not regress it.
-    main()
+    # The existing completed replay remains the ranking baseline and must
+    # never be replaced by a graft that improves only a helper objective.
+    output.write_text(f'$test#author#{_level.source_level_string}#'
+                      f'{encode_complex_replay(source)}#\n')
     original = output.read_bytes()
+    main()
     main()
     assert output.read_bytes() == original
 

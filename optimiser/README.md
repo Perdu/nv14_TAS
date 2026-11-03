@@ -1474,7 +1474,8 @@ so Ctrl+C may discard only the live backend population/current unfinished
 search. An existing `--output` replay is independently verified and used as
 the final-score baseline, preventing a restart with an older input from
 overwriting a better completed replay. Changed or invalid existing final
-outputs are rejected rather than overwritten. `--ls-splices` remains read-only.
+outputs cannot veto a new campaign; only verified improvements replace a
+previously verified completed output. `--ls-splices` remains read-only.
 
 Set `save-frontier = 64` in either the shared or per-level `[multi-splicer]`
 configuration (default 64; maximum 256). Unlike `frontier`, which controls
@@ -1704,8 +1705,8 @@ If either backend improves that seed's valid stage objective, the no-improvement
 counter resets. Otherwise, it increments after *both* backends have tried.
 The search moves to the next seed/stage after `stagnation-rounds` consecutive
 cycles without an eligible improvement. Near misses can guide the search but
-do not reset stagnation unless they satisfy all earlier required goals and the
-current stage's goal. A newly discovered route is measured against its own
+do not reset stagnation unless they satisfy the current stage's own goal.
+Earlier splice objectives are independent search helpers, not constraints. A newly discovered route is measured against its own
 starting candidate, not a possibly better historical checkpoint, so new routes
 still have an opportunity to propagate. The regular `n-1` / `n-2` frontiers,
 full-route verification, and stage checkpoint protection remain unchanged.
@@ -1770,10 +1771,10 @@ is also tried, after the input.
 From the third stage, it tries seeds from both the preceding stage (**n-1**)
 and the stage before that (**n-2**), reserving a slot for a distinct n-2 elite
 even if n-1 won its local objective. This allows the later stage to avoid a
-locally better but globally detrimental splice. Earlier mandatory goals,
-route-control events, and completion still have to verify before saving any
-result. More source branches may increase total stage searches, but do not
-double the per-branch proposal budget.
+locally better but globally detrimental splice. Each saved checkpoint must
+satisfy only its own goal; completed results still require canonical completion
+and preserved persistent route-control events. More source branches may
+increase total stage searches, but do not double the per-branch proposal budget.
 
 Set `splice-directory = "../some/other/directory"` if the input or goal files
 are elsewhere. A CLI equivalent is `--auto-splice-files 203,408,switch,end
@@ -1781,14 +1782,21 @@ are elsewhere. A CLI equivalent is `--auto-splice-files 203,408,switch,end
 not required when `splice-files` is set, although it remains supported.
 
 After each stage the optimiser carries a bounded frontier of candidate replays
-into the next stage. Every later candidate must still satisfy the preceding
-named goals, and a published improvement is independently checked against all
-stage objectives. The final stage's objective determines the improvement rank;
-for a completed source, the entire resulting route must also finish and retain
-its existing route-control interactions. An earlier canonical completion can be
-trimmed and verified. Failed partial splices are never written to the output.
-The best checkpoint is written immediately; the original output is untouched
-if no verified improvement exists. `splice-iterations`/`splice-rounds` control
+into the next stage. **Named splice goals are independent helpers**: a later
+stage may improve by taking a different route, even if it no longer visits an
+earlier stage's target. The active Auto/Local refinement leader and every saved
+stage checkpoint are scored against **that stage's own goal only**. Stage-only
+results remain separate from the unsuffixed completed replay. For completed
+runs, actual canonical finish time (then exit proximity) determines the best
+rank, regardless of intermediate splice objectives; persistent game controls
+from the input run must still survive. A faster completion discovered at any
+stage may be published after independent full replay verification. An earlier
+canonical completion can be trimmed and verified. An already verified saved
+completion cannot be replaced with an incomplete route. A better manually
+edited completed input is copied to the saved final output before searching,
+while the input itself remains seed 1. If a previous fully completed outer
+campaign left a progress sidecar behind, a new invocation starts at round 1;
+genuine interrupted backend state is still resumed. `splice-iterations`/`splice-rounds` control
 search effort *per stage*. Per-file Local search tuning (such as `window`,
 `passes`, or `restarts`) is not imported: only endpoint goal definitions are
 read. Set `runs` to a finite number if you do not want an indefinite campaign.

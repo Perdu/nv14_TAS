@@ -259,9 +259,9 @@ def test_unmet_intermediate_checkpoint_does_not_skip_end(monkeypatch):
         completion_policy='complete')
     assert [name for name, _ in visited] == ['556', '739', 'end']
     assert visited[-1][1] == tuple(source)
-    assert any("'739': no candidate met all goals" in line for line in messages)
+    assert any("'739': no candidate met its own goal" in line for line in messages)
     assert any("'end' seed 1/1" in line for line in messages)
-    assert any('unmet checkpoints: 739, end' in line for line in messages)
+    assert any('unmet checkpoints: 739' in line for line in messages)
     assert result.attempts == 3 and result.evaluations == 3
     assert result.frames == tuple(source) and result.improvements == 0
     assert not saved
@@ -294,5 +294,5 @@ def test_failed_stage_keeps_two_back_fallback_branches(monkeypatch):
             iterations=6, rounds=1, workers=1, frontier=2, seed=3),
         progress=logs.append)
     assert any(stage == 'end' for stage, branch in visited)
-    assert any("'unreachable': no candidate met all goals" in line for line in logs)
+    assert any("'unreachable': no candidate met its own goal" in line for line in logs)
     assert result.frames == tuple(source) and result.improvements == 0

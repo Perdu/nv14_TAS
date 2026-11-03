@@ -2439,10 +2439,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="directory containing named .txt/.toml goals (default: ../splices/LEVEL relative to input)")
     command.add_argument("--splice-start", "--auto-splice-start", dest="auto_splice_start",
                          modes=auto_modes, metavar="NAME",
-                         help="first named splice to optimise (inclusive; preceding goals still enforced)")
+                         help="first named splice to optimise (inclusive; earlier helper goals are non-binding)")
     command.add_argument("--splice-stop", "--auto-splice-stop", dest="auto_splice_stop",
                          modes=auto_modes, metavar="NAME",
-                         help="last named splice to optimise (inclusive; full-run outputs require all goals)")
+                         help="last named splice to optimise (inclusive; completed outputs require canonical verification)")
     command.add_argument("--splice-from-best", dest="auto_splice_from_best",
                          modes=auto_modes, metavar="NAME",
                          help="seed from the best saved LTM/TXT for NAME and, by default, "
@@ -4447,6 +4447,15 @@ def main() -> None:
                     except (OSError, ValueError, KeyError, TypeError) as exc:
                         print(f"[auto:user-splice:resume] ignoring stale completed-pass "
                               f"state {progress_file}: {exc}", flush=True)
+                # A completed run is not an instruction to skip a new manual
+                # invocation with the same source and --auto-runs budget. Keep
+                # genuine *in-flight* resumes, but restart a finished campaign.
+                if (resume_state is None and splice_config.rounds and
+                        completed_passes >= splice_config.rounds):
+                    print("[auto:user-splice:resume] previous outer campaign "
+                          "finished; starting a fresh pass from the current "
+                          "input (saved stage bests retained)", flush=True)
+                    completed_passes = 0
                 def persist_outer_round(round_no):
                     if round_no is None:
                         progress_file.unlink(missing_ok=True)
