@@ -620,6 +620,10 @@ def optimise_user_splices(
                 '; ' + _stage_savings_text(stages[i].goal, candidate,
                                            best_eval, 'best run'))
 
+    # Preserve the exact CLI input as the first ordinary search seed for every
+    # named stage.  A previously saved completed best is a score baseline and
+    # useful alternative, but must not silently displace a manually edited run.
+    input_seed = _materialise_splice_tail(source, len(current) - 1)
     propagation_seed = current
     if from_best_index is None and saved_final_frames is not None and best_output != source:
         # Use the previously verified best completed replay for normal search,
@@ -926,12 +930,30 @@ def optimise_user_splices(
             attempts_before_stage = attempts
             temp_gains = 0
             branches = _stage_sources_history(history, config.frontier)
+            if from_best_index is None:
+                # Selection quotas stay unchanged, but search the best seed
+                # from each prior stage before lower-ranked alternatives from
+                # that same stage: n-1 rank 1, n-2 rank 1, ..., n-1 rank 2.
+                # A replay in multiple pools takes its best (rank, recency).
+                priorities: dict[tuple[InputFrame, ...], tuple[int, int]] = {}
+                for depth, pool in enumerate(history):
+                    for rank, candidate in enumerate(pool):
+                        key = (rank, depth)
+                        if candidate not in priorities or key < priorities[candidate]:
+                            priorities[candidate] = key
+                branches.sort(key=lambda candidate: priorities[candidate])
             if start_from_stage_bests and stage_checkpoints[index] is not None:
                 # Retry the best of *this* splice as another starting point,
                 # even when it never propagated to the previous stage frontier.
                 local_best = _materialise_splice_tail(
                     stage_checkpoints[index], len(current) - 1)
                 branches = [local_best, *(b for b in branches if b != local_best)]
+            if from_best_index is None:
+                # Always try manual edits from the input replay first, then
+                # the existing n-1/n-2/older frontier order.  Deduplicate so
+                # a frontier containing the input does not consume two searches.
+                # Explicit --splice-from-best retains its selected seed order.
+                branches = [input_seed, *(b for b in branches if b != input_seed)]
             if active_phase is not None and index == stage_begin:
                 # Never search another route before recovering the interrupted
                 # backend. The other viable routes remain archived separately.
@@ -940,9 +962,12 @@ def optimise_user_splices(
                 branches = [resumed_branch, *(b for b in branches if b != resumed_branch)]
             if progress and len(history) > 1:
                 labels = "/".join(f"n-{i}" for i in range(1, len(history) + 1))
-                counts = "/".join(str(len(source)) for source in history)
+                counts = "/".join(str(len(pool)) for pool in history)
+                order = ("current input, then " if from_best_index is None else "")
+                if active_phase is not None and index == stage_begin:
+                    order = "resumed backend, then " + order
                 progress(f"[auto:user-splice] {stage.name!r}: "
-                         f"{len(branches)} seed(s) from {labels} frontiers "
+                         f"{len(branches)} seed(s): {order}{labels} frontiers "
                          f"({counts} available; lookback {config.stage_lookback})")
             # Previously discovered stage elites are valid candidates without
             # spending more simulation proposals to rediscover them.
@@ -954,20 +979,24 @@ def optimise_user_splices(
                 # Sources are ranked *within* their own checkpoint objective,
                 # not by the score of the stage we are about to search.
                 source_detail = "input/best completed replay"
-                if (start_from_stage_bests and stage_checkpoints[index] is not None and
-                        branch == _materialise_splice_tail(stage_checkpoints[index], len(current)-1)):
-                    source_detail = f"start from splice {stage.name} (saved stage best)"
-                elif active_phase is not None and index == stage_begin and seed_index == 1:
+                if active_phase is not None and index == stage_begin and seed_index == 1:
                     source_detail = "resumed interrupted backend seed"
+                elif from_best_index is None and branch == input_seed:
+                    source_detail = "current input run"
+                elif (start_from_stage_bests and stage_checkpoints[index] is not None and
+                      branch == _materialise_splice_tail(stage_checkpoints[index], len(current)-1)):
+                    source_detail = f"start from splice {stage.name} (saved stage best)"
                 else:
-                    for depth, (pool, origin) in enumerate(zip(history, history_origins), 1):
-                        if branch in pool:
-                            if origin is not None:
-                                source_detail = (f"start from splice {stages[origin].name} "
-                                                 f"(n-{index-origin}, source rank {pool.index(branch)+1})")
-                            elif from_best_index is not None:
-                                source_detail = f"start from splice {stages[from_best_index].name}"
-                            break
+                    origins = [(pool.index(branch), depth, origin)
+                               for depth, (pool, origin) in enumerate(
+                                   zip(history, history_origins)) if branch in pool]
+                    if origins:
+                        rank, _depth, origin = min(origins)
+                        if origin is not None:
+                            source_detail = (f"start from splice {stages[origin].name} "
+                                             f"(n-{index-origin}, source rank {rank+1})")
+                        elif from_best_index is not None:
+                            source_detail = f"start from splice {stages[from_best_index].name}"
                 if progress:
                     phase_mode = (stage_config.splice_auto_stagnation_rounds or
                                   stage_config.splice_local_stagnation_rounds)

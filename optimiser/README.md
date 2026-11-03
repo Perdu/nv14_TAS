@@ -1740,6 +1740,21 @@ are printed at startup. Colors respect `[common] color = false` and `--no-color`
 redirected logs contain no ANSI escape codes.
 
 Every stage also retains its best verified candidate frontier across rounds.
+**Normal named multi-splicer searches always try the current input replay first**
+(the path passed as the `auto` positional argument), even if an older saved
+completed replay or preceding frontier has a better recorded stage score.
+They then try distinct candidates from the preceding stage (**n-1**), the
+stage before that (**n-2**), and any configured older lookback stages, without
+removing existing frontier slots. The best candidate from each source runs
+before lower-ranked candidates from the same source (n-1 rank 1, n-2 rank 1,
+then n-1 rank 2, etc.). Duplicate replays are searched only once.
+The seed log identifies `current input run` and each saved splice origin.
+This may add one backend search per stage when the input differs from the
+selected frontiers. An explicit `--splice-from-best` continues to start from
+the requested saved splice; an interrupted search resumes its exact in-flight
+backend first. With `--splice-each-best`, the saved best of that same stage
+is also tried, after the input.
+
 From the third stage, it tries seeds from both the preceding stage (**n-1**)
 and the stage before that (**n-2**), reserving a slot for a distinct n-2 elite
 even if n-1 won its local objective. This allows the later stage to avoid a
