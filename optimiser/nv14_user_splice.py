@@ -622,8 +622,9 @@ def optimise_user_splices(
     current = _materialise_splice_tail(source, max(s.goal.target_frame for s in stages))
     # A completed saved final output must never be displaced by an incomplete
     # checkpoint, even when the new input is incomplete and policy=checkpoint.
-    require_complete = (completion_policy == "complete" or source_complete
-                        or saved_final_frames is not None)
+    # A stale/incomplete saved file is a reusable hint at most, not a veto
+    # on a new campaign. Canonical completion is independently verified below.
+    require_complete = (completion_policy == "complete" or source_complete)
     if completion_policy == "complete" and not source_complete:
         raise ValueError("user splice requires a canonically completed source for completion-policy=complete")
     for stage in stages:
@@ -704,18 +705,24 @@ def optimise_user_splices(
         # Never let an older input replay overwrite an already verified final
         # result. Check the archived movie using *current* stage requirements.
         physical = evaluate_replay_with_sentinel(level, saved_final)
-        if not physical.valid or physical.finish_tick != len(saved_final):
-            raise ValueError("saved final output is not a verified completed replay; "
-                             "refusing to overwrite it")
-        saved_rank = final_rank(_materialise_splice_tail(saved_final, len(current) - 1))
-        if saved_rank is None:
-            raise ValueError("saved final output fails current splice requirements; "
-                             "refusing to overwrite it")
-        if best_rank is None or saved_rank[0] < best_rank:
-            best_rank, best_output = saved_rank
-        if progress:
-            progress("[auto:user-splice:resume] verified saved final replay; "
-                     "protected as the final-score baseline")
+        saved_complete = physical.valid and physical.finish_tick == len(saved_final)
+        if saved_complete:
+            require_complete = True  # do not replace a completed movie with a partial one
+            saved_rank = final_rank(_materialise_splice_tail(saved_final, len(current) - 1))
+            if saved_rank is not None:
+                if best_rank is None or saved_rank[0] < best_rank:
+                    best_rank, best_output = saved_rank
+                if progress:
+                    progress("[auto:user-splice:resume] verified compatible saved final "
+                             "replay; retained as the score baseline")
+            elif progress:
+                progress("[auto:user-splice:resume] saved completed replay no longer "
+                         "satisfies the current splice goals; retaining on disk "
+                         "until a newly verified completion is found")
+        elif progress:
+            progress("[auto:user-splice:resume] saved final is not a verified "
+                     "completion; treating it as an obsolete search artifact, "
+                     "not a barrier to a new run")
     improvements = attempts = evaluations = stagnant = 0
     stage_best: list[tuple | None] = []
     stage_best_evaluation: list[EndpointEvaluation | None] = []
@@ -799,16 +806,21 @@ def optimise_user_splices(
                 "start_at": start_at, "stop_at": stop_at,
             }
             if any(resume_state.get(k) != value for k, value in wanted.items()):
-                raise ValueError("named splice search checkpoint no longer matches level, "
-                                 "input, splice configuration, or requested stages")
-            active_phase = resume_state
+                if progress:
+                    progress("[auto:user-splice:resume] incompatible in-flight search "
+                             "checkpoint skipped (configuration or source changed)")
+            else:
+                active_phase = resume_state
+                if progress:
+                    progress(f"[auto:user-splice:resume] restoring outer round "
+                             f"{int(active_phase['round_no']) + 1}, splice "
+                             f"{active_phase['stage']!r}, backend "
+                             f"{active_phase['phase']['backend']} from last completed round")
+        except (KeyError, TypeError, ValueError, IndexError) as exc:
+            active_phase = None
             if progress:
-                progress(f"[auto:user-splice:resume] restoring outer round "
-                         f"{int(active_phase['round_no']) + 1}, splice "
-                         f"{active_phase['stage']!r}, backend "
-                         f"{active_phase['phase']['backend']} from last completed round")
-        except (KeyError, TypeError) as exc:
-            raise ValueError("invalid named splice search checkpoint") from exc
+                progress(f"[auto:user-splice:resume] invalid in-flight checkpoint "
+                         f"skipped: {exc}")
 
     # Summary-only mode reports on disk checkpoints without changing them.
     # There must be no baseline checkpoint writes or Auto/Local searches.

@@ -24,12 +24,12 @@ def test_previous_text_replays_are_read_and_deduplicated(tmp_path):
     assert _user_splice_alias_ltm_path(tmp_path/'optim.ltm', tmp_path/'97-1.txt', '556') == tmp_path/'97-1_556.ltm'
 
 
-def test_unreadable_checkpoint_refuses_overwrite(tmp_path):
+def test_unreadable_checkpoint_skips_resume_without_modifying_file(tmp_path):
     path = tmp_path / 'optim_556.ltm'
     path.write_bytes(b'not an LTM')
-    with pytest.raises(ValueError, match='refusing to overwrite'):
-        _load_user_splice_checkpoints({'556': (path, None)},
-                                      tmp_path/'optim.ltm', None)
+    assert _load_user_splice_checkpoints({'556': (path, None)},
+                                         tmp_path/'optim.ltm', None) == {}
+    assert path.read_bytes() == b'not an LTM'
 
 
 def test_saved_better_stage_score_blocks_worse_replacement(monkeypatch):

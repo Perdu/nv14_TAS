@@ -3461,9 +3461,30 @@ def _load_user_splice_frontiers(
                     entries.append(frames)
             restored[stage.name] = tuple(entries)
         except (OSError, UnicodeError, ValueError, TypeError) as exc:
-            raise ValueError(f"cannot read saved splice frontier {path}: {exc}; "
-                             "refusing to overwrite an unverified population") from exc
+            print(f"[auto:user-splice:resume] skipping unreadable frontier "
+                  f"{path}: {exc}", flush=True)
     return restored
+
+
+def _protect_unreadable_splice_output(path: Path | None) -> None:
+    """Back up unreadable old checkpoints *when* replacing them, not on load."""
+    if path is None or not path.is_file():
+        return
+    try:
+        if path.suffix.lower() == ".ltm":
+            LtmMovie.load(path)
+        else:
+            record = path.read_text(encoding="utf-8").strip()
+            try:
+                decode_complex_replay(record)
+            except (TypeError, ValueError):
+                decode_complex_replay(parse_combined_level_replay(record).replay_string)
+    except (OSError, UnicodeError, ValueError, LtmError):
+        backup = path.with_name(path.name + ".unverified.bak")
+        if not backup.exists():
+            _atomic_write_binary(backup, path.read_bytes())
+        print(f"[auto:user-splice:resume] preserved unreadable old checkpoint "
+              f"at {backup}", flush=True)
 
 
 def _load_user_splice_checkpoints(
@@ -3496,8 +3517,9 @@ def _load_user_splice_checkpoints(
                         frames = decode_complex_replay(
                             parse_combined_level_replay(text).replay_string).frames
             except (OSError, UnicodeError, ValueError, LtmError) as exc:
-                raise ValueError(f"cannot read existing splice checkpoint {path}: {exc}; "
-                                 "refusing to overwrite an unverified best") from exc
+                print(f"[auto:user-splice:resume] skipping unreadable stage "
+                      f"checkpoint {path}: {exc}", flush=True)
+                continue
             canonical = tuple(editable_frames(frames))
             if canonical not in candidates:
                 candidates.append(canonical)
@@ -4237,6 +4259,8 @@ def main() -> None:
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
                     replay_text = encode_complex_replay(clean_splice_output(frames))
+                    _protect_unreadable_splice_output(main_path)
+                    _protect_unreadable_splice_output(packed_path)
                     if source.ltm_movie is not None and packed_path is not None:
                         # An LTM may regard trailing neutral ticks as implicit
                         # post-roll. Save the plain replay as it will actually
@@ -4301,13 +4325,16 @@ def main() -> None:
                             explicit_level_id=common_config.level_id,
                             ltm_postroll=common_config.ltm_postroll)
                     except (LtmError, OSError, ValueError) as exc:
-                        raise ValueError(f"cannot read saved final replay {output_path}: {exc}") from exc
-                    if saved_final.combined.level_string != combined.level_string:
-                        raise ValueError(f"saved final replay {output_path} belongs to a different level")
-                    saved_final_frames = tuple(editable_frames(
-                        decode_complex_replay(saved_final.combined.replay_string).frames))
-                    if args.auto_ls_splice:
-                        summary_frames = saved_final_frames
+                        print(f"[auto:user-splice:resume] ignoring unreadable saved output "
+                              f"{output_path}: {exc}", flush=True)
+                    else:
+                        if saved_final.combined.level_string != combined.level_string:
+                            raise ValueError(f"saved final replay {output_path} belongs to "
+                                             "a different level; choose a different output path")
+                        saved_final_frames = tuple(editable_frames(
+                            decode_complex_replay(saved_final.combined.replay_string).frames))
+                        if args.auto_ls_splice:
+                            summary_frames = saved_final_frames
                 resume_state_path = output_path.with_suffix(".splice-search.json")
                 resume_state = None
                 if not args.auto_ls_splice and resume_state_path.is_file():
@@ -4316,8 +4343,8 @@ def main() -> None:
                             raise ValueError("named splice resume state exceeds 128 KiB")
                         resume_state = json.loads(resume_state_path.read_text(encoding="utf-8"))
                     except (OSError, ValueError, UnicodeError) as exc:
-                        raise ValueError(f"cannot read active named splice search "
-                                         f"state {resume_state_path}: {exc}") from exc
+                        print(f"[auto:user-splice:resume] ignoring unreadable active "
+                              f"search state {resume_state_path}: {exc}", flush=True)
                 def persist_resume_state(state):
                     if state is None:
                         resume_state_path.unlink(missing_ok=True)
@@ -4361,7 +4388,8 @@ def main() -> None:
                             raise ValueError("incompatible completed-pass checkpoint")
                         completed_passes = record["next_round"]
                     except (OSError, ValueError, KeyError, TypeError) as exc:
-                        raise ValueError(f"cannot restore completed-pass state {progress_file}: {exc}") from exc
+                        print(f"[auto:user-splice:resume] ignoring stale completed-pass "
+                              f"state {progress_file}: {exc}", flush=True)
                 def persist_outer_round(round_no):
                     if round_no is None:
                         progress_file.unlink(missing_ok=True)

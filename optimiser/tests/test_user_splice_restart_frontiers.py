@@ -89,8 +89,7 @@ def test_sidecar_checks_stage_and_level_identity(tmp_path):
     outputs = {'a': (main, None)}
     assert len(_load_user_splice_frontiers(level, [stage], outputs)['a']) == 2
     path.write_text('{broken')
-    with pytest.raises(ValueError, match='cannot read saved splice frontier'):
-        _load_user_splice_frontiers(level, [stage], outputs)
+    assert _load_user_splice_frontiers(level, [stage], outputs) == {}
     doc['level_sha256'] = 'not this level'
     path.write_text(json.dumps(doc))
     assert _load_user_splice_frontiers(level, [stage], outputs) == {}
@@ -125,14 +124,14 @@ def test_saved_final_protects_score_even_when_source_is_worse(monkeypatch):
     assert writes == []
 
 
-def test_invalid_saved_final_blocks_overwrite(monkeypatch):
+def test_invalid_saved_final_is_ignored_for_new_search(monkeypatch):
     level, source, _ = _baseline()
     monkeypatch.setattr(us, '_search_stage', lambda *args, **kwargs: ((), 0, 1))
-    with pytest.raises(ValueError, match='saved final output'):
-        optimise_user_splices(
-            level, source, [UserSpliceStage('end', EndpointGoal(10, 'max-x'), 0, 10)],
-            RandomSpliceConfig(rounds=1, iterations=2),
-            saved_final_frames=source[:10], completion_policy='complete')
+    result = optimise_user_splices(
+        level, source, [UserSpliceStage('end', EndpointGoal(10, 'max-x'), 0, 10)],
+        RandomSpliceConfig(rounds=1, iterations=2),
+        saved_final_frames=source[:10], completion_policy='complete')
+    assert result.frames == source
 
 
 def test_cli_atomic_frontier_persists_and_is_read_only_for_ls(tmp_path, monkeypatch):
