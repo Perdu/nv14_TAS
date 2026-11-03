@@ -74,10 +74,13 @@ class RandomSpliceConfig:
     frontier: int = 0  # additional cross-waypoint partial beam; CLI defaults to 3
     stage_lookback: int = 2  # named splices: use frontiers n-1 through n-N
     save_frontier: int = 64  # persisted per-stage candidates; separate from active frontier
+    live_save_best: bool = False  # bypass parent live-best throttling on named stages
     exit_lookback: int = 96  # minimum editable horizon of the exit approach
     seed: int = 0
 
     def __post_init__(self) -> None:
+        if type(self.live_save_best) is not bool:
+            raise ValueError("live_save_best must be boolean")
         if self.mode not in ("random", "complexity", "physics"):
             raise ValueError("splice mode must be random, complexity, or physics")
         allowed = {"switch", "walljump", "landing", "bounceblock"}

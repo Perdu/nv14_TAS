@@ -92,7 +92,8 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                 config=replace(config, search_backend=backend),
                 iterations=iterations, rounds=config.splice_rounds,
                 seed=rng.getrandbits(63), include_partial=True,
-                live_update_interval=30.0 if config.workers > 1 else 0.75,
+                live_update_interval=(0.0 if config.live_save_best else
+                                      30.0 if config.workers > 1 else 0.75),
                 **({"best_callback": candidate_callback} if candidate_callback else {}))
         except ValueError as exc:
             if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
@@ -202,7 +203,7 @@ def _search_stage_backend_phases(
                 # interval. The backend's final winner/frontier is still
                 # processed in full after the phase, without being dropped.
                 now = time.monotonic()
-                if config.workers > 1 and now - last_live_check < 30.0:
+                if not config.live_save_best and config.workers > 1 and now - last_live_check < 30.0:
                     return
                 last_live_check = now
                 candidate = tuple(frames)
@@ -226,7 +227,8 @@ def _search_stage_backend_phases(
                     iterations=iterations, rounds=0,
                     stagnation_rounds=patience,
                     seed=seed, include_partial=True,
-                    live_update_interval=30.0 if config.workers > 1 else 0.75,
+                    live_update_interval=(0.0 if config.live_save_best else
+                                      30.0 if config.workers > 1 else 0.75),
                     best_callback=on_live_best if candidate_callback is not None else None,
                     **({"checkpoint_path": checkpoint, "resume": bool(start_backend)}
                        if checkpoint else {}))
@@ -326,7 +328,8 @@ def _search_stage_until_stagnant(
                     config=replace(config, search_backend=backend),
                     iterations=iterations, rounds=config.splice_rounds,
                     seed=rng.getrandbits(63), include_partial=True,
-                    live_update_interval=30.0 if config.workers > 1 else 0.75,
+                    live_update_interval=(0.0 if config.live_save_best else
+                                      30.0 if config.workers > 1 else 0.75),
                     **({"best_callback": candidate_callback} if candidate_callback else {}))
             except ValueError as exc:
                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
@@ -1192,7 +1195,7 @@ def optimise_user_splices(
                 def live_candidate(candidate: tuple[InputFrame, ...], frame: int) -> None:
                     nonlocal last_live_accept
                     now = time.monotonic()
-                    if stage_config.workers > 1 and now - last_live_accept < 30.0:
+                    if not stage_config.live_save_best and stage_config.workers > 1 and now - last_live_accept < 30.0:
                         return
                     last_live_accept = now
                     accept_stage_candidate(candidate)

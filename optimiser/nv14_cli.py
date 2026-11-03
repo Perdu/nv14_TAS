@@ -1690,6 +1690,7 @@ def _load_config_defaults(
         "frontier": "auto_splice_frontier",
         "save_frontier": "auto_splice_save_frontier",
         "lookback": "auto_splice_stage_lookback",
+        "live_save_best": "auto_splice_live_save_best",
         "mutations": "auto_mutations",  # endpoint Auto, not Local mutation selection
     })
     # The dedicated table is last within its file: a splice override wins over
@@ -2490,6 +2491,10 @@ def build_parser() -> argparse.ArgumentParser:
                          dest="auto_splice_stagnation_rounds", modes=auto_modes,
                          type=int, default=0, metavar="N",
                          help="named multi-splicer: alternate Auto/Local until N consecutive cycles have no eligible stage improvement (0=legacy fixed rounds)")
+    command.add_argument("--splice-live-save-best", dest="auto_splice_live_save_best",
+                         modes=auto_modes, action="store_true",
+                         help="verify and save each live stage improvement immediately "
+                              "rather than throttle parent callbacks (costs CPU)")
     command.add_argument("--splice-auto-stagnation-rounds", "--auto-splice-auto-stagnation-rounds",
                          dest="auto_splice_auto_stagnation_rounds", modes=auto_modes,
                          type=int, default=0, metavar="N",
@@ -4294,6 +4299,7 @@ def main() -> None:
                     splice_stagnation_rounds=args.auto_splice_stagnation_rounds,
                     splice_auto_stagnation_rounds=args.auto_splice_auto_stagnation_rounds,
                     splice_local_stagnation_rounds=args.auto_splice_local_stagnation_rounds,
+                    live_save_best=args.auto_splice_live_save_best,
                     search_backend=args.auto_splice_search,
                     endpoint_max_retime=args.max_retime,
                     endpoint_mutation_span=args.auto_mutation_span,
