@@ -1518,8 +1518,9 @@ python3 optimize_replay.py auto ../n_levels/97-2.ltm \
 
 To **merge saved splice bests once and exit**, use the same command with
 `--splice-merge-only`. It implies `--splice-merge-bests`, reads the saved named
-splice LTM/TXT checkpoints, and tests replay-verified joins from preceding
-stages within `--splice-stage-lookback N` (default 2). It reports skipped
+splice LTM/TXT checkpoints, and tests replay-verified joins from **all**
+earlier saved stages. Merge pairing is independent of `--splice-stage-lookback`
+(default 2), which still controls ordinary search frontier seeds. It reports skipped
 pairs (missing/identical checkpoints), rejected joins (physical seam or stage
 goals), verified joins, stage-best upgrades and completed-best upgrades.
 Only improved, stage-feasible checkpoints and independently verified completed
@@ -1535,8 +1536,19 @@ python3 optimize_replay.py auto ../n_levels/88-4.ltm \
   --config examples/config.toml \
   --splice-config ../splices/88-4/multi-splicer.toml \
   --output wip/88-4.ltm --replay-output wip/88-4.txt \
-  --splice-merge-only --splice-stage-lookback 10
+  --splice-merge-only
 ```
+
+With `--splice-merge-bests` (or `[multi-splicer] merge-bests = true`),
+the exact same verified direct-join pass runs **twice**: once before the normal
+Auto/Local searches, and again after the search finishes. The final pass uses
+stage bests saved during that campaign, so it can immediately propagate a
+new discovery. `--splice-merge-only` stays one pass and exits without search.
+No separate search-lookback increase or additional option is required; the
+seam search still uses the existing `--auto-splice-lookback` (default 32 frames).
+These merge passes do not perform input-mutation bridge repairs: the
+`--auto-endpoint-repair-steps` setting applies inside the endpoint Auto search,
+not to merging incompatible replay suffixes.
 
 To keep the one-shot behavior in a splice TOML, put `merge-only = true` under
 `[multi-splicer]` (or use `--splice-merge-only` on the command line).

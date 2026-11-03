@@ -778,17 +778,31 @@ def optimise_user_splices(
     # Their rank is the objective of the stage that produced them; do not
     # promote a local improvement if its mandatory earlier goals were lost.
     elites: list[list[tuple[InputFrame, ...]]] = [list(pool[:config.frontier]) for pool in archived_frontiers]
-    if merge_stage_bests:
+    def run_saved_merge_pass(phase: str) -> None:
+        """Graft saved stage bests at startup and after fresh discoveries.
+
+        Each pass walks earlier-to-later so a stage upgraded by one graft may
+        become the source for later propagation in that same pass. The normal
+        search's stage_lookback still governs only seed selection.
+        """
+        nonlocal best_rank, best_output, current, improvements
         pairs = attempted = joined = upgraded = completed = 0
-        if merge_only and progress:
-            progress("[auto:user-splice:merge-only] merging saved named-splice "
-                     f"checkpoints; lookback {config.stage_lookback} stage(s), "
-                     f"seam lookback {config.lookback} frame(s); no search")
+        report = ("[auto:user-splice:merge-only]" if merge_only else
+                  f"[auto:user-splice:merge:{phase}]")
+        if progress:
+            progress(f"{report} merging saved named-splice checkpoints; "
+                     f"all earlier stages eligible (normal search lookback "
+                     f"remains {config.stage_lookback}); seam lookback "
+                     f"{config.lookback} frame(s)" +
+                     ("; no search" if merge_only else ""))
         # Try grafting each saved earlier-stage best onto later saved routes.
         # An incomplete graft is only a *stage seed*; only final_rank may
         # promote it to the completed result. No branch bypasses past goals.
         for later in range(1, len(stages)):
-            for earlier in range(max(0, later-config.stage_lookback), later):
+            # Merge pairing is intentionally independent of search seed history.
+            # Include old pending gains without forcing an excessive normal
+            # stage_lookback (and its extra backend searches).
+            for earlier in range(later):
                 pairs += 1
                 prefix, suffix = stage_checkpoints[earlier], stage_checkpoints[later]
                 label = f"{stages[earlier].name} -> {stages[later].name}"
@@ -867,13 +881,16 @@ def optimise_user_splices(
                         progress(f"[auto:user-splice:merge-only] {label}: "
                                  f"rejected ({reason})")
 
+        if progress:
+            progress(f"{report} done: {pairs} pair(s) considered; "
+                     f"{attempted} attempted; {joined} verified join(s); "
+                     f"{upgraded} stage best(s) improved; "
+                     f"{completed} completed best(s) improved; "
+                     f"{pairs-attempted} skipped; {attempted-joined} rejected")
+
+    if merge_stage_bests:
+        run_saved_merge_pass("startup")
         if merge_only:
-            if progress:
-                progress(f"[auto:user-splice:merge-only] done: {pairs} pair(s) considered; "
-                         f"{attempted} attempted; {joined} verified join(s); "
-                         f"{upgraded} stage best(s) improved; "
-                         f"{completed} completed best(s) improved; "
-                         f"{pairs-attempted} skipped; {attempted-joined} rejected")
             report_checkpoint_summary("after merges")
             return UserSpliceResult(best_output, improvements, 0, 0)
 
@@ -1216,5 +1233,9 @@ def optimise_user_splices(
             break
     if save_outer_round is not None:
         save_outer_round(None)
+    if merge_stage_bests:
+        # Saved stage checkpoints may have changed during the last search
+        # round; an entry-time merge cannot propagate those new results.
+        run_saved_merge_pass("final")
     report_checkpoint_summary("final")
     return UserSpliceResult(best_output, improvements, attempts, evaluations)
