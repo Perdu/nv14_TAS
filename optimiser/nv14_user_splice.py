@@ -489,8 +489,9 @@ def optimise_user_splices(
     # A manually edited completed input is authoritative when it is faster
     # than the older output on disk. Previously it became the in-memory best
     # without being persisted, leaving the saved final file stale on reruns.
-    # Summary and merge-only modes must remain read-only except for merges.
-    if (not summary_only and not merge_only and source_complete and
+    # Summary-only is read-only. Merge-only may publish a verified, faster
+    # manually edited input, but never creates search checkpoints or sidecars.
+    if (not summary_only and source_complete and
             saved_final_frames is not None and baseline is not None and
             (saved_rank is None or baseline[0] < saved_rank[0])):
         if best_callback:
@@ -799,136 +800,208 @@ def optimise_user_splices(
     # helper objectives do not veto a different route at a later stage.
     elites: list[list[tuple[InputFrame, ...]]] = [list(pool[:config.frontier]) for pool in archived_frontiers]
     def run_saved_merge_pass(phase: str) -> None:
-        """Graft saved stage bests at startup and after fresh discoveries.
+        """Try saved-stage joins *and* current-input-to-saved-route joins.
 
-        Each pass walks earlier-to-later so a stage upgraded by one graft may
-        become the source for later propagation in that same pass. The normal
-        search's stage_lookback still governs only seed selection.
+        A manual edit need not satisfy any named helper goal. The unchanged
+        positional input is a real prefix candidate, even when it later dies;
+        the verified completed output is a suffix candidate. All emitted
+        movies must still pass the canonical replay/control verification gate.
+        No Auto/Local mutation search runs here.
         """
         nonlocal best_rank, best_output, current, improvements
-        pairs = attempted = joined = upgraded = completed = 0
+        pairs = attempted = joined = upgraded = completed = input_attempted = 0
         report = ("[auto:user-splice:merge-only]" if merge_only else
                   f"[auto:user-splice:merge:{phase}]")
         if progress:
-            progress(f"{report} merging saved named-splice checkpoints; "
+            progress(f"{report} grafting saved stage routes and current input; "
                      f"all earlier stages eligible (normal search lookback "
                      f"remains {config.stage_lookback}); seam lookback "
-                     f"{config.lookback} frame(s)" +
-                     ("; no search" if merge_only else ""))
-        # Try grafting each saved earlier-stage best onto later saved routes.
-        # The destination goal is the only stage feasibility requirement;
-        # final_rank independently verifies any completed result.
+                     f"{config.lookback} frame(s); "
+                     "no Auto/Local bridge mutation search")
+
+        # The CLI input is not automatically included in saved stage checkpoints
+        # (especially in merge-only mode), so offer it separately as a prefix.
+        # Cap the seam at the final live input tick: edits that die before a
+        # later helper must still be considered at the last reachable seam.
+        input_prefix = _materialise_splice_tail(source, len(current) - 1)
+        last_live = (source_eval.dead_tick - 1 if source_eval.dead_tick is not None
+                     else source_eval.finish_tick - 2 if source_eval.finish_tick is not None
+                     else len(source) - 2)
+        last_live = max(1, min(len(input_prefix) - 2, last_live))
+        if progress and merge_only:
+            if saved_final is None:
+                comparison = "no saved completed-output replay was loaded"
+            else:
+                mismatch = next((tick for tick, (a, b) in enumerate(zip(source, saved_final))
+                                 if a != b), None)
+                if mismatch is None and len(source) != len(saved_final):
+                    mismatch = min(len(source), len(saved_final))
+                comparison = (f"differs from saved output starting at frame {mismatch}"
+                              if mismatch is not None else "identical to saved output")
+            progress(f"{report} current input: {len(source)} frames; "
+                     f"{comparison}; last live candidate seam frame {last_live}")
+        seen_requests: set[tuple[tuple[InputFrame, ...], tuple[InputFrame, ...],
+                                 int, int | None]] = set()
+
+        def offer_candidate(candidate: tuple[InputFrame, ...],
+                            later: int | None, label: str) -> tuple[bool, bool]:
+            """Rank stage checkpoints and completions independently."""
+            nonlocal best_rank, best_output, current, improvements, upgraded, completed
+            padded = _materialise_splice_tail(candidate, len(current) - 1)
+            stage_ok = later is not None and stage_feasible(padded, later)
+            if stage_ok:
+                score = original_endpoints[later].evaluate(padded)
+                pool = {frames: original_endpoints[later].evaluate(frames).objective_key
+                        for frames in archived_frontiers[later]}
+                pool[padded] = score.objective_key
+                selected = _diverse_saved_archive(
+                    pool, original_endpoints[later], config.save_frontier)
+                changed_archive = selected != archived_frontiers[later]
+                archived_frontiers[later] = selected
+                if (stage_checkpoint_evals[later] is None or
+                        score.objective_key < stage_checkpoint_evals[later].objective_key):
+                    stage_checkpoints[later] = padded
+                    stage_checkpoint_evals[later] = score
+                    stage_checkpoint_origin[later] = "verified merge"
+                    upgraded += 1
+                    if stage_best_callback:
+                        stage_best_callback(stages[later].name, stage_export(padded))
+                    if merge_only and progress:
+                        progress(f"{report} {label}: new saved stage best; "
+                                 f"{_stage_improvement_text(stages[later].goal, None, score)}"
+                                 f"{reported_savings(later, score)}")
+                if frontier_callback and (not merge_only or changed_archive):
+                    frontier_callback(stages[later].name,
+                                      tuple(archived_frontiers[later]))
+            # A completed improvement is never rejected by helper goals.
+            complete = final_rank(padded)
+            completion_ok = complete is not None
+            if complete is not None and (best_rank is None or complete[0] < best_rank):
+                best_rank, best_output = complete
+                current = padded
+                improvements += 1
+                completed += 1
+                if best_callback:
+                    best_callback(best_output)
+                if progress:
+                    progress(f"[auto:user-splice:merge] {label}: improved verified "
+                             f"completed replay at {len(best_output)} frames; saved")
+            return stage_ok, completion_ok
+
+        def try_join(prefix: tuple[InputFrame, ...],
+                     suffix: tuple[InputFrame, ...], seam: int,
+                     later: int | None, label: str,
+                     *, require_suffix_completion: bool = False) -> None:
+            nonlocal pairs, attempted, joined, input_attempted
+            pairs += 1
+            # Identity joins do not propagate the input or change the route.
+            if prefix == suffix:
+                if merge_only and progress:
+                    progress(f"{report} {label}: skipped (identical replays)")
+                return
+            key = (prefix, suffix, seam, later)
+            if key in seen_requests:
+                return
+            seen_requests.add(key)
+            attempted += 1
+            if label.startswith("current input ->"):
+                input_attempted += 1
+            physically_verified = 0
+            accepted = False
+            completed_join = False
+            stage_join = False
+            for graft in verified_suffix_grafts(
+                    level, prefix, suffix, seam_frame=seam,
+                    lookback=config.lookback,
+                    completion_required=require_suffix_completion):
+                physically_verified += 1
+                stage_ok, completion_ok = offer_candidate(graft, later, label)
+                if stage_ok or completion_ok:
+                    accepted = True
+                    completed_join = completed_join or completion_ok
+                    stage_join = stage_join or stage_ok
+                    # Inspect all independently verified grafts (at most four),
+                    # rather than stopping after the first valid but suboptimal
+                    # seam. Completion and stage best have separate rankings.
+            if accepted:
+                joined += 1
+                if merge_only and progress:
+                    result = ("completed join accepted despite missing destination helper"
+                              if completed_join and later is not None and not stage_join else
+                              "verified completed join" if completed_join else
+                              "verified stage join")
+                    progress(f"{report} {label}: {result} accepted")
+            elif merge_only and progress:
+                reason = ("no physically compatible seam" if not physically_verified
+                          else "no join satisfies its destination objective or completion")
+                progress(f"{report} {label}: rejected ({reason})")
+
+        # Preserve the established saved-stage merge behavior, including its
+        # earlier-to-later ordering, so a newly upgraded checkpoint may be used
+        # in a subsequent join within this pass.
         for later in range(1, len(stages)):
-            # Merge pairing is intentionally independent of search seed history.
-            # Include old pending gains without forcing an excessive normal
-            # stage_lookback (and its extra backend searches).
             for earlier in range(later):
-                pairs += 1
                 prefix, suffix = stage_checkpoints[earlier], stage_checkpoints[later]
                 label = f"{stages[earlier].name} -> {stages[later].name}"
                 if prefix is None or suffix is None:
+                    pairs += 1
                     if merge_only and progress:
                         missing = ("both checkpoints" if prefix is None and suffix is None else
                                    "source checkpoint" if prefix is None else "destination checkpoint")
-                        progress(f"[auto:user-splice:merge-only] {label}: skipped (missing {missing})")
+                        progress(f"{report} {label}: skipped (missing {missing})")
                     continue
-                if prefix == suffix:
-                    if merge_only and progress:
-                        progress(f"[auto:user-splice:merge-only] {label}: skipped (identical replays)")
+                try_join(prefix, suffix, stages[earlier].end, later, label)
+
+        # A manually edited replay is an independent source, even when it
+        # fails its next helper or dies before reaching that stage. Test seams
+        # at every earlier splice, plus the last reachable input seam.
+        for later, stage in enumerate(stages):
+            suffix = stage_checkpoints[later]
+            if suffix is None:
+                continue
+            tried_seams: set[int] = set()
+            for earlier in range(later + 1):
+                seam = min(last_live, stages[earlier].end)
+                if seam in tried_seams:
                     continue
-                attempted += 1
-                physically_verified = 0
-                accepted = False
-                completion_only = False
-                for graft in verified_suffix_grafts(
-                        level, _materialise_splice_tail(prefix, len(current)-1),
-                        _materialise_splice_tail(suffix, len(current)-1),
-                        seam_frame=stages[earlier].end,
-                        lookback=config.lookback, completion_required=False):
-                    physically_verified += 1
-                    candidate = _materialise_splice_tail(graft, len(current)-1)
-                    if not stage_feasible(candidate, later):
-                        # An otherwise verified faster completed replay is not
-                        # disqualified by the destination's helper goal. It
-                        # does NOT become a saved destination checkpoint.
-                        complete = final_rank(candidate) if require_complete else None
-                        if complete is not None and (best_rank is None or complete[0] < best_rank):
-                            best_rank, best_output = complete
-                            current = candidate
-                            improvements += 1
-                            completed += 1
-                            joined += 1
-                            accepted = True
-                            completion_only = True
-                            if best_callback:
-                                best_callback(best_output)
-                            if progress:
-                                progress("[auto:user-splice:merge] improved verified "
-                                         f"completed replay at {len(best_output)} frames; "
-                                         "destination helper missed; saved")
-                            break
+                tried_seams.add(seam)
+                try_join(input_prefix, suffix, seam, later,
+                         f"current input -> {stage.name} (seam {seam})")
+            if last_live not in tried_seams:
+                try_join(input_prefix, suffix, last_live, later,
+                         f"current input -> {stage.name} (last live seam {last_live})")
+
+        # A saved completed run is a useful continuation that may be absent
+        # from all stage frontiers. Try it against the *manual input* and each
+        # pending stage route without replacing a verified best by a checkpoint.
+        if saved_final is not None and saved_rank is not None:
+            suffix = saved_final  # unpadded: canonical completion required
+            for earlier, stage in enumerate(stages):
+                for source_label, prefix in (("current input", input_prefix),
+                                             (stage.name, stage_checkpoints[earlier])):
+                    if prefix is None:
                         continue
-                    accepted = True
-                    joined += 1
-                    score = original_endpoints[later].evaluate(candidate)
-                    pool = {frames: original_endpoints[later].evaluate(frames).objective_key
-                            for frames in archived_frontiers[later]}
-                    pool[candidate] = score.objective_key
-                    selected = _diverse_saved_archive(
-                        pool, original_endpoints[later], config.save_frontier)
-                    changed_archive = selected != archived_frontiers[later]
-                    archived_frontiers[later] = selected
-                    if (stage_checkpoint_evals[later] is None or
-                            score.objective_key < stage_checkpoint_evals[later].objective_key):
-                        stage_checkpoints[later] = candidate
-                        stage_checkpoint_evals[later] = score
-                        stage_checkpoint_origin[later] = "merged stage bests"
-                        upgraded += 1
-                        if stage_best_callback:
-                            stage_best_callback(stages[later].name, stage_export(candidate))
-                        if merge_only and progress:
-                            progress(f"[auto:user-splice:merge-only] {label}: "
-                                     "new saved stage best; "
-                                     f"{_stage_improvement_text(stages[later].goal, None, score)}"
-                                     f"{reported_savings(later, score)}")
-                    if frontier_callback and (not merge_only or changed_archive):
-                        frontier_callback(stages[later].name,
-                                          tuple(archived_frontiers[later]))
-                    if progress:
-                        progress(f"[auto:user-splice:merge] splice "
-                                 f"{stages[earlier].name} -> {stages[later].name}: "
-                                 "verified graft satisfies destination goal; "
-                                 "stored as stage seed (not yet a final win)")
-                    complete = final_rank(candidate)
-                    if complete is not None and (best_rank is None or complete[0] < best_rank):
-                        best_rank, best_output = complete
-                        current = candidate
-                        improvements += 1
-                        completed += 1
-                        if best_callback:
-                            best_callback(best_output)
-                        if progress:
-                            progress("[auto:user-splice:merge] improved verified "
-                                     f"completed replay at {len(best_output)} frames; saved")
-                    break
-                if merge_only and progress:
-                    if accepted:
-                        reason = ("verified completed join accepted despite missing "
-                                  "destination helper" if completion_only else
-                                  "verified join accepted (stage candidate checked)")
-                        progress(f"[auto:user-splice:merge-only] {label}: {reason}")
-                    else:
-                        reason = ("no physically compatible seam" if not physically_verified
-                                  else "joined replay fails destination goal")
-                        progress(f"[auto:user-splice:merge-only] {label}: "
-                                 f"rejected ({reason})")
+                    seam = (min(last_live, stage.end) if source_label == "current input"
+                            else stage.end)
+                    try_join(prefix, suffix, seam, None,
+                             f"{source_label} -> saved completed run (seam {seam})",
+                             require_suffix_completion=True)
+            # Manual edits may die after the last named helper; also try the
+            # last physically reachable frame instead of a helper boundary.
+            try_join(input_prefix, suffix, last_live, None,
+                     f"current input -> saved completed run (last live seam {last_live})",
+                     require_suffix_completion=True)
+        elif progress and merge_only:
+            progress(f"{report} no verified saved completed replay for suffix grafting; "
+                     "only saved stage suffixes were available")
 
         if progress:
             progress(f"{report} done: {pairs} pair(s) considered; "
                      f"{attempted} attempted; {joined} verified join(s); "
                      f"{upgraded} stage best(s) improved; "
                      f"{completed} completed best(s) improved; "
-                     f"{pairs-attempted} skipped; {attempted-joined} rejected")
+                     f"{pairs-attempted} skipped; {attempted-joined} rejected; "
+                     f"{input_attempted} current-input graft attempt(s)")
 
     if merge_stage_bests:
         run_saved_merge_pass("startup")

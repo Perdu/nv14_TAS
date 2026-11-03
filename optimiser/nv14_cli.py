@@ -4468,6 +4468,12 @@ def main() -> None:
                     return str(stage_outputs[name][0].with_suffix(
                         f".{backend}.round.json"))
 
+                if merge_only:
+                    print(f"[auto:user-splice:merge-only] current input: "
+                          f"{input_path.resolve()}; saved completed run: "
+                          f"{output_path.resolve()} (if verified); "
+                          "only the positional input is treated as manual edits",
+                          flush=True)
                 result = optimise_user_splices(
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,

@@ -1518,17 +1518,34 @@ python3 optimize_replay.py auto ../n_levels/97-2.ltm \
 ```
 
 To **merge saved splice bests once and exit**, use the same command with
-`--splice-merge-only`. It implies `--splice-merge-bests`, reads the saved named
-splice LTM/TXT checkpoints, and tests replay-verified joins from **all**
-earlier saved stages. Merge pairing is independent of `--splice-stage-lookback`
-(default 2), which still controls ordinary search frontier seeds. It reports skipped
-pairs (missing/identical checkpoints), rejected joins (physical seam or stage
-goals), verified joins, stage-best upgrades and completed-best upgrades.
-Only improved, stage-feasible checkpoints and independently verified completed
-final results are saved; an incomplete stage graft is **never** promoted to a
-completed best. No Auto/Local search, startup baseline checkpoint writes, or
-search resume/progress sidecar changes occur. `--auto-runs` and `--workers`
-do not govern this one-shot operation.
+`--splice-merge-only`. It implies `--splice-merge-bests` and tests
+replay-verified joins from **all** earlier saved splice LTM/TXT checkpoints.
+**The positional input replay is also a merge prefix**, even when a manual
+change leaves it unable to reach a later helper goal, and the existing
+**verified saved completed output** is a potential suffix. The merge tests
+seams at named splice boundaries and at the input's last live frame, so a
+partial manual route can sometimes reconnect to the previous completed route.
+It prints the exact input and saved-output paths to prevent editing the wrong
+replay: in the example below, edit `../n_levels/88-4.ltm` or use the actual
+edited file as the positional argument. Editing only `wip/88-4.ltm` does **not**
+change that input. This behavior also applies to startup and final merge passes
+under `merge-bests = true`.
+
+Merge pairing is independent of `--splice-stage-lookback` (default 2), which
+still controls ordinary search frontier seeds. The summary reports current-input
+merge attempts separately. Only independently verified completed improvements
+replace the final output; stage-feasible grafts may update their own checkpoints.
+A manually edited input that already completes faster than the saved output is
+also written immediately in merge-only mode after independent verification.
+An incomplete stage graft is **never** promoted to a completed best.
+
+**This is still a direct verified suffix graft, not an Auto/Local bridge-repair
+search:** if no physically compatible join exists, merge-only reports rejection
+and keeps the original completed best. Increasing search lookback is not necessary
+for choosing all earlier stages; seam lookback affects only nearby join attempts.
+No Auto/Local search, startup baseline checkpoint writes, or search
+resume/progress sidecar changes occur. `--auto-runs` and `--workers` do not
+govern this one-shot operation.
 
 For example, starting in `optimiser/`:
 
