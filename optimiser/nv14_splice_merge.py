@@ -18,7 +18,7 @@ from nv14_replay import editable_frames
 def verified_suffix_grafts(
     level: Level, prefix: Sequence[InputFrame], reference: Sequence[InputFrame],
     *, seam_frame: int, lookback: int = 32, max_results: int = 4,
-    completion_required: bool = True,
+    completion_required: bool = True, min_prefix_frame: int = 1,
 ) -> tuple[tuple[InputFrame, ...], ...]:
     """Try matching prefix states to nearby reference ticks and verify joins.
 
@@ -38,7 +38,7 @@ def verified_suffix_grafts(
     elif original.dead_tick is not None and original.finish_tick is None:
         return ()
     options: list[tuple[float, int, int]] = []
-    low = max(1, seam_frame - lookback)
+    low = max(1, min_prefix_frame, seam_frame - lookback)
     high = min(seam_frame + lookback, len(candidate)-2)
     for tick in range(low, high+1):
         state = probe.point(tick)

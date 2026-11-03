@@ -869,7 +869,7 @@ def optimise_user_splices(
         No Auto/Local mutation search runs here.
         """
         nonlocal best_rank, best_output, current, improvements
-        pairs = attempted = joined = upgraded = completed = input_attempted = 0
+        pairs = attempted = joined = upgraded = completed = input_attempted = section_attempted = 0
         report = ("[auto:user-splice:repair-only]" if merge_repair_only else
                   "[auto:user-splice:merge-only]" if merge_only else
                   f"[auto:user-splice:merge:{phase}]")
@@ -903,6 +903,43 @@ def optimise_user_splices(
                      f"{comparison}; last live candidate seam frame {last_live}")
         seen_requests: set[tuple[tuple[InputFrame, ...], tuple[InputFrame, ...],
                                  int, int | None]] = set()
+
+        def merge_routes(index: int) -> list[tuple[str, tuple[InputFrame, ...]]]:
+            """Keep a separate locally fast section when the stage best is slower.
+
+            The endpoint winner and fastest *within-section* replay can differ:
+            a later arrival at the previous helper can still yield a shorter
+            subsequent interval. Frontier sidecars retain this independent
+            candidate, but the fast merge used to ignore them completely.
+            Include one archived alternative even when duration is unmeasurable
+            (e.g. fixed-frame spatial goals), without claiming it is faster.
+            """
+            stage = stages[index]
+            routes: list[tuple[str, tuple[InputFrame, ...]]] = []
+            best = stage_checkpoints[index]
+            if best is not None:
+                routes.append((stage.name, best))
+            others = [frames for frames in archived_frontiers[index]
+                      if frames != best]
+            timed = [(duration, original_endpoints[index].evaluate(frames).objective_key,
+                      frames) for frames in others
+                     if (duration := section_duration(index, frames)) is not None]
+            if timed:
+                duration, _score, frames = min(timed)
+                routes.append((f"{stage.name} archived section ({duration} frames)", frames))
+            elif others:
+                routes.append((f"{stage.name} archived alternative", others[0]))
+            return routes
+
+        def first_input_difference(suffix: tuple[InputFrame, ...]) -> int | None:
+            """Do not graft before the first manual edit and drop that edit."""
+            first = next((i for i, (a, b) in enumerate(zip(source, suffix))
+                          if a != b), None)
+            if first is None and len(source) > len(suffix):
+                return len(suffix)
+            # A truncated but otherwise identical input has no changed input
+            # frame to preserve. It is valid to graft the old tail onto it.
+            return first
 
         def offer_candidate(candidate: tuple[InputFrame, ...],
                             later: int | None, label: str) -> tuple[bool, bool]:
@@ -952,7 +989,7 @@ def optimise_user_splices(
                      suffix: tuple[InputFrame, ...], seam: int,
                      later: int | None, label: str,
                      *, require_suffix_completion: bool = False) -> None:
-            nonlocal pairs, attempted, joined, input_attempted
+            nonlocal pairs, attempted, joined, input_attempted, section_attempted
             pairs += 1
             # Identity joins do not propagate the input or change the route.
             if prefix == suffix:
@@ -964,8 +1001,25 @@ def optimise_user_splices(
                 return
             seen_requests.add(key)
             attempted += 1
-            if label.startswith("current input ->"):
+            manual_input = label.startswith("current input ->")
+            if manual_input:
                 input_attempted += 1
+            if "archived section" in label or "archived alternative" in label:
+                section_attempted += 1
+            # When an edited input is grafted onto a historical suffix, the
+            # seam must at least contain its first changed input frame.  A
+            # seam *before* the edits merely reproduces the old run.
+            changed_at = first_input_difference(suffix) if manual_input else None
+            # A saved stage route can differ from the current input at frame 0
+            # even when the *manual* edit was made hundreds of frames later.
+            # Use the independently loaded completed output as another floor
+            # for every current-input join, so an unrelated early stage route
+            # cannot make us graft away the manual edit.
+            if manual_input and saved_final is not None and saved_rank is not None:
+                saved_difference = first_input_difference(saved_final)
+                if saved_difference is not None:
+                    changed_at = max(saved_difference, changed_at or 0)
+            min_prefix_frame = 1 if changed_at is None else max(1, changed_at)
             physically_verified = 0
             accepted = False
             completed_join = False
@@ -973,7 +1027,8 @@ def optimise_user_splices(
             for graft in verified_suffix_grafts(
                     level, prefix, suffix, seam_frame=seam,
                     lookback=config.lookback,
-                    completion_required=require_suffix_completion):
+                    completion_required=require_suffix_completion,
+                    min_prefix_frame=min_prefix_frame):
                 physically_verified += 1
                 stage_ok, completion_ok = offer_candidate(graft, later, label)
                 if stage_ok or completion_ok:
@@ -996,64 +1051,71 @@ def optimise_user_splices(
                           else "no join satisfies its destination objective or completion")
                 progress(f"{report} {label}: rejected ({reason})")
 
-        # Preserve the established saved-stage merge behavior, including its
-        # earlier-to-later ordering, so a newly upgraded checkpoint may be used
-        # in a subsequent join within this pass.
-        for later in range(1, len(stages)):
-            for earlier in range(later):
-                prefix, suffix = stage_checkpoints[earlier], stage_checkpoints[later]
-                label = f"{stages[earlier].name} -> {stages[later].name}"
-                if prefix is None or suffix is None:
-                    pairs += 1
-                    if merge_only and progress:
-                        missing = ("both checkpoints" if prefix is None and suffix is None else
-                                   "source checkpoint" if prefix is None else "destination checkpoint")
-                        progress(f"{report} {label}: skipped (missing {missing})")
-                    continue
-                try_join(prefix, suffix, stages[earlier].end, later, label)
-
-        # A manually edited replay is an independent source, even when it
-        # fails its next helper or dies before reaching that stage. Test seams
-        # at every earlier splice, plus the last reachable input seam.
-        for later, stage in enumerate(stages):
-            suffix = stage_checkpoints[later]
-            if suffix is None:
-                continue
-            tried_seams: set[int] = set()
-            for earlier in range(later + 1):
-                seam = min(last_live, stages[earlier].end)
-                if seam in tried_seams:
-                    continue
-                tried_seams.add(seam)
-                try_join(input_prefix, suffix, seam, later,
-                         f"current input -> {stage.name} (seam {seam})")
-            if last_live not in tried_seams:
-                try_join(input_prefix, suffix, last_live, later,
-                         f"current input -> {stage.name} (last live seam {last_live})")
-
-        # A saved completed run is a useful continuation that may be absent
-        # from all stage frontiers. Try it against the *manual input* and each
-        # pending stage route without replacing a verified best by a checkpoint.
+        # A manually edited positional replay is the first source, not a
+        # fallback after all saved-splice pairings. First try to reconnect it
+        # to the previous verified completion, independently of helper goals.
         if saved_final is not None and saved_rank is not None:
-            suffix = saved_final  # unpadded: canonical completion required
             for earlier, stage in enumerate(stages):
-                for source_label, prefix in (("current input", input_prefix),
-                                             (stage.name, stage_checkpoints[earlier])):
-                    if prefix is None:
-                        continue
-                    seam = (min(last_live, stage.end) if source_label == "current input"
-                            else stage.end)
-                    try_join(prefix, suffix, seam, None,
-                             f"{source_label} -> saved completed run (seam {seam})",
-                             require_suffix_completion=True)
-            # Manual edits may die after the last named helper; also try the
-            # last physically reachable frame instead of a helper boundary.
-            try_join(input_prefix, suffix, last_live, None,
+                try_join(input_prefix, saved_final,
+                         min(last_live, stage.end), None,
+                         f"current input -> saved completed run (seam {min(last_live, stage.end)})",
+                         require_suffix_completion=True)
+            try_join(input_prefix, saved_final, last_live, None,
                      f"current input -> saved completed run (last live seam {last_live})",
                      require_suffix_completion=True)
+
+        # Give the positional input a chance against BOTH the endpoint winner
+        # and the independently archived section candidate at every stage.
+        # All pairs are independent; an unmergeable stage cannot block others.
+        for later, stage in enumerate(stages):
+            for suffix_name, suffix in merge_routes(later):
+                tried_seams: set[int] = set()
+                for earlier in range(later + 1):
+                    seam = min(last_live, stages[earlier].end)
+                    if seam in tried_seams:
+                        continue
+                    tried_seams.add(seam)
+                    try_join(input_prefix, suffix, seam, later,
+                             f"current input -> {suffix_name} (seam {seam})")
+                if last_live not in tried_seams:
+                    try_join(input_prefix, suffix, last_live, later,
+                             f"current input -> {suffix_name} (last live seam {last_live})")
+
+        # Saved stage checkpoints and one independent archived candidate per
+        # stage are also viable prefixes. Try the saved completed suffix before
+        # spending work on other intermediate goals; these are best-effort
+        # joins and do not become mandatory constraints.
+        if saved_final is not None and saved_rank is not None:
+            for earlier, stage in enumerate(stages):
+                for source_name, prefix in merge_routes(earlier):
+                    try_join(prefix, saved_final, stage.end, None,
+                             f"{source_name} -> saved completed run (seam {stage.end})",
+                             require_suffix_completion=True)
         elif progress and merge_only:
             progress(f"{report} no verified saved completed replay for suffix grafting; "
                      "only saved stage suffixes were available")
+
+        # Earlier-to-later stage propagation still runs. The archived candidate
+        # is considered independently from each stage's absolute-frame winner,
+        # in both prefix and suffix roles. A later-arriving fast section can
+        # therefore survive, and a failed join at e.g. 564 does not prevent
+        # another from connecting 522 directly to 614 or a completed suffix.
+        for later in range(1, len(stages)):
+            for earlier in range(later):
+                prefixes = merge_routes(earlier)
+                suffixes = merge_routes(later)
+                if not prefixes or not suffixes:
+                    pairs += 1
+                    if merge_only and progress:
+                        missing = ("both checkpoints" if not prefixes and not suffixes else
+                                   "source checkpoint" if not prefixes else "destination checkpoint")
+                        progress(f"{report} {stages[earlier].name} -> {stages[later].name}: "
+                                 f"skipped (missing {missing})")
+                    continue
+                for source_name, prefix in prefixes:
+                    for suffix_name, suffix in suffixes:
+                        try_join(prefix, suffix, stages[earlier].end, later,
+                                 f"{source_name} -> {suffix_name}")
 
         if repair:
             run_bridge_repair_pass(report, offer_candidate)
@@ -1063,7 +1125,8 @@ def optimise_user_splices(
                      f"{upgraded} stage best(s) improved; "
                      f"{completed} completed best(s) improved; "
                      f"{pairs-attempted} skipped; {attempted-joined} rejected; "
-                     f"{input_attempted} current-input graft attempt(s)")
+                     f"{input_attempted} current-input graft attempt(s); "
+                     f"{section_attempted} archived-alternative graft attempt(s)")
 
     def run_bridge_repair_pass(report: str, offer) -> None:
         """Repair independent saved-prefix routes without blocking on failures.

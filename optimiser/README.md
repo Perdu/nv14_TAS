@@ -1520,9 +1520,13 @@ python3 optimize_replay.py auto ../n_levels/97-2.ltm \
 To **merge saved splice bests once and exit**, use the same command with
 `--splice-merge-only`. It implies `--splice-merge-bests` and tests
 replay-verified joins from **all** earlier saved splice LTM/TXT checkpoints.
-**The positional input replay is also a merge prefix**, even when a manual
-change leaves it unable to reach a later helper goal, and the existing
-**verified saved completed output** is a potential suffix. The merge tests
+**The positional input replay is tried first**, before saved-stage-to-stage
+pairs, even when a manual change leaves it unable to reach a later helper goal.
+The older **verified saved completed output** is a separate suffix candidate,
+not a replacement for that input. Input-to-saved joins must include at least
+its first changed input frame, so a seam before the edit cannot silently
+reproduce the old route. A truncated input with no changed input presses can
+still reconnect to its saved continuation. The merge tests
 seams at named splice boundaries and at the input's last live frame, so a
 partial manual route can sometimes reconnect to the previous completed route.
 It prints the exact input and saved-output paths to prevent editing the wrong
@@ -1532,9 +1536,17 @@ change that input. This behavior also applies to startup and final merge passes
 under `merge-bests = true`.
 
 Merge pairing is independent of `--splice-stage-lookback` (default 2), which
-still controls ordinary search frontier seeds. The summary reports current-input
-merge attempts separately. Only independently verified completed improvements
-replace the final output; stage-feasible grafts may update their own checkpoints.
+still controls ordinary search frontier seeds. Besides the stage-best checkpoint,
+fast merge considers **one independent archived candidate per stage** in both
+prefix and suffix roles. It prioritizes the fastest measured section when the
+goals permit measuring actual elapsed section time; otherwise it uses an archived
+alternative without claiming it is faster. A later-arriving but locally faster
+section is not discarded simply because its absolute arrival is worse. A
+failed splice pair (e.g. 564) never prevents attempting other pairs (e.g. 522 ->
+614). This adds some verified seam attempts, but no mutation/repair searches.
+The summary reports current-input and archived-alternative graft attempts
+separately. Only independently verified completed improvements replace the final
+output; stage-feasible grafts may update their own checkpoints/frontiers.
 A manually edited input that already completes faster than the saved output is
 also written immediately in merge-only mode after independent verification.
 An incomplete stage graft is **never** promoted to a completed best.
