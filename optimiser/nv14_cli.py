@@ -2451,6 +2451,9 @@ def build_parser() -> argparse.ArgumentParser:
                          help="seed from the best saved LTM/TXT for NAME and, by default, "
                               "search from the next splice; preserve the current verified "
                               "run as the final-score baseline")
+    command.add_argument("--splice-each-best", dest="auto_splice_each_best",
+                         modes=auto_modes, action="store_true",
+                         help="also start every named splice from its own saved best checkpoint")
     command.add_argument("-l", "--ls-splice", "--ls-splices", dest="auto_ls_splice",
                          modes=auto_modes, action="store_true",
                          help="show saved named-splice checkpoint propagation summary and exit; "
@@ -4343,6 +4346,7 @@ def main() -> None:
                     "stages": [repr(stage) for stage in stages],
                     "config": repr(splice_config),
                     "from_best": args.auto_splice_from_best,
+                    "start_from_stage_bests": args.auto_splice_each_best,
                     "start_at": args.auto_splice_start,
                     "stop_at": args.auto_splice_stop,
                 }
@@ -4375,6 +4379,7 @@ def main() -> None:
                     completion_policy=args.auto_completion_policy,
                     start_at=args.auto_splice_start, stop_at=args.auto_splice_stop,
                     from_best=args.auto_splice_from_best,
+                    start_from_stage_bests=args.auto_splice_each_best,
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path,

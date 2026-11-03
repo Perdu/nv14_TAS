@@ -566,6 +566,7 @@ def optimise_user_splices(
     completion_policy: str = "complete",
     start_at: str | None = None, stop_at: str | None = None,
     from_best: str | None = None,
+    start_from_stage_bests: bool = False,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
@@ -794,6 +795,7 @@ def optimise_user_splices(
                 "stage_settings": [repr(stage) for stage in stages],
                 "config": repr(config),
                 "from_best": from_best,
+                "start_from_stage_bests": start_from_stage_bests,
                 "start_at": start_at, "stop_at": stop_at,
             }
             if any(resume_state.get(k) != value for k, value in wanted.items()):
@@ -1015,6 +1017,12 @@ def optimise_user_splices(
             attempts_before_stage = attempts
             temp_gains = 0
             branches = _stage_sources_history(history, config.frontier)
+            if start_from_stage_bests and stage_checkpoints[index] is not None:
+                # Retry the best of *this* splice as another starting point,
+                # even when it never propagated to the previous stage frontier.
+                local_best = _materialise_splice_tail(
+                    stage_checkpoints[index], len(current) - 1)
+                branches = [local_best, *(b for b in branches if b != local_best)]
             if active_phase is not None and index == stage_begin:
                 # Never search another route before recovering the interrupted
                 # backend. The other viable routes remain archived separately.
@@ -1037,7 +1045,10 @@ def optimise_user_splices(
                 # Sources are ranked *within* their own checkpoint objective,
                 # not by the score of the stage we are about to search.
                 source_detail = "input/best completed replay"
-                if active_phase is not None and index == stage_begin and seed_index == 1:
+                if (start_from_stage_bests and stage_checkpoints[index] is not None and
+                        branch == _materialise_splice_tail(stage_checkpoints[index], len(current)-1)):
+                    source_detail = f"start from splice {stage.name} (saved stage best)"
+                elif active_phase is not None and index == stage_begin and seed_index == 1:
                     source_detail = "resumed interrupted backend seed"
                 else:
                     for depth, (pool, origin) in enumerate(zip(history, history_origins), 1):
@@ -1152,6 +1163,7 @@ def optimise_user_splices(
                                 "stages": [item.name for item in stages],
                                 "stage_settings": [repr(item) for item in stages],
                                 "config": repr(config), "from_best": from_best,
+                                "start_from_stage_bests": start_from_stage_bests,
                                 "start_at": start_at, "stop_at": stop_at,
                                 "round_no": round_no, "stage_index": index,
                                 "stage": stage.name,
