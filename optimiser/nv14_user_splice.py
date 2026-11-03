@@ -572,6 +572,7 @@ def optimise_user_splices(
     from_best: str | None = None,
     start_from_stage_bests: bool = False,
     reference_frames: Sequence[InputFrame] | None = None,
+    merge_stage_bests: bool = False,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
@@ -837,6 +838,7 @@ def optimise_user_splices(
                 "from_best": from_best,
                 "start_from_stage_bests": start_from_stage_bests,
                 "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
+                "merge_stage_bests": merge_stage_bests,
                 "start_at": start_at, "stop_at": stop_at,
             }
             if any(resume_state.get(k) != value for k, value in wanted.items()):
@@ -1010,6 +1012,56 @@ def optimise_user_splices(
     # Their rank is the objective of the stage that produced them; do not
     # promote a local improvement if its mandatory earlier goals were lost.
     elites: list[list[tuple[InputFrame, ...]]] = [list(pool[:config.frontier]) for pool in archived_frontiers]
+    if merge_stage_bests:
+        # Try grafting each saved earlier-stage best onto later saved routes.
+        # An incomplete graft is only a *stage seed*; only final_rank may
+        # promote it to the completed result. No branch bypasses past goals.
+        for later in range(1, len(stages)):
+            for earlier in range(max(0, later-config.stage_lookback), later):
+                prefix, suffix = stage_checkpoints[earlier], stage_checkpoints[later]
+                if prefix is None or suffix is None or prefix == suffix:
+                    continue
+                for graft in verified_suffix_grafts(
+                        level, _materialise_splice_tail(prefix, len(current)-1),
+                        _materialise_splice_tail(suffix, len(current)-1),
+                        seam_frame=stages[earlier].end,
+                        lookback=config.lookback, completion_required=False):
+                    candidate = _materialise_splice_tail(graft, len(current)-1)
+                    if not valid_stages(candidate, later+1):
+                        continue
+                    score = original_endpoints[later].evaluate(candidate)
+                    pool = {frames: original_endpoints[later].evaluate(frames).objective_key
+                            for frames in archived_frontiers[later]}
+                    pool[candidate] = score.objective_key
+                    archived_frontiers[later] = _diverse_saved_archive(
+                        pool, original_endpoints[later], config.save_frontier)
+                    if (stage_checkpoint_evals[later] is None or
+                            score.objective_key < stage_checkpoint_evals[later].objective_key):
+                        stage_checkpoints[later] = candidate
+                        stage_checkpoint_evals[later] = score
+                        stage_checkpoint_origin[later] = "merged stage bests"
+                        if stage_best_callback:
+                            stage_best_callback(stages[later].name, stage_export(candidate))
+                    if frontier_callback:
+                        frontier_callback(stages[later].name,
+                                          tuple(archived_frontiers[later]))
+                    if progress:
+                        progress(f"[auto:user-splice:merge] splice "
+                                 f"{stages[earlier].name} -> {stages[later].name}: "
+                                 "verified graft satisfies all goals through destination; "
+                                 "stored as stage seed (not yet a final win)")
+                    complete = final_rank(candidate)
+                    if complete is not None and (best_rank is None or complete[0] < best_rank):
+                        best_rank, best_output = complete
+                        current = candidate
+                        improvements += 1
+                        if best_callback:
+                            best_callback(best_output)
+                        if progress:
+                            progress("[auto:user-splice:merge] improved verified "
+                                     f"completed replay at {len(best_output)} frames; saved")
+                    break
+
     if type(resume_outer_round) is not int or resume_outer_round < 0:
         raise ValueError("invalid saved outer-round progress")
     first_round = (int(active_phase["round_no"]) if active_phase is not None
@@ -1226,6 +1278,7 @@ def optimise_user_splices(
                                 "config": repr(config), "from_best": from_best,
                                 "start_from_stage_bests": start_from_stage_bests,
                                 "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
+                                "merge_stage_bests": merge_stage_bests,
                                 "start_at": start_at, "stop_at": stop_at,
                                 "round_no": round_no, "stage_index": index,
                                 "stage": stage.name,

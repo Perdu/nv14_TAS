@@ -2452,6 +2452,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="seed from the best saved LTM/TXT for NAME and, by default, "
                               "search from the next splice; preserve the current verified "
                               "run as the final-score baseline")
+    command.add_argument("--splice-merge-bests", dest="auto_splice_merge_bests",
+                         modes=auto_modes, action="store_true",
+                         help="attempt replay-verified joins of saved best checkpoints "
+                              "across preceding named splices")
     command.add_argument("--splice-reference", dest="auto_splice_reference",
                          modes=auto_modes, type=Path, metavar="FILE",
                          help="completed same-level replay to use as a reference suffix "
@@ -4406,6 +4410,7 @@ def main() -> None:
                     "start_from_stage_bests": args.auto_splice_each_best,
                     "reference_sha256": (hashlib.sha256(encode_complex_replay(reference_frames).encode()).hexdigest()
                                           if reference_frames is not None else None),
+                    "merge_stage_bests": args.auto_splice_merge_bests,
                     "start_at": args.auto_splice_start,
                     "stop_at": args.auto_splice_stop,
                 }
@@ -4441,6 +4446,7 @@ def main() -> None:
                     from_best=args.auto_splice_from_best,
                     start_from_stage_bests=args.auto_splice_each_best,
                     reference_frames=reference_frames,
+                    merge_stage_bests=args.auto_splice_merge_bests,
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path,

@@ -17,6 +17,7 @@ from nv14_replay import editable_frames
 def verified_suffix_grafts(
     level: Level, prefix: Sequence[InputFrame], reference: Sequence[InputFrame],
     *, seam_frame: int, lookback: int = 32, max_results: int = 4,
+    completion_required: bool = True,
 ) -> tuple[tuple[InputFrame, ...], ...]:
     """Try matching prefix states to nearby reference ticks and verify joins.
 
@@ -30,7 +31,10 @@ def verified_suffix_grafts(
     reference = tuple(editable_frames(reference))
     probe = evaluate_replay_with_sentinel(level, candidate)
     original = evaluate_replay_with_sentinel(level, reference)
-    if not original.valid or original.finish_tick != len(reference):
+    if completion_required:
+        if not original.valid or original.finish_tick != len(reference):
+            return ()
+    elif original.dead_tick is not None and original.finish_tick is None:
         return ()
     options: list[tuple[float, int, int]] = []
     low = max(1, seam_frame - lookback)
@@ -62,12 +66,15 @@ def verified_suffix_grafts(
             continue
         seen.add(joined)
         check = evaluate_replay_with_sentinel(level, joined)
-        if not check.valid or check.finish_tick is None:
-            continue
-        trimmed = joined[:check.finish_tick]
-        try:
-            checked = verify_trimmed_replay(level, trimmed)
-        except ValueError:
+        if check.valid and check.finish_tick is not None:
+            trimmed = joined[:check.finish_tick]
+            try:
+                checked = verify_trimmed_replay(level, trimmed)
+            except ValueError:
+                continue
+        elif not completion_required and check.dead_tick is None:
+            trimmed, checked = joined, check
+        else:
             continue
         if not _control_preserved(original, checked):
             continue
