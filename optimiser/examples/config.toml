@@ -106,3 +106,4 @@ frontier = 3
 # Number of candidates to save per splice on disk
 save-frontier = 64
 runs = 3
+merge-bests = true
