@@ -216,3 +216,20 @@ def test_merge_only_rejected_outside_named_multi_splicer(tmp_path, monkeypatch):
                                      '--output', str(tmp_path/'test.txt')])
     with pytest.raises(SystemExit, match='requires named multi-splicer'):
         main()
+
+
+def test_cli_fast_merge_overrides_persistent_repair_at_end(tmp_path, monkeypatch, capsys):
+    """Standalone fast merging must work with end-of-run repair configured."""
+    _level, _source, _saved, output, _packed, argv = _setup(tmp_path)
+    config = tmp_path / 'config.toml'
+    with config.open('a') as stream:
+        stream.write('\n[multi-splicer]\nmerge-repair-at-end=true\n')
+    monkeypatch.setattr(us, '_search_stage', _forbid_search)
+    monkeypatch.setattr(us, 'repair_suffix_grafts', _forbid_search)
+    monkeypatch.setattr(sys, 'argv', [*argv, '--splice-merge-only'])
+    main()
+    stdout = capsys.readouterr().out
+    assert '[auto:user-splice:merge-only] done:' in stdout
+    assert 'bridge repair' not in stdout
+    assert not output.with_suffix('.splice-search.json').exists()
+    assert not output.with_suffix('.splice-progress.json').exists()

@@ -202,3 +202,41 @@ def test_unmergeable_stage_does_not_prevent_later_fast_stage_pair(monkeypatch):
     )
     assert (earlier, incompatible) in calls
     assert (earlier, later) in calls
+
+
+def test_fast_merge_equal_section_duration_and_score_do_not_compare_input_frames(monkeypatch):
+    """Different archived movies can tie on both ranking fields (user crash)."""
+    level, source, _ = _baseline()
+    # Three routes are indistinguishable at the two endpoint checkpoints,
+    # but have different later inputs; the first is the saved stage best.
+    archives = [source[:tick] + (InputFrame(left=True),) + source[tick+1:]
+                for tick in (23, 24, 25)]
+    assert len(set(archives)) == 3
+    # Keep all the candidates so the tie is exercised inside merge_routes,
+    # instead of being suppressed by an unrelated diversity limit.
+    monkeypatch.setattr(us, '_diverse_saved_archive',
+                        lambda pool, *_a, **_k: list(pool))
+    calls = []
+    monkeypatch.setattr(us, 'verified_suffix_grafts',
+                        lambda _level, prefix, suffix, **_kwargs:
+                        calls.append((tuple(prefix), tuple(suffix))) or ())
+    monkeypatch.setattr(us, '_search_stage', _no_mutations)
+    monkeypatch.setattr(us, 'repair_suffix_grafts', _no_mutations)
+    messages = []
+    stages = [
+        UserSpliceStage('72', EndpointGoal(10, 'earliest-arrival',
+                         target_region=(-1000, 1000, -1000, 1000)), 0, 10),
+        UserSpliceStage('522', EndpointGoal(20, 'earliest-arrival',
+                         target_region=(-1000, 1000, -1000, 1000)), 10, 20),
+    ]
+    optimise_user_splices(
+        level, source, stages, RandomSpliceConfig(iterations=2, save_frontier=5),
+        completion_policy='checkpoint', merge_stage_bests=True, merge_only=True,
+        saved_stage_candidates={'522': [archives[0]]},
+        saved_stage_frontiers={'522': archives}, progress=messages.append)
+    # Equal durations and objective scores must choose the first remaining
+    # archived route deterministically, without comparing InputFrame objects.
+    assert any(prefix == archives[1] or suffix == archives[1]
+               for prefix, suffix in calls)
+    assert any('archived section' in msg for msg in messages)
+    assert any('done:' in msg for msg in messages)

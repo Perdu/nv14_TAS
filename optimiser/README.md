@@ -1910,3 +1910,9 @@ genuine interrupted backend state is still resumed. `splice-iterations`/`splice-
 search effort *per stage*. Per-file Local search tuning (such as `window`,
 `passes`, or `restarts`) is not imported: only endpoint goal definitions are
 read. Set `runs` to a finite number if you do not want an indefinite campaign.
+
+Standalone `--splice-merge-only` and `--splice-merge-repair-only` take precedence
+when `[multi-splicer] merge-repair-at-end = true` is configured. A standalone
+fast merge never starts the end-of-run bridge-repair search. When two archived
+sections have identical duration and checkpoint score, direct merging chooses
+one deterministically instead of trying to compare their input-frame objects.

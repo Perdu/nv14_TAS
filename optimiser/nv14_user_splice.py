@@ -925,7 +925,11 @@ def optimise_user_splices(
                       frames) for frames in others
                      if (duration := section_duration(index, frames)) is not None]
             if timed:
-                duration, _score, frames = min(timed)
+                # Different replays can have identical section durations and
+                # endpoint scores. Compare only those sortable values: Python
+                # cannot order InputFrame tuples when both scores tie. min()
+                # is stable, preserving archive order as the tie-breaker.
+                duration, _score, frames = min(timed, key=lambda row: (row[0], row[1]))
                 routes.append((f"{stage.name} archived section ({duration} frames)", frames))
             elif others:
                 routes.append((f"{stage.name} archived alternative", others[0]))

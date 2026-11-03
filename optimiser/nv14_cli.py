@@ -3958,13 +3958,11 @@ def main() -> None:
             args.auto_random_splice and args.auto_splice_mode == "user" and
             args.auto_splice_files):
         raise SystemExit("splice merge repair requires named multi-splicer Auto mode")
-    if repair_only:
-        # A reusable [multi-splicer] repair-at-end setting must not prevent
-        # explicitly requested standalone repair (no normal run to end).
+    if merge_only:
+        # Standalone fast merge and standalone bridge repair both take priority
+        # over a persistent [multi-splicer] merge-repair-at-end setting. There
+        # is no normal search end in either mode, so do not run end repairs.
         repair_at_end = False
-    elif repair_at_end and merge_only:
-        raise SystemExit("--splice-merge-repair-at-end is for normal searches; "
-                         "use --splice-merge-repair-only for standalone repair")
     if merge_only:
         if not (args.mode == "auto" and args.auto_random_splice and
                 args.auto_splice_mode == "user" and args.auto_splice_files):
