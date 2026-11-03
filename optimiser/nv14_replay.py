@@ -363,3 +363,63 @@ def valid_retime_mutations(
                     continue
                 result.append(mutation)
     return tuple(result)
+
+
+def clean_ineffective_air_jumps(
+    level: Level, frames: Sequence[InputFrame],
+) -> tuple[InputFrame, ...]:
+    """Erase airborne jump holds only if the *entire* replay is unchanged.
+
+    'Shift' is N's jump key. This is a conservative, optional presentation
+    cleanup: remove whole jump pulses which start in free air, never cause a
+    successful jump, and whose removal preserves the full per-tick physical
+    trace, route-control events, completion and score. Keep the original if
+    any of those checks differ. The active optimizer population is untouched.
+    """
+    from dataclasses import replace
+    from nv14_auto import evaluate_replay_with_sentinel
+
+    current = tuple(editable_frames(frames))
+    baseline = evaluate_replay_with_sentinel(level, current)
+    if not baseline.valid:
+        return current
+
+    def same_run(candidate):
+        checked = evaluate_replay_with_sentinel(level, candidate)
+        if (checked.finish_tick != baseline.finish_tick or
+                checked.dead_tick != baseline.dead_tick or
+                checked.last_tick != baseline.last_tick or
+                checked.route_control_events != baseline.route_control_events or
+                checked.successful_jumps != baseline.successful_jumps or
+                checked.final_gold_mask != baseline.final_gold_mask or
+                checked.gold_bonus_ticks != baseline.gold_bonus_ticks or
+                checked.completed_exit_index != baseline.completed_exit_index or
+                checked.pre_finish_exit_distance != baseline.pre_finish_exit_distance or
+                len(checked.trace) != len(baseline.trace)):
+            return False
+        # previous_jump_held is input history, not a physical game outcome.
+        # Everything else, including collision modes, state and object masks,
+        # must match bit-for-bit at *every* replay step.
+        return all(replace(a, previous_jump_held=False) ==
+                   replace(b, previous_jump_held=False)
+                   for a, b in zip(baseline.trace, checked.trace))
+
+    i = 0
+    while i < len(current):
+        if not current[i].jump or (i and current[i-1].jump):
+            i += 1
+            continue
+        end = i + 1
+        while end < len(current) and current[end].jump:
+            end += 1
+        before = baseline.point(i - 1) if i else None
+        if (before is not None and before.in_air and not before.near_wall and
+                all(not (i <= tick < end) for tick in baseline.successful_jumps)):
+            trial = list(current)
+            for tick in range(i, end):
+                old = trial[tick]
+                trial[tick] = InputFrame(old.left, old.right, False, None)
+            if same_run(trial):
+                current = tuple(trial)
+        i = end
+    return current

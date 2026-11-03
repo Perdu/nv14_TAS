@@ -2424,6 +2424,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--auto-random-splice", modes=auto_modes, action="store_true",
         help="switch-safe stochastic route waypoint splicing; requires completed speedrun",
     )
+    command.add_argument("--auto-clean-air-jumps", modes=auto_modes,
+                         action="store_true",
+                         help="remove provably ineffective airborne Shift/jump pulses "
+                              "from saved splice results; full replay trace is reverified")
     command.add_argument("--auto-splice-search", modes=auto_modes,
                          choices=("local", "endpoint-auto", "both"), default="local",
                          help="splice search: Local population (default), endpoint Auto Hybrid, or both (named files only; shared budget)")
@@ -4217,9 +4221,19 @@ def main() -> None:
                                 raise ValueError(f"splice LTM alias {alias} conflicts with {label}")
                         alias_outputs[stage_name] = alias
 
+                def clean_splice_output(frames):
+                    if not args.auto_clean_air_jumps:
+                        return frames
+                    from nv14_replay import clean_ineffective_air_jumps
+                    cleaned = clean_ineffective_air_jumps(level, frames)
+                    if cleaned != tuple(editable_frames(frames)):
+                        print("[auto:splice:clean] removed ineffective airborne jump "
+                              "holds; verified identical full trace", flush=True)
+                    return cleaned
+
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
-                    replay_text = encode_complex_replay(frames)
+                    replay_text = encode_complex_replay(clean_splice_output(frames))
                     if source.ltm_movie is not None and packed_path is not None:
                         # An LTM may regard trailing neutral ticks as implicit
                         # post-roll. Save the plain replay as it will actually
@@ -4363,7 +4377,8 @@ def main() -> None:
                     from_best=args.auto_splice_from_best,
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
-                        source, output_path, replay_output_path, encode_complex_replay(frames)),
+                        source, output_path, replay_output_path,
+                        encode_complex_replay(clean_splice_output(frames))),
                     stage_best_callback=save_stage_best,
                     saved_stage_candidates=saved_stage_candidates,
                     saved_stage_frontiers=saved_stage_frontiers,
