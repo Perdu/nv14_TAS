@@ -214,3 +214,23 @@ To additionally *try* bounce-block contacts, include `"bounceblock"` in
 `--auto-splice-skip-probability 0.35` for equivalent CLI control. These modes
 are heuristics, not guaranteed faster than random splicing: compare under the
 same worker count, seeds, budgets, and rounds.
+
+### Shared waypoint backends (patch 43)
+
+Random, complexity-based, and physics-aware waypoint modes can now use the
+same endpoint Auto/Local backend phasing as the named multi-splicer. Select
+`--auto-splice-search both` plus `--splice-auto-stagnation-rounds N` and
+`--splice-local-stagnation-rounds M` to run continuous Auto then Local phases,
+repeating while the waypoint objective improves. The existing global
+`--auto-runs`/`--auto-stagnation-runs` bounds still control the outer sampled
+rounds. Per-backend stagnation is independent of outer-round stagnation;
+`--auto-splice-iterations` is work *per backend round*, not a lifetime cap.
+Only verified completed outcomes are committed in completed-run speedrun mode.
+
+`--splice-waypoint-lookback N` retains a selected candidate from up to N
+recent sampled waypoint frontiers when preparing subsequent waypoints (default
+1 preserves the old behavior). This is distinct from
+`--auto-splice-lookback`, which controls local mutation/seam horizons, and
+from `--splice-stage-lookback`, which applies to named multi-splicer stages.
+The setting affects the multi-waypoint search and endpoint-goal search; the
+single-anchor speedrun search still restarts from the latest verified route.

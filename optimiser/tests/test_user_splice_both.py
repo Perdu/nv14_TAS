@@ -13,7 +13,7 @@ from nv14_user_splice import (_search_stage, _stage_sources, UserSpliceStage,
 from tests.test_random_splice import _baseline
 
 
-def test_both_cli_and_toml_and_other_modes_rejected(tmp_path):
+def test_both_cli_toml_and_sampled_modes(tmp_path):
     cfg = tmp_path / 'config.toml'
     cfg.write_text('[auto]\nsplice-files=["203", "408", "end"]\nsplice-search="both"\n')
     args = parse_arguments(['auto', 'some.ltm', '--config', str(cfg)])
@@ -22,9 +22,9 @@ def test_both_cli_and_toml_and_other_modes_rejected(tmp_path):
     assert args.auto_random_splice
     assert parse_arguments(['auto', 'some.ltm', '--auto-splice-files', '203,end',
                             '--auto-splice-search', 'both']).auto_splice_search == 'both'
-    with pytest.raises(SystemExit, match='requires user mode'):
-        parse_arguments(['auto', 'some.ltm', '--auto-random-splice',
-                         '--auto-splice-search', 'both'])
+    sampled = parse_arguments(['auto', 'some.ltm', '--auto-random-splice',
+                               '--auto-splice-search', 'both'])
+    assert sampled.auto_splice_search == 'both'
     with pytest.raises(ValueError, match='only supported for user-defined'):
         from nv14_random_splice import _local_search
         level, frames, _ = _baseline()

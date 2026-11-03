@@ -1799,7 +1799,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_searches", "auto_splice_rounds",
     "auto_splice_stagnation_rounds", "auto_splice_auto_stagnation_rounds",
     "auto_splice_local_stagnation_rounds",
-    "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_exit_lookback",
+    "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_waypoint_lookback", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_directory",
     "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
 })
@@ -1831,15 +1831,9 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
             (args.auto_splice_start or args.auto_splice_stop or args.auto_splice_from_best)
             and args.auto_splice_mode != "user"):
         raise SystemExit("--splice-start/--splice-stop/--splice-from-best require named user splice mode")
-    if args.auto_random_splice and args.auto_splice_search == "both" and args.auto_splice_mode != "user":
-        raise SystemExit("splice-search=both requires user mode with splice-files")
     if (args.auto_random_splice and args.auto_splice_mode != "user" and
             "auto_splice_stage_lookback" in explicit):
         raise SystemExit("--splice-stage-lookback requires named user splice mode")
-    if (args.auto_random_splice and
-            (args.auto_splice_stagnation_rounds or args.auto_splice_auto_stagnation_rounds
-             or args.auto_splice_local_stagnation_rounds) and args.auto_splice_mode != "user"):
-        raise SystemExit("splice stagnation options require named user splice mode")
     if args.auto_random_splice and args.auto_objective == AUTO_OBJECTIVE_HIGHSCORE:
         raise SystemExit("--auto-random-splice requires --objective speedrun or an endpoint objective (not highscore)")
     if args.auto_random_splice and args.auto_splice_mode == "user":
@@ -2431,7 +2425,7 @@ def build_parser() -> argparse.ArgumentParser:
                               "from saved splice results; full replay trace is reverified")
     command.add_argument("--auto-splice-search", modes=auto_modes,
                          choices=("local", "endpoint-auto", "both"), default="local",
-                         help="splice search: Local population (default), endpoint Auto Hybrid, or both (named files only; shared budget)")
+                         help="splice search: Local population (default), endpoint Auto Hybrid, or both (all splice modes; shared budget)")
     command.add_argument("--auto-splice-mode", modes=auto_modes,
                          choices=("random", "complexity", "physics", "user"), default="random",
                          help="waypoint selection: random (default), complexity boundaries, physical interactions, or user-named goal files")
@@ -2502,11 +2496,11 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-auto-stagnation-rounds", "--auto-splice-auto-stagnation-rounds",
                          dest="auto_splice_auto_stagnation_rounds", modes=auto_modes,
                          type=int, default=0, metavar="N",
-                         help="named multi-splicer: Auto phase stops after N consecutive Auto backend rounds without an eligible improvement")
+                         help="Auto phase stops after N consecutive Auto backend rounds without an eligible improvement")
     command.add_argument("--splice-local-stagnation-rounds", "--auto-splice-local-stagnation-rounds",
                          dest="auto_splice_local_stagnation_rounds", modes=auto_modes,
                          type=int, default=0, metavar="N",
-                         help="named multi-splicer: Local phase stops after N consecutive Local backend rounds without an eligible improvement")
+                         help="Local phase stops after N consecutive Local backend rounds without an eligible improvement")
     command.add_argument("--auto-splice-repair-rounds", modes=auto_modes, type=int, default=1,
                          metavar="N", help="backend search rounds PER continuation repair (default 1)")
     command.add_argument("--auto-splice-repair-anchors", modes=auto_modes, type=int, default=2,
@@ -2518,6 +2512,11 @@ def build_parser() -> argparse.ArgumentParser:
                          dest="auto_splice_save_frontier", modes=auto_modes,
                          type=parse_positive_int, default=64, metavar="N",
                          help="named splices: persist up to N stage routes independently of active frontier (default 64, maximum 256)")
+    command.add_argument("--splice-waypoint-lookback", "--auto-splice-waypoint-lookback",
+                         dest="auto_splice_waypoint_lookback", modes=auto_modes,
+                         type=parse_positive_int, default=1, metavar="N",
+                         help="random/complexity/physics: retain preceding N sampled "
+                              "waypoint frontiers (default 1 preserves old behavior)")
     command.add_argument("--splice-stage-lookback", "--auto-splice-stage-lookback",
                          dest="auto_splice_stage_lookback", modes=auto_modes,
                          type=parse_positive_int, default=2, metavar="N",
@@ -4179,6 +4178,16 @@ def main() -> None:
         auto_parent_frames.append(tuple(parent_retimed_frames))
 
     if args.mode == "auto" and args.auto_random_splice:
+        def clean_splice_output(frames):
+            if not args.auto_clean_air_jumps:
+                return frames
+            from nv14_replay import clean_ineffective_air_jumps
+            cleaned = clean_ineffective_air_jumps(level, frames)
+            if cleaned != tuple(editable_frames(frames)):
+                print("[auto:splice:clean] removed ineffective airborne jump "
+                      "holds; verified identical full trace", flush=True)
+            return cleaned
+
         if args.auto_splice_mode == "user" and _find_option_paths(sys.argv[1:], "--goal-config"):
             raise SystemExit("user splice mode uses its own named goal files; omit --goal-config")
         target_goal = None
@@ -4258,16 +4267,6 @@ def main() -> None:
                             if protected is not None and _paths_alias(alias, protected):
                                 raise ValueError(f"splice LTM alias {alias} conflicts with {label}")
                         alias_outputs[stage_name] = alias
-
-                def clean_splice_output(frames):
-                    if not args.auto_clean_air_jumps:
-                        return frames
-                    from nv14_replay import clean_ineffective_air_jumps
-                    cleaned = clean_ineffective_air_jumps(level, frames)
-                    if cleaned != tuple(editable_frames(frames)):
-                        print("[auto:splice:clean] removed ineffective airborne jump "
-                              "holds; verified identical full trace", flush=True)
-                    return cleaned
 
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
@@ -4361,6 +4360,9 @@ def main() -> None:
                             raise ValueError("reference replay is for a different level")
                         reference_frames = tuple(editable_frames(decode_complex_replay(
                             ref_source.combined.replay_string).frames))
+                        if ref_source.promote_ltm_neutral_tail and ref_source.ltm_movie is not None:
+                            reference_frames = tuple(editable_frames(
+                                _probe_auto_ltm_completion_tail(level, ref_source.ltm_movie)))
                     except (LtmError, OSError, ValueError) as exc:
                         # Bare complex replay .txt files are also supported.
                         if ref_path.suffix.lower() != '.txt':
@@ -4505,6 +4507,11 @@ def main() -> None:
                 endpoint_performance_stats=args.auto_performance_stats,
                 repair_iterations=args.auto_splice_repair_iterations,
                 splice_rounds=args.auto_splice_rounds,
+                splice_stagnation_rounds=args.auto_splice_stagnation_rounds,
+                splice_auto_stagnation_rounds=args.auto_splice_auto_stagnation_rounds,
+                splice_local_stagnation_rounds=args.auto_splice_local_stagnation_rounds,
+                waypoint_stage_lookback=args.auto_splice_waypoint_lookback,
+                live_save_best=args.auto_splice_live_save_best,
                 repair_rounds=args.auto_splice_repair_rounds,
                 repair_anchors=args.auto_splice_repair_anchors,
                 beam=args.beam, workers=max(1, args.workers), rounds=args.auto_runs,
@@ -4521,7 +4528,8 @@ def main() -> None:
             result = optimise_random_splices(
                 level, replay.frames, splice_config,
                 best_callback=lambda frames: _write_result(
-                    source, output_path, replay_output_path, encode_complex_replay(frames)),
+                    source, output_path, replay_output_path,
+                    encode_complex_replay(clean_splice_output(frames))),
                 progress=lambda message: (
                     _print_baseline_line(message, color=common_config.color)
                     if message.startswith((

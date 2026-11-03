@@ -73,6 +73,7 @@ class RandomSpliceConfig:
     max_repair_searches: int = 8
     frontier: int = 0  # additional cross-waypoint partial beam; CLI defaults to 3
     stage_lookback: int = 2  # named splices: use frontiers n-1 through n-N
+    waypoint_stage_lookback: int = 1  # sampled modes opt in to previous waypoint pools
     save_frontier: int = 64  # persisted per-stage candidates; separate from active frontier
     live_save_best: bool = False  # bypass parent live-best throttling on named stages
     exit_lookback: int = 96  # minimum editable horizon of the exit approach
@@ -157,6 +158,8 @@ class RandomSpliceConfig:
             raise ValueError("named splice save_frontier must be between 1 and 256")
         if type(self.stage_lookback) is not int or self.stage_lookback < 1:
             raise ValueError("named splice stage_lookback must be a positive integer")
+        if type(self.waypoint_stage_lookback) is not int or self.waypoint_stage_lookback < 1:
+            raise ValueError("sampled splice waypoint_stage_lookback must be a positive integer")
         if type(self.max_repair_searches) is not int or self.max_repair_searches < 0:
             raise ValueError("random splice max_repair_searches must be nonnegative")
         if type(self.repair_anchors) is not int or self.repair_anchors < 0:
@@ -634,6 +637,38 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
     return tuple(selected), result.evaluations
 
 
+def _splicer_search(
+    level: Level, frames: tuple[InputFrame, ...], goal: EndpointGoal, *,
+    start: int, config: RandomSpliceConfig, iterations: int, rounds: int,
+    seed: int, editable_end: int | None = None,
+    progress: Callable[[str], None] | None = None,
+    include_partial: bool = False, **kwargs,
+):
+    """Use the identical stage backend as named splicing when requested.
+
+    With legacy Local/endpoint-Auto fixed rounds, retain the old direct
+    _local_search call (including result count and progress cadence). Auto ->
+    Local and backend stagnation reuse the shared persistent stage machinery.
+    """
+    if (config.search_backend != "both" and not (
+            config.splice_stagnation_rounds or config.splice_auto_stagnation_rounds
+            or config.splice_local_stagnation_rounds)):
+        return _local_search(level, frames, goal, start=start, config=config,
+                             iterations=iterations, rounds=rounds, seed=seed,
+                             editable_end=editable_end, progress=progress,
+                             include_partial=include_partial, **kwargs)
+    from nv14_splice_backend import SpliceSearchStage, _search_stage
+    stage = SpliceSearchStage(
+        f"waypoint-{goal.target_frame}", goal, start,
+        goal.target_frame if editable_end is None else editable_end)
+    stage_config = replace(config, iterations=iterations, splice_rounds=rounds)
+    found, used, _searches = _search_stage(
+        level, frames, stage, stage_config, random.Random(seed),
+        local_search=_local_search, progress=progress,
+        candidate_callback=kwargs.get("best_callback"))
+    return found, used
+
+
 def _physics_deadline(anchor: Waypoint, replay_size: int, config: RandomSpliceConfig) -> int:
     """Allow a later event if it ultimately improves the completed route.
 
@@ -832,6 +867,7 @@ def _progressive_frontier(
     if not config.frontier:
         return None, 0, 0, counters
     branches: list[tuple[InputFrame, ...]] = [current]
+    old_frontiers: list[list[tuple[InputFrame, ...]]] = []
     evaluations = attempts = 0
     previous_end = -1
     for index, waypoint in enumerate(waypoints):
@@ -845,14 +881,18 @@ def _progressive_frontier(
         if reference_point is None:
             break
         proposals: list[tuple[tuple, tuple[InputFrame, ...], bool]] = []
-        for branch_index, branch in enumerate(branches):
+        seeds = list(branches)
+        for older in old_frontiers[:config.waypoint_stage_lookback-1]:
+            seeds.extend(older[:1])
+        seeds = list(dict.fromkeys(seeds))
+        for branch_index, branch in enumerate(seeds):
             attempts += 1
             if progress:
                 progress(f"[auto:random-splice] frontier {index+1}/{len(waypoints)} "
                          f"branch {branch_index+1}/{len(branches)}: "
                          f"searching [{start}:{waypoint.frame}]")
             try:
-                found, used = _local_search(
+                found, used = _splicer_search(
                     level, branch, goal, start=start, config=config,
                     iterations=max(20, config.iterations // 2),
                     rounds=config.splice_rounds, seed=rng.getrandbits(63),
@@ -932,6 +972,7 @@ def _progressive_frontier(
                         selected.pop()
                     offer(trial)
                     break
+        old_frontiers = [list(branches), *old_frontiers][:max(0, config.waypoint_stage_lookback-1)]
         branches = selected or [current]
         counters["reference_branch_preserved"] += int(current in branches)
         previous_end = waypoint.frame
@@ -968,7 +1009,7 @@ def _progressive_frontier(
                 f"[auto:random-splice] frontier EXIT branch {index+1}: "
                 + text.removeprefix("[local:population] ")),
         }
-        found, used = _local_search(
+        found, used = _splicer_search(
             level, branch + (InputFrame(),), goal, start=start,
             editable_end=finish-1, config=config, iterations=config.iterations,
             rounds=config.splice_rounds, seed=rng.getrandbits(63),
@@ -1101,6 +1142,7 @@ def _optimise_target_splices(
         # This is the same Local checkpoint/evaluation engine as speedrun's
         # progressive frontier, but its final endpoint is the user goal.
         branches: list[tuple[InputFrame, ...]] = [current]
+        old_frontiers: list[list[tuple[InputFrame, ...]]] = []
         previous_end = range_start - 1
         improved_round = False
         for index, point in enumerate(waypoints):
@@ -1113,13 +1155,17 @@ def _optimise_target_splices(
                                deadline=point.frame, start=start)
             required_point = reference.point(point.frame)
             offerings: list[tuple[tuple, tuple[InputFrame, ...]]] = []
-            for branch in branches:
+            seeds = list(branches)
+            for older in old_frontiers[:config.waypoint_stage_lookback-1]:
+                seeds.extend(older[:1])
+            seeds = list(dict.fromkeys(seeds))
+            for branch in seeds:
                 attempts += 1
                 if progress:
                     progress(f"[auto:random-splice:goal] checkpoint {index+1}/{len(waypoints)} "
                              f"frame {point.frame}; {'Local' if config.search_backend == 'local' else 'endpoint-auto'} range [{start}:{point.frame}]")
                 try:
-                    found, used = _local_search(
+                    found, used = _splicer_search(
                         level, branch, stage_goal, start=start, config=config,
                         iterations=config.iterations, rounds=config.splice_rounds,
                         seed=rng.getrandbits(63), include_partial=True)
@@ -1145,6 +1191,7 @@ def _optimise_target_splices(
                     rank = check.progress_key
                     offerings.append((rank, trial))
                     improved_round = consider(trial, f"checkpoint {point.frame}") or improved_round
+            prior_branches = list(branches)
             if offerings:
                 offerings.sort(key=lambda item: item[0])
                 unique: list[tuple[InputFrame, ...]] = [current]
@@ -1156,6 +1203,7 @@ def _optimise_target_splices(
                 branches = unique
             else:
                 branches = [current]
+            old_frontiers = [prior_branches, *old_frontiers][:max(0, config.waypoint_stage_lookback-1)]
             previous_end = point.frame
         final_start = _exit_segment_start(last_editable, previous_end,
                                           config.exit_lookback)
@@ -1163,13 +1211,17 @@ def _optimise_target_splices(
         # On an incomplete source, a dead immutable prefix must be editable.
         if reference.dead_tick is not None and reference.dead_tick < final_start:
             final_start = range_start
-        for index, branch in enumerate(dict.fromkeys((*branches, current))):
+        final_seeds = list(dict.fromkeys((
+            *branches,
+            *(candidate for pool in old_frontiers for candidate in pool[:1]),
+            current)))
+        for index, branch in enumerate(final_seeds):
             attempts += 1
             if progress:
                 progress(f"[auto:random-splice:goal] TARGET branch {index+1}, "
                          f"{'Local' if config.search_backend == 'local' else 'endpoint-auto'} range [{final_start}:{last_editable}]")
             try:
-                found, used = _local_search(
+                found, used = _splicer_search(
                     level, branch, goal, start=final_start, editable_end=last_editable,
                     config=config, iterations=config.iterations,
                     rounds=config.splice_rounds, seed=rng.getrandbits(63))
@@ -1266,7 +1318,7 @@ def optimise_random_splices(
                     f"[auto:random-splice] {label}: "
                     + text.removeprefix("[local:population] "))
             }
-            found, used = _local_search(level, current, goal, start=start, config=config,
+            found, used = _splicer_search(level, current, goal, start=start, config=config,
                                         iterations=config.iterations, rounds=config.splice_rounds,
                                         seed=rng.getrandbits(63),
                                         **search_kw)
@@ -1341,7 +1393,7 @@ def optimise_random_splices(
                                     + text.removeprefix("[local:population] "))
                             }
                             try:
-                                repaired, used = _local_search(
+                                repaired, used = _splicer_search(
                                     level, provisional, repair_goal,
                                     start=repair_start, config=config,
                                     iterations=config.repair_iterations,
@@ -1433,7 +1485,7 @@ def optimise_random_splices(
                         "[auto:random-splice] EXIT: "
                         + text.removeprefix("[local:population] "))
                 }
-                found, used = _local_search(
+                found, used = _splicer_search(
                     level, current + (InputFrame(),), exit_goal,
                     start=exit_start, editable_end=exit_deadline - 1,
                     config=config, iterations=config.iterations,

@@ -244,3 +244,27 @@ def test_frontier_durable_after_ctrl_c_during_next_stage(tmp_path, monkeypatch):
     # The best saved stage replay survives in LTM/TXT and is used again.
     assert observed and observed[0][0] == 'end'
     assert observed[0][1] == alternatives[-1]
+
+
+def test_saved_completed_result_does_not_compete_with_incomplete_checkpoint_score(monkeypatch):
+    """An obsolete incomplete input cannot veto a new canonical completion."""
+    level, _, _ = _baseline()
+    def completed(delay):
+        movie = (InputFrame(left=True),)*delay + (InputFrame(right=True),)*80
+        return movie[:evaluate_replay_with_sentinel(level, movie).finish_tick]
+    saved = completed(3)
+    candidate = completed(1)
+    source = (InputFrame(right=True),)*15  # better at frame 10 but cannot finish
+    goal = EndpointGoal(10, 'max-x')
+    eval_stage = EndpointEvaluator(level, goal)
+    assert eval_stage.evaluate(source).objective_key < eval_stage.evaluate(candidate).objective_key
+    assert eval_stage.evaluate(candidate).objective_key < eval_stage.evaluate(saved).objective_key
+    monkeypatch.setattr(us, '_search_stage', lambda *args, **kw: (((candidate, 10),), 1, 1))
+    saved_results = []
+    result = optimise_user_splices(
+        level, source, [UserSpliceStage('end', goal, 0, 10)],
+        RandomSpliceConfig(iterations=2, rounds=1),
+        completion_policy='checkpoint', saved_final_frames=saved,
+        best_callback=saved_results.append)
+    assert result.frames == candidate
+    assert saved_results == [candidate]
