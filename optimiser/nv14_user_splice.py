@@ -974,6 +974,7 @@ def optimise_user_splices(
         # fully completed run. Completion ranking still uses the original
         # source, and all preceding named goals remain mandatory.
         history: list[list[tuple[InputFrame, ...]]] = [[propagation_seed]]
+        history_origins: list[int | None] = [from_best_index]
         if first_stage == 0 and archived_frontiers[0]:
             # A normal restart can search from saved alternatives immediately,
             # rather than merely comparing their scores after the search.
@@ -987,12 +988,15 @@ def optimise_user_splices(
             if from_best_index is None and archived_frontiers[restore_index - 1]:
                 history[0] = list(dict.fromkeys(
                     (*archived_frontiers[restore_index - 1][:config.frontier], propagation_seed)))
+                history_origins[0] = restore_index - 1
             for prior in range(restore_index - 2, max(-1, restore_index - config.stage_lookback - 1), -1):
                 if archived_frontiers[prior]:
                     history.append(archived_frontiers[prior][:config.frontier])
                 else:
                     history.append([])
+                history_origins.append(prior)
             history = history[:config.stage_lookback]
+            history_origins = history_origins[:config.stage_lookback]
         improved = False
         unfulfilled: list[str] = []
         stage_begin = int(active_phase["stage_index"]) if active_phase is not None else first_stage
@@ -1030,6 +1034,20 @@ def optimise_user_splices(
                 if valid_stages(saved, index + 1):
                     eligible[saved] = original_endpoints[index].evaluate(saved).objective_key
             for seed_index, branch in enumerate(branches, 1):
+                # Sources are ranked *within* their own checkpoint objective,
+                # not by the score of the stage we are about to search.
+                source_detail = "input/best completed replay"
+                if active_phase is not None and index == stage_begin and seed_index == 1:
+                    source_detail = "resumed interrupted backend seed"
+                else:
+                    for depth, (pool, origin) in enumerate(zip(history, history_origins), 1):
+                        if branch in pool:
+                            if origin is not None:
+                                source_detail = (f"start from splice {stages[origin].name} "
+                                                 f"(n-{index-origin}, source rank {pool.index(branch)+1})")
+                            elif from_best_index is not None:
+                                source_detail = f"start from splice {stages[from_best_index].name}"
+                            break
                 if progress:
                     phase_mode = (stage_config.splice_auto_stagnation_rounds or
                                   stage_config.splice_local_stagnation_rounds)
@@ -1047,7 +1065,7 @@ def optimise_user_splices(
                                       "(shared by the two backends when search=both)")
                     progress(f"[auto:user-splice] round {round_no+1}/{config.rounds or chr(8734)} "
                              f"stage {index+1}/{len(stages)} {stage.name!r} "
-                             f"seed {seed_index}/{len(branches)}; "
+                             f"seed {seed_index}/{len(branches)} [{source_detail}]; "
                              f"range {stage.start}:{stage.end}, target {stage.goal.target_frame}; "
                              f"search={'Auto -> Local' if stage_config.search_backend == 'both' else stage_config.search_backend}; "
                              f"{allocation}")
@@ -1197,6 +1215,7 @@ def optimise_user_splices(
                              f"continuing with {len(fallbacks)} fallback seed(s) "
                              "(final verification still requires all named goals)")
                 history = [fallbacks, *history][:config.stage_lookback]
+                history_origins = [index, *history_origins][:config.stage_lookback]
                 continue
             ordered = sorted(eligible.items(), key=lambda item: item[1])
             # Keep distinct earlier-stage frontiers independent of whether a
@@ -1205,6 +1224,7 @@ def optimise_user_splices(
             elites[index] = selected
             publish_frontier(index, [candidate for candidate, _ in ordered[:config.save_frontier]])
             history = [selected, *history][:config.stage_lookback]
+            history_origins = [index, *history_origins][:config.stage_lookback]
         stagnant = 0 if improved else stagnant + 1
         if progress:
             progress(f"[auto:user-splice] round {round_no+1} complete in "
