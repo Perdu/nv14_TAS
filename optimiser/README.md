@@ -1568,6 +1568,87 @@ These merge passes do not perform input-mutation bridge repairs: the
 `--auto-endpoint-repair-steps` setting applies inside the endpoint Auto search,
 not to merging incompatible replay suffixes.
 
+### Bounded bridge repair for saved splice and manual-input gains
+
+**Patch 52 adds a separate, opt-in Auto/Local repair mode.** Existing
+`--splice-merge-only` remains the fast, mutation-free direct-graft operation.
+When a direct join fails, `--splice-merge-repair-only` runs the fast merge first,
+then tries to mutate a short bridge in the *earlier* replay toward a physical
+state on a saved later-stage route or verified saved completed run. It uses the
+existing endpoint Auto/Local search engine; it does **not** reuse or depend on
+`endpoint-repair-steps`, which repairs proposals *within* ordinary endpoint
+searches and may be inactive with progressive refinement.
+
+Use the same input/output/splice arguments as `--splice-merge-only`, replacing
+that flag with:
+
+```sh
+--splice-merge-repair-only --splice-merge-repair-pairs 48
+```
+
+A manually edited run must still be supplied as the positional input. Standalone
+repair **does not run the normal named-stage optimisation campaign**, create
+initial checkpoints, or alter the search-resume sidecars. Only independently
+replayed, verified completed improvements replace the final output; feasible
+partial grafts may update their own saved splice frontier and best checkpoint.
+
+To run bounded repair **after** a normal multi-splicer campaign instead, put:
+
+```toml
+[multi-splicer]
+merge-repair-at-end = true
+# Optional effort controls; do not change normal stage seed lookback:
+merge-repair-pairs = 48
+merge-repair-window = 48
+merge-repair-targets = 2
+repair-iterations = 250
+```
+
+The CLI equivalent is `--splice-merge-repair-at-end`, which implies
+`--splice-merge-bests`; a normal run still performs fast startup and final
+merges. Repair occurs **only at the end**, after the final fast merge, and is
+skipped on Ctrl+C. An explicit standalone `--splice-merge-repair-only` overrides a reusable
+`repair-at-end = true` TOML setting for that invocation.
+
+- `merge-repair-pairs` caps independent source/suffix pairs across the entire
+  pass, including unsuccessful pairs. A failed route never stops another pair.
+  **The positional input is always the first repair source**, even if it is
+  already the best completed run. A distinct, verified saved completed output
+  remains an available *suffix* instead of being replaced by the input.
+  The first attempt of each saved stage and archived-section source is scheduled
+  before repeated attempts from other sources. This avoids exhausting the
+  default 48 pairs on stage bests alone and losing locally faster sections whose
+  absolute arrival frames are later. Early saved gains then receive several
+  independent destination attempts, so an incompatible successor (e.g. 564)
+  does not prevent trying a later continuation (e.g. 614).
+  The repair log identifies the input/continuation provenance and counts how
+  many archived sections were actually attempted under the budget.
+- `merge-repair-window` bounds the mutable input interval near the bridge;
+  earlier edits are immutable. It is **not** ordinary `lookback`, and never
+  widens the normal multi-splicer's n-1/n-2 seed selection.
+- `merge-repair-targets` limits distinct physical states per pair. Each uses
+  `repair-iterations` proposals per worker, divided between Auto and Local
+  when `search = "both"`. There is no unbounded stagnation loop in repairs.
+  This is deliberately more expensive than direct merging.
+
+A repair succeeds only if both the bridge and attached suffix pass native
+replay verification, canonical completion checks for a final result, and
+persistent route-control preservation. **Repair is best effort:** it cannot
+promise to connect every locally faster route, and does not erase a saved
+checkpoint or overwrite a verified completed output after an unsuccessful
+attempt. It prints counts of attempted, successful, and unsuccessful pairs.
+
+Stage checkpoint summaries additionally report **section frames** between
+neighboring helpers when at least one endpoint measures an actual earliest
+arrival or interaction and *both* goals are feasible in that same replay.
+A fastest such interval candidate gets an independent slot in the existing
+saved frontier archive (when its capacity is at least two), so it remains
+available as a repair prefix even when its *whole-route stage score* is
+lower-ranked. Spatial-only fixed-frame goals have no measured section time;
+no timing saving is inferred for them. These archived candidates remain full
+replays, not disconnected input snippets, so physics is never assumed to carry
+across a discontinuous section.
+
 To keep the one-shot behavior in a splice TOML, put `merge-only = true` under
 `[multi-splicer]` (or use `--splice-merge-only` on the command line).
 `--ls-splice` is the separate read-only summary command: unlike merge-only,

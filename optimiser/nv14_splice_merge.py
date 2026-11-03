@@ -6,6 +6,7 @@ movies whose persistent controls survive can be offered to the optimiser.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from collections.abc import Sequence
 
 from nv14_auto import evaluate_replay_with_sentinel, verify_trimmed_replay
@@ -82,3 +83,152 @@ def verified_suffix_grafts(
         if len(accepted) == max_results:
             break
     return tuple(accepted)
+
+
+@dataclass(frozen=True, slots=True)
+class BridgeRepairResult:
+    """Bounded endpoint searches and independently verified repaired grafts."""
+
+    grafts: tuple[tuple[InputFrame, ...], ...]
+    searches: int = 0
+    evaluations: int = 0
+    targets: int = 0
+
+
+def repair_suffix_grafts(
+    level: Level, prefix: Sequence[InputFrame], reference: Sequence[InputFrame],
+    *, seam_frame: int, config, window: int, targets: int,
+    completion_required: bool, seed: int,
+    local_search=None,
+) -> BridgeRepairResult:
+    """Repair a *bounded bridge* and try to graft the untouched saved suffix.
+
+    Direct grafting compares two existing trajectories. This routine instead
+    asks the ordinary endpoint Auto/Local engine to reach a nearby *reference
+    state*, mutating only the last ``window`` frames of the proposed prefix.
+    The endpoint target is guidance, NOT a permission to publish a seam: every
+    joined replay still passes ``verified_suffix_grafts``'s full independent
+    physics and persistent-control verification. Search work is capped by
+    ``targets`` and by ``config.repair_iterations`` per selected backend; the
+    ordinary Auto/Local stagnation settings are never inherited.
+    """
+    from dataclasses import replace
+    import random
+    from nv14_endpoint import EndpointGoal
+    from nv14_random_splice import _local_search
+
+    if window < 2 or targets < 1:
+        return BridgeRepairResult(())
+    search = _local_search if local_search is None else local_search
+    reference = tuple(editable_frames(reference))
+    candidate = tuple(editable_frames(prefix))
+    reference_eval = evaluate_replay_with_sentinel(level, reference)
+    if completion_required:
+        if not reference_eval.valid or reference_eval.finish_tick != len(reference):
+            return BridgeRepairResult(())
+    elif reference_eval.dead_tick is not None and reference_eval.finish_tick is None:
+        # An intermediate stage movie may meet its helper before dying in
+        # unrelated later inputs. Keep its live, replayable section for a
+        # possible *stage-only* bridge; never treat this as a completion.
+        reference = reference[:reference_eval.dead_tick]
+        reference_eval = evaluate_replay_with_sentinel(level, reference)
+        if reference_eval.dead_tick is not None:
+            return BridgeRepairResult(())
+    if len(reference) < 5 or len(candidate) < 5:
+        return BridgeRepairResult(())
+    prefix_eval = evaluate_replay_with_sentinel(level, candidate)
+    live = (prefix_eval.dead_tick - 1 if prefix_eval.dead_tick is not None else
+            prefix_eval.finish_tick - 2 if prefix_eval.finish_tick is not None else
+            len(candidate) - 2)
+    live = max(2, min(live, len(candidate) - 2))
+    seam = max(2, min(seam_frame, live + max(2, window // 4), len(candidate) - 2))
+
+    # Target states are selected by physical proximity, not splice score or
+    # absolute frame alone. This permits a manually accelerated prefix to
+    # reconnect to a later reference tick without erasing its early gain.
+    proposed: list[tuple[float, int, int]] = []
+    for target_tick in dict.fromkeys((seam, max(3, seam - window // 4),
+                                      min(len(candidate) - 2, seam + window // 4))):
+        probe = prefix_eval.point(min(live, target_tick))
+        if probe is None:
+            continue
+        first_ref = max(2, target_tick - window // 2)
+        last_ref = min(len(reference) - 2, target_tick + window)
+        for ref_tick in range(first_ref, last_ref + 1, max(1, window // 10)):
+            state = reference_eval.point(ref_tick)
+            if state is None or state.dead or state.complete:
+                continue
+            dx = math.hypot(state.x - probe.x, state.y - probe.y)
+            dv = math.hypot(state.vx - probe.vx, state.vy - probe.vy)
+            penalty = max(0, target_tick - ref_tick) * 0.3
+            proposed.append((dx + 3 * dv + penalty, target_tick, ref_tick))
+    proposed.sort()
+    chosen: list[tuple[int, int]] = []
+    # A single target tick can have multiple physical reference matches; keep
+    # distinct anchors so failed states do not consume the whole budget.
+    seen_ticks: set[int] = set()
+    for _distance, target_tick, ref_tick in proposed:
+        if target_tick in seen_ticks:
+            continue
+        chosen.append((target_tick, ref_tick))
+        seen_ticks.add(target_tick)
+        if len(chosen) >= targets:
+            break
+
+    rng = random.Random(seed)
+    grafts: list[tuple[InputFrame, ...]] = []
+    seen_grafts: set[tuple[InputFrame, ...]] = set()
+    searches = evaluations = 0
+    for target_tick, ref_tick in chosen:
+        target_state = reference_eval.point(ref_tick)
+        if target_state is None:
+            continue
+        edit_start = max(0, target_tick - window)
+        # The target rectangle is intentionally larger than the actual seam
+        # tolerance. Position and velocity constraints guide mutations, while
+        # full replay verification alone decides whether a bridge is usable.
+        radius = 10.0
+        goal = EndpointGoal(
+            target_tick, 'earliest-arrival',
+            target_region=(target_state.x - radius, target_state.x + radius,
+                           target_state.y - radius, target_state.y + radius),
+            arrival_start=max(0, target_tick - min(6, window // 4)),
+        )
+        modes = ('endpoint-auto', 'local') if config.search_backend == 'both' else (config.search_backend,)
+        # The configured repair-iterations is one bounded backend budget per
+        # target, not an instruction to run the normal 5/20 stagnant rounds.
+        per_backend = max(1, config.repair_iterations // len(modes))
+        for mode in modes:
+            try:
+                found, used = search(
+                    level, candidate, goal, start=edit_start,
+                    editable_end=target_tick,
+                    config=replace(config, search_backend=mode,
+                                   splice_auto_stagnation_rounds=0,
+                                   splice_local_stagnation_rounds=0,
+                                   splice_stagnation_rounds=0),
+                    iterations=per_backend, rounds=1,
+                    seed=rng.getrandbits(63), include_partial=True,
+                )
+            except ValueError as exc:
+                if not str(exc).startswith('the immutable prefix dies before the editable ranges'):
+                    raise
+                found, used = (), 0
+            searches += 1
+            evaluations += used
+            for frames, _frame in found[:12]:
+                repaired = tuple(editable_frames(frames))
+                if repaired[:edit_start] != candidate[:edit_start]:
+                    continue
+                for graft in verified_suffix_grafts(
+                    level, repaired, reference, seam_frame=target_tick,
+                    lookback=min(window, 48), max_results=4,
+                    completion_required=completion_required,
+                ):
+                    if graft not in seen_grafts:
+                        grafts.append(graft)
+                        seen_grafts.add(graft)
+                        if len(grafts) >= 4:
+                            return BridgeRepairResult(tuple(grafts), searches,
+                                                      evaluations, len(chosen))
+    return BridgeRepairResult(tuple(grafts), searches, evaluations, len(chosen))

@@ -23,7 +23,7 @@ from nv14_random_splice import (RandomSpliceConfig, _control_preserved,
                                 _local_search, _completed_rank)
 from nv14_auto import verify_trimmed_replay
 from nv14_replay import editable_frames, decode_complex_replay, encode_complex_replay
-from nv14_splice_merge import verified_suffix_grafts
+from nv14_splice_merge import verified_suffix_grafts, repair_suffix_grafts
 from nv14_splice_backend import _search_stage as search_splice_stage
 
 
@@ -115,6 +115,7 @@ def _stage_sources_history(history: Sequence[Sequence[tuple[InputFrame, ...]]],
 def _diverse_saved_archive(
     pool: Mapping[tuple[InputFrame, ...], tuple],
     evaluator: EndpointEvaluator, limit: int,
+    preserve: Sequence[tuple[InputFrame, ...]] = (),
 ) -> list[tuple[InputFrame, ...]]:
     """Preserve quality *and* distinct physical endpoint niches on disk.
 
@@ -149,6 +150,14 @@ def _diverse_saved_archive(
         if candidate not in seen:
             selected.append(candidate)
             seen.add(candidate)
+    # Retain one independently useful interval-fast replay when its score at
+    # the current helper is lower-ranked. It remains a complete, replayable
+    # frontier member rather than a detached input segment with no state.
+    if limit > 1:
+        for candidate in preserve[:1]:
+            if candidate in pool and candidate not in seen:
+                selected[-1] = candidate
+                seen.add(candidate)
     # Present the archive in stage-score order, preserving old ranking rules
     # when it is used to recover an active frontier.
     return sorted(selected, key=pool.__getitem__)
@@ -294,6 +303,11 @@ def optimise_user_splices(
     reference_frames: Sequence[InputFrame] | None = None,
     merge_stage_bests: bool = False,
     merge_only: bool = False,
+    merge_repair_only: bool = False,
+    merge_repair_at_end: bool = False,
+    merge_repair_pairs: int = 48,
+    merge_repair_window: int = 48,
+    merge_repair_targets: int = 2,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
@@ -320,6 +334,15 @@ def optimise_user_splices(
         raise ValueError("invalid user splice completion policy")
     if merge_only and (not merge_stage_bests or summary_only or from_best is not None):
         raise ValueError("merge-only requires merge_stage_bests, without summary-only or from-best")
+    if merge_repair_only and not merge_only:
+        raise ValueError("merge-repair-only requires merge-only")
+    if merge_repair_at_end and not merge_stage_bests:
+        raise ValueError("merge-repair-at-end requires merge-bests")
+    for name, value, minimum in (("merge_repair_pairs", merge_repair_pairs, 1),
+                                 ("merge_repair_window", merge_repair_window, 2),
+                                 ("merge_repair_targets", merge_repair_targets, 1)):
+        if type(value) is not int or value < minimum:
+            raise ValueError(f"{name} must be an integer >= {minimum}")
     # Named goals are independent helpers, not route requirements.
     def stage_index(requested: str | None, default: int, label: str) -> int:
         if requested is None:
@@ -558,6 +581,37 @@ def optimise_user_splices(
                 stage_best[i] = score.objective_key
                 stage_best_evaluation[i] = score
                 restored_stage_frames[i] = replay
+    def section_duration(index: int, frames: tuple[InputFrame, ...]) -> int | None:
+        """Measure an actual within-replay checkpoint interval when meaningful.
+
+        Spatial-only helper endpoints refer to fixed frames, so their fixed
+        difference is NOT evidence of a faster physical section. At least
+        one endpoint must measure an actual earliest arrival/interaction, and
+        BOTH checkpoints must be independently feasible in this same replay.
+        """
+        if index < 1:
+            return None
+        previous, stage = stages[index-1], stages[index]
+        if not (previous.goal.is_earliest or stage.goal.is_earliest):
+            return None
+        workspace = _materialise_splice_tail(frames,
+                                             max(previous.goal.target_frame, stage.goal.target_frame))
+        prior = original_endpoints[index-1].evaluate(workspace)
+        current_score = original_endpoints[index].evaluate(workspace)
+        if not prior.feasible or not current_score.feasible or prior.frame > current_score.frame:
+            return None
+        return current_score.frame - prior.frame
+
+    def select_archive(index: int, pool: Mapping[tuple[InputFrame, ...], tuple]
+                       ) -> list[tuple[InputFrame, ...]]:
+        durations = [(duration, pool[frames], frames)
+                     for frames in pool
+                     if (duration := section_duration(index, frames)) is not None]
+        fastest = min(durations, key=lambda row: (row[0], row[1]))[2] if durations else None
+        return _diverse_saved_archive(pool, original_endpoints[index],
+                                      config.save_frontier,
+                                      preserve=(() if fastest is None else (fastest,)))
+
     # Restore top stage populations separately from the single best LTM/TXT.
     # The old one-best checkpoints are also valid fallbacks for archives that
     # predate this feature. Re-check all entries under each stage's physics.
@@ -570,8 +624,7 @@ def optimise_user_splices(
             if stage_feasible(replay, i):
                 pool[replay] = original_endpoints[i].evaluate(replay).objective_key
         ranked = sorted(pool, key=pool.__getitem__)
-        archived_frontiers.append(_diverse_saved_archive(
-            pool, original_endpoints[i], config.save_frontier))
+        archived_frontiers.append(select_archive(i, pool))
         if progress and ranked and not summary_only:
             progress(f"[auto:user-splice:resume] {stage.name!r}: "
                      f"restored {len(archived_frontiers[-1])} validated archive candidate(s); "
@@ -584,7 +637,7 @@ def optimise_user_splices(
         for candidate in (*archived_frontiers[i], *candidates):
             if stage_feasible(candidate, i):
                 pool[candidate] = original_endpoints[i].evaluate(candidate).objective_key
-        selected = _diverse_saved_archive(pool, original_endpoints[i], config.save_frontier)
+        selected = select_archive(i, pool)
         if selected != archived_frontiers[i]:
             frontier_callback(stages[i].name, tuple(selected))
             archived_frontiers[i] = selected
@@ -768,6 +821,13 @@ def optimise_user_splices(
             if best_rank is not None and stage_feasible(best_workspace, i):
                 best_stage = original_endpoints[i].evaluate(best_workspace)
             detail = _stage_summary_text(stage.goal, candidate)
+            elapsed = section_duration(i, archived)
+            if elapsed is not None:
+                detail += f"; from {stages[i-1].name}: {elapsed} section frames"
+                timed = [span for item in archived_frontiers[i]
+                         if (span := section_duration(i, item)) is not None]
+                if timed:
+                    detail += f"; fastest archived section {min(timed)} frames"
             if best_stage is None or candidate.objective_key < best_stage.objective_key:
                 against = ("best run has no feasible checkpoint" if best_stage is None
                            else "full run: " + _stage_summary_text(stage.goal, best_stage))
@@ -799,7 +859,7 @@ def optimise_user_splices(
     # Their rank is the objective of the stage that produced them; earlier
     # helper objectives do not veto a different route at a later stage.
     elites: list[list[tuple[InputFrame, ...]]] = [list(pool[:config.frontier]) for pool in archived_frontiers]
-    def run_saved_merge_pass(phase: str) -> None:
+    def run_saved_merge_pass(phase: str, *, repair: bool = False) -> None:
         """Try saved-stage joins *and* current-input-to-saved-route joins.
 
         A manual edit need not satisfy any named helper goal. The unchanged
@@ -810,7 +870,8 @@ def optimise_user_splices(
         """
         nonlocal best_rank, best_output, current, improvements
         pairs = attempted = joined = upgraded = completed = input_attempted = 0
-        report = ("[auto:user-splice:merge-only]" if merge_only else
+        report = ("[auto:user-splice:repair-only]" if merge_repair_only else
+                  "[auto:user-splice:merge-only]" if merge_only else
                   f"[auto:user-splice:merge:{phase}]")
         if progress:
             progress(f"{report} grafting saved stage routes and current input; "
@@ -854,8 +915,7 @@ def optimise_user_splices(
                 pool = {frames: original_endpoints[later].evaluate(frames).objective_key
                         for frames in archived_frontiers[later]}
                 pool[padded] = score.objective_key
-                selected = _diverse_saved_archive(
-                    pool, original_endpoints[later], config.save_frontier)
+                selected = select_archive(later, pool)
                 changed_archive = selected != archived_frontiers[later]
                 archived_frontiers[later] = selected
                 if (stage_checkpoint_evals[later] is None or
@@ -995,6 +1055,8 @@ def optimise_user_splices(
             progress(f"{report} no verified saved completed replay for suffix grafting; "
                      "only saved stage suffixes were available")
 
+        if repair:
+            run_bridge_repair_pass(report, offer_candidate)
         if progress:
             progress(f"{report} done: {pairs} pair(s) considered; "
                      f"{attempted} attempted; {joined} verified join(s); "
@@ -1003,11 +1065,214 @@ def optimise_user_splices(
                      f"{pairs-attempted} skipped; {attempted-joined} rejected; "
                      f"{input_attempted} current-input graft attempt(s)")
 
+    def run_bridge_repair_pass(report: str, offer) -> None:
+        """Repair independent saved-prefix routes without blocking on failures.
+
+        Every prefix gets a first opportunity before any gets a second one.
+        A stalled splice (for example 564) therefore cannot consume all work
+        or prevent a later/earlier independent gain from being propagated.
+        """
+        nonlocal evaluations, attempts
+        # A verified in-memory best is a *score threshold*, not necessarily the
+        # continuation to which the user wants to connect a manual edit.  In
+        # particular a better completed positional input becomes best_output,
+        # but the *older saved final* can still supply the missing suffix.
+        # Keep both independent completions, preferring the persisted suffix.
+        completions: list[tuple[str, tuple[InputFrame, ...]]] = []
+        for name, candidate in (("saved completed", saved_final),
+                                ("current best completed", best_output if best_rank is not None else None)):
+            if candidate is None:
+                continue
+            checked = evaluate_replay_with_sentinel(level, candidate)
+            if (checked.valid and checked.finish_tick == len(candidate) and
+                    all(candidate != frames for _, frames in completions)):
+                completions.append((name, tuple(candidate)))
+        if not completions and progress:
+            progress(f"{report} bridge repair: no verified completed suffix; "
+                     "trying only intermediate saved splices")
+        # Source provenance is fixed for the whole pass.  Do not replace the
+        # positional input with best_output or suppress it merely because the
+        # input currently holds the best completion time.
+        comparison = next((frames for _, frames in completions if frames != source), None)
+        first_difference = None
+        if comparison is not None:
+            first_difference = next((tick for tick, (left, right) in
+                                     enumerate(zip(source, comparison))
+                                     if left != right), None)
+            if first_difference is None and len(source) != len(comparison):
+                first_difference = min(len(source), len(comparison))
+        manual_repair_seam = (min(len(source)-2, first_difference + merge_repair_window)
+                              if first_difference is not None else len(source)-2)
+        manual_repair_seam = max(2, manual_repair_seam)
+        if progress:
+            names = ", ".join(f"{label} ({len(frames)} frames)" for label, frames in completions)
+            progress(f"{report} bridge sources: positional current input "
+                     f"({len(source)} frames) is first; verified continuations: "
+                     f"{names or 'none'}; manual seam {manual_repair_seam}")
+        sources: list[tuple[str, tuple[InputFrame, ...], int | None]] = [
+            ("current input", input_prefix_for_repair, None)]
+        for index, stage in enumerate(stages):
+            prefix = stage_checkpoints[index]
+            if prefix is None:
+                continue
+            # A completed best may exceed a saved stage's *overall objective*
+            # while that stage has a useful, faster local section.  The local
+            # candidate is considered separately below, regardless of this.
+            covered = False
+            completed_best = next((frames for name, frames in completions
+                                   if name == "current best completed"), None)
+            if completed_best is not None and stage_feasible(completed_best, index):
+                full_eval = original_endpoints[index].evaluate(completed_best)
+                score = stage_checkpoint_evals[index]
+                covered = score is not None and score.objective_key >= full_eval.objective_key
+            if not covered and prefix != input_prefix_for_repair:
+                sources.append((stage.name, prefix, index))
+        primary_count = len(sources)
+        # The saved archive has an independent fastest-section slot (when a
+        # physical duration is measurable).  A locally faster replay may have
+        # a *later absolute arrival* and a worse endpoint objective; it still
+        # deserves an independent repair attempt.  Do not require it to beat
+        # the current completed run or the saved stage best.
+        primary_frames = {(frames, index) for _, frames, index in sources}
+        for index, stage in enumerate(stages):
+            candidates = sorted(archived_frontiers[index], key=lambda item, at=index: (
+                (span if (span := section_duration(at, item)) is not None
+                 else float('inf')),
+                original_endpoints[at].evaluate(item).objective_key))
+            for item in candidates:
+                if (item, index) in primary_frames or item == input_prefix_for_repair:
+                    continue
+                duration = section_duration(index, item)
+                label = (f"{stage.name} archived section ({duration} local frames)"
+                         if duration is not None else
+                         f"{stage.name} archived alternative (section time unknown)")
+                sources.append((label, item, index))
+                break
+
+        # Independent source/continuation pairings: use persisted final first,
+        # even if the positional input is already the in-memory best.  A
+        # completed suffix identical to a source is skipped, but other suffixes
+        # remain eligible.  The full verification gate still ranks completions.
+        tasks = []
+        for label, prefix, index in sources:
+            suffixes = [(name, candidate, None, True)
+                        for name, candidate in completions if candidate != prefix]
+            if index is not None:
+                for later in range(index + 1, len(stages)):
+                    later_prefix = stage_checkpoints[later]
+                    if later_prefix is not None and later_prefix != prefix:
+                        suffixes.append((stages[later].name, later_prefix, later, False))
+            else:
+                for later in range(len(stages)):
+                    later_prefix = stage_checkpoints[later]
+                    if later_prefix is not None and later_prefix != prefix:
+                        suffixes.append((stages[later].name, later_prefix, later, False))
+            tasks.append((label, prefix, index, suffixes))
+        attempts_used = successes = search_calls = repair_evals = 0
+        attempted_labels: set[str] = set()
+        seen_pairs: set[tuple[tuple[InputFrame, ...], tuple[InputFrame, ...]]] = set()
+        primary_tasks, section_tasks = tasks[:primary_count], tasks[primary_count:]
+        # One pass over *every distinct source*, including locally fast saved
+        # sections, before giving any source a second destination.  Previously
+        # three attempts per primary source could exhaust all 48 default pairs
+        # before even the first archived section got a chance.
+        plan = []
+        if primary_tasks:
+            plan.append((primary_tasks[0], 0))  # positional input always first
+        for i in range(max(len(primary_tasks) - 1, len(section_tasks))):
+            if i + 1 < len(primary_tasks):
+                plan.append((primary_tasks[i + 1], 0))
+            if i < len(section_tasks):
+                plan.append((section_tasks[i], 0))
+        # Once every source has had a chance, give *early* gains two more
+        # independent destinations before moving on.  The first continuation
+        # after 522 can be unmergeable (564), while the next (614) is useful;
+        # neither failure should wait behind dozens of unrelated late splices.
+        for item in primary_tasks:
+            plan.extend((item, turn) for turn in (1, 2) if turn < len(item[3]))
+        for item in section_tasks:
+            plan.extend((item, turn) for turn in (1, 2) if turn < len(item[3]))
+        max_turn = max((len(item[3]) for item in tasks), default=0)
+        for turn in range(3, max_turn):
+            for i in range(max(len(primary_tasks), len(section_tasks))):
+                if i < len(primary_tasks):
+                    plan.append((primary_tasks[i], turn))
+                if i < len(section_tasks):
+                    plan.append((section_tasks[i], turn))
+        for (label, prefix, index, suffixes), turn in plan:
+            if attempts_used >= merge_repair_pairs:
+                break
+            if turn >= len(suffixes):
+                continue
+            target_name, suffix, later, needs_completion = suffixes[turn]
+            if (prefix, suffix) in seen_pairs:
+                continue
+            seen_pairs.add((prefix, suffix))
+            attempts_used += 1
+            attempted_labels.add(label)
+            seam = (stages[index].end if index is not None else
+                    min(len(prefix) - 2, max(manual_repair_seam,
+                        stages[later].end if later is not None else manual_repair_seam)))
+            if progress:
+                progress(f"{report} bridge {attempts_used}/{merge_repair_pairs}: "
+                         f"{label} -> {target_name}; seam {seam}; "
+                         f"window {merge_repair_window}, targets {merge_repair_targets}, "
+                         f"{config.workers} worker(s) x {config.repair_iterations} "
+                         "proposals per target")
+            try:
+                result = repair_suffix_grafts(
+                    level, prefix, suffix, seam_frame=seam, config=config,
+                    window=merge_repair_window, targets=merge_repair_targets,
+                    completion_required=needs_completion,
+                    seed=rng.getrandbits(63))
+            except KeyboardInterrupt:
+                if progress:
+                    progress(f"{report} bridge interrupted; verified results saved "
+                             "before interruption are retained")
+                raise
+            except (ValueError, RuntimeError) as exc:
+                # A corrupt or unrepairable saved section may fail the native
+                # search preflight. Treat that *pair* as unsuccessful, without
+                # preventing the 522 -> 614 path after 522 -> 564 fails.
+                if progress:
+                    progress(f"{report} bridge {label} -> {target_name}: "
+                             f"failed ({type(exc).__name__}: {exc}); "
+                             "continuing with independent repair pairs")
+                continue
+            search_calls += result.searches
+            repair_evals += result.evaluations
+            found = False
+            for repaired in result.grafts:
+                stage_ok, completed_ok = offer(repaired, later, f"repair {label} -> {target_name}")
+                found = stage_ok or completed_ok or found
+            if found:
+                successes += 1
+            if progress:
+                progress(f"{report} bridge {label} -> {target_name}: "
+                         f"{'verified graft accepted' if found else 'no verified graft'}; "
+                         f"{result.searches} backend search(es), "
+                         f"{result.evaluations} evaluations")
+        evaluations += repair_evals
+        attempts += search_calls
+        if progress:
+            progress(f"{report} bridge repair done: {attempts_used} independent "
+                     f"pair(s) attempted; {successes} accepted; "
+                     f"{attempts_used-successes} unsuccessful; "
+                     f"{search_calls} backend search(es), {repair_evals} evaluations; "
+                     f"positional input {'attempted' if 'current input' in attempted_labels else 'not attempted'}, "
+                     f"archived sections {sum(item[0] in attempted_labels for item in section_tasks)}"
+                     f"/{len(section_tasks)} attempted; "
+                     "failed pairs do not stop other attempts")
+
+    # The input must remain a separate repair source even when saved final
+    # state is used for other search or reporting paths.
+    input_prefix_for_repair = _materialise_splice_tail(source, len(current) - 1)
+
     if merge_stage_bests:
-        run_saved_merge_pass("startup")
+        run_saved_merge_pass("startup", repair=merge_repair_only)
         if merge_only:
             report_checkpoint_summary("after merges")
-            return UserSpliceResult(best_output, improvements, 0, 0)
+            return UserSpliceResult(best_output, improvements, attempts, evaluations)
 
     if type(resume_outer_round) is not int or resume_outer_round < 0:
         raise ValueError("invalid saved outer-round progress")
@@ -1331,7 +1596,7 @@ def optimise_user_splices(
             # more recent stage wins its own intermediate ranking.
             selected = [candidate for candidate, _ in ordered[:max(1, config.frontier)]]
             elites[index] = selected
-            publish_frontier(index, [candidate for candidate, _ in ordered[:config.save_frontier]])
+            publish_frontier(index, [candidate for candidate, _ in ordered])
             history = [selected, *history][:config.stage_lookback]
             history_origins = [index, *history_origins][:config.stage_lookback]
             if reference is not None and selected:
@@ -1355,6 +1620,6 @@ def optimise_user_splices(
     if merge_stage_bests:
         # Saved stage checkpoints may have changed during the last search
         # round; an entry-time merge cannot propagate those new results.
-        run_saved_merge_pass("final")
+        run_saved_merge_pass("final", repair=merge_repair_at_end)
     report_checkpoint_summary("final")
     return UserSpliceResult(best_output, improvements, attempts, evaluations)

@@ -106,4 +106,11 @@ frontier = 3
 # Number of candidates to save per splice on disk
 save-frontier = 64
 runs = 3
+# Fast repair
 merge-bests = true
+# Cost-intensive repair
+merge-repair-at-end = true
+merge-repair-pairs = 48
+merge-repair-window = 48
+merge-repair-targets = 2
+repair-iterations = 250

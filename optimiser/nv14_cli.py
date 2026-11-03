@@ -1693,6 +1693,12 @@ def _load_config_defaults(
         "live_save_best": "auto_splice_live_save_best",
             "merge_only": "auto_splice_merge_only",
             "merge_bests": "auto_splice_merge_bests",
+        "merge_repair_only": "auto_splice_merge_repair_only",
+        "merge_repair_at_end": "auto_splice_merge_repair_at_end",
+        "merge_repair_pairs": "auto_splice_merge_repair_pairs",
+        "merge_repair_window": "auto_splice_merge_repair_window",
+        "merge_repair_targets": "auto_splice_merge_repair_targets",
+        "repair_iterations": "auto_splice_repair_iterations",
         "mutations": "auto_mutations",  # endpoint Auto, not Local mutation selection
     })
     # The dedicated table is last within its file: a splice override wins over
@@ -2457,6 +2463,23 @@ def build_parser() -> argparse.ArgumentParser:
                          help="attempt verified merges of saved named-splice bests, "
                               "report rejected joins and saved gains, then exit "
                               "without Auto/Local search (implies --splice-merge-bests)")
+    command.add_argument("--splice-merge-repair-only", dest="auto_splice_merge_repair_only",
+                         modes=auto_modes, action="store_true",
+                         help="standalone: try fast saved-route merges, then bounded Auto/Local "
+                              "bridge repairs; save verified gains and exit (implies --splice-merge-only)")
+    command.add_argument("--splice-merge-repair-at-end", dest="auto_splice_merge_repair_at_end",
+                         modes=auto_modes, action="store_true",
+                         help="run bounded bridge repairs after the final normal multi-splicer "
+                              "merge pass (implies --splice-merge-bests)")
+    command.add_argument("--splice-merge-repair-pairs", dest="auto_splice_merge_repair_pairs",
+                         modes=auto_modes, type=parse_positive_int, default=48, metavar="N",
+                         help="maximum independent source/suffix repair pairs per pass (default 48)")
+    command.add_argument("--splice-merge-repair-window", dest="auto_splice_merge_repair_window",
+                         modes=auto_modes, type=parse_positive_int, default=48, metavar="N",
+                         help="editable bridge frames, independent of stage lookback (default 48)")
+    command.add_argument("--splice-merge-repair-targets", dest="auto_splice_merge_repair_targets",
+                         modes=auto_modes, type=parse_positive_int, default=2, metavar="N",
+                         help="distinct physical suffix targets to try per pair (default 2)")
     command.add_argument("--splice-reference", dest="auto_splice_reference",
                          modes=auto_modes, type=Path, metavar="FILE",
                          help="completed same-level replay to use as a reference suffix "
@@ -3928,7 +3951,20 @@ def main() -> None:
         raise SystemExit("-l/--ls-splice/--ls-splices requires named multi-splicer Auto mode with splice files")
     if getattr(args, "auto_ls_splice", False) and args.auto_splice_from_best:
         raise SystemExit("--ls-splice cannot be combined with --splice-from-best")
-    merge_only = getattr(args, "auto_splice_merge_only", False)
+    repair_only = getattr(args, "auto_splice_merge_repair_only", False)
+    repair_at_end = getattr(args, "auto_splice_merge_repair_at_end", False)
+    merge_only = getattr(args, "auto_splice_merge_only", False) or repair_only
+    if (repair_only or repair_at_end) and not (args.mode == "auto" and
+            args.auto_random_splice and args.auto_splice_mode == "user" and
+            args.auto_splice_files):
+        raise SystemExit("splice merge repair requires named multi-splicer Auto mode")
+    if repair_only:
+        # A reusable [multi-splicer] repair-at-end setting must not prevent
+        # explicitly requested standalone repair (no normal run to end).
+        repair_at_end = False
+    elif repair_at_end and merge_only:
+        raise SystemExit("--splice-merge-repair-at-end is for normal searches; "
+                         "use --splice-merge-repair-only for standalone repair")
     if merge_only:
         if not (args.mode == "auto" and args.auto_random_splice and
                 args.auto_splice_mode == "user" and args.auto_splice_files):
@@ -4338,6 +4374,7 @@ def main() -> None:
                     endpoint_performance_stats=args.auto_performance_stats,
                     lookback=args.auto_splice_lookback,
                     beam=args.beam, workers=max(1, args.workers),
+                    repair_iterations=args.auto_splice_repair_iterations,
                     rounds=args.auto_runs, stagnation_rounds=args.auto_stagnation_runs,
                     frontier=max(1, args.auto_splice_frontier),
                     save_frontier=args.auto_splice_save_frontier,
@@ -4430,7 +4467,11 @@ def main() -> None:
                     "start_from_stage_bests": args.auto_splice_each_best,
                     "reference_sha256": (hashlib.sha256(encode_complex_replay(reference_frames).encode()).hexdigest()
                                           if reference_frames is not None else None),
-                    "merge_stage_bests": args.auto_splice_merge_bests or merge_only,
+                    "merge_stage_bests": args.auto_splice_merge_bests or merge_only or repair_at_end,
+                    "merge_repair_at_end": repair_at_end,
+                    "merge_repair_pairs": args.auto_splice_merge_repair_pairs,
+                    "merge_repair_window": args.auto_splice_merge_repair_window,
+                    "merge_repair_targets": args.auto_splice_merge_repair_targets,
                     "start_at": args.auto_splice_start,
                     "stop_at": args.auto_splice_stop,
                 }
@@ -4469,7 +4510,8 @@ def main() -> None:
                         f".{backend}.round.json"))
 
                 if merge_only:
-                    print(f"[auto:user-splice:merge-only] current input: "
+                    report = "repair-only" if repair_only else "merge-only"
+                    print(f"[auto:user-splice:{report}] current input: "
                           f"{input_path.resolve()}; saved completed run: "
                           f"{output_path.resolve()} (if verified); "
                           "only the positional input is treated as manual edits",
@@ -4481,8 +4523,13 @@ def main() -> None:
                     from_best=args.auto_splice_from_best,
                     start_from_stage_bests=args.auto_splice_each_best,
                     reference_frames=reference_frames,
-                    merge_stage_bests=args.auto_splice_merge_bests or merge_only,
+                    merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end,
                     merge_only=merge_only,
+                    merge_repair_only=repair_only,
+                    merge_repair_at_end=repair_at_end,
+                    merge_repair_pairs=args.auto_splice_merge_repair_pairs,
+                    merge_repair_window=args.auto_splice_merge_repair_window,
+                    merge_repair_targets=args.auto_splice_merge_repair_targets,
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path,
