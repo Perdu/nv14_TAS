@@ -1,0 +1,25 @@
+auto:
+export LEVEL='53-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+
+local:
+export SPLICE='end'; export LEVEL='55-1' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 50
+
+random-splicer:
+export LEVEL='55-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config '../splices/random-splice.toml' --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --simulate-enemies --auto-stagnation-runs 10 --workers 15
+
+auto local:
+export SPLICE='591'; export LEVEL='53-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+
+multi-splicer:
+export LEVEL='97-2' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+
+jaffar algorithm:
+--auto-repair-beam-width 32 --auto-repair-cache-entries 16 --auto-adaptive-repair-windows --auto-repair-local-steps 2000
+--local-beam-width 32 --local-search-cache-entries 16 --local-adaptive-windows  --local-search-ticks 20000
+
+looping multi-splicer over several levels:
+for i in "97-2" "88-4" ; do export LEVEL="$i" ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 ; done
+
+Running merge modes alone:
+export LEVEL="88-4" ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 1 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --splice-merge-only
+export LEVEL="88-4" ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 1 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --splice-merge-repair-only
