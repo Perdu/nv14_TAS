@@ -141,14 +141,21 @@ def repair_suffix_grafts(
             prefix_eval.finish_tick - 2 if prefix_eval.finish_tick is not None else
             len(candidate) - 2)
     live = max(2, min(live, len(candidate) - 2))
-    seam = max(2, min(seam_frame, live + max(2, window // 4), len(candidate) - 2))
+    # A padded workspace can extend beyond a replay that already completed.
+    # Never target an input after that actual completion: it cannot produce
+    # a bridge from a live player and can cause endpoint backends to evaluate
+    # a trimmed replay at a frame it does not contain. For incomplete/dead
+    # prefixes retain the existing forward recovery window.
+    target_limit = (live if prefix_eval.finish_tick is not None
+                    else len(candidate) - 2)
+    seam = max(2, min(seam_frame, live + max(2, window // 4), target_limit))
 
     # Target states are selected by physical proximity, not splice score or
     # absolute frame alone. This permits a manually accelerated prefix to
     # reconnect to a later reference tick without erasing its early gain.
     proposed: list[tuple[float, int, int]] = []
-    for target_tick in dict.fromkeys((seam, max(3, seam - window // 4),
-                                      min(len(candidate) - 2, seam + window // 4))):
+    for target_tick in dict.fromkeys((seam, max(2, seam - window // 4),
+                                      min(target_limit, seam + window // 4))):
         probe = prefix_eval.point(min(live, target_tick))
         if probe is None:
             continue

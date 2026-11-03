@@ -1188,10 +1188,18 @@ def optimise_user_splices(
             covered = False
             completed_best = next((frames for name, frames in completions
                                    if name == "current best completed"), None)
-            if completed_best is not None and stage_feasible(completed_best, index):
-                full_eval = original_endpoints[index].evaluate(completed_best)
-                score = stage_checkpoint_evals[index]
-                covered = score is not None and score.objective_key >= full_eval.objective_key
+            if completed_best is not None:
+                # A verified completion can end before a later helper's target
+                # frame (e.g. finish at 788, final helper target at 811).
+                # EndpointEvaluator needs the implicit neutral search tail,
+                # but the saved completed replay itself must stay trimmed.
+                completed_workspace = _materialise_splice_tail(
+                    completed_best, stage.goal.target_frame)
+                if stage_feasible(completed_workspace, index):
+                    full_eval = original_endpoints[index].evaluate(completed_workspace)
+                    score = stage_checkpoint_evals[index]
+                    covered = (score is not None and
+                               score.objective_key >= full_eval.objective_key)
             if not covered and prefix != input_prefix_for_repair:
                 sources.append((stage.name, prefix, index))
         primary_count = len(sources)

@@ -1916,3 +1916,10 @@ when `[multi-splicer] merge-repair-at-end = true` is configured. A standalone
 fast merge never starts the end-of-run bridge-repair search. When two archived
 sections have identical duration and checkpoint score, direct merging chooses
 one deterministically instead of trying to compare their input-frame objects.
+
+Standalone `--splice-merge-repair-only` also handles completed inputs and saved
+continuations that finish **before** a later helper's target frame. The repair
+scheduler uses an implicit neutral tail only for evaluating those helper goals;
+it does not extend the verified completed movie on disk. Mutation-based bridge
+searches never target frames after an already completed prefix's finish. One
+unusable pair does not prevent attempts on other saved splice sections.
