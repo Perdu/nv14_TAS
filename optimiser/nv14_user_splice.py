@@ -243,6 +243,44 @@ def _stage_summary_text(goal: EndpointGoal, evaluation: EndpointEvaluation) -> s
     return _stage_improvement_text(goal, None, evaluation)
 
 
+def _stage_savings_text(goal: EndpointGoal,
+                        candidate: EndpointEvaluation,
+                        reference: EndpointEvaluation | None,
+                        label: str) -> str:
+    """Compare physical frames and goal-directed pixel distance, not ranking keys.
+
+    A positive difference is a saving. Purely frame-based objectives have no
+    scored pixel metric, so their x/y displacement is labelled as positional.
+    """
+    if reference is None:
+        return f"vs {label}: unavailable (no feasible checkpoint)"
+    frames_saved = reference.frame - candidate.frame
+    objective = goal.objective
+    pixel_saving = None
+    pixel_label = objective
+    if objective in ("min-x", "max-x", "min-y", "max-y"):
+        axis = "x" if objective.endswith("-x") else "y"
+        before, after = getattr(reference, axis), getattr(candidate, axis)
+        pixel_saving = before - after if objective.startswith("min-") else after - before
+    elif objective == "min-distance":
+        # min-distance scores are NEGATIVE SQUARED distances.
+        pixel_saving = (math.sqrt(max(0.0, -reference.score)) -
+                        math.sqrt(max(0.0, -candidate.score)))
+    elif goal.secondary_objective in ("min-x", "max-x", "min-y", "max-y",
+                                       "min-exit-distance"):
+        pixel_label = goal.secondary_objective
+        before, after = reference.secondary_value, candidate.secondary_value
+        pixel_saving = (before - after if pixel_label.startswith("min-")
+                        else after - before)
+    result = f"vs {label}: {frames_saved:+d} frames saved"
+    if pixel_saving is not None and math.isfinite(pixel_saving):
+        return result + f", {pixel_saving:+.6g} px saved ({pixel_label})"
+    if all(math.isfinite(v) for v in (reference.x, reference.y, candidate.x, candidate.y)):
+        return (result + f", position dx {candidate.x-reference.x:+.6g} px, "
+                f"dy {candidate.y-reference.y:+.6g} px (not scored)")
+    return result
+
+
 def optimise_user_splices(
     level: Level, source_frames: Sequence[InputFrame],
     stages: Sequence[UserSpliceStage], config: RandomSpliceConfig,
@@ -258,6 +296,7 @@ def optimise_user_splices(
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
+    reporting_input_frames: Sequence[InputFrame] | None = None,
     frontier_callback: Callable[[str, tuple[tuple[InputFrame, ...], ...]], None] | None = None,
     summary_only: bool = False,
     resume_state: Mapping[str, object] | None = None,
@@ -302,6 +341,10 @@ def optimise_user_splices(
     if first_stage > last_stage:
         raise ValueError("splice start must not be after splice stop")
     source = tuple(editable_frames(source_frames))
+    # --ls-splice uses saved final frames as its working replay; preserve the
+    # CLI input replay independently so the reporting baseline stays correct.
+    reporting_input = (tuple(editable_frames(reporting_input_frames))
+                       if reporting_input_frames is not None else source)
     reference = (tuple(editable_frames(reference_frames))
                  if reference_frames is not None else None)
     if reference is not None:
@@ -339,10 +382,19 @@ def optimise_user_splices(
                                 else s.simulate_enemies] for s in stages)
     original_endpoints = tuple(EndpointEvaluator(stage_level, stage.goal)
                                for stage_level, stage in zip(stage_levels, stages))
+    reporting_workspace = _materialise_splice_tail(
+        reporting_input, max(s.goal.target_frame for s in stages))
     # Stage goals are intentionally checked independently. Later edits must not
     # silently undo an earlier switch, jump, or arrival requirement.
     def valid_stages(frames, through: int) -> bool:
         return all(evaluate.evaluate(frames).feasible for evaluate in original_endpoints[:through])
+
+    # Reporting must not add simulation work to headless searches.
+    input_stage_evals = (tuple(
+        endpoint.evaluate(reporting_workspace)
+        if valid_stages(reporting_workspace, i + 1) else None
+        for i, endpoint in enumerate(original_endpoints)
+    ) if progress is not None else (None,) * len(stages))
 
     def final_rank(frames):
         # A named stage's goal is the user's optimisation objective. Finishing
@@ -552,6 +604,17 @@ def optimise_user_splices(
     # Choose only a previously saved, validated best for explicit propagation.
     # Do this before writing initial source checkpoints, so --splice-from-best
     # never silently falls back to an unsaved current-run baseline.
+    def reported_savings(i: int, candidate: EndpointEvaluation) -> str:
+        """Savings against both independent input and verified completed best."""
+        best_workspace = _materialise_splice_tail(best_output, len(current) - 1)
+        best_eval = (original_endpoints[i].evaluate(best_workspace)
+                     if best_rank is not None and valid_stages(best_workspace, i + 1)
+                     else None)
+        return ('; ' + _stage_savings_text(stages[i].goal, candidate,
+                                           input_stage_evals[i], 'input run') +
+                '; ' + _stage_savings_text(stages[i].goal, candidate,
+                                           best_eval, 'best run'))
+
     propagation_seed = current
     if from_best_index is None and saved_final_frames is not None and best_output != source:
         # Use the previously verified best completed replay for normal search,
@@ -587,13 +650,15 @@ def optimise_user_splices(
                 if progress:
                     progress(f"[auto:user-splice:initial] {stage.name!r}: "
                              "saved starting stage result; "
-                             f"{_stage_improvement_text(stage.goal, None, baseline_evaluation)}")
+                             f"{_stage_improvement_text(stage.goal, None, baseline_evaluation)}"
+                             f"{reported_savings(i, baseline_evaluation)}")
     if progress and not summary_only:
         for i, replay in enumerate(restored_stage_frames):
             if replay is not None:
                 progress(f"[auto:user-splice:resume] {stages[i].name!r}: "
                          "restored a strictly better historical checkpoint; "
-                         f"{_stage_improvement_text(stages[i].goal, None, stage_best_evaluation[i])}")
+                         f"{_stage_improvement_text(stages[i].goal, None, stage_best_evaluation[i])}"
+                         f"{reported_savings(i, stage_best_evaluation[i])}")
     if progress and not summary_only:
         for i, stage in enumerate(stages):
             progress(f"[auto:user-splice:physics] {stage.name!r}: "
@@ -678,7 +743,8 @@ def optimise_user_splices(
                            else "full run: " + _stage_summary_text(stage.goal, best_stage))
                 progress(f"[auto:user-splice:summary:pending] {stage.name!r}: "
                          f"pending ({stage_checkpoint_origin[i]}); "
-                         f"splice: {detail}; {against}")
+                         f"splice: {detail}; {against}"
+                         f"{reported_savings(i, candidate)}")
             else:
                 # Normalize jump triggers and implicit neutral tail before
                 # comparing prefixes.  Downstream edits may improve a stage
@@ -691,7 +757,8 @@ def optimise_user_splices(
                 progress(f"[auto:user-splice:summary:propagated] {stage.name!r}: "
                          f"{state} ({stage_checkpoint_origin[i]}); "
                          f"splice: {detail}; full run: "
-                         f"{_stage_summary_text(stage.goal, best_stage)}")
+                         f"{_stage_summary_text(stage.goal, best_stage)}"
+                         f"{reported_savings(i, candidate)}")
 
     report_checkpoint_summary("saved checkpoints" if summary_only else "startup")
     if summary_only:
@@ -916,7 +983,8 @@ def optimise_user_splices(
                             progress(f"[auto:user-splice:temporary] "
                                      f"round {round_no+1} stage {index+1}/{len(stages)} "
                                      f"{stage.name!r}: {label}; "
-                                     f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}")
+                                     f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}"
+                                     f"{reported_savings(index, evaluation)}")
                     if is_final_gain:
                         candidate_rank, completed_frames = candidate_final
                         # Compare final best vs final best. old_evaluation
@@ -928,6 +996,9 @@ def optimise_user_splices(
                             original_endpoints[index].evaluate(
                                 _materialise_splice_tail(previous_best_output, len(current)-1))
                             if previous_best_rank is not None else None)
+                        previous_savings = (_stage_savings_text(
+                            stage.goal, evaluation, previous_final, "previous best run")
+                            if progress else "")
                         current = normalized
                         best_output = completed_frames
                         best_rank = candidate_rank
@@ -945,7 +1016,8 @@ def optimise_user_splices(
                                      f"({stage.name}); {completed_text}; "
                                      f"final-goal comparison: "
                                      f"{_stage_improvement_text(stage.goal, previous_final, evaluation)}; "
-                                     "saved")
+                                     f"{_stage_savings_text(stage.goal, evaluation, input_stage_evals[index], 'input run')}; "
+                                     f"{previous_savings}; saved")
 
                 last_live_accept = float("-inf")
                 def live_candidate(candidate: tuple[InputFrame, ...], frame: int) -> None:
@@ -1013,6 +1085,7 @@ def optimise_user_splices(
                          f"{temp_gains} stage-best update(s); "
                          f"stage best "
                          f"{_stage_improvement_text(stage.goal, None, stage_best_evaluation[index]) if stage_best_evaluation[index] is not None else 'none'}; "
+                         f"{reported_savings(index, stage_best_evaluation[index]) if stage_best_evaluation[index] is not None else 'no feasible stage checkpoint'}; "
                          f"{time.monotonic() - stage_started:.1f}s")
             if not eligible:
                 # A temporarily infeasible intermediate checkpoint must not

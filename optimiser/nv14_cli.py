@@ -4457,6 +4457,7 @@ def main() -> None:
                     saved_stage_candidates=saved_stage_candidates,
                     saved_stage_frontiers=saved_stage_frontiers,
                     saved_final_frames=(None if args.auto_ls_splice else saved_final_frames),
+                    reporting_input_frames=replay.frames,
                     frontier_callback=save_frontier,
                     resume_state=resume_state,
                     save_resume_state=(None if args.auto_ls_splice else persist_resume_state),
