@@ -1516,6 +1516,35 @@ python3 optimize_replay.py auto ../n_levels/97-2.ltm \
   --output wip/optim.ltm --replay-output wip/97-2.txt --workers 15
 ```
 
+To **merge saved splice bests once and exit**, use the same command with
+`--splice-merge-only`. It implies `--splice-merge-bests`, reads the saved named
+splice LTM/TXT checkpoints, and tests replay-verified joins from preceding
+stages within `--splice-stage-lookback N` (default 2). It reports skipped
+pairs (missing/identical checkpoints), rejected joins (physical seam or stage
+goals), verified joins, stage-best upgrades and completed-best upgrades.
+Only improved, stage-feasible checkpoints and independently verified completed
+final results are saved; an incomplete stage graft is **never** promoted to a
+completed best. No Auto/Local search, startup baseline checkpoint writes, or
+search resume/progress sidecar changes occur. `--auto-runs` and `--workers`
+do not govern this one-shot operation.
+
+For example, starting in `optimiser/`:
+
+```sh
+python3 optimize_replay.py auto ../n_levels/88-4.ltm \
+  --config examples/config.toml \
+  --splice-config ../splices/88-4/multi-splicer.toml \
+  --output wip/88-4.ltm --replay-output wip/88-4.txt \
+  --splice-merge-only --splice-stage-lookback 10
+```
+
+To keep the one-shot behavior in a splice TOML, put `merge-only = true` under
+`[multi-splicer]` (or use `--splice-merge-only` on the command line).
+`--ls-splice` is the separate read-only summary command: unlike merge-only,
+it never attempts or saves joins. Do not combine merge-only with
+`--splice-from-best`, `--splice-start`, `--splice-stop`, or `--splice-reference`;
+it uses all saved named splice bests.
+
 `--splice-config` overlays all preceding `--config` files; explicit CLI
 options win regardless of argument order. Splice goals are resolved relative
 to the `--splice-config` file's directory by default; an explicit

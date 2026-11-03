@@ -293,6 +293,7 @@ def optimise_user_splices(
     start_from_stage_bests: bool = False,
     reference_frames: Sequence[InputFrame] | None = None,
     merge_stage_bests: bool = False,
+    merge_only: bool = False,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
@@ -317,6 +318,8 @@ def optimise_user_splices(
         raise ValueError("user splice requires at least one named goal")
     if completion_policy not in ("checkpoint", "complete"):
         raise ValueError("invalid user splice completion policy")
+    if merge_only and (not merge_stage_bests or summary_only or from_best is not None):
+        raise ValueError("merge-only requires merge_stage_bests, without summary-only or from-best")
     # Selection does not waive requirements of earlier goals.
     def stage_index(requested: str | None, default: int, label: str) -> int:
         if requested is None:
@@ -361,7 +364,9 @@ def optimise_user_splices(
     # checkpoint, even when the new input is incomplete and policy=checkpoint.
     # A stale/incomplete saved file is a reusable hint at most, not a veto
     # on a new campaign. Canonical completion is independently verified below.
-    require_complete = (completion_policy == "complete" or source_complete)
+    # The merge-only command never publishes a stage checkpoint as the final
+    # replay, even when the source uses completion-policy=checkpoint.
+    require_complete = (completion_policy == "complete" or source_complete or merge_only)
     if completion_policy == "complete" and not source_complete:
         raise ValueError("user splice requires a canonically completed source for completion-policy=complete")
     for stage in stages:
@@ -567,7 +572,7 @@ def optimise_user_splices(
     # It can resume the last *completed backend round*, even if previous
     # stage passes were interrupted. Reject ambiguous incompatible snapshots.
     active_phase = None
-    if resume_state is not None and not summary_only:
+    if resume_state is not None and not (summary_only or merge_only):
         try:
             wanted = {
                 "version": 1,
@@ -634,7 +639,7 @@ def optimise_user_splices(
     # Create the initial stage checkpoints as well as subsequent new bests.
     # Compare against validated on-disk checkpoints first: an existing better
     # movie must never be overwritten by a weaker starting replay.
-    if not summary_only:
+    if not (summary_only or merge_only):
         for i, stage in enumerate(stages):
             baseline_evaluation = original_endpoints[i].evaluate(current) if valid_stages(current, i + 1) else None
             archived_evaluation = stage_checkpoint_evals[i]
@@ -652,14 +657,14 @@ def optimise_user_splices(
                              "saved starting stage result; "
                              f"{_stage_improvement_text(stage.goal, None, baseline_evaluation)}"
                              f"{reported_savings(i, baseline_evaluation)}")
-    if progress and not summary_only:
+    if progress and not (summary_only or merge_only):
         for i, replay in enumerate(restored_stage_frames):
             if replay is not None:
                 progress(f"[auto:user-splice:resume] {stages[i].name!r}: "
                          "restored a strictly better historical checkpoint; "
                          f"{_stage_improvement_text(stages[i].goal, None, stage_best_evaluation[i])}"
                          f"{reported_savings(i, stage_best_evaluation[i])}")
-    if progress and not summary_only:
+    if progress and not (summary_only or merge_only):
         for i, stage in enumerate(stages):
             progress(f"[auto:user-splice:physics] {stage.name!r}: "
                      f"simulate-enemies={str(stage_levels[i].simulate_enemies).lower()} "
@@ -760,7 +765,8 @@ def optimise_user_splices(
                          f"{_stage_summary_text(stage.goal, best_stage)}"
                          f"{reported_savings(i, candidate)}")
 
-    report_checkpoint_summary("saved checkpoints" if summary_only else "startup")
+    report_checkpoint_summary("saved checkpoints" if summary_only else
+                              "before merges" if merge_only else "startup")
     if summary_only:
         return UserSpliceResult(best_output, 0, 0, 0)
 
@@ -769,36 +775,65 @@ def optimise_user_splices(
     # promote a local improvement if its mandatory earlier goals were lost.
     elites: list[list[tuple[InputFrame, ...]]] = [list(pool[:config.frontier]) for pool in archived_frontiers]
     if merge_stage_bests:
+        pairs = attempted = joined = upgraded = completed = 0
+        if merge_only and progress:
+            progress("[auto:user-splice:merge-only] merging saved named-splice "
+                     f"checkpoints; lookback {config.stage_lookback} stage(s), "
+                     f"seam lookback {config.lookback} frame(s); no search")
         # Try grafting each saved earlier-stage best onto later saved routes.
         # An incomplete graft is only a *stage seed*; only final_rank may
         # promote it to the completed result. No branch bypasses past goals.
         for later in range(1, len(stages)):
             for earlier in range(max(0, later-config.stage_lookback), later):
+                pairs += 1
                 prefix, suffix = stage_checkpoints[earlier], stage_checkpoints[later]
-                if prefix is None or suffix is None or prefix == suffix:
+                label = f"{stages[earlier].name} -> {stages[later].name}"
+                if prefix is None or suffix is None:
+                    if merge_only and progress:
+                        missing = ("both checkpoints" if prefix is None and suffix is None else
+                                   "source checkpoint" if prefix is None else "destination checkpoint")
+                        progress(f"[auto:user-splice:merge-only] {label}: skipped (missing {missing})")
                     continue
+                if prefix == suffix:
+                    if merge_only and progress:
+                        progress(f"[auto:user-splice:merge-only] {label}: skipped (identical replays)")
+                    continue
+                attempted += 1
+                physically_verified = 0
+                accepted = False
                 for graft in verified_suffix_grafts(
                         level, _materialise_splice_tail(prefix, len(current)-1),
                         _materialise_splice_tail(suffix, len(current)-1),
                         seam_frame=stages[earlier].end,
                         lookback=config.lookback, completion_required=False):
+                    physically_verified += 1
                     candidate = _materialise_splice_tail(graft, len(current)-1)
                     if not valid_stages(candidate, later+1):
                         continue
+                    accepted = True
+                    joined += 1
                     score = original_endpoints[later].evaluate(candidate)
                     pool = {frames: original_endpoints[later].evaluate(frames).objective_key
                             for frames in archived_frontiers[later]}
                     pool[candidate] = score.objective_key
-                    archived_frontiers[later] = _diverse_saved_archive(
+                    selected = _diverse_saved_archive(
                         pool, original_endpoints[later], config.save_frontier)
+                    changed_archive = selected != archived_frontiers[later]
+                    archived_frontiers[later] = selected
                     if (stage_checkpoint_evals[later] is None or
                             score.objective_key < stage_checkpoint_evals[later].objective_key):
                         stage_checkpoints[later] = candidate
                         stage_checkpoint_evals[later] = score
                         stage_checkpoint_origin[later] = "merged stage bests"
+                        upgraded += 1
                         if stage_best_callback:
                             stage_best_callback(stages[later].name, stage_export(candidate))
-                    if frontier_callback:
+                        if merge_only and progress:
+                            progress(f"[auto:user-splice:merge-only] {label}: "
+                                     "new saved stage best; "
+                                     f"{_stage_improvement_text(stages[later].goal, None, score)}"
+                                     f"{reported_savings(later, score)}")
+                    if frontier_callback and (not merge_only or changed_archive):
                         frontier_callback(stages[later].name,
                                           tuple(archived_frontiers[later]))
                     if progress:
@@ -811,12 +846,32 @@ def optimise_user_splices(
                         best_rank, best_output = complete
                         current = candidate
                         improvements += 1
+                        completed += 1
                         if best_callback:
                             best_callback(best_output)
                         if progress:
                             progress("[auto:user-splice:merge] improved verified "
                                      f"completed replay at {len(best_output)} frames; saved")
                     break
+                if merge_only and progress:
+                    if accepted:
+                        progress(f"[auto:user-splice:merge-only] {label}: "
+                                 "verified join accepted (stage candidate checked)")
+                    else:
+                        reason = ("no physically compatible seam" if not physically_verified
+                                  else "joined replay fails preceding/destination goals")
+                        progress(f"[auto:user-splice:merge-only] {label}: "
+                                 f"rejected ({reason})")
+
+        if merge_only:
+            if progress:
+                progress(f"[auto:user-splice:merge-only] done: {pairs} pair(s) considered; "
+                         f"{attempted} attempted; {joined} verified join(s); "
+                         f"{upgraded} stage best(s) improved; "
+                         f"{completed} completed best(s) improved; "
+                         f"{pairs-attempted} skipped; {attempted-joined} rejected")
+            report_checkpoint_summary("after merges")
+            return UserSpliceResult(best_output, improvements, 0, 0)
 
     if type(resume_outer_round) is not int or resume_outer_round < 0:
         raise ValueError("invalid saved outer-round progress")

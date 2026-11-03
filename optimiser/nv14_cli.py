@@ -1691,6 +1691,8 @@ def _load_config_defaults(
         "save_frontier": "auto_splice_save_frontier",
         "lookback": "auto_splice_stage_lookback",
         "live_save_best": "auto_splice_live_save_best",
+            "merge_only": "auto_splice_merge_only",
+            "merge_bests": "auto_splice_merge_bests",
         "mutations": "auto_mutations",  # endpoint Auto, not Local mutation selection
     })
     # The dedicated table is last within its file: a splice override wins over
@@ -2450,6 +2452,11 @@ def build_parser() -> argparse.ArgumentParser:
                          modes=auto_modes, action="store_true",
                          help="attempt replay-verified joins of saved best checkpoints "
                               "across preceding named splices")
+    command.add_argument("--splice-merge-only", dest="auto_splice_merge_only",
+                         modes=auto_modes, action="store_true",
+                         help="attempt verified merges of saved named-splice bests, "
+                              "report rejected joins and saved gains, then exit "
+                              "without Auto/Local search (implies --splice-merge-bests)")
     command.add_argument("--splice-reference", dest="auto_splice_reference",
                          modes=auto_modes, type=Path, metavar="FILE",
                          help="completed same-level replay to use as a reference suffix "
@@ -3921,6 +3928,17 @@ def main() -> None:
         raise SystemExit("-l/--ls-splice/--ls-splices requires named multi-splicer Auto mode with splice files")
     if getattr(args, "auto_ls_splice", False) and args.auto_splice_from_best:
         raise SystemExit("--ls-splice cannot be combined with --splice-from-best")
+    merge_only = getattr(args, "auto_splice_merge_only", False)
+    if merge_only:
+        if not (args.mode == "auto" and args.auto_random_splice and
+                args.auto_splice_mode == "user" and args.auto_splice_files):
+            raise SystemExit("--splice-merge-only requires named multi-splicer Auto mode with splice files")
+        if args.auto_ls_splice:
+            raise SystemExit("--splice-merge-only cannot be combined with --ls-splice")
+        if (args.auto_splice_from_best or args.auto_splice_start or
+                args.auto_splice_stop or args.auto_splice_reference is not None):
+            raise SystemExit("--splice-merge-only uses all saved named splice bests; "
+                             "omit --splice-from-best, --splice-start/stop and --splice-reference")
     try:
         source = _load_source(
             input_path,
@@ -3974,7 +3992,7 @@ def main() -> None:
         )
 
     auto_parent_sources: list[tuple[Path, _LoadedSource]] = []
-    if args.mode == "auto" and not getattr(args, "auto_ls_splice", False):
+    if args.mode == "auto" and not (getattr(args, "auto_ls_splice", False) or merge_only):
         for parent_number, parent_path in enumerate(args.auto_parents, start=2):
             try:
                 parent_source = _load_source(
@@ -4373,7 +4391,7 @@ def main() -> None:
                           f"{len(reference_frames)} frames; full replay will be verified", flush=True)
                 resume_state_path = output_path.with_suffix(".splice-search.json")
                 resume_state = None
-                if not args.auto_ls_splice and resume_state_path.is_file():
+                if not (args.auto_ls_splice or merge_only) and resume_state_path.is_file():
                     try:
                         if resume_state_path.stat().st_size > 128 * 1024:
                             raise ValueError("named splice resume state exceeds 128 KiB")
@@ -4412,12 +4430,12 @@ def main() -> None:
                     "start_from_stage_bests": args.auto_splice_each_best,
                     "reference_sha256": (hashlib.sha256(encode_complex_replay(reference_frames).encode()).hexdigest()
                                           if reference_frames is not None else None),
-                    "merge_stage_bests": args.auto_splice_merge_bests,
+                    "merge_stage_bests": args.auto_splice_merge_bests or merge_only,
                     "start_at": args.auto_splice_start,
                     "stop_at": args.auto_splice_stop,
                 }
                 completed_passes = 0
-                if not args.auto_ls_splice and progress_file.is_file():
+                if not (args.auto_ls_splice or merge_only) and progress_file.is_file():
                     try:
                         record = json.loads(progress_file.read_text(encoding="utf-8"))
                         if record["identity"] != progress_identity or (
@@ -4448,7 +4466,8 @@ def main() -> None:
                     from_best=args.auto_splice_from_best,
                     start_from_stage_bests=args.auto_splice_each_best,
                     reference_frames=reference_frames,
-                    merge_stage_bests=args.auto_splice_merge_bests,
+                    merge_stage_bests=args.auto_splice_merge_bests or merge_only,
+                    merge_only=merge_only,
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path,
@@ -4460,10 +4479,10 @@ def main() -> None:
                     reporting_input_frames=replay.frames,
                     frontier_callback=save_frontier,
                     resume_state=resume_state,
-                    save_resume_state=(None if args.auto_ls_splice else persist_resume_state),
+                    save_resume_state=(None if args.auto_ls_splice or merge_only else persist_resume_state),
                     backend_checkpoint_path=backend_round_path,
                     resume_outer_round=(0 if args.auto_ls_splice else completed_passes),
-                    save_outer_round=(None if args.auto_ls_splice else persist_outer_round),
+                    save_outer_round=(None if args.auto_ls_splice or merge_only else persist_outer_round),
                     progress=lambda message: (
                         _print_baseline_line(message, color=common_config.color)
                         if message.startswith("[auto:user-splice:baseline]")
@@ -4475,7 +4494,7 @@ def main() -> None:
                                                "[auto:user-splice:summary:propagated]"))
                         else print(message, flush=True)),
                 )
-                if args.auto_ls_splice:
+                if args.auto_ls_splice or merge_only:
                     return
                 if not result.improvements:
                     print("[auto:user-splice] no verified improvement; existing output retained")
