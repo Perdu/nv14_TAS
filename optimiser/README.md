@@ -1955,3 +1955,36 @@ they do not print each rejected or unchanged source/suffix pair. Use
 `--splice-merge-verbose` or `[multi-splicer] merge-verbose = true` to restore
 the previous per-pair detail while diagnosing a particular checkpoint.
 Computation and merge ranking are unchanged by this logging switch.
+
+### Short optimiser commands (patch 60)
+
+`tas.py` is an **optional launcher** that calls the existing `optimize_replay.py`
+CLI. It provides the usual input (`../n_levels/LEVEL.ltm`), output
+(`wip/LEVEL.ltm`, `wip/LEVEL.txt`), workers (15), TOML and splice paths; the
+underlying optimiser and its normal CLI remain fully supported.
+
+```sh
+./tas.py auto 53-4                   # whole-run Auto, 10 runs
+./tas.py local 55-1 end              # local, 50 stagnation rounds
+./tas.py random 55-1                 # random splicer with enemies
+./tas.py goal 53-4 591               # endpoint Auto with a Local goal file
+./tas.py multi 97-2                  # named multi-splicer, 50 rounds
+./tas.py merge 88-4                  # standalone fast merge
+./tas.py repair 88-4                 # standalone bridge repair
+./tas.py loop 97-2 88-4              # run named multi on each level
+./tas.py local 55-1 end --jaffar     # Local Jaffar option preset
+./tas.py auto 53-4 --jaffar          # Auto Jaffar option preset
+./tas.py multi 97-2 --dry-run        # inspect expanded command only
+LEVEL=88-4 ./tas.py merge            # no repeated LEVEL argument
+./tas.py multi 97-2 --auto-runs 5    # normal CLI flags pass through
+```
+
+Environment settings such as `TAS_WORKERS=15`, `TAS_CONFIG=examples/config.toml`,
+`TAS_OUTPUT_TEMPLATE=wip/{level}.ltm`, `TAS_REPLAY_TEMPLATE=wip/{level}.txt`,
+`TAS_INPUT_TEMPLATE=../n_levels/{level}.ltm`, and `TAS_MULTI_TEMPLATE`/
+`TAS_GOAL_TEMPLATE` choose paths without rewriting your level configs.
+`TAS_LEVEL` (or `LEVEL`) and `TAS_SPLICE` (or `SPLICE`) supply positional values.
+With `TAS_INPUT_TEMPLATE` pointing at a manually edited replay, use a **different**
+output template; the launcher refuses to overwrite its own input. `./tas.py --help`
+lists all supported defaults. Normal optimiser flags appended afterward always
+have the final word. No shell expansion or automatic use of wip files occurs.
