@@ -303,6 +303,7 @@ def optimise_user_splices(
     reference_frames: Sequence[InputFrame] | None = None,
     merge_stage_bests: bool = False,
     merge_only: bool = False,
+    merge_verbose: bool = False,
     merge_repair_only: bool = False,
     merge_repair_at_end: bool = False,
     merge_repair_pairs: int = 48,
@@ -1027,7 +1028,7 @@ def optimise_user_splices(
             pairs += 1
             # Identity joins do not propagate the input or change the route.
             if prefix == suffix:
-                if merge_only and progress:
+                if merge_only and progress and merge_verbose:
                     progress(f"{report} {label}: skipped (identical replays)")
                 return
             key = (prefix, suffix, seam, later)
@@ -1074,13 +1075,13 @@ def optimise_user_splices(
                     # seam. Completion and stage best have separate rankings.
             if accepted:
                 joined += 1
-                if merge_only and progress:
+                if merge_only and progress and merge_verbose:
                     result = ("completed join accepted despite missing destination helper"
                               if completed_join and later is not None and not stage_join else
                               "verified completed join" if completed_join else
                               "verified stage join")
                     progress(f"{report} {label}: {result} accepted")
-            elif merge_only and progress:
+            elif merge_only and progress and merge_verbose:
                 reason = ("no physically compatible seam" if not physically_verified
                           else "no join satisfies its destination objective or completion")
                 progress(f"{report} {label}: rejected ({reason})")
@@ -1140,7 +1141,7 @@ def optimise_user_splices(
                 suffixes = merge_routes(later)
                 if not prefixes or not suffixes:
                     pairs += 1
-                    if merge_only and progress:
+                    if merge_only and progress and merge_verbose:
                         missing = ("both checkpoints" if not prefixes and not suffixes else
                                    "source checkpoint" if not prefixes else "destination checkpoint")
                         progress(f"{report} {stages[earlier].name} -> {stages[later].name}: "
@@ -1318,7 +1319,7 @@ def optimise_user_splices(
             seam = (stages[index].end if index is not None else
                     min(len(prefix) - 2, max(manual_repair_seam,
                         stages[later].end if later is not None else manual_repair_seam)))
-            if progress:
+            if progress and merge_verbose:
                 progress(f"{report} bridge {attempts_used}/{merge_repair_pairs}: "
                          f"{label} -> {target_name}; seam {seam}; "
                          f"window {merge_repair_window}, targets {merge_repair_targets}, "
@@ -1339,7 +1340,7 @@ def optimise_user_splices(
                 # A corrupt or unrepairable saved section may fail the native
                 # search preflight. Treat that *pair* as unsuccessful, without
                 # preventing the 522 -> 614 path after 522 -> 564 fails.
-                if progress:
+                if progress and merge_verbose:
                     progress(f"{report} bridge {label} -> {target_name}: "
                              f"failed ({type(exc).__name__}: {exc}); "
                              "continuing with independent repair pairs")
@@ -1352,7 +1353,7 @@ def optimise_user_splices(
                 found = stage_ok or completed_ok or found
             if found:
                 successes += 1
-            if progress:
+            if progress and merge_verbose:
                 progress(f"{report} bridge {label} -> {target_name}: "
                          f"{'verified graft accepted' if found else 'no verified graft'}; "
                          f"{result.searches} backend search(es), "

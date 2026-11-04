@@ -111,7 +111,7 @@ def test_repair_only_independent_stage_failures_cannot_block_other_sources(monke
         level, slow, stages,
         RandomSpliceConfig(iterations=4, repair_iterations=3),
         completion_policy='checkpoint', merge_stage_bests=True,
-        merge_only=True, merge_repair_only=True, merge_repair_pairs=8,
+        merge_only=True, merge_repair_only=True, merge_repair_pairs=8, merge_verbose=True,
         saved_final_frames=slow,
         saved_stage_candidates={'522': [good], '564': [blocked], '614': [later_section]},
         progress=messages.append, best_callback=completed.append)

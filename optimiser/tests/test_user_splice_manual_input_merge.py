@@ -103,7 +103,7 @@ def test_no_writes_if_input_merge_cannot_physically_join(monkeypatch):
     result = optimise_user_splices(
         level, manual, stages, RandomSpliceConfig(iterations=4, rounds=0),
         completion_policy='checkpoint', merge_stage_bests=True, merge_only=True,
-        saved_final_frames=slow, progress=messages.append,
+        saved_final_frames=slow, merge_verbose=True, progress=messages.append,
         best_callback=lambda *_a: saved.append('completed'),
         stage_best_callback=lambda *_a: saved.append('stage'))
     assert not saved

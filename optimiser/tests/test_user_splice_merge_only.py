@@ -43,7 +43,7 @@ def test_merge_only_skips_search_initial_saves_and_resume_sidecars(monkeypatch):
     monkeypatch.setattr(us, '_search_stage', _forbid_search)
     result = optimise_user_splices(
         level, source, stages, RandomSpliceConfig(rounds=0, iterations=4),
-        completion_policy='checkpoint', merge_stage_bests=True, merge_only=True,
+        completion_policy='checkpoint', merge_stage_bests=True, merge_only=True, merge_verbose=True,
         progress=messages.append,
         stage_best_callback=lambda *values: writes.append(('stage', values)),
         best_callback=lambda *values: writes.append(('final', values)),
@@ -97,7 +97,7 @@ def test_merge_only_reports_failed_physical_join_without_writes(monkeypatch):
     writes, messages = [], []
     result = optimise_user_splices(
         level, source, stages, RandomSpliceConfig(rounds=0, iterations=4),
-        completion_policy='checkpoint', merge_stage_bests=True, merge_only=True,
+        completion_policy='checkpoint', merge_stage_bests=True, merge_only=True, merge_verbose=True,
         saved_stage_candidates={'first': [earlier], 'last': [source]},
         progress=messages.append, stage_best_callback=lambda *_a: writes.append('stage'),
         frontier_callback=lambda *_a: writes.append('frontier'),
@@ -233,3 +233,32 @@ def test_cli_fast_merge_overrides_persistent_repair_at_end(tmp_path, monkeypatch
     assert 'bridge repair' not in stdout
     assert not output.with_suffix('.splice-search.json').exists()
     assert not output.with_suffix('.splice-progress.json').exists()
+
+
+def test_default_merge_output_is_compact_and_verbose_restores_pair_details(monkeypatch):
+    level, source, _ = _baseline()
+    stages = [UserSpliceStage('one', EndpointGoal(10, 'min-x'), 0, 10),
+              UserSpliceStage('two', EndpointGoal(12, 'min-x'), 0, 12)]
+    earlier = (InputFrame(left=True),) + source[1:]
+    monkeypatch.setattr(us, 'verified_suffix_grafts', lambda *_args, **_kw: ())
+    outputs = []
+    for verbose in (False, True):
+        messages = []
+        optimise_user_splices(
+            level, source, stages, RandomSpliceConfig(rounds=0, iterations=3),
+            merge_stage_bests=True, merge_only=True, merge_verbose=verbose,
+            completion_policy='checkpoint',
+            saved_stage_candidates={'one': [earlier], 'two': [source]},
+            progress=messages.append)
+        outputs.append(messages)
+    assert any('done:' in message for message in outputs[0])
+    assert not any('rejected (' in message for message in outputs[0])
+    assert any('rejected (' in message for message in outputs[1])
+
+
+def test_merge_verbose_toml(tmp_path):
+    config = tmp_path / 'merge.toml'
+    config.write_text('[multi-splicer]\nfiles=["one", "two"]\nmerge-verbose=true\n')
+    args = parse_arguments(['auto', 'run.ltm', '--splice-config', str(config)])
+    assert args.auto_splice_merge_verbose is True
+    assert parse_arguments(['auto', 'run.ltm']).auto_splice_merge_verbose is False

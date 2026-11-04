@@ -1946,3 +1946,12 @@ objectives to be feasible in that replay; missing goals are explicitly marked
 as unmeasurable. Fixed-frame spatial goals show their objective's pixel delta
 separately and never claim total time savings from an unchanged deadline.
 Pixel gains are not accumulated across different axes or distance objectives.
+
+### Compact merge logging (patch 59)
+
+Fast and repairing merge passes now report the initial source, verified saved
+improvements, failures that abort a pass, and one aggregate count summary;
+they do not print each rejected or unchanged source/suffix pair. Use
+`--splice-merge-verbose` or `[multi-splicer] merge-verbose = true` to restore
+the previous per-pair detail while diagnosing a particular checkpoint.
+Computation and merge ranking are unchanged by this logging switch.

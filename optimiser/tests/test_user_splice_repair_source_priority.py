@@ -32,7 +32,7 @@ def test_repair_uses_positional_input_even_when_it_is_in_memory_completed_best(m
          UserSpliceStage('later', EndpointGoal(20, 'min-x'), 10, 20)],
         RandomSpliceConfig(iterations=2, repair_iterations=2),
         completion_policy='checkpoint', merge_stage_bests=True,
-        merge_only=True, merge_repair_only=True, merge_repair_pairs=1,
+        merge_only=True, merge_repair_only=True, merge_repair_pairs=1, merge_verbose=True,
         saved_final_frames=old_saved, progress=messages.append)
     # The *old* saved final is still the suffix even though best_output is the
     # manually edited input. Repair must never silently replace that prefix.

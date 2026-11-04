@@ -196,7 +196,7 @@ def test_merge_can_publish_faster_completion_missing_destination_helper(monkeypa
     saved, stage_saved, logs = [], [], []
     result = optimise_user_splices(
         level, slow, stages, RandomSpliceConfig(rounds=1, iterations=2),
-        merge_stage_bests=True, merge_only=True,
+        merge_stage_bests=True, merge_only=True, merge_verbose=True,
         saved_stage_candidates={'first': [fast], 'end': [slow]},
         best_callback=saved.append,
         stage_best_callback=lambda *args: stage_saved.append(args),

@@ -1698,6 +1698,7 @@ def _load_config_defaults(
         "live_save_best": "auto_splice_live_save_best",
             "merge_only": "auto_splice_merge_only",
             "merge_bests": "auto_splice_merge_bests",
+        "merge_verbose": "auto_splice_merge_verbose",
         "merge_repair_only": "auto_splice_merge_repair_only",
         "merge_repair_at_end": "auto_splice_merge_repair_at_end",
         "merge_repair_pairs": "auto_splice_merge_repair_pairs",
@@ -2464,6 +2465,9 @@ def build_parser() -> argparse.ArgumentParser:
                          modes=auto_modes, action="store_true",
                          help="attempt replay-verified joins of saved best checkpoints "
                               "across preceding named splices")
+    command.add_argument("--splice-merge-verbose", dest="auto_splice_merge_verbose",
+                         modes=auto_modes, action="store_true",
+                         help="log every merge pairing/rejection (default: compact progress and saved gains)")
     command.add_argument("--splice-merge-only", dest="auto_splice_merge_only",
                          modes=auto_modes, action="store_true",
                          help="attempt verified merges of saved named-splice bests, "
@@ -4537,6 +4541,7 @@ def main() -> None:
                     reference_frames=reference_frames,
                     merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end,
                     merge_only=merge_only,
+                    merge_verbose=args.auto_splice_merge_verbose,
                     merge_repair_only=repair_only,
                     merge_repair_at_end=repair_at_end,
                     merge_repair_pairs=args.auto_splice_merge_repair_pairs,

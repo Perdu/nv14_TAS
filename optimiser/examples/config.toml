@@ -114,3 +114,4 @@ merge-repair-pairs = 48
 merge-repair-window = 48
 merge-repair-targets = 2
 repair-iterations = 250
+merge-verbose = false
