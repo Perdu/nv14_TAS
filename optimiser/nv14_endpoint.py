@@ -75,10 +75,13 @@ class EndpointGoal:
     # Serialized load indices; each drone must start targeting during the interval.
     required_drone_detections: tuple[int, ...] = ()
     require_drone_detection_frames: tuple[int, int] | None = None
+    survive_after_goal: int = 0  # require N further live ticks after the objective
 
     def __post_init__(self) -> None:
         if isinstance(self.target_frame, bool) or not isinstance(self.target_frame, int) or self.target_frame < 0:
             raise ValueError("target_frame must be a non-negative integer")
+        if type(self.survive_after_goal) is not int or self.survive_after_goal < 0:
+            raise ValueError("survive-after-goal must be a non-negative integer")
         if self.objective not in _OBJECTIVES:
             raise ValueError(f"unknown endpoint objective {self.objective!r}")
         if self.secondary_objective is not None:
@@ -216,6 +219,7 @@ class EndpointEvaluation:
     pre_finish_exit_distance: float | None = None
     drone_detection_frames: tuple[int | None, ...] = ()
     missing_drone_indices: tuple[int, ...] = ()
+    missing_survival: bool = False
 
     @property
     def objective_key(self) -> tuple[float, ...]:
@@ -610,7 +614,7 @@ class EndpointEvaluator:
             raise ValueError(f"target frame {self.goal.target_frame} is outside a {len(key)}-frame replay")
         if key[:self.prefix_frame] != self._source_key[:self.prefix_frame]:
             raise ValueError("candidate changed the immutable cached prefix")
-        if self._reference_required:
+        if self._reference_required or self.goal.survive_after_goal:
             return self.evaluate_reference(frames)
         state, events, eligible, terminal_frame, terminal_dead, jump_event, ambiguous, pre_position, detections = self._native_plan.scan(
             self._prefix, key, jump_event=self._prefix_jump, with_pre_position=True,
@@ -649,6 +653,34 @@ class EndpointEvaluator:
             mode, chasing = after[load_index]
             if (old_mode == 0 and mode == 1) or (not old_chasing and chasing):
                 recorded[i] = frame
+
+    def _survives_after_goal(self, state: Any, frames: Sequence[InputFrame], frame: int) -> bool:
+        """Require N genuine ticks after the goal, not just a non-dead endpoint.
+
+        A completed level is terminal success. A truncated, still-live replay
+        cannot prove survival through unrecorded frames. Only used when opted in.
+        """
+        if not self.goal.survive_after_goal:
+            return True
+        probe = state.clone()
+        if probe.static_state()["level_complete"]:
+            return True
+        for next_frame in range(frame + 1, frame + self.goal.survive_after_goal + 1):
+            if next_frame >= len(frames):
+                return False
+            step = probe.step(frames[next_frame])
+            if step["dead"]:
+                return False
+            if probe.static_state()["level_complete"]:
+                return True
+        return True
+
+    @staticmethod
+    def _failed_survival(result: EndpointEvaluation) -> EndpointEvaluation:
+        # Keep the valid goal score as an optimization gradient, but never
+        # promote a survivor-less checkpoint as feasible or complete.
+        return replace(result, feasible=False, missing_survival=True,
+                       progress_key=(1, 0, 0, 0, 0, 0, -result.score))
 
     def _evaluate_multiple_jumps(self, frames: tuple[InputFrame, ...]) -> EndpointEvaluation:
         """Exact native-physics reference scorer for several independent jump predicates.
@@ -694,14 +726,18 @@ class EndpointEvaluator:
             if previous is not None:
                 previous = (candidate.interaction_state, candidate.completed_exit_index)
             if candidate.feasible:
-                return replace(candidate, state_key=state.state_key(),
-                               terminal_frame=frame, terminal_dead=dead)
+                if self._survives_after_goal(state, frames, frame):
+                    return replace(candidate, state_key=state.state_key(),
+                                   terminal_frame=frame, terminal_dead=dead)
+                candidate = self._failed_survival(candidate)
             if best is None or candidate.progress_key < best.progress_key:
                 best = replace(candidate, state_key=state.state_key())
         terminal = self._evaluate_state(state, arrival_eligible=False,
                                         jump_event=recorded[0], jump_events=tuple(recorded),
                                         drone_detection_frames=tuple(detections))
         if not self.goal.is_earliest:
+            if terminal.feasible and not self._survives_after_goal(state, frames, terminal.frame):
+                return self._failed_survival(terminal)
             return terminal
         if best is None:
             best = terminal
@@ -722,7 +758,10 @@ class EndpointEvaluator:
             if not self._prefix_dead:
                 state.step_many(frames[self.prefix_frame:self.goal.target_frame+1],
                                 stop_on_dead=True, stop_on_complete=False)
-            return self._exact_exit_proximity(self._evaluate_state(state), frames)
+            result = self._evaluate_state(state)
+            if result.feasible and not self._survives_after_goal(state, frames, result.frame):
+                result = self._failed_survival(result)
+            return self._exact_exit_proximity(result, frames)
         # Inspect every eligible input tick: entry/exit and momentum constraints
         # can become true, false and true again. Binary search is unsound here.
         best = None
@@ -752,12 +791,17 @@ class EndpointEvaluator:
             if previous is not None:
                 previous = (candidate.interaction_state, candidate.completed_exit_index)
             if candidate.feasible:
-                return self._exact_exit_proximity(
-                    replace(candidate, state_key=state.state_key()), frames)
+                if self._survives_after_goal(state, frames, frame):
+                    return self._exact_exit_proximity(
+                        replace(candidate, state_key=state.state_key()), frames)
+                candidate = self._failed_survival(candidate)
             if best is None or candidate.progress_key < best.progress_key:
                 best = replace(candidate, state_key=state.state_key())
-        terminal = self._evaluate_state(state, arrival_eligible=False, jump_event=jump_event,
-                                        drone_detection_frames=tuple(detections))
+        terminal = self._evaluate_state(state, arrival_eligible=not self.goal.is_earliest,
+                                        jump_event=jump_event, drone_detection_frames=tuple(detections))
+        if not self.goal.is_earliest and terminal.feasible:
+            if not self._survives_after_goal(state, frames, terminal.frame):
+                terminal = self._failed_survival(terminal)
         if best is None:
             best = terminal
         return self._exact_exit_proximity(
@@ -776,7 +820,7 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
     evaluator = EndpointEvaluator(level, goal)
     result = evaluator.evaluate_reference(frames)
     if expected is not None:
-        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index", "jump_event", "missing_jump", "jump_events", "missing_jump_indices", "drone_detection_frames", "missing_drone_indices")
+        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index", "jump_event", "missing_jump", "jump_events", "missing_jump_indices", "drone_detection_frames", "missing_drone_indices", "missing_survival")
         mismatch = [name for name in comparable if getattr(result, name) != getattr(expected, name)]
         if mismatch:
             raise ValueError("endpoint verification mismatch: " + ", ".join(mismatch))

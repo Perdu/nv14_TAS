@@ -186,6 +186,7 @@ class LocalConfig:
     required_jumps: tuple[RequiredJump, ...] = ()
     require_drone_detection: tuple[str, ...] = ()
     require_drone_detection_frames: tuple[int, int] | None = None
+    survive_after_goal: int = 0
     top_results: int = 1
     iterations: int = 10000
     beam: int = 32
@@ -250,9 +251,12 @@ class LocalConfig:
             or self.required_jumps
             or self.checkpoint_path is not None or self.resume
             or self.secondary_objective is not None
+            or self.survive_after_goal
         ):
             raise ValueError("endpoint extensions require --search population")
         if self.search == "population":
+            if type(self.survive_after_goal) is not int or self.survive_after_goal < 0:
+                raise ValueError("survive-after-goal must be a non-negative integer")
             if self.required_jumps and self.require_jump_region is not None:
                 raise ValueError("require-jumps cannot be combined with require-jump-region")
             if self.require_jump_frames is not None:
@@ -396,6 +400,7 @@ class LocalConfig:
             required_jumps=tuple(args.require_jumps),
             require_drone_detection=tuple(args.require_drone_detection),
             require_drone_detection_frames=args.require_drone_detection_frames,
+            survive_after_goal=getattr(args, "survive_after_goal", 0),
             top_results=args.top_results,
             iterations=args.iterations,
             beam=args.beam,
@@ -1747,6 +1752,7 @@ _LOCAL_GOAL_TO_AUTO = {
     "require_jumps": "auto_require_jumps",
     "require_drone_detection": "auto_require_drone_detection",
     "require_drone_detection_frames": "auto_require_drone_detection_frames",
+    "survive_after_goal": "auto_survive_after_goal",
     "simulate_enemies": "simulate_enemies",
 }
 
@@ -1778,7 +1784,7 @@ _LOCAL_POPULATION_OPTIONS = frozenset({
     "repair_lookback", "mutation_span", "checkpoint", "resume", "top_results",
     "target_region", "arrival_start",
     "require_jump_region", "require_jump_frames", "require_jumps",
-    "require_drone_detection", "require_drone_detection_frames",
+    "require_drone_detection", "require_drone_detection_frames", "survive_after_goal",
     "secondary_objective",
 })
 
@@ -1819,7 +1825,7 @@ _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
     "auto_vx_window", "auto_vy_window", "auto_require_interaction", "auto_avoid_interaction",
     "auto_require_reference_interactions", "auto_require_jump_region",
     "auto_require_jump_frames", "auto_require_jumps",
-    "auto_require_drone_detection", "auto_require_drone_detection_frames", "auto_completion_policy", "auto_mutation_span",
+    "auto_require_drone_detection", "auto_require_drone_detection_frames", "auto_survive_after_goal", "auto_completion_policy", "auto_mutation_span",
 })
 
 
@@ -2595,6 +2601,9 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-require-drone-detection", "--require-drone-detection", modes=auto_modes,
                          action="append", default=[], metavar="drone:INDEX",
                          help="require the named drone to detect the player (repeatable)")
+    command.add_argument("--auto-survive-after-goal", "--survive-after-goal", modes=auto_modes,
+                         dest="auto_survive_after_goal", type=parse_nonnegative_int, default=0,
+                         metavar="N", help="endpoint goal: reject replay if player dies in next N frames after objective")
     command.add_argument("--auto-require-drone-detection-frames", "--require-drone-detection-frames", modes=auto_modes,
                          type=parse_drone_detection_frames, metavar="START:END",
                          help="inclusive detection interval for all required drones")
@@ -2992,6 +3001,9 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--require-drone-detection", modes=local_modes,
                          action="append", default=[], metavar="drone:INDEX",
                          help="population only: require named drone acquisition (repeatable)")
+    command.add_argument("--survive-after-goal", modes=local_modes,
+                         type=parse_nonnegative_int, default=0, metavar="N",
+                         help="population only: require survival for N frames after the objective")
     command.add_argument("--require-drone-detection-frames", modes=local_modes,
                          type=parse_drone_detection_frames, metavar="START:END",
                          help="population only: inclusive required detection interval")
@@ -3661,6 +3673,7 @@ def _run_local_population(
             required_jumps=config.required_jumps,
             required_drone_detections=_resolve_drone_detection(level, config.require_drone_detection),
             require_drone_detection_frames=config.require_drone_detection_frames,
+            survive_after_goal=config.survive_after_goal,
             require_jump_region=config.require_jump_region,
             require_jump_frames=(config.require_jump_frames or (ranges[0][0], target_frame))
             if config.require_jump_region is not None else None,
@@ -3886,6 +3899,7 @@ def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
         required_jumps=tuple(args.auto_require_jumps),
         required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
         require_drone_detection_frames=args.auto_require_drone_detection_frames,
+        survive_after_goal=getattr(args, "auto_survive_after_goal", 0),
         require_jump_region=args.auto_require_jump_region,
         require_jump_frames=(args.auto_require_jump_frames or (start, frame))
         if args.auto_require_jump_region is not None else None,
@@ -4717,6 +4731,7 @@ def main() -> None:
                 required_jumps=tuple(args.auto_require_jumps),
                 required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
                 require_drone_detection_frames=args.auto_require_drone_detection_frames,
+                survive_after_goal=getattr(args, "auto_survive_after_goal", 0),
                 require_jump_region=args.auto_require_jump_region,
                 require_jump_frames=(args.auto_require_jump_frames or (start, frame))
                 if args.auto_require_jump_region is not None else None,

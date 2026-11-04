@@ -1923,3 +1923,15 @@ scheduler uses an implicit neutral tail only for evaluating those helper goals;
 it does not extend the verified completed movie on disk. Mutation-based bridge
 searches never target frames after an already completed prefix's finish. One
 unusable pair does not prevent attempts on other saved splice sections.
+
+### Post-goal survival constraint (patch 57)
+
+In a Local population goal or named splice `[local]` goal, `survive-after-goal = 12`
+requires the player to remain alive through the **12 following input ticks**
+after the accepted objective (arrival tick for earliest goals; `target-frame` for
+fixed goals). Auto endpoint goals accept `[auto] survive-after-goal = 12` or
+`--auto-survive-after-goal 12`. `0` (the default) leaves prior behavior unchanged.
+A verified level completion during this interval counts as success. Death or
+insufficient recorded frames (without completion) is not accepted as proof of
+survival. Enable this only where the replay contains enough post-goal inputs.
+The opt-in check uses independent native physics replay, not a heuristic.
