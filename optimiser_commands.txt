@@ -23,3 +23,7 @@ for i in "97-2" "88-4" ; do export LEVEL="$i" ; python3 optimize_replay.py auto 
 Running merge modes alone:
 export LEVEL="88-4" ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 1 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --splice-merge-only
 export LEVEL="88-4" ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 1 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --splice-merge-repair-only
+
+
+Re-dumping all ghosts of former TAS:
+python3 dump_all_ghosts.py --force --fields frame,x,y,jump_held,input_left,input_right,vx,vy
