@@ -1,0 +1,10 @@
+[local]
+search = "population"
+target_frame = 216
+range = "100:216"
+simulate-enemies = true
+objective = "earliest-arrival"
+target_region = "607:627,186:226"
+secondary_objective = "min-x"
+#require-drone-detection = ["drone:0"]
+#require-drone-detection-frames = "120:130"
