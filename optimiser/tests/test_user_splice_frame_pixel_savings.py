@@ -85,3 +85,19 @@ def test_cli_ls_splice_uses_original_input_comparison(tmp_path, monkeypatch, cap
     assert gain > 0
     assert f'{gain:+.6g} px saved (min-x)' in line
     assert 'vs best run: +0 frames saved, +0 px saved (min-x)' in line
+
+
+def test_summary_distinguishes_individual_and_cumulative_gain(monkeypatch):
+    level, source, _ = _baseline()
+    improvement = (InputFrame(left=True),) + source[1:]
+    stage = UserSpliceStage('230', EndpointGoal(10, 'min-x'), 0, 10)
+    monkeypatch.setattr(us, '_search_stage', lambda *a, **kw: ((), 0, 1))
+    logs = []
+    optimise_user_splices(level, source, [stage],
+                          RandomSpliceConfig(rounds=1, workers=1, iterations=2),
+                          saved_stage_candidates={'230': [improvement]},
+                          progress=logs.append)
+    summary = next(line for line in logs if '[auto:user-splice:summary:pending]' in line)
+    assert 'individual splice gain:' in summary
+    assert 'cumulative gain through this splice:' in summary
+    assert 'not measurable as saved time' in summary  # fixed-frame spatial objective

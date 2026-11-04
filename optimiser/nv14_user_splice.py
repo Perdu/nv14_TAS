@@ -683,16 +683,46 @@ def optimise_user_splices(
     # Choose only a previously saved, validated best for explicit propagation.
     # Do this before writing initial source checkpoints, so --splice-from-best
     # never silently falls back to an unsaved current-run baseline.
-    def reported_savings(i: int, candidate: EndpointEvaluation) -> str:
-        """Savings against both independent input and verified completed best."""
+    def reported_savings(i: int, candidate: EndpointEvaluation,
+                         frames: tuple[InputFrame, ...] | None = None) -> str:
+        """Separate local *section* time from cumulative checkpoint progress.
+
+        A fixed-frame spatial helper can improve its x/y without saving time.
+        Nor can improvements in different axes be summed as pixel savings.
+        """
         best_workspace = _materialise_splice_tail(best_output, len(current) - 1)
         best_eval = (original_endpoints[i].evaluate(best_workspace)
                      if best_rank is not None and stage_feasible(best_workspace, i)
                      else None)
-        return ('; ' + _stage_savings_text(stages[i].goal, candidate,
-                                           input_stage_evals[i], 'input run') +
+        baseline = input_stage_evals[i]
+        replay = frames if frames is not None else stage_checkpoints[i]
+        if i == 0 and baseline is not None and stages[i].goal.is_earliest:
+            individual = f"{baseline.frame - candidate.frame:+d} frames from start"
+        elif replay is not None and i > 0:
+            before = section_duration(i, reporting_input)
+            after = section_duration(i, replay)
+            if before is not None and after is not None:
+                individual = (f"{before - after:+d} section frames "
+                              f"({before} -> {after}; {stages[i-1].name} to {stages[i].name})")
+            else:
+                individual = ("section timing unavailable; "
+                              "objective gain is shown vs input below")
+        else:
+            individual = ("objective gain is shown vs input below; "
+                          "section timing unavailable")
+        if baseline is None:
+            cumulative = "unavailable (input did not meet this helper)"
+        elif stages[i].goal.is_earliest:
+            cumulative = f"{baseline.frame - candidate.frame:+d} frames at this checkpoint vs input"
+        else:
+            cumulative = ("not measurable as saved time (fixed-frame spatial goal); "
+                          "see pixel comparison below")
+        return ('; individual splice gain: ' + individual +
+                '; cumulative gain through this splice: ' + cumulative +
                 '; ' + _stage_savings_text(stages[i].goal, candidate,
-                                           best_eval, 'best run'))
+                                            baseline, 'input run') +
+                '; ' + _stage_savings_text(stages[i].goal, candidate,
+                                            best_eval, 'best run'))
 
     # Preserve the exact CLI input as the first ordinary search seed for every
     # named stage.  A previously saved completed best is a score baseline and
@@ -834,7 +864,7 @@ def optimise_user_splices(
                 progress(f"[auto:user-splice:summary:pending] {stage.name!r}: "
                          f"pending ({stage_checkpoint_origin[i]}); "
                          f"splice: {detail}; {against}"
-                         f"{reported_savings(i, candidate)}")
+                         f"{reported_savings(i, candidate, archived)}")
             else:
                 # Normalize jump triggers and implicit neutral tail before
                 # comparing prefixes.  Downstream edits may improve a stage
@@ -848,7 +878,7 @@ def optimise_user_splices(
                          f"{state} ({stage_checkpoint_origin[i]}); "
                          f"splice: {detail}; full run: "
                          f"{_stage_summary_text(stage.goal, best_stage)}"
-                         f"{reported_savings(i, candidate)}")
+                         f"{reported_savings(i, candidate, archived)}")
 
     report_checkpoint_summary("saved checkpoints" if summary_only else
                               "before merges" if merge_only else "startup")
@@ -970,7 +1000,7 @@ def optimise_user_splices(
                     if merge_only and progress:
                         progress(f"{report} {label}: new saved stage best; "
                                  f"{_stage_improvement_text(stages[later].goal, None, score)}"
-                                 f"{reported_savings(later, score)}")
+                                 f"{reported_savings(later, score, padded)}")
                 if frontier_callback and (not merge_only or changed_archive):
                     frontier_callback(stages[later].name,
                                       tuple(archived_frontiers[later]))
@@ -1543,7 +1573,7 @@ def optimise_user_splices(
                                          f"round {round_no+1} stage {index+1}/{len(stages)} "
                                          f"{stage.name!r}: {label}; "
                                          f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}"
-                                         f"{reported_savings(index, evaluation)}")
+                                         f"{reported_savings(index, evaluation, normalized)}")
                     if is_final_gain:
                         candidate_rank, completed_frames = candidate_final
                         # Compare final best vs final best. old_evaluation
@@ -1645,7 +1675,7 @@ def optimise_user_splices(
                          f"{temp_gains} stage-best update(s); "
                          f"stage best "
                          f"{_stage_improvement_text(stage.goal, None, stage_best_evaluation[index]) if stage_best_evaluation[index] is not None else 'none'}; "
-                         f"{reported_savings(index, stage_best_evaluation[index]) if stage_best_evaluation[index] is not None else 'no feasible stage checkpoint'}; "
+                         f"{reported_savings(index, stage_best_evaluation[index], restored_stage_frames[index]) if stage_best_evaluation[index] is not None else 'no feasible stage checkpoint'}; "
                          f"{time.monotonic() - stage_started:.1f}s")
             if not eligible:
                 # A temporarily infeasible intermediate checkpoint must not

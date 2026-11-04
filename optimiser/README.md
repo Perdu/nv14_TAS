@@ -1935,3 +1935,14 @@ A verified level completion during this interval counts as success. Death or
 insufficient recorded frames (without completion) is not accepted as proof of
 survival. Enable this only where the replay contains enough post-goal inputs.
 The opt-in check uses independent native physics replay, not a heuristic.
+
+### Individual versus cumulative splice gains (patch 58)
+
+Stage best and summary lines distinguish **individual splice gain** (the elapsed
+frames between this stage and the previous stage, measured on the **same replay**)
+from **cumulative gain through this splice** (arrival-frame advantage versus
+the positional input). An individual duration needs both neighboring helper
+objectives to be feasible in that replay; missing goals are explicitly marked
+as unmeasurable. Fixed-frame spatial goals show their objective's pixel delta
+separately and never claim total time savings from an unchanged deadline.
+Pixel gains are not accumulated across different axes or distance objectives.
