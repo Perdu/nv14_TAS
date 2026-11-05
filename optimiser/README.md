@@ -2031,3 +2031,13 @@ Defaults: one outer pass; Auto stagnation 5, Local stagnation 20. Explicit
 `--auto-runs` override them. Stage-only checkpoints remain separate in
 `wip/LEVEL_522.ltm`, and only canonically verified completed replay gains can
 replace `wip/LEVEL.ltm`. Existing `auto`, `local` and `goal` commands are unchanged.
+
+### Airborne Shift cleanup on incomplete splice checkpoints (patch 66)
+
+`--auto-clean-air-jumps` (or `[multi-splicer] clean-air-jumps = true`) now
+checks **incomplete stage-best checkpoints** as well as completed outputs.
+The old cleaning function returned immediately if a replay did not finish the
+level, making it appear inert for pending splice gains. It still requires an
+exact match of every observed physics tick, successful jumps, route-control
+events, death/completion and score before stripping input pulses. It never
+rewrites the active search population or any failed candidate.

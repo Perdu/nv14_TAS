@@ -4340,6 +4340,9 @@ def main() -> None:
         auto_parent_frames.append(tuple(parent_retimed_frames))
 
     if args.mode == "auto" and args.auto_random_splice:
+        if args.auto_clean_air_jumps:
+            print("[auto:splice:clean] enabled: clean saved checkpoints and "
+                  "completed outputs after replay-trace verification", flush=True)
         def clean_splice_output(frames):
             if not args.auto_clean_air_jumps:
                 return frames

@@ -381,7 +381,11 @@ def clean_ineffective_air_jumps(
 
     current = tuple(editable_frames(frames))
     baseline = evaluate_replay_with_sentinel(level, current)
-    if not baseline.valid:
+    # A saved *stage checkpoint* is usually incomplete (and may die later).
+    # Requiring a canonical completed movie disabled cleanup for precisely the
+    # outputs most likely to contain ineffective airborne button presses.
+    # Physics/event equivalence below also works for incomplete traces.
+    if baseline.unsupported or not baseline.trace:
         return current
 
     def same_run(candidate):
