@@ -1882,9 +1882,11 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
         raise SystemExit("user splice mode requires --auto-splice-files or [auto] splice-files")
     if args.auto_splice_alt_route and (not args.auto_random_splice or args.auto_splice_mode != "user"):
         raise SystemExit("--splice-alt-route requires named multi-splicer mode")
-    if args.auto_splice_alt_route and any((args.auto_splice_start, args.auto_splice_stop,
-                                          args.auto_splice_from_best)):
-        raise SystemExit("alternate routes cannot be combined with --splice-start/stop/from-best")
+    # A primary-route start can skip the shared prefix while the alternate
+    # campaign still searches its divergent stages. Stop/from-best remain
+    # ambiguous across independently ordered named routes.
+    if args.auto_splice_alt_route and (args.auto_splice_stop or args.auto_splice_from_best):
+        raise SystemExit("alternate routes cannot be combined with --splice-stop/from-best")
     if args.auto_random_splice and args.auto_splice_files and args.auto_splice_mode != "user":
         raise SystemExit("splice-files requires --auto-splice-mode user")
     if (args.auto_random_splice and
@@ -4765,6 +4767,15 @@ def main() -> None:
                     else:
                         rejoin_index = alternate_names.index(rejoin_name, shared_prefix)
                         alternate_branch = alternate_stages[shared_prefix:rejoin_index]
+                    # --start-at-splice refers to the primary route. If the
+                    # start is already at/past the rejoin, the branch lies
+                    # entirely before the requested starting point.
+                    skipped_before_start = False
+                    if (args.auto_splice_start is not None and rejoin_name is not None and
+                            primary_names.index(args.auto_splice_start) >=
+                            primary_names.index(rejoin_name)):
+                        alternate_branch = ()
+                        skipped_before_start = True
                     if alternate_branch:
                         print("[auto:user-splice:route] alternate branch: " +
                               " -> ".join(stage.name for stage in alternate_branch) +
@@ -4775,6 +4786,10 @@ def main() -> None:
                                f" (shared prefix through {alternate_names[shared_prefix - 1]!r})"
                                if shared_prefix else ""),
                               flush=True)
+                    elif skipped_before_start:
+                        print("[auto:user-splice:route] alternate branch skipped: "
+                              f"--start-at-splice {args.auto_splice_start!r} is at/after "
+                              f"rejoin {rejoin_name!r}", flush=True)
                     else:
                         print("[auto:user-splice:route] alternate branch has no unique stages; "
                               "shared prefix and rejoin are already covered by the primary route",

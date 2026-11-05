@@ -2089,7 +2089,11 @@ rejected. The original full-route notation ending in `end` remains supported.
 CLI `--splice-alt-route 403,482,485,527` accepts the shorthand too.
 
 Alternate routes do not impose helper goals on the primary route or change
-normal stage lookback. `--splice-start`, `--splice-stop`, and
-`--splice-from-best` cannot be combined with an alternate route. The alternate
-campaign uses separate backend checkpoint names and does not resume an
-interrupted primary backend state.
+normal stage lookback. Use `--start-at-splice 479` (alias `--splice-start 479`)
+to skip searching the shared prefix through `403` and begin the primary
+campaign at its first divergent stage. The alternate campaign still searches
+only `482 -> 485`; it never searches the seam `403`. If the requested primary
+start is at or after the reconvergence splice `527`, the earlier alternate
+branch is skipped. `--splice-stop` and `--splice-from-best` remain incompatible
+with alternative routes. The alternate campaign uses separate backend checkpoint
+names and does not resume an interrupted primary backend state.

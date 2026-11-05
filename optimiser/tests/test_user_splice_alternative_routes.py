@@ -28,8 +28,10 @@ def test_alt_route_toml_cli_and_validation(tmp_path):
     assert args.auto_splice_alt_route == ('230', '240', 'end')
     args = parse_arguments(argv[1:] + ['--splice-alt-route', '230,end'])
     assert args.auto_splice_alt_route == ('230', 'end')
+    args = parse_arguments(argv[1:] + ['--start-at-splice', 'end'])
+    assert args.auto_splice_start == 'end'
     with pytest.raises(SystemExit, match='alternate routes cannot be combined'):
-        parse_arguments(argv[1:] + ['--splice-start', '240'])
+        parse_arguments(argv[1:] + ['--splice-stop', 'end'])
 
 
 def test_cli_searches_both_orders_and_shares_verified_best(tmp_path, monkeypatch, capsys):
@@ -181,3 +183,44 @@ def test_short_alt_route_toml_and_cli_only_search_divergent_stages(tmp_path, mon
     monkeypatch.setattr(sys, 'argv', argv + ['--splice-config', str(routes), '--auto-runs', '1'])
     main()
     assert calls == [('230', '250', 'end'), ('240',)]
+
+
+def test_start_at_first_primary_divergence_skips_seam_but_runs_alt_branch(
+    tmp_path, monkeypatch, capsys,
+):
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages), kwargs.get('start_at')))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '1', '--start-at-splice', '239'])
+    main()
+    assert calls == [(('230', '239', '250', 'end'), '239'), (('240',), None)]
+    assert "alternate branch: 240" in capsys.readouterr().out
+
+
+def test_start_at_rejoin_skips_earlier_alt_branch(tmp_path, monkeypatch, capsys):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages), kwargs.get('start_at')))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--auto-runs', '1', '--start-at-splice', 'end'])
+    main()
+    assert calls == [(('230', 'end'), 'end')]
+    assert "alternate branch skipped" in capsys.readouterr().out
