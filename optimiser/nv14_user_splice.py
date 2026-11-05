@@ -53,6 +53,37 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                                local_search=_local_search, evaluator_factory=EndpointEvaluator, **kwargs)
 
 
+def _unique_search_seeds(
+    level: Level, branches: Sequence[tuple[InputFrame, ...]], start: int,
+) -> list[tuple[InputFrame, ...]]:
+    """Search a physical start state and its future input suffix only once.
+
+    Whole-replay equality misses e.g. a saved completed run whose earlier
+    button presses differ but whose position, velocity, object state and held
+    input history are *exactly* the same at this splice's editable start.
+    Compare the complete deterministic simulation state (not rounded x/y)
+    and every remaining input: different suffixes can produce different full
+    completions and must remain independent search seeds.
+    """
+    from nv14_replay import simulate_through_frame
+
+    seen: set[tuple] = set()
+    unique: list[tuple[InputFrame, ...]] = []
+    for frames in branches:
+        frames = tuple(frames)
+        # A too-short branch is handled by the backend's ordinary preflight;
+        # do not silently discard it or compare at a nonexistent frame.
+        if start > len(frames):
+            unique.append(frames)
+            continue
+        state = simulate_through_frame(level, frames, start - 1)
+        signature = (state.state_key(), frames[start:])
+        if signature not in seen:
+            seen.add(signature)
+            unique.append(frames)
+    return unique
+
+
 def _stage_sources(recent: Sequence[tuple[InputFrame, ...]],
                    two_back: Sequence[tuple[InputFrame, ...]],
                    frontier: int) -> list[tuple[InputFrame, ...]]:
@@ -1463,6 +1494,15 @@ def optimise_user_splices(
                 resumed_branch = tuple(editable_frames(decode_complex_replay(
                     active_phase["branch"]).frames))
                 branches = [resumed_branch, *(b for b in branches if b != resumed_branch)]
+            # A current input, a saved final replay and a frontier candidate
+            # can be distinct files but identical searches after stage.start.
+            # Keep their first-ranked origin and avoid repeated millions of
+            # backend proposals on the same physical start and input suffix.
+            before_dedup = len(branches)
+            branches = _unique_search_seeds(stage_levels[index], branches, stage.start)
+            if progress and before_dedup != len(branches):
+                progress(f"[auto:user-splice] {stage.name!r}: skipped "
+                         f"{before_dedup - len(branches)} physically duplicate seed(s)")
             if progress and len(history) > 1:
                 labels = "/".join(f"n-{i}" for i in range(1, len(history) + 1))
                 counts = "/".join(str(len(pool)) for pool in history)
