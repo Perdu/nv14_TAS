@@ -21,6 +21,16 @@ def test_cli_start_stop_names_and_config():
         parse_arguments(['auto', 'source.ltm', '--auto-splice-start', '628'])
 
 
+def test_start_at_splice_is_alias_for_splice_start():
+    args = ['auto', 'source.ltm', '--auto-splice-files', '556,628,739,end']
+    original = parse_arguments(args + ['--splice-start', '628'])
+    alias = parse_arguments(args + ['--start-at-splice', '628'])
+    assert original.auto_splice_start == alias.auto_splice_start == '628'
+    assert original.auto_splice_mode == alias.auto_splice_mode == 'user'
+    with pytest.raises(SystemExit, match='require --auto-random-splice'):
+        parse_arguments(['auto', 'source.ltm', '--start-at-splice', '628'])
+
+
 def test_only_inclusive_selected_stages_are_searched(monkeypatch):
     level, source, _ = _baseline()
     stages = [UserSpliceStage(name, EndpointGoal(frame, 'max-x'), 0, frame)

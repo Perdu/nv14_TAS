@@ -2552,7 +2552,7 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-directory", modes=auto_modes,
                          type=Path, metavar="DIR",
                          help="directory containing named .txt/.toml goals (default: ../splices/LEVEL relative to input)")
-    command.add_argument("--splice-start", "--auto-splice-start", dest="auto_splice_start",
+    command.add_argument("--splice-start", "--start-at-splice", "--auto-splice-start", dest="auto_splice_start",
                          modes=auto_modes, metavar="NAME",
                          help="first named splice to optimise (inclusive; earlier helper goals are non-binding)")
     command.add_argument("--splice-stop", "--auto-splice-stop", dest="auto_splice_stop",
