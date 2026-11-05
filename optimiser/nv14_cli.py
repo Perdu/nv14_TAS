@@ -2207,12 +2207,56 @@ def parse_splice_interactions(value: str) -> tuple[str, ...]:
     return values
 
 
+def _single_splice_both_arguments(argv: Sequence[str]) -> list[str]:
+    """Adapt `both IN.ltm --goal-config goal.txt` to one named stage.
+
+    This reuses multi-splicer's exact Auto/Local coordinator, checkpoint
+    verification and independent backend stagnation instead of maintaining a
+    second single-goal mutation engine. Explicit backend patience and run
+    counts are respected; otherwise one complete until-stagnant pass is run.
+    """
+    command = list(argv)
+    if not command or command[0] != "both":
+        return command
+    command[0] = "auto"
+    goal = None
+    for index, item in enumerate(tuple(command)):
+        if item == "--goal-config" and index + 1 < len(command):
+            goal = command[index + 1]
+            del command[index:index + 2]
+            break
+        if item.startswith("--goal-config="):
+            goal = item.split("=", 1)[1]
+            command.remove(item)
+            break
+    if goal is None:
+        raise SystemExit("both mode requires --goal-config SPLICE.txt")
+    goal_path = Path(goal)
+    if goal_path.suffix not in (".txt", ".toml"):
+        raise SystemExit("both goal must be a named .txt or .toml Local goal file")
+    command.extend(("--auto-splice-directory", str(goal_path.parent),
+                    "--auto-splice-files", goal_path.stem,
+                    "--auto-splice-search", "both"))
+    explicit = {item.split("=", 1)[0] for item in command}
+    for options, default in (
+        (("--splice-auto-stagnation-rounds", "--auto-splice-auto-stagnation-rounds"), "5"),
+        (("--splice-local-stagnation-rounds", "--auto-splice-local-stagnation-rounds"), "20"),
+        (("--auto-runs",), "1"),
+    ):
+        if not any(option in explicit for option in options):
+            command.extend((options[0], default))
+    return command
+
+
 def parse_arguments(
     argv: Sequence[str] | None = None,
 ) -> argparse.Namespace:
     """Parse CLI arguments, applying TOML defaults before explicit CLI values."""
     actual_argv = list(sys.argv[1:] if argv is None else argv)
+    both_mode = bool(actual_argv and actual_argv[0] == "both")
+    actual_argv = _single_splice_both_arguments(actual_argv)
     namespace = build_parser().parse_args(actual_argv)
+    namespace._both_mode = both_mode
     if namespace.mode in {"dump-player", "encode-video"}:
         return namespace
     if namespace.mode != "local" and namespace.frame_range is not None:
@@ -2238,7 +2282,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = _ConfigArgumentParser(
         description=(
             "Optimise an n v1.4 replay, dump player state, or encode video. Choose "
-            "auto, local, jump-pattern, dump-player, or encode-video."
+            "auto, local, both (single-goal Auto -> Local), jump-pattern, dump-player, or encode-video."
         )
     )
     subparsers = parser.add_subparsers(
@@ -4306,7 +4350,8 @@ def main() -> None:
                       "holds; verified identical full trace", flush=True)
             return cleaned
 
-        if args.auto_splice_mode == "user" and _find_option_paths(sys.argv[1:], "--goal-config"):
+        if (args.auto_splice_mode == "user" and not getattr(args, "_both_mode", False)
+                and _find_option_paths(sys.argv[1:], "--goal-config")):
             raise SystemExit("user splice mode uses its own named goal files; omit --goal-config")
         target_goal = None
         target_start, target_end = 0, None

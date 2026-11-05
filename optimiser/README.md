@@ -2009,3 +2009,25 @@ additional hard feasibility requirement only for **that** goal, not a
 binding helper constraint for unrelated later named splices. The opt-in
 reference path uses native simulation snapshots to check every eligible tick;
 ordinary endpoints retain their fast native scan.
+
+### Single-splice Auto ↔ Local (patch 65)
+
+`both` runs the shared named-splicer Auto/Local backend on **one** Local goal,
+without requiring a multi-splicer TOML list. Each native phase continues until
+its own stagnation limit; a backend is restarted only when the other backend
+found a changed seed. The goal file still determines the objective, editable
+range and any hard physical requirements.
+
+```sh
+python3 optimize_replay.py both ../n_levels/88-4.ltm \
+  --config examples/config.toml --goal-config ../splices/88-4/522.txt \
+  --output wip/88-4.ltm --replay-output wip/88-4.txt --workers 15
+# Or:
+./tas.py both 88-4 522
+```
+
+Defaults: one outer pass; Auto stagnation 5, Local stagnation 20. Explicit
+`--splice-auto-stagnation-rounds`/`--splice-local-stagnation-rounds` and
+`--auto-runs` override them. Stage-only checkpoints remain separate in
+`wip/LEVEL_522.ltm`, and only canonically verified completed replay gains can
+replace `wip/LEVEL.ltm`. Existing `auto`, `local` and `goal` commands are unchanged.
