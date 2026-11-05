@@ -326,6 +326,9 @@ def optimise_user_splices(
     stages: Sequence[UserSpliceStage], config: RandomSpliceConfig,
     *, best_callback: Callable[[tuple[InputFrame, ...]], None] | None = None,
     stage_best_callback: Callable[[str, tuple[InputFrame, ...]], None] | None = None,
+    stage_result_callback: Callable[[str, tuple[InputFrame, ...] | None], None] | None = None,
+    initial_seeds: Sequence[Sequence[InputFrame]] = (),
+    seed_from_saved_final: bool = True,
     progress: Callable[[str], None] | None = None,
     completion_policy: str = "complete",
     start_at: str | None = None, stop_at: str | None = None,
@@ -761,7 +764,8 @@ def optimise_user_splices(
     # useful alternative, but must not silently displace a manually edited run.
     input_seed = _materialise_splice_tail(source, len(current) - 1)
     propagation_seed = current
-    if from_best_index is None and saved_final_frames is not None and best_output != source:
+    if (seed_from_saved_final and from_best_index is None and
+            saved_final_frames is not None and best_output != source):
         # Use the previously verified best completed replay for normal search,
         # not only as a score threshold. Explicit --splice-from-best still wins.
         propagation_seed = _materialise_splice_tail(best_output, len(current) - 1)
@@ -1488,6 +1492,15 @@ def optimise_user_splices(
                     stage_checkpoints[index], len(current) - 1)
                 branches = [local_best, *(b for b in branches if b != local_best)]
             if from_best_index is None:
+                # A reconverged route can carry several independently searched
+                # prefixes. Reserve a search for every injected branch before
+                # the normal frontier quota; physical duplicates are removed
+                # below, but a slower branch must not disappear at this seam.
+                if index == stage_begin and initial_seeds:
+                    injected = [_materialise_splice_tail(
+                        tuple(editable_frames(candidate)), len(current) - 1)
+                        for candidate in initial_seeds]
+                    branches = list(dict.fromkeys((*injected, *branches)))
                 # Always try manual edits from the input replay first, then
                 # the existing n-1/n-2/older frontier order.  Deduplicate so
                 # a frontier containing the input does not consume two searches.
@@ -1724,6 +1737,8 @@ def optimise_user_splices(
                          f"{reported_savings(index, stage_best_evaluation[index], restored_stage_frames[index]) if stage_best_evaluation[index] is not None else 'no feasible stage checkpoint'}; "
                          f"{time.monotonic() - stage_started:.1f}s")
             if not eligible:
+                if stage_result_callback is not None:
+                    stage_result_callback(stage.name, None)
                 # A temporarily infeasible intermediate checkpoint must not
                 # silently abort the remaining named stages. Later edits may
                 # recover it, and the unchanged (possibly completed) source
@@ -1747,6 +1762,8 @@ def optimise_user_splices(
             # more recent stage wins its own intermediate ranking.
             selected = [candidate for candidate, _ in ordered[:max(1, config.frontier)]]
             elites[index] = selected
+            if stage_result_callback is not None:
+                stage_result_callback(stage.name, stage_export(selected[0]))
             publish_frontier(index, [candidate for candidate, _ in ordered])
             history = [selected, *history][:config.stage_lookback]
             history_origins = [index, *history_origins][:config.stage_lookback]

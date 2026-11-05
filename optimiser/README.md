@@ -2066,11 +2066,25 @@ splice-files = ["72", "126", "179", "243", "289", "end"]
 alt-route = ["72", "126", "185", "220", "289", "end"]
 ```
 
-The primary route runs first. The alternate campaign searches only its
-**divergent stages**; stages shared at the start and from the first
-reconvergence onward are not searched twice. Saved stage checkpoints and
-frontier sidecars remain reusable, and only replay-verified completed runs
-are promoted to the shared completed best.
+For normal searches, the routes are **interleaved at their first reconvergence**:
+search any requested shared prefix once; search the primary divergent stages;
+search the alternative divergent stages; search the reconvergence goal once
+**from each branch**; then continue through the shared suffix, seeding it
+from both branches. The shared suffix is searched just once, rather than
+being exhausted before the alternative branch has even been explored.
+Only replay-verified completed runs are promoted to the shared completed best.
+
+At reconvergence, the higher-ranked goal result keeps the usual
+`LEVEL_STAGE.ltm` (and TXT companion) if it improves the stored stage best.
+The lower-ranked branch has its own replay at
+`LEVEL_STAGE_other_route.ltm` (and companion TXT), with a route-identity
+sidecar. It is kept across restarts and receives independent opportunities
+in the shared suffix and the existing 64-replay frontier. For earliest-arrival
+goals, lower-ranked usually means slower at the seam; spatial-only goals
+rank by their configured objective rather than inventing a time saving.
+A branch that cannot meet the rejoin goal does not erase the other branch;
+both prefixes remain possible shared-suffix search seeds. Standalone
+`--splice-merge-only` and `--ls-splice` retain their own non-search behavior.
 
 For a short branch, specify only its **two seams** (existing primary splice
 names, in primary-route order) and the new stages between them:
@@ -2091,9 +2105,10 @@ CLI `--splice-alt-route 403,482,485,527` accepts the shorthand too.
 Alternate routes do not impose helper goals on the primary route or change
 normal stage lookback. Use `--start-at-splice 479` (alias `--splice-start 479`)
 to skip searching the shared prefix through `403` and begin the primary
-campaign at its first divergent stage. The alternate campaign still searches
-only `482 -> 485`; it never searches the seam `403`. If the requested primary
-start is at or after the reconvergence splice `527`, the earlier alternate
+branch at its first divergent stage. The execution order is then
+`479`, `482 -> 485`, `527` from **both** branch results, and finally
+`599 -> ... -> end`. The initial seam `403` is not searched. If the requested
+primary start is at or after reconvergence `527`, the earlier alternative
 branch is skipped. `--splice-stop` and `--splice-from-best` remain incompatible
-with alternative routes. The alternate campaign uses separate backend checkpoint
-names and does not resume an interrupted primary backend state.
+with alternative routes. Each phase has its own backend checkpoint filename,
+so its in-flight state cannot be mistaken for another branch's work.

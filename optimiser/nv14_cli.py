@@ -4718,6 +4718,392 @@ def main() -> None:
                           f"{output_path.resolve()} (if verified); "
                           "only the positional input is treated as manual edits",
                           flush=True)
+                # Interleave alternate branches before searching their shared
+                # suffix. Both reconvergence candidates are independently
+                # searched and retained; the lower-ranked route is not lost
+                # merely because the other branch reaches the seam first.
+                if (alternate_stages and not (args.auto_ls_splice or merge_only)):
+                    from nv14_endpoint import EndpointEvaluator
+                    from nv14_user_splice import _materialise_splice_tail
+
+                    primary_names = [item.name for item in stages]
+                    alt_names = [item.name for item in alternate_stages]
+                    prefix_count = 0
+                    for left, right in zip(primary_names, alt_names):
+                        if left != right:
+                            break
+                        prefix_count += 1
+                    tail_names = set(primary_names[prefix_count:])
+                    rejoin_name = next((name for name in alt_names[prefix_count:]
+                                        if name in tail_names), None)
+                    rejoin_index = (primary_names.index(rejoin_name)
+                                    if rejoin_name is not None else None)
+                    start_index = (primary_names.index(args.auto_splice_start)
+                                   if args.auto_splice_start is not None else 0)
+                    if (rejoin_index is not None and start_index < rejoin_index
+                            and prefix_count <= rejoin_index):
+                        alt_rejoin_index = alt_names.index(rejoin_name, prefix_count)
+                        shared_prefix = stages[start_index:prefix_count]
+                        primary_branch = stages[max(start_index, prefix_count):rejoin_index]
+                        other_branch = alternate_stages[prefix_count:alt_rejoin_index]
+                        shared_rejoin = stages[rejoin_index]
+                        shared_suffix = stages[rejoin_index + 1:]
+                        # Every segment has its own interrupted-backend state;
+                        # one branch must never load another route's checkpoint.
+                        input_completion = evaluate_replay_with_sentinel(level, replay.frames)
+                        completed_best = [saved_final_frames if saved_final_frames is not None else
+                                          tuple(editable_frames(replay.frames))
+                                          if (input_completion.valid and
+                                              input_completion.finish_tick == len(replay.frames))
+                                          else None]
+                        phase_attempts = phase_evaluations = phase_improvements = 0
+                        captured: dict[str, tuple[InputFrame, ...]] = {}
+
+                        def stage_world(stage):
+                            enabled = (level.simulate_enemies if stage.simulate_enemies is None
+                                       else stage.simulate_enemies)
+                            if enabled == level.simulate_enemies:
+                                return level
+                            return parse_level_string(level.source_level_string,
+                                                      simulate_enemies=enabled)
+
+                        def stage_rank(stage, frames):
+                            if frames is None:
+                                return None
+                            workspace = _materialise_splice_tail(
+                                tuple(editable_frames(frames)), stage.goal.target_frame)
+                            evaluation = EndpointEvaluator(stage_world(stage), stage.goal).evaluate(workspace)
+                            return evaluation.objective_key if evaluation.feasible else None
+
+                        def better_stage(stage, left, right):
+                            left_score = stage_rank(stage, left)
+                            right_score = stage_rank(stage, right)
+                            if left_score is None:
+                                return right
+                            if right_score is None:
+                                return left
+                            return left if left_score <= right_score else right
+
+                        def phase_best_callback(frames):
+                            canonical = tuple(editable_frames(frames))
+                            checked = evaluate_replay_with_sentinel(level, canonical)
+                            if not checked.valid or checked.finish_tick != len(canonical):
+                                # A branch may have only a provisional endpoint
+                                # checkpoint. Never publish it as the final run.
+                                return
+                            verify_trimmed_replay(level, canonical)
+                            completed_best[0] = canonical
+                            _write_result(source, output_path, replay_output_path,
+                                          encode_complex_replay(clean_splice_output(canonical)))
+
+                        def run_route_phase(label, phase_stages, phase_input, *,
+                                            checkpoints=None, frontiers=None,
+                                            checkpoint_writer=None, frontier_writer=None,
+                                            extra_seeds=(), from_saved_final=True,
+                                            merge_at_start=False, repair_at_finish=False):
+                            nonlocal phase_attempts, phase_evaluations, phase_improvements
+                            if not phase_stages:
+                                return tuple(editable_frames(phase_input)), {}
+                            phase_results = {}
+                            def save_result(name, frames):
+                                if frames is not None:
+                                    previous = phase_results.get(name)
+                                    phase_results[name] = better_stage(
+                                        next(item for item in phase_stages if item.name == name),
+                                        previous, tuple(editable_frames(frames)))
+
+                            # Saved stage checkpoints can be read by the next
+                            # phase, but never by a different branch's join
+                            # search. That is what preserves route identity.
+                            loaded = (_load_user_splice_checkpoints(
+                                stage_outputs, output_path, replay_output_path)
+                                if checkpoints is None else checkpoints)
+                            archive = (_load_user_splice_frontiers(
+                                level, phase_stages, stage_outputs)
+                                if frontiers is None else frontiers)
+                            checkpoint_path = output_path.with_suffix(
+                                f".{label}.splice-search.json")
+                            checkpoint = None
+                            if checkpoint_path.is_file():
+                                try:
+                                    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+                                except (OSError, UnicodeError, ValueError):
+                                    print(f"[auto:user-splice:resume] ignoring unreadable "
+                                          f"{checkpoint_path}", flush=True)
+                            def save_phase_state(state):
+                                if state is None:
+                                    checkpoint_path.unlink(missing_ok=True)
+                                else:
+                                    _atomic_write_text(checkpoint_path,
+                                                       json.dumps(state, separators=(',', ':')) + '\n')
+                            def phase_backend(name, backend):
+                                return str(stage_outputs[name][0].with_suffix(
+                                    f".{label}.{backend}.round.json"))
+                            print(f"[auto:user-splice:route] {label}: " +
+                                  ' -> '.join(item.name for item in phase_stages), flush=True)
+                            phase_result = optimise_user_splices(
+                                level, phase_input, phase_stages, splice_config,
+                                completion_policy=args.auto_completion_policy,
+                                start_from_stage_bests=(args.auto_splice_each_best
+                                                       if from_saved_final else False),
+                                reference_frames=reference_frames,
+                                merge_stage_bests=merge_at_start or repair_at_finish,
+                                merge_verbose=args.auto_splice_merge_verbose,
+                                merge_repair_at_end=repair_at_finish,
+                                merge_repair_pairs=args.auto_splice_merge_repair_pairs,
+                                merge_repair_window=args.auto_splice_merge_repair_window,
+                                merge_repair_targets=args.auto_splice_merge_repair_targets,
+                                best_callback=phase_best_callback,
+                                stage_best_callback=(checkpoint_writer if checkpoint_writer is not None
+                                                     else save_stage_best),
+                                stage_result_callback=save_result,
+                                initial_seeds=extra_seeds,
+                                seed_from_saved_final=from_saved_final,
+                                saved_stage_candidates=loaded,
+                                saved_stage_frontiers=archive,
+                                saved_final_frames=completed_best[0],
+                                reporting_input_frames=replay.frames,
+                                frontier_callback=(frontier_writer if frontier_writer is not None
+                                                   else save_frontier),
+                                resume_state=checkpoint,
+                                save_resume_state=save_phase_state,
+                                backend_checkpoint_path=phase_backend,
+                                progress=lambda message: _print_user_splice_progress(
+                                    message, color=common_config.color),
+                            )
+                            phase_attempts += phase_result.attempts
+                            phase_evaluations += phase_result.evaluations
+                            phase_improvements += phase_result.improvements
+                            return phase_result.frames, phase_results
+
+                        def saved_stage_seed(name):
+                            candidates = _load_user_splice_checkpoints(
+                                stage_outputs, output_path, replay_output_path).get(name, ())
+                            stage = next(item for item in all_stages if item.name == name)
+                            feasible = [(stage_rank(stage, candidate), candidate)
+                                        for candidate in candidates]
+                            feasible = [(rank, candidate) for rank, candidate in feasible
+                                        if rank is not None]
+                            return min(feasible, key=lambda item: item[0])[1] if feasible else None
+
+                        initial_input = tuple(editable_frames(replay.frames))
+
+                        def merge_all_saved_stages(phase, *, repair=False):
+                            nonlocal phase_attempts, phase_evaluations, phase_improvements
+                            # The merge pass needs *both* branch populations,
+                            # not just the current suffix's stage subset.
+                            joined_branches = sorted(
+                                (*primary_branch, *other_branch),
+                                key=lambda item: item.goal.target_frame)
+                            joined_stages = tuple((
+                                *stages[:prefix_count], *joined_branches,
+                                *stages[rejoin_index:]))
+                            print(f"[auto:user-splice:route] {phase}: "
+                                  "merge across both branch archives", flush=True)
+                            merged = optimise_user_splices(
+                                level, initial_input, joined_stages, splice_config,
+                                completion_policy=args.auto_completion_policy,
+                                merge_stage_bests=True, merge_only=True,
+                                merge_repair_only=repair,
+                                merge_verbose=args.auto_splice_merge_verbose,
+                                merge_repair_pairs=args.auto_splice_merge_repair_pairs,
+                                merge_repair_window=args.auto_splice_merge_repair_window,
+                                merge_repair_targets=args.auto_splice_merge_repair_targets,
+                                saved_final_frames=completed_best[0],
+                                saved_stage_candidates=_load_user_splice_checkpoints(
+                                    stage_outputs, output_path, replay_output_path),
+                                saved_stage_frontiers=_load_user_splice_frontiers(
+                                    level, joined_stages, stage_outputs),
+                                reference_frames=reference_frames,
+                                reporting_input_frames=replay.frames,
+                                best_callback=phase_best_callback,
+                                stage_best_callback=save_stage_best,
+                                frontier_callback=save_frontier,
+                                progress=lambda message: _print_user_splice_progress(
+                                    message, color=common_config.color),
+                            )
+                            phase_attempts += merged.attempts
+                            phase_evaluations += merged.evaluations
+                            phase_improvements += merged.improvements
+
+                        if args.auto_splice_merge_bests or repair_at_end:
+                            merge_all_saved_stages('startup')
+                        shared_seed = initial_input
+                        if shared_prefix:
+                            _, prefix_results = run_route_phase(
+                                'shared-prefix', shared_prefix, shared_seed)
+                            shared_seed = (prefix_results.get(shared_prefix[-1].name)
+                                           or saved_stage_seed(shared_prefix[-1].name)
+                                           or initial_input)
+                        elif prefix_count:
+                            shared_seed = (saved_stage_seed(stages[prefix_count - 1].name)
+                                           or initial_input)
+                        main_seed = shared_seed
+                        alt_seed = shared_seed
+                        _, main_results = run_route_phase(
+                            'primary-branch', primary_branch, main_seed,
+                            extra_seeds=(initial_input,), from_saved_final=False)
+                        if primary_branch:
+                            main_seed = (main_results.get(primary_branch[-1].name)
+                                         or saved_stage_seed(primary_branch[-1].name)
+                                         or main_seed)
+                        _, other_results = run_route_phase(
+                            'alternate-branch', other_branch, alt_seed,
+                            extra_seeds=(initial_input,), from_saved_final=False)
+                        if other_branch:
+                            alt_seed = (other_results.get(other_branch[-1].name)
+                                        or saved_stage_seed(other_branch[-1].name)
+                                        or alt_seed)
+
+                        rejoin_candidates = {}
+                        frontier_additions = []
+                        for branch_label, branch_seed in (('primary', main_seed),
+                                                          ('alternate', alt_seed)):
+                            def capture_rejoin(_name, candidates):
+                                for candidate in candidates:
+                                    frontier_additions.append(tuple(editable_frames(candidate)))
+                            _, join_results = run_route_phase(
+                                branch_label + '-rejoin', (shared_rejoin,), branch_seed,
+                                checkpoints={}, frontiers={}, from_saved_final=False,
+                                checkpoint_writer=lambda _name, _frames: None,
+                                frontier_writer=capture_rejoin)
+                            candidate = join_results.get(rejoin_name)
+                            if candidate is not None and stage_rank(shared_rejoin, candidate) is not None:
+                                rejoin_candidates[branch_label] = candidate
+                                frontier_additions.append(candidate)
+                        # Recover the best saved replay for each *route* before
+                        # ranking this run. A good alternative must not vanish
+                        # merely because it was not rediscovered today.
+                        main_path, main_text = stage_outputs[rejoin_name]
+                        other_main = main_path.with_name(
+                            f"{main_path.stem}_other_route{main_path.suffix}")
+                        other_text = (main_text.with_name(
+                            f"{main_text.stem}_other_route{main_text.suffix}")
+                            if main_text is not None else None)
+                        main_meta = main_path.with_suffix('.route.json')
+                        other_meta = other_main.with_suffix('.other_route.json')
+                        checkpoint_identity = _user_splice_frontier_identity(
+                            level, shared_rejoin)
+                        protected = (input_path, output_path, replay_output_path,
+                                     args.config, args.splice_config, source.levels_file_path,
+                                     *alias_outputs.values(),
+                                     *(path for pair in stage_outputs.values()
+                                       for path in pair if path is not None))
+                        for destination in (other_main, other_text, other_meta, main_meta):
+                            if destination is not None and any(
+                                    path is not None and _paths_alias(destination, path)
+                                    for path in protected):
+                                raise ValueError(
+                                    f"other-route checkpoint {destination} aliases a protected file")
+
+                        def read_routed_checkpoint(path, meta_path):
+                            if not path.is_file() or not meta_path.is_file():
+                                return None, None
+                            try:
+                                record = json.loads(meta_path.read_text(encoding='utf-8'))
+                                if (record.get('version') != 1 or
+                                        record.get('identity') != checkpoint_identity or
+                                        record.get('route') not in ('primary', 'alternate')):
+                                    return None, None
+                                if path.suffix.lower() == '.ltm':
+                                    frames = LtmMovie.load(path).replay_frames
+                                else:
+                                    text = path.read_text(encoding='utf-8').strip()
+                                    try:
+                                        frames = decode_complex_replay(text).frames
+                                    except (ValueError, TypeError):
+                                        frames = decode_complex_replay(
+                                            parse_combined_level_replay(text).replay_string).frames
+                                frames = tuple(editable_frames(frames))
+                                if stage_rank(shared_rejoin, frames) is not None:
+                                    return record['route'], frames
+                            except (OSError, UnicodeError, ValueError, TypeError, LtmError):
+                                pass
+                            return None, None
+
+                        for path, meta in ((main_path, main_meta),
+                                           (other_main, other_meta)):
+                            old_route, old_frames = read_routed_checkpoint(path, meta)
+                            if old_route is not None:
+                                rejoin_candidates[old_route] = better_stage(
+                                    shared_rejoin, rejoin_candidates.get(old_route), old_frames)
+
+                        ranked_routes = sorted(rejoin_candidates.items(),
+                                               key=lambda item: stage_rank(shared_rejoin, item[1]))
+                        if ranked_routes:
+                            preferred_route, preferred = ranked_routes[0]
+                            old_saved = saved_stage_seed(rejoin_name)
+                            old_rank = stage_rank(shared_rejoin, old_saved)
+                            new_rank = stage_rank(shared_rejoin, preferred)
+                            if old_rank is None or new_rank < old_rank:
+                                save_stage_best(rejoin_name, preferred)
+                            if old_rank is None or new_rank <= old_rank:
+                                _atomic_write_text(main_meta, json.dumps({
+                                    'version': 1, 'route': preferred_route,
+                                    'identity': checkpoint_identity,
+                                }, sort_keys=True) + '\n')
+                            if (len(ranked_routes) > 1 and
+                                    ranked_routes[1][1] != preferred):
+                                slower_route, slower = ranked_routes[1]
+                                # One named stage has one overall checkpoint;
+                                # the lower-ranked *branch* gets a separate LTM
+                                # and companion TXT for future merge/searches.
+                                old_route, old_other = read_routed_checkpoint(
+                                    other_main, other_meta)
+                                if (old_route != slower_route or old_other != slower):
+                                    _protect_unreadable_splice_output(other_main)
+                                    _protect_unreadable_splice_output(other_text)
+                                    slower_replay = encode_complex_replay(clean_splice_output(slower))
+                                    if source.ltm_movie is not None and other_text is not None:
+                                        _write_result(source, other_main, None, slower_replay)
+                                        # Reflect the exact replay the LTM stores,
+                                        # including its implicit neutral post-roll.
+                                        loaded = LtmMovie.load(other_main)
+                                        _atomic_write_text(other_text,
+                                            encode_complex_replay(loaded.replay_frames) + '\n')
+                                    else:
+                                        _write_result(source, other_main, other_text, slower_replay)
+                                    _atomic_write_text(other_meta, json.dumps({
+                                        'version': 1, 'route': slower_route,
+                                        'identity': checkpoint_identity,
+                                    }, sort_keys=True) + '\n')
+                                frontier_additions.append(tuple(editable_frames(slower)))
+                                print(f"[auto:user-splice:route] {rejoin_name!r}: "
+                                      f"retained {slower_route} branch at {other_main} "
+                                      '(other route, independently reusable)', flush=True)
+                            persisted = _load_user_splice_frontiers(
+                                level, (shared_rejoin,), stage_outputs).get(rejoin_name, ())
+                            # Never allow a large primary frontier to evict
+                            # the lower-ranked route when the archive reaches
+                            # its 64-replay cap. Both branch winners are first.
+                            combined_archive = list(dict.fromkeys((
+                                *(frames for _, frames in ranked_routes),
+                                *frontier_additions, *persisted)))
+                            if combined_archive:
+                                save_frontier(rejoin_name, tuple(combined_archive[:64]))
+                            continuation = preferred
+                            if shared_suffix:
+                                run_route_phase('shared-suffix', shared_suffix, continuation,
+                                                extra_seeds=tuple(value for _, value in ranked_routes[1:]),
+                                                repair_at_finish=False)
+                        else:
+                            # No branch reached the reconvergence objective.
+                            # Do not discard both prefixes or invent a saved
+                            # seam checkpoint; try the shared suffix from both.
+                            print(f"[auto:user-splice:route] {rejoin_name!r}: "
+                                  'neither branch reached the seam goal; '
+                                  'preserving both as shared-suffix search seeds', flush=True)
+                            if shared_suffix:
+                                run_route_phase('shared-suffix', shared_suffix, main_seed,
+                                                extra_seeds=(alt_seed,),
+                                                repair_at_finish=False)
+                        if args.auto_splice_merge_bests or repair_at_end:
+                            merge_all_saved_stages('final', repair=repair_at_end)
+                        print(f"[auto:user-splice] {phase_attempts} stage searches; "
+                              f"{phase_evaluations} evaluations; "
+                              f"{phase_improvements} verified improvements")
+                        return
+
                 result = optimise_user_splices(
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,

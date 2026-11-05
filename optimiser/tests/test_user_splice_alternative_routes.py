@@ -77,10 +77,10 @@ def test_normal_runs_share_verified_primary_completed_replay(tmp_path, monkeypat
     monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
     monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '1'])
     main()
-    assert [item[0] for item in calls] == [('230', 'end'), ('240',)]
-    assert tuple(calls[1][1]) == tuple(source)
-    assert calls[0][2] is not None  # primary preserves normal restart behavior
-    assert calls[1][2] is None      # alternate cannot consume primary backend resume
+    assert [item[0] for item in calls] == [
+        ('230',), ('240',), ('end',), ('end',)]
+    assert calls[0][2] is not None  # phase-specific resume-state callback
+    assert calls[1][2] is not None  # distinct checkpoints; no primary state is reused
 
 
 def test_unlimited_primary_cannot_silently_starve_alt_route(tmp_path, monkeypatch):
@@ -98,8 +98,10 @@ def test_actual_native_search_checks_both_routes(tmp_path, monkeypatch, capsys):
         '--auto-splice-iterations', '4'])
     main()
     messages = capsys.readouterr().out
-    assert "stage 2/2 'end'" in messages
-    assert "alternate branch: 240 (shared prefix through '230'; rejoin at 'end')" in messages
+    assert "shared-prefix: 230" in messages
+    assert "alternate-branch: 240" in messages
+    assert "primary-rejoin: end" in messages
+    assert "alternate-rejoin: end" in messages
     assert "stage 1/1 '240'" in messages
 
 
@@ -130,7 +132,7 @@ alt-route=[\"230\",\"240\",\"250\",\"end\"]
     monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
     monkeypatch.setattr(sys, 'argv', argv + ['--splice-config', str(routes), '--auto-runs', '1'])
     main()
-    assert calls == [('230', '250', 'end'), ('240',)]
+    assert calls == [('230',), ('240',), ('250',), ('250',), ('end',)]
 
 
 def test_short_alt_route_expands_seams_in_original_order():
@@ -182,7 +184,7 @@ def test_short_alt_route_toml_and_cli_only_search_divergent_stages(tmp_path, mon
     monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
     monkeypatch.setattr(sys, 'argv', argv + ['--splice-config', str(routes), '--auto-runs', '1'])
     main()
-    assert calls == [('230', '250', 'end'), ('240',)]
+    assert calls == [('230',), ('240',), ('250',), ('250',), ('end',)]
 
 
 def test_start_at_first_primary_divergence_skips_seam_but_runs_alt_branch(
@@ -206,8 +208,10 @@ def test_start_at_first_primary_divergence_skips_seam_but_runs_alt_branch(
     monkeypatch.setattr(sys, 'argv', argv + [
         '--splice-config', str(routes), '--auto-runs', '1', '--start-at-splice', '239'])
     main()
-    assert calls == [(('230', '239', '250', 'end'), '239'), (('240',), None)]
-    assert "alternate branch: 240" in capsys.readouterr().out
+    assert calls == [
+        (('239',), None), (('240',), None), (('250',), None),
+        (('250',), None), (('end',), None)]
+    assert "alternate-branch: 240" in capsys.readouterr().out
 
 
 def test_start_at_rejoin_skips_earlier_alt_branch(tmp_path, monkeypatch, capsys):
@@ -224,3 +228,150 @@ def test_start_at_rejoin_skips_earlier_alt_branch(tmp_path, monkeypatch, capsys)
     main()
     assert calls == [(('230', 'end'), 'end')]
     assert "alternate branch skipped" in capsys.readouterr().out
+
+
+def test_interleaved_rejoin_saves_other_route_and_reuses_both(tmp_path, monkeypatch):
+    """A slower branch must survive as an independently reloadable checkpoint."""
+    from nv14_engine import InputFrame
+    from nv14_replay import decode_complex_replay, editable_frames
+    from nv14_cli import _load_user_splice_frontiers, _user_splice_output_paths
+    level, source, _saved, output, packed, argv = _setup(tmp_path)
+    alternate = (InputFrame(left=True),) + tuple(source[1:])
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        names = tuple(stage.name for stage in stages)
+        calls.append((names, tuple(frames), kwargs.get('initial_seeds', ())))
+        candidate = alternate if names == ('240',) else tuple(frames)
+        if kwargs.get('stage_result_callback') is not None:
+            kwargs['stage_result_callback'](names[-1], candidate)
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '1',
+        '--start-at-splice', '239'])
+    main()
+    assert [names for names, _, _ in calls] == [
+        ('239',), ('240',), ('250',), ('250',), ('end',)]
+    # Alternate won the seam (lower min-x), primary is saved independently.
+    assert tuple(editable_frames(decode_complex_replay(
+        (tmp_path / '97-1_250.txt').read_text()).frames)) == alternate
+    other_path = tmp_path / '97-1_250_other_route.txt'
+    assert other_path.is_file()
+    assert tuple(editable_frames(decode_complex_replay(other_path.read_text()).frames)) == tuple(source)
+    assert (tmp_path / 'optim_250_other_route.txt').is_file()
+    assert tuple(calls[-1][1]) == alternate
+    assert tuple(calls[-1][2][0]) == tuple(source)
+    stage_outputs = _user_splice_output_paths(('250',), output, packed)
+    from nv14_cli import _load_named_splice_stages, parse_arguments
+    args = parse_arguments(argv[1:] + ['--splice-config', str(routes)])
+    stage = _load_named_splice_stages(level, source, args, goals, ('250',))
+    archived = _load_user_splice_frontiers(level, stage, stage_outputs)['250']
+    assert alternate in archived and tuple(source) in archived
+
+
+def test_interleaved_rejoin_old_other_route_remains_best_on_rerun(tmp_path, monkeypatch):
+    from nv14_engine import InputFrame
+    from nv14_replay import decode_complex_replay, editable_frames
+    _level, source, _saved, _output, _packed, argv = _setup(tmp_path)
+    best_alt = (InputFrame(left=True),) + tuple(source[1:])
+    stronger_main = (InputFrame(),) + tuple(source[1:])
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    main_candidate = [stronger_main]
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        names = tuple(stage.name for stage in stages)
+        candidate = (best_alt if names == ('240',)
+                     else main_candidate[0] if names == ('239',)
+                     else tuple(frames))
+        cb = kwargs.get('stage_result_callback')
+        if cb is not None:
+            cb(names[-1], candidate)
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '1',
+        '--start-at-splice', '239'])
+    main()
+    other_path = tmp_path / '97-1_250_other_route.txt'
+    assert tuple(editable_frames(decode_complex_replay(other_path.read_text()).frames)) == stronger_main
+    # Second run has a worse primary candidate. Preserve its historical best.
+    main_candidate[0] = tuple(source)
+    main()
+    assert tuple(editable_frames(decode_complex_replay(other_path.read_text()).frames)) == stronger_main
+
+
+def test_reconvergence_initial_seeds_survive_small_frontier(monkeypatch):
+    from nv14_engine import InputFrame
+    from nv14_endpoint import EndpointGoal
+    from nv14_random_splice import RandomSpliceConfig
+    from nv14_user_splice import UserSpliceStage, optimise_user_splices
+    from tests.test_random_splice import _baseline
+
+    level, source, _ = _baseline()
+    alternate = (InputFrame(left=True),) + tuple(source[1:])
+    stages = (UserSpliceStage('end', EndpointGoal(10, 'min-x'), 0, 10),)
+    seen = []
+
+    def no_mutations(_level, frames, *_args, **_kwargs):
+        seen.append(tuple(frames))
+        return [], 0, 1
+
+    monkeypatch.setattr(us, '_search_stage', no_mutations)
+    observed = []
+    optimise_user_splices(
+        level, source, stages,
+        RandomSpliceConfig(iterations=4, workers=1, rounds=1, frontier=1),
+        completion_policy='checkpoint', initial_seeds=(alternate,),
+        stage_result_callback=lambda name, frames: observed.append((name, frames)))
+    assert seen == [tuple(source), alternate]
+    assert observed[-1] == ('end', alternate)
+
+
+def test_interleaved_merges_consider_both_routes_before_and_after_search(
+        tmp_path, monkeypatch):
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages),
+                      kwargs.get('merge_only', False),
+                      kwargs.get('merge_repair_only', False)))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '1',
+        '--start-at-splice', '239', '--splice-merge-bests'])
+    main()
+    assert calls == [
+        (('230', '239', '240', '250', 'end'), True, False),
+        (('239',), False, False),
+        (('240',), False, False),
+        (('250',), False, False),
+        (('250',), False, False),
+        (('end',), False, False),
+        (('230', '239', '240', '250', 'end'), True, False),
+    ]
