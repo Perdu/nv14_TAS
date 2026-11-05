@@ -2054,3 +2054,25 @@ The same options can be set in `[multi-splicer]` as `speed = "fast"` and
 `round-speeds = ["current", "slow"]`. `--auto-runs` determines the number of
 outer rounds; a schedule does not itself increase that number. Presets control
 named splice phases, not standalone Auto endpoint or standalone Local.
+
+
+### Alternative named splice route
+
+A per-level multi-splicer TOML can specify two independent ordered sequences:
+
+```toml
+[multi-splicer]
+splice-files = ["72", "126", "179", "243", "289", "end"]
+alt-route = ["72", "126", "185", "220", "289", "end"]
+```
+
+The primary sequence runs first, then the alternate sequence, each with its
+own stage order and helper objectives. Shared named stage checkpoint files and
+frontier sidecars are reused safely, and the independently verified completed
+best is carried into the alternate search. An alternate route does not impose
+its helper goals on the primary route, nor change the normal stage lookback.
+`--splice-alt-route 72,126,185,220,289,end` overrides the TOML list. With an
+alternate route, `--splice-start`, `--splice-stop`, and `--splice-from-best`
+are not supported, because a selected stage could occur in only one sequence.
+The secondary route starts fresh rather than reusing an interrupted primary
+backend resume file; its per-backend checkpoint filenames are separate.

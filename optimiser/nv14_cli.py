@@ -1578,7 +1578,7 @@ def _coerce_config_value(
         if not value or not all(isinstance(item, str) for item in value):
             raise ValueError(f"TOML key {key!r} must contain speed names")
         return parse_splice_round_speeds(",".join(value))
-    if action.dest == "auto_splice_files" and isinstance(value, (list, tuple)):
+    if action.dest in ("auto_splice_files", "auto_splice_alt_route") and isinstance(value, (list, tuple)):
         if not value or not all(isinstance(item, str) and item.strip() for item in value):
             raise ValueError(f"TOML key {key!r} must be a nonempty array of splice file names")
         try:
@@ -1717,6 +1717,7 @@ def _load_config_defaults(
     splice_aliases = dict(mode_aliases)
     splice_aliases.update({
         "files": "auto_splice_files",
+        "alt_route": "auto_splice_alt_route",
         "directory": "auto_splice_directory",
         "start": "auto_splice_start",
         "stop": "auto_splice_stop",
@@ -1854,7 +1855,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_stagnation_rounds", "auto_splice_auto_stagnation_rounds",
     "auto_splice_local_stagnation_rounds", "auto_splice_speed", "auto_splice_round_speeds",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_waypoint_lookback", "auto_splice_exit_lookback",
-    "auto_splice_search", "auto_splice_files", "auto_splice_directory",
+    "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_directory",
     "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
 })
 
@@ -1879,6 +1880,11 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
                          + " require --auto-random-splice")
     if args.auto_random_splice and args.auto_splice_mode == "user" and not args.auto_splice_files:
         raise SystemExit("user splice mode requires --auto-splice-files or [auto] splice-files")
+    if args.auto_splice_alt_route and (not args.auto_random_splice or args.auto_splice_mode != "user"):
+        raise SystemExit("--splice-alt-route requires named multi-splicer mode")
+    if args.auto_splice_alt_route and any((args.auto_splice_start, args.auto_splice_stop,
+                                          args.auto_splice_from_best)):
+        raise SystemExit("alternate routes cannot be combined with --splice-start/stop/from-best")
     if args.auto_random_splice and args.auto_splice_files and args.auto_splice_mode != "user":
         raise SystemExit("splice-files requires --auto-splice-mode user")
     if (args.auto_random_splice and
@@ -2536,6 +2542,10 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-mode", modes=auto_modes,
                          choices=("random", "complexity", "physics", "user"), default="random",
                          help="waypoint selection: random (default), complexity boundaries, physical interactions, or user-named goal files")
+    command.add_argument("--splice-alt-route", "--auto-splice-alt-route",
+                         dest="auto_splice_alt_route", modes=auto_modes,
+                         type=parse_splice_files, metavar="NAMES",
+                         help="alternate ordered named splice route; searched after the primary route")
     command.add_argument("--auto-splice-files", modes=auto_modes,
                          type=parse_splice_files, metavar="NAMES",
                          help="ordered comma-separated Local splice names; [auto] splice-files accepts a TOML array")
@@ -4036,7 +4046,8 @@ def _named_splice_enemy_simulation(args: argparse.Namespace, default: bool) -> b
     if (getattr(args, "mode", None) != "auto" or
             getattr(args, "auto_splice_mode", None) != "user"):
         return default
-    names = getattr(args, "auto_splice_files", ()) or ()
+    names = tuple(dict.fromkeys((*(getattr(args, "auto_splice_files", ()) or ()),
+                                 *(getattr(args, "auto_splice_alt_route", ()) or ()))))
     if not names:
         return default
     if _splice_enemy_cli_explicit(args):
@@ -4395,14 +4406,27 @@ def main() -> None:
                 directory = _named_splice_directory(args)
                 stages = _load_named_splice_stages(level, replay.frames, args,
                                                    directory, args.auto_splice_files)
+                alternate_stages = (_load_named_splice_stages(
+                    level, replay.frames, args, directory, args.auto_splice_alt_route)
+                    if args.auto_splice_alt_route else ())
+                all_stages = tuple({stage.name: stage for stage in
+                                    (*stages, *alternate_stages)}.values())
+                all_names = tuple(stage.name for stage in all_stages)
+                if (alternate_stages and not (args.auto_ls_splice or
+                                               args.auto_splice_merge_only or
+                                               args.auto_splice_merge_repair_only) and
+                        args.auto_runs == 0):
+                    raise SystemExit("alt-route requires finite --auto-runs: "
+                                     "an unlimited primary campaign would never reach "
+                                     "the alternate route")
                 stage_outputs = _user_splice_output_paths(
-                    [stage.name for stage in stages], output_path, replay_output_path,
+                    all_names, output_path, replay_output_path,
                     protected_paths=(("input", input_path),
                                      ("TOML config", args.config),
                                      ("splice config", args.splice_config),
                                      ("levels file", source.levels_file_path),
                                      *((f"splice goal {name}", path) for name, path in
-                                       _resolve_named_splice_files(directory, args.auto_splice_files))),
+                                       _resolve_named_splice_files(directory, all_names))),
                 )
 
                 # Restore best stage checkpoints and their small diverse frontier
@@ -4412,7 +4436,7 @@ def main() -> None:
                     stage_outputs, output_path, replay_output_path)
                 saved_stage_frontiers = ({} if args.auto_ls_splice else
                                          _load_user_splice_frontiers(
-                                             level, stages, stage_outputs))
+                                             level, all_stages, stage_outputs))
                 for stage_name, main_pair in stage_outputs.items():
                     archive_path = _user_splice_frontier_path(main_pair[0])
                     for title, protected in (("input", input_path),
@@ -4429,7 +4453,7 @@ def main() -> None:
 
                 def save_frontier(name: str, frames: tuple[tuple[InputFrame, ...], ...]) -> None:
                     path = _user_splice_frontier_path(stage_outputs[name][0])
-                    stage = next(item for item in stages if item.name == name)
+                    stage = next(item for item in all_stages if item.name == name)
                     document = _user_splice_frontier_identity(level, stage)
                     document["replays"] = [encode_complex_replay(item) for item in frames]
                     _atomic_write_text(path, json.dumps(document, separators=(",", ":")) + "\n")
@@ -4598,6 +4622,7 @@ def main() -> None:
                     "source": hashlib.sha256(encode_complex_replay(tuple(
                         editable_frames(replay.frames))).encode()).hexdigest(),
                     "stages": [repr(stage) for stage in stages],
+                    "alternate_stages": [repr(stage) for stage in alternate_stages],
                     "config": repr(splice_config),
                     "from_best": args.auto_splice_from_best,
                     "start_from_stage_bests": args.auto_splice_each_best,
@@ -4685,6 +4710,67 @@ def main() -> None:
                     progress=lambda message: _print_user_splice_progress(
                         message, color=common_config.color),
                 )
+                if alternate_stages:
+                    print("[auto:user-splice:route] alternate: " +
+                          " -> ".join(stage.name for stage in alternate_stages), flush=True)
+                    # The primary route may have saved fresh checkpoints.
+                    # Re-load them for the alternate route, and compare against
+                    # the primary's independently verified completed best.
+                    alt_candidates = _load_user_splice_checkpoints(
+                        stage_outputs, output_path, replay_output_path)
+                    alt_frontiers = ({} if args.auto_ls_splice else
+                                     _load_user_splice_frontiers(
+                                         level, alternate_stages, stage_outputs))
+                    primary_eval = evaluate_replay_with_sentinel(level, result.frames)
+                    alt_best = (result.frames if primary_eval.valid and
+                                primary_eval.finish_tick == len(result.frames)
+                                else saved_final_frames)
+                    # Distinct backend checkpoint names prevent an alternate
+                    # route from loading an interrupted *primary* backend.
+                    def alt_backend_path(name, backend):
+                        return str(stage_outputs[name][0].with_suffix(
+                            f".alt.{backend}.round.json"))
+                    alt_result = optimise_user_splices(
+                        level, summary_frames, alternate_stages, splice_config,
+                        completion_policy=args.auto_completion_policy,
+                        start_from_stage_bests=args.auto_splice_each_best,
+                        reference_frames=reference_frames,
+                        merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end,
+                        merge_only=merge_only,
+                        merge_verbose=args.auto_splice_merge_verbose,
+                        merge_repair_only=repair_only,
+                        merge_repair_at_end=repair_at_end,
+                        merge_repair_pairs=args.auto_splice_merge_repair_pairs,
+                        merge_repair_window=args.auto_splice_merge_repair_window,
+                        merge_repair_targets=args.auto_splice_merge_repair_targets,
+                        summary_only=args.auto_ls_splice,
+                        best_callback=lambda frames: _write_result(
+                            source, output_path, replay_output_path,
+                            encode_complex_replay(clean_splice_output(frames))),
+                        stage_best_callback=save_stage_best,
+                        saved_stage_candidates=alt_candidates,
+                        saved_stage_frontiers=alt_frontiers,
+                        saved_final_frames=(None if args.auto_ls_splice else alt_best),
+                        reporting_input_frames=replay.frames,
+                        frontier_callback=save_frontier,
+                        backend_checkpoint_path=alt_backend_path,
+                        progress=lambda message: _print_user_splice_progress(
+                            message, color=common_config.color),
+                    )
+                    # Each route owns its stage objectives and frontier order.
+                    # Never promote an incomplete alternate replay over a
+                    # verified primary completed result.
+                    alt_eval = evaluate_replay_with_sentinel(level, alt_result.frames)
+                    if alt_eval.valid and alt_eval.finish_tick == len(alt_result.frames):
+                        chosen_frames = alt_result.frames
+                    else:
+                        chosen_frames = result.frames
+                    result = type(result)(
+                        chosen_frames,
+                        result.improvements + alt_result.improvements,
+                        result.attempts + alt_result.attempts,
+                        result.evaluations + alt_result.evaluations,
+                    )
                 if args.auto_ls_splice or merge_only:
                     return
                 if not result.improvements:
