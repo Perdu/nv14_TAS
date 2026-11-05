@@ -831,9 +831,12 @@ rerecords: 324
 bbcd at start is 1f slower
 
 # 21-4
-rerecords: 347
+rerecords: 409
 
+Branch 9: slowing down to get an earlier drone detection
+Branch 8: spliced to reach wall earlier, 1f slower
 
+To optimise this, we would need to get detected as left as possible while still maintaining speed until we cross the laser path. This is a complex condition which I don't know how to tackle and may already be optimised.
 
 # 22-0
 rerecords: 708
@@ -2792,7 +2795,7 @@ When falling from the top section jumping was overall slower
 For the third locked door key jumping on the lower slope was slower
 
 # 88-4
-rerecords: 1523
+rerecords: 1680
 
 
 
@@ -3024,17 +3027,17 @@ Branch 5: fastest way to splice 353
 Branch 4: trying to go above drone 3
 
 # 97-1
-rerecords: 118
+rerecords: 126
 
 
 
 # 97-2
-rerecords: 802
+rerecords: 1017
 
-Branch 9: attempt at going up left after switch 0, to avoid the drone by its right side while falling
+Branch 9: Best run at beating the final pacelock
 Branch 8: for the end, go down then jump over the drone
 Branch 7: faster way to the first pacelock (drone 3 early detection)
-Branch 6: earlier arrival in drone 1's detection range (but no earlier detection): best 438
+Branch 6: Lower path after drone 1
 Branch 5: Use the right path on the way down
 Branch 4: drone 1 detection test: must be in the range at frame 433
 
@@ -3119,4 +3122,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 270829
+# Total rerecords: 271271
