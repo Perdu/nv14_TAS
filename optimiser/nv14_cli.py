@@ -117,6 +117,29 @@ def _print_colored_line(message: str, *, color: bool, ansi_color: int) -> None:
         print(message, flush=True)
 
 
+def _print_user_splice_progress(message: str, *, color: bool) -> None:
+    """Color verified merge results like ordinary multi-splice bests.
+
+    Yellow is a saved, local/temporary gain not yet propagated to a completed
+    replay. Green is an independently verified completed improvement. All
+    other diagnostics and quiet merge summaries retain their normal style.
+    """
+    if message.startswith("[auto:user-splice:baseline]"):
+        _print_baseline_line(message, color=color)
+    elif (message.startswith(("[auto:user-splice:temporary]",
+                              "[auto:user-splice:summary:pending]"))
+          or "new saved stage best" in message
+          or "verified stage join" in message):
+        _print_temporary_line(message, color=color)
+    elif (message.startswith(("[auto:user-splice] improved ",
+                              "[auto:user-splice:summary:propagated]"))
+          or "improved verified completed replay" in message
+          or "verified completed join" in message):
+        _print_best_line(message, color=color)
+    else:
+        print(message, flush=True)
+
+
 @dataclass(frozen=True, slots=True)
 class CommonConfig:
     """Configuration shared by the three optimisation subcommands.
@@ -4562,16 +4585,8 @@ def main() -> None:
                     backend_checkpoint_path=backend_round_path,
                     resume_outer_round=(0 if args.auto_ls_splice else completed_passes),
                     save_outer_round=(None if args.auto_ls_splice or merge_only else persist_outer_round),
-                    progress=lambda message: (
-                        _print_baseline_line(message, color=common_config.color)
-                        if message.startswith("[auto:user-splice:baseline]")
-                        else _print_temporary_line(message, color=common_config.color)
-                        if message.startswith(("[auto:user-splice:temporary]",
-                                               "[auto:user-splice:summary:pending]"))
-                        else _print_best_line(message, color=common_config.color)
-                        if message.startswith(("[auto:user-splice] improved ",
-                                               "[auto:user-splice:summary:propagated]"))
-                        else print(message, flush=True)),
+                    progress=lambda message: _print_user_splice_progress(
+                        message, color=common_config.color),
                 )
                 if args.auto_ls_splice or merge_only:
                     return
