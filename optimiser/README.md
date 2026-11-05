@@ -1988,3 +1988,24 @@ With `TAS_INPUT_TEMPLATE` pointing at a manually edited replay, use a **differen
 output template; the launcher refuses to overwrite its own input. `./tas.py --help`
 lists all supported defaults. Normal optimiser flags appended afterward always
 have the final word. No shell expansion or automatic use of wip files occurs.
+
+### Required presence inside a region (patch 64)
+
+An endpoint goal can require the player to be **alive inside an inclusive
+rectangle at least once during an inclusive frame interval**, regardless of
+whether a jump occurred there. In a `[local]` goal file (also used by named
+splices and `--goal-config`):
+
+```toml
+[local]
+require-region = "380:410,180:220"
+require-region-frames = "440:500"
+```
+
+The interval defaults to `0:target-frame`; it must not extend beyond the
+objective target. CLI equivalents are `--require-region` and
+`--require-region-frames` for Local population and endpoint Auto. This is an
+additional hard feasibility requirement only for **that** goal, not a
+binding helper constraint for unrelated later named splices. The opt-in
+reference path uses native simulation snapshots to check every eligible tick;
+ordinary endpoints retain their fast native scan.

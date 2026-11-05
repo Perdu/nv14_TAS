@@ -204,6 +204,8 @@ class LocalConfig:
     vy_window: AxisWindow | None = None
     target_region: tuple[float, float, float, float] | None = None
     arrival_start: int | None = None
+    require_region: tuple[float, float, float, float] | None = None
+    require_region_frames: tuple[int, int] | None = None
     require_jump_region: tuple[float, float, float, float] | None = None
     require_jump_frames: tuple[int, int] | None = None
     required_jumps: tuple[RequiredJump, ...] = ()
@@ -270,6 +272,7 @@ class LocalConfig:
         if self.search == "windows" and (
             self.objective in EARLIEST_OBJECTIVES or self.target_region is not None
             or self.arrival_start is not None or self.top_results != 1
+            or self.require_region is not None or self.require_region_frames is not None
             or self.require_jump_region is not None or self.require_jump_frames is not None
             or self.required_jumps
             or self.checkpoint_path is not None or self.resume
@@ -280,6 +283,8 @@ class LocalConfig:
         if self.search == "population":
             if type(self.survive_after_goal) is not int or self.survive_after_goal < 0:
                 raise ValueError("survive-after-goal must be a non-negative integer")
+            if self.require_region_frames is not None and self.require_region is None:
+                raise ValueError("require-region-frames requires require-region")
             if self.required_jumps and self.require_jump_region is not None:
                 raise ValueError("require-jumps cannot be combined with require-jump-region")
             if self.require_jump_frames is not None:
@@ -418,6 +423,8 @@ class LocalConfig:
             vy_window=args.vy_window,
             target_region=args.target_region,
             arrival_start=args.arrival_start,
+            require_region=args.require_region,
+            require_region_frames=args.require_region_frames,
             require_jump_region=args.require_jump_region,
             require_jump_frames=args.require_jump_frames,
             required_jumps=tuple(args.require_jumps),
@@ -1771,6 +1778,8 @@ _LOCAL_GOAL_TO_AUTO = {
     "require_interaction": "auto_require_interaction",
     "avoid_interaction": "auto_avoid_interaction",
     "require_reference_interactions": "auto_require_reference_interactions",
+    "require_region": "auto_require_region",
+    "require_region_frames": "auto_require_region_frames",
     "require_jump_region": "auto_require_jump_region",
     "require_jump_frames": "auto_require_jump_frames",
     "require_jumps": "auto_require_jumps",
@@ -1807,6 +1816,7 @@ _LOCAL_POPULATION_OPTIONS = frozenset({
     "iterations", "beam", "rounds", "stagnation_rounds", "repair_steps",
     "repair_lookback", "mutation_span", "checkpoint", "resume", "top_results",
     "target_region", "arrival_start",
+    "require_region", "require_region_frames",
     "require_jump_region", "require_jump_frames", "require_jumps",
     "require_drone_detection", "require_drone_detection_frames", "survive_after_goal",
     "secondary_objective",
@@ -1847,7 +1857,7 @@ _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
     "auto_target_frame", "auto_target_region", "auto_target_object", "auto_target_point",
     "auto_arrival_start", "auto_secondary_objective", "auto_x_window", "auto_y_window",
     "auto_vx_window", "auto_vy_window", "auto_require_interaction", "auto_avoid_interaction",
-    "auto_require_reference_interactions", "auto_require_jump_region",
+    "auto_require_reference_interactions", "auto_require_region", "auto_require_region_frames", "auto_require_jump_region",
     "auto_require_jump_frames", "auto_require_jumps",
     "auto_require_drone_detection", "auto_require_drone_detection_frames", "auto_survive_after_goal", "auto_completion_policy", "auto_mutation_span",
 })
@@ -2616,6 +2626,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-avoid-interaction", "--avoid-interaction", modes=auto_modes,
                          action="append", default=[], metavar="SELECTOR",
                          help="forbidden persistent interaction at the endpoint")
+    command.add_argument("--auto-require-region", "--require-region", modes=auto_modes,
+                         type=parse_target_region, metavar="XMIN:XMAX,YMIN:YMAX",
+                         help="require the player to visit this inclusive rectangle")
+    command.add_argument("--auto-require-region-frames", "--require-region-frames", modes=auto_modes,
+                         type=parse_required_jump_frames, metavar="START:END",
+                         help="inclusive interval to visit required region (default 0:target-frame)")
     command.add_argument("--auto-require-jump-region", "--require-jump-region", modes=auto_modes,
                          type=parse_target_region, metavar="XMIN:XMAX,YMIN:YMAX",
                          help="require a jump originating within this region")
@@ -3016,6 +3032,11 @@ def build_parser() -> argparse.ArgumentParser:
                          metavar="MIN:MAX", help="inclusive endpoint vertical velocity bounds (windows and population)")
     command.add_argument("--target-region", modes=local_modes, type=parse_target_region,
                          metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival population goal: inclusive target rectangle")
+    command.add_argument("--require-region", modes=local_modes, type=parse_target_region,
+                         metavar="XMIN:XMAX,YMIN:YMAX",
+                         help="population only: player must visit this rectangle within the required interval")
+    command.add_argument("--require-region-frames", modes=local_modes, type=parse_required_jump_frames,
+                         metavar="START:END", help="population only: inclusive visit interval")
     command.add_argument("--require-jump-region", modes=local_modes, type=parse_target_region,
                          metavar="XMIN:XMAX,YMIN:YMAX",
                          help="population only: require an actual jump originating inside this inclusive rectangle")
@@ -3698,6 +3719,8 @@ def _run_local_population(
             secondary_objective=config.secondary_objective,
             interaction_target=interaction_target,
             required_jumps=config.required_jumps,
+            require_region=config.require_region,
+            require_region_frames=config.require_region_frames,
             required_drone_detections=_resolve_drone_detection(level, config.require_drone_detection),
             require_drone_detection_frames=config.require_drone_detection_frames,
             survive_after_goal=config.survive_after_goal,
@@ -3924,6 +3947,8 @@ def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
         vx_window=args.auto_vx_window, vy_window=args.auto_vy_window,
         required_interactions=required, avoided_interactions=avoided,
         required_jumps=tuple(args.auto_require_jumps),
+        require_region=args.auto_require_region,
+        require_region_frames=args.auto_require_region_frames,
         required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
         require_drone_detection_frames=args.auto_require_drone_detection_frames,
         survive_after_goal=getattr(args, "auto_survive_after_goal", 0),
@@ -4749,6 +4774,8 @@ def main() -> None:
                 vx_window=args.auto_vx_window, vy_window=args.auto_vy_window,
                 required_interactions=required, avoided_interactions=avoided,
                 required_jumps=tuple(args.auto_require_jumps),
+                require_region=args.auto_require_region,
+                require_region_frames=args.auto_require_region_frames,
                 required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
                 require_drone_detection_frames=args.auto_require_drone_detection_frames,
                 survive_after_goal=getattr(args, "auto_survive_after_goal", 0),

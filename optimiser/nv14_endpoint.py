@@ -76,6 +76,8 @@ class EndpointGoal:
     required_drone_detections: tuple[int, ...] = ()
     require_drone_detection_frames: tuple[int, int] | None = None
     survive_after_goal: int = 0  # require N further live ticks after the objective
+    require_region: tuple[float, float, float, float] | None = None
+    require_region_frames: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.target_frame, bool) or not isinstance(self.target_frame, int) or self.target_frame < 0:
@@ -134,6 +136,22 @@ class EndpointGoal:
                        for atom in self.interaction_target.alternatives)
         ):
             raise ValueError("exit_distance_tiebreak requires an exit-door interaction target")
+        if self.require_region is not None:
+            region = tuple(float(v) for v in self.require_region)
+            if (len(region) != 4 or not all(math.isfinite(v) for v in region)
+                    or region[0] > region[1] or region[2] > region[3]):
+                raise ValueError("require-region needs four finite ordered rectangle bounds")
+            object.__setattr__(self, "require_region", region)
+        if self.require_region_frames is not None:
+            if self.require_region is None:
+                raise ValueError("require-region-frames requires require-region")
+            interval = tuple(self.require_region_frames)
+            if (len(interval) != 2 or any(type(v) is not int for v in interval)
+                    or not 0 <= interval[0] <= interval[1] <= self.target_frame):
+                raise ValueError("require-region-frames must lie within target-frame")
+            object.__setattr__(self, "require_region_frames", interval)
+        elif self.require_region is not None:
+            object.__setattr__(self, "require_region_frames", (0, self.target_frame))
         if self.require_jump_region is not None:
             region = tuple(float(v) for v in self.require_jump_region)
             if (len(region) != 4 or not all(math.isfinite(v) for v in region)
@@ -220,6 +238,8 @@ class EndpointEvaluation:
     drone_detection_frames: tuple[int | None, ...] = ()
     missing_drone_indices: tuple[int, ...] = ()
     missing_survival: bool = False
+    missing_region: bool = False
+    region_visit_frame: int | None = None
 
     @property
     def objective_key(self) -> tuple[float, ...]:
@@ -297,6 +317,9 @@ class EndpointEvaluator:
                 source, simulate_enemies=bool(level.simulate_enemies))
         self.source_frames = tuple(source_frames)
         prefix_frame = min(prefix_frame, goal.target_frame + 1)
+        if goal.require_region is not None:
+            # An event inside the cached prefix must not vanish.
+            prefix_frame = min(prefix_frame, goal.require_region_frames[0])
         if goal.required_drone_detections:
             # Events in an immutable prefix still matter. Re-scan starting at
             # the first allowed detection tick so prefix caching cannot erase them.
@@ -415,6 +438,7 @@ class EndpointEvaluator:
                         jump_event: tuple[int, float, float] | None = None,
                         jump_events: tuple[tuple[int, float, float] | None, ...] = (),
                         drone_detection_frames: tuple[int | None, ...] = (),
+                        region_visit_frame: int | None = None,
                         ) -> EndpointEvaluation:
         player = state.player_snapshot()
         masks, completed = self._interaction_snapshot(state)
@@ -468,6 +492,7 @@ class EndpointEvaluator:
         missing_drones = tuple(i for i in range(len(goal.required_drone_detections))
                                if i >= len(drone_detection_frames) or drone_detection_frames[i] is None)
         missing_jump = bool(missing_indices) if self._multiple_jumps else (goal.require_jump_region is not None and jump_event is None)
+        missing_region = goal.require_region is not None and region_visit_frame is None
         jump_distance = 0.0
         if self._multiple_jumps and finite:
             jump_distance = sum(math.hypot(max(spec.region[0]-x, x-spec.region[1], 0.0),
@@ -480,7 +505,7 @@ class EndpointEvaluator:
         dead = bool(player["dead"])
         at_endpoint = ((arrival_eligible and goal.arrival_start <= frame <= goal.target_frame)
                        if goal.is_earliest else frame == goal.target_frame)
-        feasible = bool(at_endpoint and finite and not dead and not missing and not violated and not missing_jump and not missing_drones
+        feasible = bool(at_endpoint and finite and not dead and not missing and not violated and not missing_jump and not missing_drones and not missing_region
                         and error == 0.0 and region_distance == 0.0
                         and (goal.interaction_target is None or events))
         # The native state contains the position from immediately before this
@@ -517,13 +542,19 @@ class EndpointEvaluator:
             # Keep requirements/avoidances discrete, then offer useful movement
             # gradients toward satisfying the remaining exact goals. Earlier
             # surviving near-misses remain useful even if the later run dies.
-            progress_key = (1, len(violated), len(missing) + (len(missing_indices) if self._multiple_jumps else int(missing_jump)) + len(missing_drones), int(dead),
+            visit_distance = 0.0
+            if missing_region and finite:
+                xmin, xmax, ymin, ymax = goal.require_region
+                visit_distance = math.hypot(max(xmin-x, x-xmax, 0.0),
+                                            max(ymin-y, y-ymax, 0.0))
+            progress_key = (1, len(violated), len(missing) + (len(missing_indices) if self._multiple_jumps else int(missing_jump)) + len(missing_drones) + int(missing_region), int(dead),
                             error + region_distance**2 + missing_distance**2 + target_distance**2
-                            + (jump_distance**2 if missing_jump else 0.0),
+                            + (jump_distance**2 if missing_jump else 0.0) + visit_distance**2,
                             max(goal.arrival_start-frame, 0) if goal.is_earliest
                             else max(goal.target_frame-frame, 0), -score)
             if (goal.interaction_target is not None or goal.require_jump_region is not None
-                    or self._multiple_jumps or goal.required_drone_detections):
+                    or self._multiple_jumps or goal.required_drone_detections
+                    or goal.require_region is not None):
                 # States after the final possible interaction cannot repair the
                 # event's failed constraints. Keep its actual tick or an earlier
                 # viable approach, even if requirements become true later.
@@ -531,7 +562,8 @@ class EndpointEvaluator:
                              or (missing_jump and (any(frame >= goal.required_jumps[index].frames[1]
                                                      for index in missing_indices) if self._multiple_jumps
                                             else frame >= (goal.require_jump_frames or (0, goal.target_frame))[1]))
-                             or (bool(missing_drones) and frame >= goal.require_drone_detection_frames[1]))
+                             or (bool(missing_drones) and frame >= goal.require_drone_detection_frames[1])
+                             or (missing_region and frame >= goal.require_region_frames[1]))
                 progress_key = (progress_key[0], int(exhausted), *progress_key[1:])
         contact = (player["state"], player["in_air"], player["near_wall"],
                    player["floor_n"], player["wall_n"], player["previous_jump_held"])
@@ -544,6 +576,8 @@ class EndpointEvaluator:
             niche = (*niche, tuple(i not in missing_drones for i in range(len(goal.required_drone_detections))))
         if goal.require_jump_region is not None or self._multiple_jumps:
             niche = (*niche, tuple(event is not None for event in jump_events) if self._multiple_jumps else not missing_jump)
+        if goal.require_region is not None:
+            niche = (*niche, not missing_region)
         return EndpointEvaluation(feasible, score, frame, x, y, vx, vy, missing, violated,
                                   dead, progress_key,
                                   state.state_key() if capture_state_key else b"", niche, masks, contact,
@@ -551,7 +585,8 @@ class EndpointEvaluator:
                                   tuple(player.items()), secondary_score, secondary_value,
                                   events, completed, target_distance, jump_event, missing_jump, jump_distance,
                                   jump_events, missing_indices, exit_distance,
-                                  drone_detection_frames, missing_drones)
+                                  drone_detection_frames, missing_drones,
+                                  False, missing_region, region_visit_frame)
 
     def _qualifying_jump(self, frame: int, jumped: bool, origin: tuple | None) -> bool:
         """Independent reference event predicate; never called by the C tick loop."""
@@ -614,7 +649,7 @@ class EndpointEvaluator:
             raise ValueError(f"target frame {self.goal.target_frame} is outside a {len(key)}-frame replay")
         if key[:self.prefix_frame] != self._source_key[:self.prefix_frame]:
             raise ValueError("candidate changed the immutable cached prefix")
-        if self._reference_required or self.goal.survive_after_goal:
+        if self._reference_required or self.goal.survive_after_goal or self.goal.require_region is not None:
             return self.evaluate_reference(frames)
         state, events, eligible, terminal_frame, terminal_dead, jump_event, ambiguous, pre_position, detections = self._native_plan.scan(
             self._prefix, key, jump_event=self._prefix_jump, with_pre_position=True,
@@ -653,6 +688,20 @@ class EndpointEvaluator:
             mode, chasing = after[load_index]
             if (old_mode == 0 and mode == 1) or (not old_chasing and chasing):
                 recorded[i] = frame
+
+    def _visits_required_region(self, state: Any, frame: int) -> bool:
+        goal = self.goal
+        if goal.require_region is None:
+            return False
+        first, last = goal.require_region_frames
+        if not first <= frame <= last:
+            return False
+        player = state.player_snapshot()
+        if player["dead"]:
+            return False
+        x, y = player["pos"]
+        xmin, xmax, ymin, ymax = goal.require_region
+        return xmin <= x <= xmax and ymin <= y <= ymax
 
     def _survives_after_goal(self, state: Any, frames: Sequence[InputFrame], frame: int) -> bool:
         """Require N genuine ticks after the goal, not just a non-dead endpoint.
@@ -695,6 +744,7 @@ class EndpointEvaluator:
         detections: list[int | None] = [None] * len(self.goal.required_drone_detections)
         previous = self._interaction_snapshot(state) if self.goal.interaction_target is not None else None
         best = None
+        visit_frame = None
         dead = False
         for frame in range(self.goal.target_frame + 1):
             if dead:
@@ -704,6 +754,8 @@ class EndpointEvaluator:
             if detections:
                 self._record_drone_detections(frame, before, self._drone_signals(state), detections)
             dead = bool(step["dead"])
+            if visit_frame is None and self._visits_required_region(state, frame):
+                visit_frame = frame
             if step["jumped"] and step["jump_origin"] is not None:
                 x, y = step["jump_origin"]
                 if math.isfinite(x) and math.isfinite(y):
@@ -722,7 +774,8 @@ class EndpointEvaluator:
             candidate = self._evaluate_state(state, capture_state_key=False,
                                              previous_interactions=previous,
                                              jump_event=recorded[0], jump_events=tuple(recorded),
-                                             drone_detection_frames=tuple(detections))
+                                             drone_detection_frames=tuple(detections),
+                                             region_visit_frame=visit_frame)
             if previous is not None:
                 previous = (candidate.interaction_state, candidate.completed_exit_index)
             if candidate.feasible:
@@ -734,7 +787,8 @@ class EndpointEvaluator:
                 best = replace(candidate, state_key=state.state_key())
         terminal = self._evaluate_state(state, arrival_eligible=False,
                                         jump_event=recorded[0], jump_events=tuple(recorded),
-                                        drone_detection_frames=tuple(detections))
+                                        drone_detection_frames=tuple(detections),
+                                        region_visit_frame=visit_frame)
         if not self.goal.is_earliest:
             if terminal.feasible and not self._survives_after_goal(state, frames, terminal.frame):
                 return self._failed_survival(terminal)
@@ -754,7 +808,8 @@ class EndpointEvaluator:
             return self._exact_exit_proximity(self._evaluate_multiple_jumps(frames), frames)
         state = self._prefix.clone()
         if (not self.goal.is_earliest and self.goal.require_jump_region is None
-                and not self.goal.required_drone_detections):
+                and not self.goal.required_drone_detections
+                and self.goal.require_region is None):
             if not self._prefix_dead:
                 state.step_many(frames[self.prefix_frame:self.goal.target_frame+1],
                                 stop_on_dead=True, stop_on_complete=False)
@@ -766,6 +821,7 @@ class EndpointEvaluator:
         # can become true, false and true again. Binary search is unsound here.
         best = None
         jump_event = self._prefix_jump
+        visit_frame = None
         detections: list[int | None] = [None] * len(self.goal.required_drone_detections)
         dead = self._prefix_dead
         previous = self._interaction_snapshot(state) if self.goal.interaction_target is not None else None
@@ -777,6 +833,8 @@ class EndpointEvaluator:
             if detections:
                 self._record_drone_detections(frame, before, self._drone_signals(state), detections)
             dead = bool(step["dead"])
+            if visit_frame is None and self._visits_required_region(state, frame):
+                visit_frame = frame
             if jump_event is None and self._qualifying_jump(frame, step["jumped"], step["jump_origin"]):
                 jump_event = (frame, *step["jump_origin"])
             if not self.goal.is_earliest:
@@ -787,7 +845,8 @@ class EndpointEvaluator:
                 continue
             candidate = self._evaluate_state(state, capture_state_key=False, previous_interactions=previous,
                                              jump_event=jump_event,
-                                             drone_detection_frames=tuple(detections))
+                                             drone_detection_frames=tuple(detections),
+                                             region_visit_frame=visit_frame)
             if previous is not None:
                 previous = (candidate.interaction_state, candidate.completed_exit_index)
             if candidate.feasible:
@@ -798,7 +857,8 @@ class EndpointEvaluator:
             if best is None or candidate.progress_key < best.progress_key:
                 best = replace(candidate, state_key=state.state_key())
         terminal = self._evaluate_state(state, arrival_eligible=not self.goal.is_earliest,
-                                        jump_event=jump_event, drone_detection_frames=tuple(detections))
+                                        jump_event=jump_event, drone_detection_frames=tuple(detections),
+                                        region_visit_frame=visit_frame)
         if not self.goal.is_earliest and terminal.feasible:
             if not self._survives_after_goal(state, frames, terminal.frame):
                 terminal = self._failed_survival(terminal)
@@ -820,7 +880,7 @@ def verify_endpoint(level: object, frames: Sequence[InputFrame], goal: EndpointG
     evaluator = EndpointEvaluator(level, goal)
     result = evaluator.evaluate_reference(frames)
     if expected is not None:
-        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index", "jump_event", "missing_jump", "jump_events", "missing_jump_indices", "drone_detection_frames", "missing_drone_indices", "missing_survival")
+        comparable = ("feasible", "score", "secondary_score", "secondary_value", "frame", "missing_interactions", "violated_interactions", "dead", "state_key", "interaction_events", "completed_exit_index", "jump_event", "missing_jump", "jump_events", "missing_jump_indices", "drone_detection_frames", "missing_drone_indices", "missing_survival", "missing_region", "region_visit_frame")
         mismatch = [name for name in comparable if getattr(result, name) != getattr(expected, name)]
         if mismatch:
             raise ValueError("endpoint verification mismatch: " + ", ".join(mismatch))
