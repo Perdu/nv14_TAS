@@ -152,6 +152,10 @@ def _search_stage_backend_phases(
     best_rank = rank(incumbent)
     best_progress = evaluator.evaluate(incumbent).progress_key
     evaluations = calls = 0
+    # A continuous phase has already searched to its *own* stagnation limit.
+    # Repeating it with the exact same seed cannot help. A gain from the other
+    # backend invalidates that exhausted seed and makes a new turn worthwhile.
+    exhausted_on: dict[str, tuple[InputFrame, ...]] = {}
     cycle = int(resume_phase["cycle"]) - 1 if resume_phase is not None else 0
     while True:
         cycle += 1
@@ -160,6 +164,8 @@ def _search_stage_backend_phases(
         start_backend = str(resume_phase["backend"]) if resume_phase is not None else None
         for backend, iterations, patience in phases:
             if start_backend is not None and backend != start_backend:
+                continue
+            if start_backend is None and exhausted_on.get(backend) == search_seed:
                 continue
             if progress:
                 progress(f"[auto:user-splice:refine] {stage.name!r}: "
@@ -249,18 +255,23 @@ def _search_stage_backend_phases(
                 best_progress = evaluator.evaluate(incumbent).progress_key
             else:
                 search_seed, best_progress = near_miss, near_progress
+            exhausted_on[backend] = search_seed
             if progress:
                 progress(f"[auto:user-splice:refine] {stage.name!r}: "
                          f"cycle {cycle}, {backend} phase finished at "
                          f"its own stagnation limit {patience}; "
                          f"{'stage improved' if phase_improved else 'no stage gain'}; "
                          f"{used} distinct evaluations")
+        # Each backend has now exhausted this incumbent. Restart only when
+        # another backend actually changed the seed since its last search.
+        pending = any(exhausted_on.get(backend) != search_seed
+                      for backend, _, _ in phases)
         if progress:
             progress(f"[auto:user-splice:refine] {stage.name!r}: "
                      f"cycle {cycle} "
-                     f"{'improved; restarting Auto' if cycle_improved else 'no improvement; advancing'}; "
+                     f"{'improved; next changed-seed backend' if pending else 'both modes stagnated; advancing'}; "
                      f"{calls} backend phase(s), {evaluations} distinct evaluations")
-        if not cycle_improved:
+        if not pending:
             break
     return tuple(merged.items()), evaluations, calls
 

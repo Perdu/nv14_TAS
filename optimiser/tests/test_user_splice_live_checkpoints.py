@@ -42,8 +42,8 @@ def test_phase_reports_and_saves_stage_best_before_backend_returns(monkeypatch):
         progress=lambda line: events.append(('temporary', line))
         if line.startswith('[auto:user-splice:temporary]') else None,
     )
-    assert len(calls) == 2
-    assert result.evaluations == 38
+    assert len(calls) == 1  # the single Local phase already stagnated
+    assert result.evaluations == 19
     assert [event[0] for event in events].count('checkpoint') == 2  # baseline and live gain
     assert any('min-x' in event[1] for event in events if event[0] == 'temporary')
 

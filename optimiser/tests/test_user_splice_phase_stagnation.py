@@ -38,8 +38,9 @@ def test_auto_then_local_continuous_phases_and_repeat(monkeypatch):
             return FakeEvaluation(candidate[0])
 
     # One uninterrupted backend call each phase; Local's gain feeds the next
-    # continuous Auto phase. The second pair finds no gain, so stage advances.
-    changes = [9, 8, None, None]
+    # continuous Auto phase. Auto stagnates on Local's new seed; Local was
+    # already exhausted on that seed and must not run needlessly again.
+    changes = [9, 8, None]
     seen = []
 
     def search(level, frames, goal, *, config, iterations, rounds,
@@ -62,11 +63,10 @@ def test_auto_then_local_continuous_phases_and_repeat(monkeypatch):
 
     assert seen == [('endpoint-auto', 10, 50, 0, 2),
                     ('local', 9, 51, 0, 3),
-                    ('endpoint-auto', 8, 50, 0, 2),
-                    ('local', 8, 51, 0, 3)]
-    assert (calls, evaluations) == (4, 20)
+                    ('endpoint-auto', 8, 50, 0, 2)]
+    assert (calls, evaluations) == (3, 15)
     assert {frames for frames, _ in results} == {(9,), (8,)}
-    assert 'cycle 2 no improvement; advancing' in logs[-1]
+    assert 'cycle 2 both modes stagnated; advancing' in logs[-1]
 
 
 def test_backend_stagnation_owned_by_each_continuous_search(monkeypatch):
