@@ -2041,3 +2041,16 @@ level, making it appear inert for pending splice gains. It still requires an
 exact match of every observed physics tick, successful jumps, route-control
 events, death/completion and score before stripping input pulses. It never
 rewrites the active search population or any failed candidate.
+
+
+### Splice search speed presets and round schedules
+
+Named multi-splicer and single-splice `both` searches accept `--splice-speed fast|normal|slow`
+(`fast` = Auto 3/Local 10 stagnant rounds, `normal` = 5/20, `slow` = 10/50).
+Use `--splice-round-speeds current,slow` to run outer round 1 with the current
+configured stagnation limits, then outer round 2 (and subsequent rounds) with
+slow patience. The schedule never changes ordinary splice lookback or physics.
+The same options can be set in `[multi-splicer]` as `speed = "fast"` and
+`round-speeds = ["current", "slow"]`. `--auto-runs` determines the number of
+outer rounds; a schedule does not itself increase that number. Presets control
+named splice phases, not standalone Auto endpoint or standalone Local.

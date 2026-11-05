@@ -64,6 +64,8 @@ class RandomSpliceConfig:
     splice_stagnation_rounds: int = 0  # legacy: shared cycle-level stagnation stop
     splice_auto_stagnation_rounds: int = 0  # named stages: consecutive stagnant Auto backend rounds
     splice_local_stagnation_rounds: int = 0  # named stages: consecutive stagnant Local backend rounds
+    splice_speed: str | None = None  # optional fast/normal/slow phase patience
+    splice_round_speeds: tuple[str, ...] = ()  # schedule: current,fast,normal,slow
     repair_rounds: int = 1  # backend search rounds PER continuation repair
     repair_anchors: int = 2
     beam: int = 16
@@ -118,6 +120,13 @@ class RandomSpliceConfig:
                       "splice_local_stagnation_rounds"):
             if type(getattr(self, field)) is not int or getattr(self, field) < 0:
                 raise ValueError(f"{field} must be a nonnegative integer")
+        allowed_speeds = {"current", "fast", "normal", "slow"}
+        if self.splice_speed is not None and self.splice_speed not in allowed_speeds - {"current"}:
+            raise ValueError("splice_speed must be fast, normal or slow")
+        if (not isinstance(self.splice_round_speeds, (tuple, list)) or
+                any(mode not in allowed_speeds for mode in self.splice_round_speeds)):
+            raise ValueError("splice_round_speeds must be current,fast,normal,slow")
+        object.__setattr__(self, "splice_round_speeds", tuple(self.splice_round_speeds))
         phase_mode = (self.splice_auto_stagnation_rounds > 0 or
                       self.splice_local_stagnation_rounds > 0)
         if phase_mode and self.splice_stagnation_rounds:
@@ -1125,6 +1134,8 @@ def _optimise_target_splices(
         return True
 
     for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
+        from nv14_splice_backend import splice_config_for_round
+        round_config = splice_config_for_round(config, round_no)
         round_start = time.monotonic()
         reference = evaluate_replay_with_sentinel(level, current)
         waypoint_context = ({"frames": current, "level": level}
@@ -1166,7 +1177,7 @@ def _optimise_target_splices(
                              f"frame {point.frame}; {'Local' if config.search_backend == 'local' else 'endpoint-auto'} range [{start}:{point.frame}]")
                 try:
                     found, used = _splicer_search(
-                        level, branch, stage_goal, start=start, config=config,
+                        level, branch, stage_goal, start=start, config=round_config,
                         iterations=config.iterations, rounds=config.splice_rounds,
                         seed=rng.getrandbits(63), include_partial=True)
                 except ValueError as exc:
@@ -1223,7 +1234,7 @@ def _optimise_target_splices(
             try:
                 found, used = _splicer_search(
                     level, branch, goal, start=final_start, editable_end=last_editable,
-                    config=config, iterations=config.iterations,
+                    config=round_config, iterations=config.iterations,
                     rounds=config.splice_rounds, seed=rng.getrandbits(63))
             except ValueError as exc:
                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
@@ -1277,6 +1288,8 @@ def optimise_random_splices(
     stagnant = 0
     last_waypoints: tuple[Waypoint, ...] = ()
     for round_no in (itertools.count() if config.rounds == 0 else range(config.rounds)):
+        from nv14_splice_backend import splice_config_for_round
+        round_config = splice_config_for_round(config, round_no)
         # Re-sample against the *current best* route after each round.
         reference = evaluate_replay_with_sentinel(level, current)
         waypoint_context = ({"frames": current, "level": level}
@@ -1318,7 +1331,7 @@ def optimise_random_splices(
                     f"[auto:random-splice] {label}: "
                     + text.removeprefix("[local:population] "))
             }
-            found, used = _splicer_search(level, current, goal, start=start, config=config,
+            found, used = _splicer_search(level, current, goal, start=start, config=round_config,
                                         iterations=config.iterations, rounds=config.splice_rounds,
                                         seed=rng.getrandbits(63),
                                         **search_kw)
@@ -1488,7 +1501,7 @@ def optimise_random_splices(
                 found, used = _splicer_search(
                     level, current + (InputFrame(),), exit_goal,
                     start=exit_start, editable_end=exit_deadline - 1,
-                    config=config, iterations=config.iterations,
+                    config=round_config, iterations=config.iterations,
                     rounds=config.splice_rounds, seed=rng.getrandbits(63),
                     **exit_progress,
                 )

@@ -1574,6 +1574,10 @@ def _coerce_config_value(
                 return not value
         return value
 
+    if action.dest == "auto_splice_round_speeds" and isinstance(value, (list, tuple)):
+        if not value or not all(isinstance(item, str) for item in value):
+            raise ValueError(f"TOML key {key!r} must contain speed names")
+        return parse_splice_round_speeds(",".join(value))
     if action.dest == "auto_splice_files" and isinstance(value, (list, tuple)):
         if not value or not all(isinstance(item, str) and item.strip() for item in value):
             raise ValueError(f"TOML key {key!r} must be a nonempty array of splice file names")
@@ -1722,6 +1726,8 @@ def _load_config_defaults(
         "stagnation_rounds": "auto_splice_stagnation_rounds",
         "auto_stagnation_rounds": "auto_splice_auto_stagnation_rounds",
         "local_stagnation_rounds": "auto_splice_local_stagnation_rounds",
+        "speed": "auto_splice_speed",
+        "round_speeds": "auto_splice_round_speeds",
         "frontier": "auto_splice_frontier",
         "save_frontier": "auto_splice_save_frontier",
         "lookback": "auto_splice_stage_lookback",
@@ -1846,7 +1852,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_iterations", "auto_splice_repair_anchors",
     "auto_splice_repair_searches", "auto_splice_rounds",
     "auto_splice_stagnation_rounds", "auto_splice_auto_stagnation_rounds",
-    "auto_splice_local_stagnation_rounds",
+    "auto_splice_local_stagnation_rounds", "auto_splice_speed", "auto_splice_round_speeds",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_waypoint_lookback", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_directory",
     "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
@@ -2033,6 +2039,15 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
         result._explicit_options = frozenset(explicit)
         result._cli_explicit_options = frozenset(cli_explicit)
         return result
+
+
+def parse_splice_round_speeds(value: str) -> tuple[str, ...]:
+    if not isinstance(value, str):
+        raise argparse.ArgumentTypeError("round-speeds requires comma-separated preset names")
+    modes = tuple(mode.strip().lower() for mode in value.split(","))
+    if not modes or any(mode not in ("current", "fast", "normal", "slow") for mode in modes):
+        raise argparse.ArgumentTypeError("round-speeds requires current,fast,normal,slow")
+    return modes
 
 
 def parse_splice_files(value: str) -> tuple[str, ...]:
@@ -2618,6 +2633,13 @@ def build_parser() -> argparse.ArgumentParser:
                          dest="auto_splice_local_stagnation_rounds", modes=auto_modes,
                          type=int, default=0, metavar="N",
                          help="Local phase stops after N consecutive Local backend rounds without an eligible improvement")
+    command.add_argument("--splice-speed", "--auto-splice-speed", dest="auto_splice_speed",
+                         modes=auto_modes, choices=("fast", "normal", "slow"),
+                         help="set Auto/Local stagnation patience to fast=3/10, normal=5/20, slow=10/50")
+    command.add_argument("--splice-round-speeds", "--auto-splice-round-speeds",
+                         dest="auto_splice_round_speeds", modes=auto_modes,
+                         type=parse_splice_round_speeds, default=(), metavar="MODES",
+                         help="comma-separated speed schedule for outer rounds, e.g. current,slow")
     command.add_argument("--auto-splice-repair-rounds", modes=auto_modes, type=int, default=1,
                          metavar="N", help="backend search rounds PER continuation repair (default 1)")
     command.add_argument("--auto-splice-repair-anchors", modes=auto_modes, type=int, default=2,
@@ -4468,6 +4490,8 @@ def main() -> None:
                     splice_stagnation_rounds=args.auto_splice_stagnation_rounds,
                     splice_auto_stagnation_rounds=args.auto_splice_auto_stagnation_rounds,
                     splice_local_stagnation_rounds=args.auto_splice_local_stagnation_rounds,
+                    splice_speed=args.auto_splice_speed,
+                    splice_round_speeds=args.auto_splice_round_speeds,
                     live_save_best=args.auto_splice_live_save_best,
                     search_backend=args.auto_splice_search,
                     endpoint_max_retime=args.max_retime,
@@ -4697,6 +4721,8 @@ def main() -> None:
                 splice_stagnation_rounds=args.auto_splice_stagnation_rounds,
                 splice_auto_stagnation_rounds=args.auto_splice_auto_stagnation_rounds,
                 splice_local_stagnation_rounds=args.auto_splice_local_stagnation_rounds,
+                splice_speed=args.auto_splice_speed,
+                splice_round_speeds=args.auto_splice_round_speeds,
                 waypoint_stage_lookback=args.auto_splice_waypoint_lookback,
                 live_save_best=args.auto_splice_live_save_best,
                 repair_rounds=args.auto_splice_repair_rounds,

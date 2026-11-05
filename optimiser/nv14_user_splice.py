@@ -24,7 +24,7 @@ from nv14_random_splice import (RandomSpliceConfig, _control_preserved,
 from nv14_auto import verify_trimmed_replay
 from nv14_replay import editable_frames, decode_complex_replay, encode_complex_replay
 from nv14_splice_merge import verified_suffix_grafts, repair_suffix_grafts
-from nv14_splice_backend import _search_stage as search_splice_stage
+from nv14_splice_backend import (_search_stage as search_splice_stage, splice_config_for_round)
 
 
 @dataclass(frozen=True)
@@ -1418,6 +1418,11 @@ def optimise_user_splices(
     for round_no in (itertools.count(first_round) if config.rounds == 0
                      else range(first_round, config.rounds)):
         begun = time.monotonic()
+        selected = (config.splice_round_speeds[min(round_no, len(config.splice_round_speeds)-1)]
+                    if config.splice_round_speeds else config.splice_speed)
+        if progress and selected:
+            progress(f"[auto:user-splice] round {round_no+1}: speed={selected} "
+                     "(independent Auto/Local stagnation limits)")
         # A propagation run deliberately retries the archived splice-best
         # path on every outer round, rather than restarting only from the best
         # fully completed run. Completed replay verification remains strict,
@@ -1453,7 +1458,7 @@ def optimise_user_splices(
             stage = stages[index]
             # Stage-specific Local TOML is an override for both Auto and Local
             # search backends, not a new choice of search backend.
-            stage_config = replace(config, **stage.config_overrides)
+            stage_config = splice_config_for_round(replace(config, **stage.config_overrides), round_no)
             if progress and stage.config_overrides:
                 progress(f"[auto:user-splice:config] {stage.name!r}: "
                          + ", ".join(f"{key}={value}" for key, value in

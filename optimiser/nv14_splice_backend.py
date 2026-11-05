@@ -16,6 +16,25 @@ from nv14_random_splice import RandomSpliceConfig, _local_search as _default_loc
 from nv14_replay import editable_frames, encode_complex_replay, decode_complex_replay
 
 
+SPLICE_SPEEDS = {"fast": (3, 10), "normal": (5, 20), "slow": (10, 50)}
+
+
+def splice_config_for_round(config: RandomSpliceConfig, round_no: int) -> RandomSpliceConfig:
+    """Apply an optional per-round stagnation preset, preserving mode selection.
+
+    A scheduled ``current`` round preserves explicitly configured patience.
+    Once the schedule ends, repeat its last speed rather than silently reverting.
+    """
+    sequence = config.splice_round_speeds
+    speed = sequence[min(round_no, len(sequence) - 1)] if sequence else config.splice_speed
+    if speed is None or speed == "current":
+        return config
+    auto, local = SPLICE_SPEEDS[speed]
+    return replace(config, splice_stagnation_rounds=0,
+                   splice_auto_stagnation_rounds=(auto if config.search_backend in ("both", "endpoint-auto") else 0),
+                   splice_local_stagnation_rounds=(local if config.search_backend in ("both", "local") else 0))
+
+
 @dataclass(frozen=True, slots=True)
 class SpliceSearchStage:
     name: str
@@ -137,6 +156,7 @@ def _search_stage_backend_phases(
         phases = (("local", config.iterations,
                    config.splice_local_stagnation_rounds),)
 
+    evaluator_factory = EndpointEvaluator if evaluator_factory is None else evaluator_factory
     evaluator = evaluator_factory(level, stage.goal)
 
     def rank(frames: tuple[InputFrame, ...]) -> tuple | None:
