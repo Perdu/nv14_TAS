@@ -2269,6 +2269,37 @@ def _single_splice_both_arguments(argv: Sequence[str]) -> list[str]:
     return command
 
 
+def _expand_named_splice_alt_route(
+    primary: Sequence[str], alternate: Sequence[str],
+) -> tuple[str, ...]:
+    """Expand a short alternative branch between two primary-route seams.
+
+    ``[A, X, Y, B]`` replaces the primary stages strictly between A and B.
+    Full routes ending in ``end`` retain their historical meaning.
+    """
+    primary, alternate = tuple(primary), tuple(alternate)
+    if not alternate or alternate[-1] == "end":
+        return alternate
+    if len(alternate) < 3:
+        raise ValueError("short alt-route must contain start seam, at least one "
+                         "divergent splice, and end seam")
+    if len(set(primary)) != len(primary) or len(set(alternate)) != len(alternate):
+        raise ValueError("splice-files and short alt-route must not contain duplicate names")
+    left, right = alternate[0], alternate[-1]
+    if left not in primary or right not in primary:
+        raise ValueError("short alt-route must start and end at names in splice-files "
+                         f"(got {left!r} and {right!r})")
+    start, stop = primary.index(left), primary.index(right)
+    if stop <= start:
+        raise ValueError("short alt-route end seam must follow its start seam "
+                         "in splice-files")
+    duplicate = [name for name in alternate[1:-1] if name in primary]
+    if duplicate:
+        raise ValueError("short alt-route divergent splices must not duplicate "
+                         f"primary-route splices: {', '.join(duplicate)}")
+    return primary[:start + 1] + alternate[1:-1] + primary[stop:]
+
+
 def parse_arguments(
     argv: Sequence[str] | None = None,
 ) -> argparse.Namespace:
@@ -2278,6 +2309,13 @@ def parse_arguments(
     actual_argv = _single_splice_both_arguments(actual_argv)
     namespace = build_parser().parse_args(actual_argv)
     namespace._both_mode = both_mode
+    if (getattr(namespace, "auto_splice_alt_route", ()) and
+            getattr(namespace, "auto_splice_files", ())):
+        try:
+            namespace.auto_splice_alt_route = _expand_named_splice_alt_route(
+                namespace.auto_splice_files, namespace.auto_splice_alt_route)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
     if namespace.mode in {"dump-player", "encode-video"}:
         return namespace
     if namespace.mode != "local" and namespace.frame_range is not None:
@@ -2545,7 +2583,8 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-alt-route", "--auto-splice-alt-route",
                          dest="auto_splice_alt_route", modes=auto_modes,
                          type=parse_splice_files, metavar="NAMES",
-                         help="alternate ordered named splice route; searched after the primary route")
+                         help="alternate named splice route, or short branch bounded by two "
+                              "primary-route seam names; only divergent stages are searched")
     command.add_argument("--auto-splice-files", modes=auto_modes,
                          type=parse_splice_files, metavar="NAMES",
                          help="ordered comma-separated Local splice names; [auto] splice-files accepts a TOML array")

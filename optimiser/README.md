@@ -2066,13 +2066,30 @@ splice-files = ["72", "126", "179", "243", "289", "end"]
 alt-route = ["72", "126", "185", "220", "289", "end"]
 ```
 
-The primary sequence runs first, then the alternate sequence, each with its
-own stage order and helper objectives. Shared named stage checkpoint files and
-frontier sidecars are reused safely, and the independently verified completed
-best is carried into the alternate search. An alternate route does not impose
-its helper goals on the primary route, nor change the normal stage lookback.
-`--splice-alt-route 72,126,185,220,289,end` overrides the TOML list. With an
-alternate route, `--splice-start`, `--splice-stop`, and `--splice-from-best`
-are not supported, because a selected stage could occur in only one sequence.
-The secondary route starts fresh rather than reusing an interrupted primary
-backend resume file; its per-backend checkpoint filenames are separate.
+The primary route runs first. The alternate campaign searches only its
+**divergent stages**; stages shared at the start and from the first
+reconvergence onward are not searched twice. Saved stage checkpoints and
+frontier sidecars remain reusable, and only replay-verified completed runs
+are promoted to the shared completed best.
+
+For a short branch, specify only its **two seams** (existing primary splice
+names, in primary-route order) and the new stages between them:
+
+```toml
+[multi-splicer]
+splice-files = ["48", "85", "103", "137", "207", "275", "358", "403", "479", "527", "599", "end"]
+alt-route = ["403", "482", "485", "527"]
+```
+
+This automatically inherits the prefix through `403` and suffix from `527`
+onward, replacing primary `479` with `482 -> 485`. Only `482` and `485` are
+searched during the alternative campaign. Both seam names must exist in
+`splice-files` in that order; duplicate or overlapping branch names are
+rejected. The original full-route notation ending in `end` remains supported.
+CLI `--splice-alt-route 403,482,485,527` accepts the shorthand too.
+
+Alternate routes do not impose helper goals on the primary route or change
+normal stage lookback. `--splice-start`, `--splice-stop`, and
+`--splice-from-best` cannot be combined with an alternate route. The alternate
+campaign uses separate backend checkpoint names and does not resume an
+interrupted primary backend state.

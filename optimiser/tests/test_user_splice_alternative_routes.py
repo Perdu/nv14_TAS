@@ -6,7 +6,7 @@ import sys
 import pytest
 
 import nv14_user_splice as us
-from nv14_cli import main, parse_arguments
+from nv14_cli import main, parse_arguments, _expand_named_splice_alt_route
 from tests.test_user_splice_list_summary import _setup
 
 
@@ -119,6 +119,58 @@ range=\"0:10\"
 splice-files=[\"230\",\"250\",\"end\"]
 alt-route=[\"230\",\"240\",\"250\",\"end\"]
 """)
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append(tuple(stage.name for stage in stages))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--splice-config', str(routes), '--auto-runs', '1'])
+    main()
+    assert calls == [('230', '250', 'end'), ('240',)]
+
+
+def test_short_alt_route_expands_seams_in_original_order():
+    primary = ("48", "85", "103", "137", "207", "275", "358",
+               "403", "479", "527", "599", "655", "728", "795",
+               "870", "955", "1031", "1071", "1109", "end")
+    short = ("403", "482", "485", "527")
+    expected = primary[:8] + ("482", "485") + primary[9:]
+    assert _expand_named_splice_alt_route(primary, short) == expected
+    # The original full-route format remains accepted verbatim.
+    assert _expand_named_splice_alt_route(primary, expected) == expected
+
+
+@pytest.mark.parametrize(('short', 'error'), [
+    (("403", "482"), "at least one divergent"),
+    (("404", "482", "527"), "start and end"),
+    (("403", "482", "528"), "start and end"),
+    (("527", "482", "403"), "must follow"),
+    (("403", "479", "527"), "must not duplicate"),
+    (("403", "482", "482", "527"), "duplicate names"),
+])
+def test_short_alt_route_rejects_invalid_seams(short, error):
+    primary = ("403", "479", "527", "end")
+    with pytest.raises(ValueError, match=error):
+        _expand_named_splice_alt_route(primary, short)
+
+
+def test_short_alt_route_toml_and_cli_only_search_divergent_stages(tmp_path, monkeypatch):
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    goals = tmp_path / 'goals'
+    for name in ('240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    args = parse_arguments(argv[1:] + ['--splice-config', str(routes)])
+    assert args.auto_splice_alt_route == ('230', '240', '250', 'end')
+    # Explicit CLI overrides use the same short notation.
+    cli_args = parse_arguments(argv[1:] + ['--splice-config', str(routes),
+                                          '--splice-alt-route', '230,240,250'])
+    assert cli_args.auto_splice_alt_route == args.auto_splice_alt_route
     calls = []
 
     def fake_search(_level, frames, stages, config, **kwargs):
