@@ -4711,8 +4711,35 @@ def main() -> None:
                         message, color=common_config.color),
                 )
                 if alternate_stages:
-                    print("[auto:user-splice:route] alternate: " +
-                          " -> ".join(stage.name for stage in alternate_stages), flush=True)
+                    primary_names = [stage.name for stage in stages]
+                    alternate_names = [stage.name for stage in alternate_stages]
+                    shared_prefix = 0
+                    for left, right in zip(primary_names, alternate_names):
+                        if left != right:
+                            break
+                        shared_prefix += 1
+                    primary_tail = set(primary_names[shared_prefix:])
+                    rejoin_name = next((name for name in alternate_names[shared_prefix:]
+                                        if name in primary_tail), None)
+                    if rejoin_name is None:
+                        alternate_branch = alternate_stages[shared_prefix:]
+                    else:
+                        rejoin_index = alternate_names.index(rejoin_name, shared_prefix)
+                        alternate_branch = alternate_stages[shared_prefix:rejoin_index]
+                    if alternate_branch:
+                        print("[auto:user-splice:route] alternate branch: " +
+                              " -> ".join(stage.name for stage in alternate_branch) +
+                              (f" (shared prefix through {alternate_names[shared_prefix - 1]!r}; "
+                               f"rejoin at {rejoin_name!r})"
+                               if shared_prefix and rejoin_name is not None else
+                               f" (rejoin at {rejoin_name!r})" if rejoin_name is not None else
+                               f" (shared prefix through {alternate_names[shared_prefix - 1]!r})"
+                               if shared_prefix else ""),
+                              flush=True)
+                    else:
+                        print("[auto:user-splice:route] alternate branch has no unique stages; "
+                              "shared prefix and rejoin are already covered by the primary route",
+                              flush=True)
                     # The primary route may have saved fresh checkpoints.
                     # Re-load them for the alternate route, and compare against
                     # the primary's independently verified completed best.
@@ -4720,7 +4747,7 @@ def main() -> None:
                         stage_outputs, output_path, replay_output_path)
                     alt_frontiers = ({} if args.auto_ls_splice else
                                      _load_user_splice_frontiers(
-                                         level, alternate_stages, stage_outputs))
+                                         level, alternate_branch, stage_outputs))
                     primary_eval = evaluate_replay_with_sentinel(level, result.frames)
                     alt_best = (result.frames if primary_eval.valid and
                                 primary_eval.finish_tick == len(result.frames)
@@ -4730,33 +4757,36 @@ def main() -> None:
                     def alt_backend_path(name, backend):
                         return str(stage_outputs[name][0].with_suffix(
                             f".alt.{backend}.round.json"))
-                    alt_result = optimise_user_splices(
-                        level, summary_frames, alternate_stages, splice_config,
-                        completion_policy=args.auto_completion_policy,
-                        start_from_stage_bests=args.auto_splice_each_best,
-                        reference_frames=reference_frames,
-                        merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end,
-                        merge_only=merge_only,
-                        merge_verbose=args.auto_splice_merge_verbose,
-                        merge_repair_only=repair_only,
-                        merge_repair_at_end=repair_at_end,
-                        merge_repair_pairs=args.auto_splice_merge_repair_pairs,
-                        merge_repair_window=args.auto_splice_merge_repair_window,
-                        merge_repair_targets=args.auto_splice_merge_repair_targets,
-                        summary_only=args.auto_ls_splice,
-                        best_callback=lambda frames: _write_result(
-                            source, output_path, replay_output_path,
-                            encode_complex_replay(clean_splice_output(frames))),
-                        stage_best_callback=save_stage_best,
-                        saved_stage_candidates=alt_candidates,
-                        saved_stage_frontiers=alt_frontiers,
-                        saved_final_frames=(None if args.auto_ls_splice else alt_best),
-                        reporting_input_frames=replay.frames,
-                        frontier_callback=save_frontier,
-                        backend_checkpoint_path=alt_backend_path,
-                        progress=lambda message: _print_user_splice_progress(
-                            message, color=common_config.color),
-                    )
+                    if alternate_branch:
+                        alt_result = optimise_user_splices(
+                            level, summary_frames, alternate_branch, splice_config,
+                            completion_policy=args.auto_completion_policy,
+                            start_from_stage_bests=args.auto_splice_each_best,
+                            reference_frames=reference_frames,
+                            merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end,
+                            merge_only=merge_only,
+                            merge_verbose=args.auto_splice_merge_verbose,
+                            merge_repair_only=repair_only,
+                            merge_repair_at_end=repair_at_end,
+                            merge_repair_pairs=args.auto_splice_merge_repair_pairs,
+                            merge_repair_window=args.auto_splice_merge_repair_window,
+                            merge_repair_targets=args.auto_splice_merge_repair_targets,
+                            summary_only=args.auto_ls_splice,
+                            best_callback=lambda frames: _write_result(
+                                source, output_path, replay_output_path,
+                                encode_complex_replay(clean_splice_output(frames))),
+                            stage_best_callback=save_stage_best,
+                            saved_stage_candidates=alt_candidates,
+                            saved_stage_frontiers=alt_frontiers,
+                            saved_final_frames=(None if args.auto_ls_splice else alt_best),
+                            reporting_input_frames=replay.frames,
+                            frontier_callback=save_frontier,
+                            backend_checkpoint_path=alt_backend_path,
+                            progress=lambda message: _print_user_splice_progress(
+                                message, color=common_config.color),
+                        )
+                    else:
+                        alt_result = type(result)(result.frames, 0, 0, 0)
                     # Each route owns its stage objectives and frontier order.
                     # Never promote an incomplete alternate replay over a
                     # verified primary completed result.

@@ -1,4 +1,4 @@
-"""Independent named-splice route sequences share only verified completed bests."""
+"""Alternative route searches only the divergent branch stages."""
 from __future__ import annotations
 
 import sys
@@ -47,11 +47,11 @@ def test_cli_searches_both_orders_and_shares_verified_best(tmp_path, monkeypatch
     main()
     assert len(calls) == 2
     assert calls[0][0] == ('230', 'end')
-    assert calls[1][0] == ('230', '240', 'end')
+    assert calls[1][0] == ('240',)
     assert calls[1][2] is None
     assert callable(calls[1][3])
     assert not output.exists()
-    assert 'alternate:' in capsys.readouterr().out
+    assert 'alternate branch:' in capsys.readouterr().out
 
 
 def test_alt_route_rejects_absent_goal_files(tmp_path, monkeypatch):
@@ -75,7 +75,7 @@ def test_normal_runs_share_verified_primary_completed_replay(tmp_path, monkeypat
     monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
     monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '1'])
     main()
-    assert [item[0] for item in calls] == [('230', 'end'), ('230', '240', 'end')]
+    assert [item[0] for item in calls] == [('230', 'end'), ('240',)]
     assert tuple(calls[1][1]) == tuple(source)
     assert calls[0][2] is not None  # primary preserves normal restart behavior
     assert calls[1][2] is None      # alternate cannot consume primary backend resume
@@ -97,6 +97,35 @@ def test_actual_native_search_checks_both_routes(tmp_path, monkeypatch, capsys):
     main()
     messages = capsys.readouterr().out
     assert "stage 2/2 'end'" in messages
-    assert 'alternate: 230 -> 240 -> end' in messages
-    assert "stage 2/3 '240'" in messages
-    assert "stage 3/3 'end'" in messages
+    assert "alternate branch: 240 (shared prefix through '230'; rejoin at 'end')" in messages
+    assert "stage 1/1 '240'" in messages
+
+
+def test_alt_route_runs_only_unique_branch_before_rejoin(tmp_path, monkeypatch):
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    goals = tmp_path / 'goals'
+    (goals / '240.txt').write_text("""[local]
+objective=\"min-x\"
+target-frame=10
+range=\"0:10\"
+""")
+    (goals / '250.txt').write_text("""[local]
+objective=\"min-x\"
+target-frame=10
+range=\"0:10\"
+""")
+    routes = tmp_path / 'routes.toml'
+    routes.write_text("""[multi-splicer]
+splice-files=[\"230\",\"250\",\"end\"]
+alt-route=[\"230\",\"240\",\"250\",\"end\"]
+""")
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append(tuple(stage.name for stage in stages))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--splice-config', str(routes), '--auto-runs', '1'])
+    main()
+    assert calls == [('230', '250', 'end'), ('240',)]
