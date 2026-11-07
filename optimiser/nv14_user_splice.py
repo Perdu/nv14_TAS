@@ -329,6 +329,7 @@ def optimise_user_splices(
     stage_result_callback: Callable[[str, tuple[InputFrame, ...] | None], None] | None = None,
     initial_seeds: Sequence[Sequence[InputFrame]] = (),
     seed_from_saved_final: bool = True,
+    use_current_run: bool = True,
     progress: Callable[[str], None] | None = None,
     completion_policy: str = "complete",
     start_at: str | None = None, stop_at: str | None = None,
@@ -365,6 +366,8 @@ def optimise_user_splices(
     """
     if not stages:
         raise ValueError("user splice requires at least one named goal")
+    if type(use_current_run) is not bool:
+        raise ValueError("use_current_run must be a boolean")
     if completion_policy not in ("checkpoint", "complete"):
         raise ValueError("invalid user splice completion policy")
     if merge_only and (not merge_stage_bests or summary_only or from_best is not None):
@@ -692,6 +695,7 @@ def optimise_user_splices(
                 "config": repr(config),
                 "from_best": from_best,
                 "start_from_stage_bests": start_from_stage_bests,
+                "use_current_run": use_current_run,
                 "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
                 "merge_stage_bests": merge_stage_bests,
                 "start_at": start_at, "stop_at": stop_at,
@@ -1445,13 +1449,16 @@ def optimise_user_splices(
         # path on every outer round, rather than restarting only from the best
         # fully completed run. Completed replay verification remains strict,
         # but preceding helper objectives do not constrain later stages.
-        history: list[list[tuple[InputFrame, ...]]] = [[propagation_seed]]
+        # When the input seed is disabled, an unchanged input must not slip
+        # back in through the initial history or an archived identical replay.
+        history: list[list[tuple[InputFrame, ...]]] = [[propagation_seed]
+            if (use_current_run or propagation_seed != input_seed) else []]
         history_origins: list[int | None] = [from_best_index]
         if first_stage == 0 and archived_frontiers[0]:
             # A normal restart can search from saved alternatives immediately,
             # rather than merely comparing their scores after the search.
-            history[0] = list(dict.fromkeys((propagation_seed,
-                                             *archived_frontiers[0][:config.frontier])))
+            history[0] = list(dict.fromkeys((*history[0],
+                                             *archived_frontiers[0][:config.frontier if use_current_run else max(1, config.frontier)])))
         # Reconstruct lookback at the interrupted stage, not only at the
         # originally requested start. Other routes remain on disk while the
         # interrupted backend's own seed is resumed first.
@@ -1459,7 +1466,7 @@ def optimise_user_splices(
         if restore_index > 0:
             if from_best_index is None and archived_frontiers[restore_index - 1]:
                 history[0] = list(dict.fromkeys(
-                    (*archived_frontiers[restore_index - 1][:config.frontier], propagation_seed)))
+                    (*archived_frontiers[restore_index - 1][:config.frontier if use_current_run else max(1, config.frontier)], *history[0])))
                 history_origins[0] = restore_index - 1
             for prior in range(restore_index - 2, max(-1, restore_index - config.stage_lookback - 1), -1):
                 if archived_frontiers[prior]:
@@ -1515,11 +1522,13 @@ def optimise_user_splices(
                         tuple(editable_frames(candidate)), len(current) - 1)
                         for candidate in initial_seeds]
                     branches = list(dict.fromkeys((*injected, *branches)))
-                # Always try manual edits from the input replay first, then
-                # the existing n-1/n-2/older frontier order.  Deduplicate so
-                # a frontier containing the input does not consume two searches.
-                # Explicit --splice-from-best retains its selected seed order.
-                branches = [input_seed, *(b for b in branches if b != input_seed)]
+                # Manual input edits are optional search seeds. When disabled,
+                # discard them even if the same replay is in an old archive.
+                # The input is still used for scoring/reporting baselines.
+                if use_current_run:
+                    branches = [input_seed, *(b for b in branches if b != input_seed)]
+                else:
+                    branches = [b for b in branches if b != input_seed]
             if active_phase is not None and index == stage_begin:
                 # Never search another route before recovering the interrupted
                 # backend. The other viable routes remain archived separately.
@@ -1530,6 +1539,10 @@ def optimise_user_splices(
             # can be distinct files but identical searches after stage.start.
             # Keep their first-ranked origin and avoid repeated millions of
             # backend proposals on the same physical start and input suffix.
+            if not branches:
+                raise ValueError(f"splice {stage.name!r} has no search seeds after "
+                                 "disabling the current input; load saved splice "
+                                 "frontiers/checkpoints or a distinct completed best")
             before_dedup = len(branches)
             branches = _unique_search_seeds(stage_levels[index], branches, stage.start)
             if progress and before_dedup != len(branches):
@@ -1538,7 +1551,8 @@ def optimise_user_splices(
             if progress and len(history) > 1:
                 labels = "/".join(f"n-{i}" for i in range(1, len(history) + 1))
                 counts = "/".join(str(len(pool)) for pool in history)
-                order = ("current input, then " if from_best_index is None else "")
+                order = ("current input, then " if from_best_index is None and
+                         use_current_run else "")
                 if active_phase is not None and index == stage_begin:
                     order = "resumed backend, then " + order
                 progress(f"[auto:user-splice] {stage.name!r}: "
@@ -1703,6 +1717,7 @@ def optimise_user_splices(
                                 "stage_settings": [repr(item) for item in stages],
                                 "config": repr(config), "from_best": from_best,
                                 "start_from_stage_bests": start_from_stage_bests,
+                                "use_current_run": use_current_run,
                                 "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
                                 "merge_stage_bests": merge_stage_bests,
                                 "start_at": start_at, "stop_at": stop_at,
@@ -1768,7 +1783,9 @@ def optimise_user_splices(
                 # requires every named goal and canonical completion: these
                 # fallbacks are search seeds, not accepted results.
                 unfulfilled.append(stage.name)
-                fallbacks = list(dict.fromkeys((current, *branches)))[:max(2, config.frontier)]
+                fallback_candidates = ((current, *branches) if use_current_run
+                                       else tuple(branches))
+                fallbacks = list(dict.fromkeys(fallback_candidates))[:max(2, config.frontier)]
                 if progress:
                     progress(f"[auto:user-splice] stage {index+1}/{len(stages)} "
                              f"{stage.name!r}: no candidate met its own goal; "

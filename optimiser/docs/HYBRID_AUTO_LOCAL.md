@@ -152,3 +152,13 @@ This initial implementation is restricted to **named** splices. Sampled
 random/physics waypoint search is left unchanged because the separate repair
 paths still assume a single backend; extending the scheduler to those paths
 requires additional review.
+
+## Optional input-run seed (patch 79)
+
+Set `[multi-splicer] use-current-run = false` or use
+`--no-use-current-run` to prevent the supplied input run from being
+searched as a seed at every named stage. It still contributes the input
+baseline and reporting metrics. Saved stage frontiers, saved checkpoints and
+a distinct saved completed replay can supply seeds instead; if none are
+available for a stage, an explicit error explains why the search cannot
+proceed. This does not disable `--splice-from-best` or resume recovery.

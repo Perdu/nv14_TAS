@@ -1735,6 +1735,7 @@ def _load_config_defaults(
         "frontier": "auto_splice_frontier",
         "save_frontier": "auto_splice_save_frontier",
         "lookback": "auto_splice_stage_lookback",
+        "use_current_run": "auto_splice_use_current_run",
         "live_save_best": "auto_splice_live_save_best",
             "merge_only": "auto_splice_merge_only",
             "merge_bests": "auto_splice_merge_bests",
@@ -1860,6 +1861,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_hybrid_local_rounds", "auto_splice_hybrid_cycles", "auto_splice_hybrid_stagnation_cycles",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_waypoint_lookback", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_directory",
+    "auto_splice_use_current_run",
     "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
 })
 
@@ -2737,6 +2739,12 @@ def build_parser() -> argparse.ArgumentParser:
                          type=parse_positive_int, default=1, metavar="N",
                          help="random/complexity/physics: retain preceding N sampled "
                               "waypoint frontiers (default 1 preserves old behavior)")
+    command.add_argument("--use-current-run", "--auto-splice-use-current-run",
+                         dest="use_current_run", modes=auto_modes,
+                         action=argparse.BooleanOptionalAction, default=True,
+                         help="named multi-splicer: include the input run as a search seed "
+                              "(disable with --no-use-current-run; "
+                              "the input remains a comparison baseline)")
     command.add_argument("--splice-stage-lookback", "--auto-splice-stage-lookback",
                          dest="auto_splice_stage_lookback", modes=auto_modes,
                          type=parse_positive_int, default=2, metavar="N",
@@ -4877,6 +4885,7 @@ def main() -> None:
                             phase_result = optimise_user_splices(
                                 level, phase_input, phase_stages, splice_config,
                                 completion_policy=args.auto_completion_policy,
+                                use_current_run=args.auto_splice_use_current_run,
                                 start_from_stage_bests=(args.auto_splice_each_best
                                                        if from_saved_final else False),
                                 reference_frames=reference_frames,
@@ -5140,6 +5149,7 @@ def main() -> None:
                 result = optimise_user_splices(
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
+                    use_current_run=args.auto_splice_use_current_run,
                     start_at=args.auto_splice_start, stop_at=args.auto_splice_stop,
                     from_best=args.auto_splice_from_best,
                     start_from_stage_bests=args.auto_splice_each_best,
@@ -5234,6 +5244,7 @@ def main() -> None:
                         alt_result = optimise_user_splices(
                             level, summary_frames, alternate_branch, splice_config,
                             completion_policy=args.auto_completion_policy,
+                            use_current_run=args.auto_splice_use_current_run,
                             start_from_stage_bests=args.auto_splice_each_best,
                             reference_frames=reference_frames,
                             merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end,
