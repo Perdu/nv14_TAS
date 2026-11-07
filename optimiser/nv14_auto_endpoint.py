@@ -1268,6 +1268,8 @@ def optimise_auto_endpoint_campaign(
     checkpoint_path: str | Path | None = None,
     resume: bool = False,
     best_update_interval: float = 0.75,
+    initial_population: Sequence[Sequence[InputFrame]] = (),
+    population_callback: Callable[[tuple[AutoEndpointCandidate, ...]], None] | None = None,
 ) -> tuple[AutoEndpointCandidate, AutoEndpointCandidate | None, int]:
     """Run seeded Auto-style endpoint beams in independent processes.
 
@@ -1300,9 +1302,38 @@ def optimise_auto_endpoint_campaign(
                     if frontier_callback is not None else 0)
     survivors: dict[bytes, AutoEndpointCandidate] = {}
     inherited_population: tuple[AutoEndpointCandidate, ...] = ()
+    if initial_population and resume:
+        raise ValueError("cannot warm-start Auto from a population and a checkpoint simultaneously")
+    if initial_population:
+        start = config.range_start
+        end = min(goal.target_frame, len(initial) - 1,
+                  len(initial) - 1 if config.range_end is None else config.range_end)
+        evaluator = EndpointEvaluator(level, goal, source_frames=initial,
+                                      prefix_frame=start)
+        seen = {_key(initial)}
+        donors = []
+        for donor in initial_population:
+            frames = tuple(editable_frames(donor))
+            if frames == initial:
+                continue
+            if (len(frames) != len(initial) or frames[:start] != initial[:start]
+                    or frames[end + 1:] != initial[end + 1:]):
+                raise ValueError("hybrid Auto donor changes immutable replay frames")
+            identity = _key(frames)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            result = evaluator.evaluate(frames)
+            if not result.dead:
+                donors.append(AutoEndpointCandidate(frames, result, False))
+        source_key = _key(initial)
+        ranked = sorted(_ranked_candidate(c, source_key) for c in donors)
+        inherited_population = tuple(entry.candidate for entry in
+                                     _select_ranked_endpoint_beam(ranked, config.beam_width))
     # Request a small frontier from each worker when there will be a next
-    # round. This is independent of frontier export to random splicing.
-    carry_limit = min(config.beam_width, 16) if runs == 0 or runs > 1 else 0
+    # round, or when Hybrid wants to transfer the beam to Local.
+    carry_limit = (config.beam_width if population_callback is not None else
+                   min(config.beam_width, 16) if runs == 0 or runs > 1 else 0)
     worker_frontier_limit = max(export_limit, carry_limit)
     round_donors: dict[bytes, AutoEndpointCandidate] = {}
     round_improved = False
@@ -1646,7 +1677,8 @@ def optimise_auto_endpoint_campaign(
 
             if best is not None:
                 current = best.frames
-            if carry_limit and (runs == 0 or round_index + 1 < runs):
+            if carry_limit and (population_callback is not None or
+                                runs == 0 or round_index + 1 < runs):
                 # Preserve the current winner plus diverse survivors from all
                 # workers and earlier rounds. Select with the same feasible /
                 # near-miss niche policy used inside each worker's beam.
@@ -1682,6 +1714,10 @@ def optimise_auto_endpoint_campaign(
         _write_auto_round(checkpoint_file, identity, inherited_population,
                           best, round_index + 1 if 'round_index' in locals() else first_round,
                           total, stagnant, complete=True)
+    if population_callback is not None:
+        # Replays have been independently verified before beam inheritance.
+        # This is not the public winner/frontier API.
+        population_callback(inherited_population)
     if export_limit:
         ranked = sorted(_ranked_candidate(c, _key(initial), identity)
                         for identity, c in survivors.items())

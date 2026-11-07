@@ -2191,7 +2191,7 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
                 continue
             for field in config_fields:
                 overrides[field] = local_values[local_key]
-        if (args.auto_splice_search in ("hybrid", "hybrid-local-control") and
+        if (args.auto_splice_search in ("hybrid", "hybrid-restart", "hybrid-local-control") and
                 ("rounds" in local_values or "stagnation_rounds" in local_values)):
             raise ValueError(f"splice {name!r} ({path}): Local rounds/stagnation settings "
                              "conflict with hybrid; set hybrid-local-rounds, "
@@ -2323,7 +2323,7 @@ def parse_arguments(
     namespace = build_parser().parse_args(actual_argv)
     namespace._both_mode = both_mode
     if (namespace.mode == "auto" and namespace.auto_splice_search in
-            ("hybrid", "hybrid-local-control") and not namespace.auto_splice_files):
+            ("hybrid", "hybrid-restart", "hybrid-local-control") and not namespace.auto_splice_files):
         raise SystemExit("hybrid splice search currently requires named --auto-splice-files "
                          "or the `hybrid` single-goal shortcut")
     if (getattr(namespace, "auto_splice_alt_route", ()) and
@@ -2593,10 +2593,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="remove provably ineffective airborne Shift/jump pulses "
                               "from saved splice results; full replay trace is reverified")
     command.add_argument("--auto-splice-search", modes=auto_modes,
-                         choices=("local", "endpoint-auto", "both", "hybrid", "hybrid-local-control"),
+                         choices=("local", "endpoint-auto", "both", "hybrid", "hybrid-restart", "hybrid-local-control"),
                          default="local",
                          help="splice search: Local, endpoint Auto, both, or fixed-cycle hybrid "
-                              "(control replaces each Auto round with Local)")
+                              "(hybrid shares populations; restart controls do not)")
     command.add_argument("--splice-hybrid-local-rounds", "--auto-splice-hybrid-local-rounds",
                          dest="auto_splice_hybrid_local_rounds", modes=auto_modes,
                          type=parse_positive_int, default=5, metavar="N",

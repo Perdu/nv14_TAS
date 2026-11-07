@@ -38,7 +38,7 @@ class RandomSpliceConfig:
     radius: float = 16.0
     lookback: int = 32  # seam matching/maximum local mutation span, NOT a segment length
     iterations: int = 400  # proposals per worker, per anchor search round
-    search_backend: str = "local"  # local, endpoint-auto, both, hybrid, hybrid-local-control
+    search_backend: str = "local"  # local, endpoint-auto, both, hybrid, hybrid-restart, hybrid-local-control
     # Hybrid cycles: exactly 1 Auto round then N uninterrupted Local rounds.
     # Control: replace Auto with one Local round at identical restarts/budget.
     hybrid_local_rounds: int = 5
@@ -147,9 +147,9 @@ class RandomSpliceConfig:
             if type(getattr(self, field)) is not int or getattr(self, field) < 1:
                 raise ValueError(f"random splice {field} must be a positive integer")
         if self.search_backend not in ("local", "endpoint-auto", "both",
-                                       "hybrid", "hybrid-local-control"):
+                                       "hybrid", "hybrid-restart", "hybrid-local-control"):
             raise ValueError("splice search_backend must be local, endpoint-auto, both, "
-                             "hybrid or hybrid-local-control")
+                             "hybrid, hybrid-restart or hybrid-local-control")
         for field in ("hybrid_local_rounds", "hybrid_cycles"):
             value = getattr(self, field)
             if type(value) is not int or not 1 <= value <= 10000:
@@ -157,7 +157,7 @@ class RandomSpliceConfig:
         if (type(self.hybrid_stagnation_cycles) is not int or
                 not 0 <= self.hybrid_stagnation_cycles <= self.hybrid_cycles):
             raise ValueError("hybrid_stagnation_cycles must be 0..hybrid_cycles")
-        if self.search_backend in ("hybrid", "hybrid-local-control") and (
+        if self.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control") and (
             phase_mode or self.splice_stagnation_rounds or
             self.splice_speed is not None or self.splice_round_speeds or
             self.splice_rounds != 1
@@ -555,7 +555,9 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
                   stagnation_rounds: int | None = None,
                   best_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
                   checkpoint_path: str | Path | None = None, resume: bool = False,
-                  live_update_interval: float = 0.75):
+                  live_update_interval: float = 0.75,
+                  initial_population: Sequence[Sequence[InputFrame]] = (),
+                  population_callback: Callable[[tuple[tuple[InputFrame, ...], ...]], None] | None = None):
     # With a backend-specific patience, a single uninterrupted search owns
     # its evolving population and applies stagnation after each *real* round.
     if stagnation_rounds is not None and (
@@ -566,7 +568,7 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
         return (), 0
     if config.search_backend == "both":
         raise ValueError("splice-search=both is only supported for user-defined splice-files")
-    if config.search_backend in ("hybrid", "hybrid-local-control"):
+    if config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
         raise ValueError("hybrid splice search must be scheduled by the named-stage coordinator")
     if config.search_backend == "endpoint-auto":
         # Reuse the exact endpoint Hybrid search and evaluator, but *not* its
@@ -602,6 +604,10 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             stagnation_rounds=stagnation_rounds or 0,
             checkpoint_path=checkpoint_path, resume=resume,
             best_update_interval=live_update_interval,
+            initial_population=initial_population,
+            population_callback=(lambda population: population_callback(
+                tuple(candidate.frames for candidate in population)))
+            if population_callback is not None else None,
             best_callback=(lambda candidate: best_callback(candidate.frames, candidate.evaluation.frame))
             if best_callback is not None else None,
         )
@@ -644,6 +650,7 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
             checkpoint_path=checkpoint_path, resume=resume,
         ),
         progress=progress,
+        initial_population=initial_population,
         best_callback=(lambda candidate: best_callback(candidate.frames, candidate.evaluation.frame))
         if best_callback is not None else None,
     )
@@ -654,6 +661,8 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
     # Propagate *after* Local has stopped and joined its worker pool.
     if getattr(result, "interrupted", False):
         raise KeyboardInterrupt
+    if population_callback is not None:
+        population_callback(tuple(candidate.frames for candidate in result.population))
     candidates = list(result.candidates)
     if include_partial:
         # Local already ranks non-feasible states using required interactions,

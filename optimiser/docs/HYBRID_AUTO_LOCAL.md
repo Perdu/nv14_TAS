@@ -1,17 +1,17 @@
-# Experimental one-Auto / N-Local hybrid (patch 75)
+# Experimental one-Auto / N-Local hybrid (patch 75, population handoff patch 76)
 
 This is a **bounded, opt-in scheduling experiment** for named splice goals,
-not a new physics engine, an assurance of better TAS quality, or a merged
-Auto/Local population. The existing `both` mode remains unchanged so the
-previous continuous Auto-until-stagnant → Local-until-stagnant strategy can be
-compared independently.
+not a new physics engine or an assurance of better TAS quality. Starting in
+**patch 76, `hybrid` retains a shared, bounded population of replay candidates**
+across Auto/Local switches, rather than passing only its current best. The
+existing `both` mode remains unchanged for a separate comparison.
 
 ## Why
 
-An improvement after changing algorithms does not establish causality. The
-second algorithm starts a *new population*, with a new random seed and another
-opportunity to reach a different local optimum. Merely restarting Local from
-an incumbent could yield the same advantage. This mode tests that hypothesis.
+An improvement after switching algorithms does not establish causality. A
+restart alone might reach a different local optimum. With patch 76, `hybrid`
+retains a diverse population of surviving candidates between phases, while two
+restart-only controls permit a more informative comparison.
 
 For each named stage seed, `hybrid` runs up to `K` cycles:
 
@@ -19,15 +19,23 @@ For each named stage seed, `hybrid` runs up to `K` cycles:
 2. **N consecutive Local** population rounds *inside one Local invocation*,
    `I` proposals per worker per round. Local retains its population across
    these N rounds.
-3. Feed the best feasible stage incumbent to the next turn. With no feasible
-   candidate, follow the best endpoint progress ranking. Preserve all returned
-   candidates for the normal named-splice frontier and independent validation.
+3. Merge each backend's actual *retained beam* with the previous cross-backend
+   population, keeping a bounded set of feasible elites and distinct endpoint
+   niches, including live non-feasible states. By default the shared pool is
+   limited to `beam` candidates, and retains an infeasible reserve.
+4. Hand the selected replay population to the next backend, including members
+   that were not exported as named-stage winners or partial frontiers. In the
+   receiving backend every replay is independently evaluated with the current
+   endpoint goal and checked against fixed prefix/suffix frames. Raw native
+   states, visited sets, private caches, and round counters are **not** reused.
+5. The best eligible incumbent still cannot regress. Other returned candidates
+   are preserved for normal named-splice frontier selection and verification.
 
-Each backend starts its *own* search population on invocation; the population
-itself does not survive a backend switch. The shared state is the incumbent,
-not the full search history. An optional hybrid-specific stagnant-cycle limit
-can stop before the fixed `K` cycles. A cycle is stagnant only when neither
-backend improves the stage's feasible objective. Default 0 runs all cycles.
+Local's N rounds remain one uninterrupted native-population invocation. Across
+backend calls, phase-specific internal search state is recreated, but the
+*surviving replay population* is persistent. This is a shared replay beam,
+not a single unified native search session. An optional stagnant-cycle limit
+stops after K cycles without a feasible objective gain (default 0: run all).
 
 ## Invocation
 
@@ -69,11 +77,15 @@ goals/constraints and per-stage mutation/beam settings remain available.
 **Use the same input replay, named goal, workers, iterations, cycle count,
 Local round count and seeds**, with separate output/checkpoint paths:
 
-- **Hybrid:** `--auto-splice-search hybrid` uses Auto(1), Local(N).
-- **Restart-only control:** `--auto-splice-search hybrid-local-control`
-  uses Local(1), Local(N). This repeats exactly the same invocation boundaries,
-  number of round slots, and coordinator random-seed draws. Only the first
-  algorithm changes.
+- **Population-preserving Hybrid:** `--auto-splice-search hybrid` uses Auto(1),
+  Local(N), exchanging a bounded population after every backend call.
+- **Auto/Local restart control:** `--auto-splice-search hybrid-restart`
+  uses Auto(1), Local(N) but passes only the incumbent. This preserves patch 75's
+  original alternating behaviour and isolates the value of population handoff.
+- **Local-only restart control:** `--auto-splice-search hybrid-local-control`
+  uses Local(1), Local(N) and passes only the incumbent. It tests whether Auto
+  adds value compared with Local-only restarts, independently of the population
+  handoff experiment.
 - **Uninterrupted Local:** `--auto-splice-search local`
   `--auto-splice-rounds K*(1+N)` uses an uninterrupted Local population with
   comparable nominal proposal slots. It does not match the restart schedule.
@@ -81,15 +93,17 @@ Local round count and seeds**, with separate output/checkpoint paths:
   current independent phase-stagnation settings. Its work is *not* directly
   budget-matched until the actual number of evaluations is measured.
 
-To run the control, use `auto` with `--auto-splice-files` and
-`--auto-splice-search hybrid-local-control` (or a named `[multi-splicer]` TOML
-configuration). The `tas.py hybrid` shortcut intentionally selects the
-experimental hybrid rather than the control.
+To run either restart control, use `auto` with `--auto-splice-files` and
+`--auto-splice-search hybrid-restart` or `hybrid-local-control`, or a named
+`[multi-splicer]` TOML configuration. `tas.py hybrid` selects the shared-pool
+version. Distinct seed streams at the worker level can result even with equal
+coordinator draws once a backend receives a different population.
 
 The hybrid progress log records the backend, round count, per-turn random
 seed, evaluation count and best eligible objective key after every turn; use
 those records to determine **which phase** produces a gain and how frequently
-restarts without Auto find comparable gains.
+restarts without Auto or without population handoff find comparable gains.
+The log also reports the number of retained cross-backend replay candidates.
 
 Compare **many identical seed sets**, not just one lucky restart. Measure:
 
@@ -98,8 +112,10 @@ Compare **many identical seed sets**, not just one lucky restart. Measure:
 - diverse candidates, failed/near-miss goals and objective progress;
 - elapsed wall time, distinct evaluations and evaluated candidates per second.
 
-These controls match *nominal round slots*, not the algorithms' exact counts
-of simulations or their numerical trajectories. Do **not** conclude Auto is
+These controls match *nominal round slots* and coordinator RNG draws, not the
+exact number of simulations, the populations, or their numerical trajectories.
+Re-evaluating transferred candidates adds overhead not counted as proposal
+slots, although those evaluations are included in reported evaluation totals. Do **not** conclude Auto is
 beneficial solely because Hybrid beats the baseline once. A difference that
 persists across matched seeds, budgets and verified replays is more credible.
 
@@ -110,6 +126,8 @@ completed-replay verification. The original SWF, rather than native C,
 remains the authoritative gameplay implementation. This patch changes no
 physics or floating-point precision. It does not add a GPU dependency.
 
+Hybrid's cross-backend population is in-memory only and is scoped to one named
+stage seed; it is not a persistent pool shared between different stage goals.
 Hybrid cycles do not yet have per-cycle restart checkpoints. Existing outer
 multi-splicer checkpoints remain supported, but an interruption *inside* one
 hybrid stage seed may repeat the unfinished seed on resume. Experiment with

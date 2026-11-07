@@ -64,7 +64,7 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
     The odd proposal goes to Local, so the combined backend budget remains
     exactly config.iterations per worker and internal round.
     """
-    if config.search_backend in ("hybrid", "hybrid-local-control"):
+    if config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
         if resume_phase is not None:
             raise ValueError("hybrid does not support resuming a partially finished stage")
         return _search_stage_hybrid(
@@ -139,13 +139,14 @@ def _search_stage_hybrid(
     local_search: Callable | None = None,
     evaluator_factory: Callable | None = None,
 ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
-    """A bounded 1 Auto + N Local round *scheduler*, not a merged population.
+    """Alternate Auto(1) and Local(N), sharing a bounded *replay* population.
 
-    Each backend receives a single incumbent and its own persistent population
-    for the duration of its invocation. Across cycles only the best admissible
-    candidate (or best progress when none is feasible) is inherited. The
-    matched restart control substitutes one Local round for Auto, keeping
-    proposal slots, two invocations per cycle, and RNG seed draws identical.
+    Hybrid retains feasible elites and diverse live near-misses across backend
+    switches. Each backend rebuilds its own native search/evaluation state from
+    these candidate replays, which avoids transferring stale native handles.
+    ``hybrid-restart`` retains patch 75's Auto/Local restart-only schedule.
+    ``hybrid-local-control`` substitutes Local for Auto, also restarting.
+    Both controls carry only the incumbent between invocations.
     """
     evaluator_factory = EndpointEvaluator if evaluator_factory is None else evaluator_factory
     evaluator = evaluator_factory(level, stage.goal)
@@ -161,12 +162,92 @@ def _search_stage_hybrid(
     incumbent = search_seed = tuple(branch)
     best_rank = rank(incumbent)
     best_progress = evaluator.evaluate(incumbent).progress_key
+    # The cross-backend pool is intentionally distinct from the stage frontier
+    # (which is emitted for subsequent goals). Store *replays*, not native
+    # state or backend-specific score objects. Each receiver independently
+    # re-evaluates/re-packs its donors. Bound by beam and keep progress niches.
+    persistent = config.search_backend == "hybrid"
+    shared: dict[tuple[InputFrame, ...], object] = {}
+    stage_reference = tuple(branch)
+    end = min(stage.end, len(stage_reference) - 1)
+
+    def admit(frames: tuple[InputFrame, ...]) -> None:
+        frames = tuple(frames)
+        if (frames in shared or len(frames) != len(stage_reference)
+                or frames[:stage.start] != stage_reference[:stage.start]
+                or frames[end + 1:] != stage_reference[end + 1:]):
+            return
+        # If a caller supplies a broader admissibility rule, never seed an
+        # unrelated earlier-stage failure into the next search phase.
+        if stage_rank is not None and rank(frames) is None:
+            return
+        evaluation = evaluator.evaluate(frames)
+        if not getattr(evaluation, "dead", False):
+            shared[frames] = evaluation
+
+    def select_shared() -> None:
+        if len(shared) <= config.beam:
+            return
+        def order(item):
+            frames, evaluation = item
+            feasible = evaluation.feasible
+            return (0 if feasible else 1,
+                    evaluation.objective_key if feasible else evaluation.progress_key,
+                    repr(frames))
+
+        ranked = sorted(shared.items(), key=order)
+        feasible = [(f, e) for f, e in ranked if e.feasible]
+        partial = [(f, e) for f, e in ranked if not e.feasible]
+        reserve = (min(len(partial), max(1, config.beam // 4), config.beam - 1)
+                   if feasible else config.beam)
+        selected: list[tuple[tuple[InputFrame, ...], object]] = []
+        seen: set[tuple[InputFrame, ...]] = set()
+
+        def add_group(group, slots):
+            niches = set()
+            start_index = len(selected)
+            for frames, evaluation in group[:max(1, slots // 4) if slots else 0]:
+                selected.append((frames, evaluation))
+                seen.add(frames)
+                niches.add(getattr(evaluation, "niche_key", frames))
+            for frames, evaluation in group:
+                if len(selected) - start_index >= slots:
+                    break
+                niche = getattr(evaluation, "niche_key", frames)
+                if frames not in seen and niche not in niches:
+                    selected.append((frames, evaluation))
+                    seen.add(frames)
+                    niches.add(niche)
+            for frames, evaluation in group:
+                if len(selected) - start_index >= slots:
+                    break
+                if frames not in seen:
+                    selected.append((frames, evaluation))
+                    seen.add(frames)
+
+        add_group(feasible, config.beam - reserve if feasible else 0)
+        add_group(partial, reserve)
+        for frames, evaluation in ranked:
+            if len(selected) >= config.beam:
+                break
+            if frames not in seen:
+                selected.append((frames, evaluation))
+                seen.add(frames)
+        shared.clear()
+        shared.update(selected)
+
+    if persistent:
+        admit(stage_reference)
     evaluations = calls = stagnant = 0
-    first_backend = "endpoint-auto" if config.search_backend == "hybrid" else "local"
+    first_backend = ("endpoint-auto" if config.search_backend in ("hybrid", "hybrid-restart")
+                     else "local")
     for cycle in range(1, config.hybrid_cycles + 1):
         cycle_improved = False
         for backend, rounds in ((first_backend, 1), ("local", config.hybrid_local_rounds)):
             turn_seed = rng.getrandbits(63)
+            phase_population: list[tuple[InputFrame, ...]] = []
+            def collect_population(donors: tuple[tuple[InputFrame, ...], ...]) -> None:
+                phase_population.extend(tuple(frames) for frames in donors)
             try:
                 found, used = local_search(
                     level, search_seed, stage.goal, start=stage.start,
@@ -176,6 +257,8 @@ def _search_stage_hybrid(
                     seed=turn_seed, include_partial=True,
                     live_update_interval=(0.0 if config.live_save_best else
                                           30.0 if config.workers > 1 else 0.75),
+                    **({"initial_population": tuple(shared),
+                        "population_callback": collect_population} if persistent else {}),
                     **({"best_callback": candidate_callback} if candidate_callback else {}),
                 )
             except ValueError as exc:
@@ -203,12 +286,21 @@ def _search_stage_hybrid(
                 best_progress = evaluator.evaluate(incumbent).progress_key
             else:
                 search_seed, best_progress = best_partial, best_partial_progress
+            if persistent:
+                # Keep donors even if they were not in the published result
+                # frontier; that list intentionally discards many niches.
+                for candidate in (*phase_population, *(f for f, _ in found),
+                                  search_seed, incumbent):
+                    admit(tuple(candidate))
+                select_shared()
             if progress:
                 progress(f"[auto:user-splice:hybrid] {stage.name!r} cycle {cycle}/"
                          f"{config.hybrid_cycles}: {backend} {rounds} round(s), "
                          f"seed {turn_seed}, {used} evaluations, "
                          f"{'stage improved' if phase_improved else 'no eligible stage gain'}; "
-                         f"best eligible objective key {best_rank!r}")
+                         f"best eligible objective key {best_rank!r}"
+                         + (f"; retained {len(shared)} cross-backend candidates"
+                            if persistent else "; restart-only control"))
         stagnant = 0 if cycle_improved else stagnant + 1
         if progress:
             progress(f"[auto:user-splice:hybrid] {stage.name!r} cycle {cycle} complete; "

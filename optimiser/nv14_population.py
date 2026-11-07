@@ -70,6 +70,9 @@ class PopulationResult:
     seed: int
     interrupted: bool = False
     frontier: tuple[PopulationCandidate, ...] = ()
+    # Full retained internal beam for explicit cross-backend hybrid handoff.
+    # Existing consumers of candidates/frontier are unchanged.
+    population: tuple[PopulationCandidate, ...] = ()
 
 
 def _input_key(frames: Sequence[InputFrame]) -> bytes:
@@ -577,6 +580,7 @@ def optimise_local_population(
     frame_ranges: Sequence[tuple[int, int]], config: PopulationConfig,
     best_callback: Callable[[PopulationCandidate], object] | None = None,
     progress: Callable[[str], object] | None = None,
+    initial_population: Sequence[Sequence[InputFrame]] = (),
 ) -> PopulationResult:
     """Search fixed replay segments; return only feasible, distinct endpoints.
 
@@ -632,6 +636,25 @@ def optimise_local_population(
     population = (baseline_candidate,)
     rounds = stagnant = 0
     evaluations = 1
+    if initial_population and config.resume:
+        raise ValueError("cannot warm-start Local from a population and a checkpoint simultaneously")
+    # Hybrid handoff: authenticate every donor against this invocation's
+    # immutable frames, then re-evaluate with its own endpoint evaluator.
+    # Do not transfer scores, history, native state, or stale cached physics.
+    if initial_population:
+        seen = {source}
+        donors = []
+        for donor in initial_population:
+            candidate_frames = tuple(editable_frames(donor))
+            if candidate_frames in seen:
+                continue
+            seen.add(candidate_frames)
+            _assert_bounded(source, candidate_frames, context.mutable)
+            candidate = context.candidate(candidate_frames, ())
+            if not candidate.evaluation.dead:
+                donors.append(candidate)
+        population = _select_population((*population, *donors), config.beam)
+        evaluations = context.evaluations
     seed = random.SystemRandom().getrandbits(64) if config.seed == "random" else (0 if config.seed is None else config.seed)
     if type(seed) is not int or seed < 0:
         raise ValueError("population seed must be a nonnegative integer or 'random'")
@@ -837,4 +860,5 @@ def optimise_local_population(
             if len(frontier) >= config.top_results:
                 break
     return PopulationResult(results, baseline, rounds, evaluations, stagnant,
-                            worker_count, seed, interrupted, tuple(frontier))
+                            worker_count, seed, interrupted, tuple(frontier),
+                            tuple(population))
