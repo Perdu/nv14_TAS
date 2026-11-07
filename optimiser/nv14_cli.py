@@ -121,8 +121,9 @@ def _print_user_splice_progress(message: str, *, color: bool) -> None:
     """Color verified merge results like ordinary multi-splice bests.
 
     Yellow is a saved, local/temporary gain not yet propagated to a completed
-    replay. Green is an independently verified completed improvement. All
-    other diagnostics and quiet merge summaries retain their normal style.
+    replay. Green is reserved for an independently verified completed
+    improvement; a propagated checkpoint summary is informational, not a
+    new gain, even if the saved prefix appears in the best completed replay.
     """
     if message.startswith("[auto:user-splice:baseline]"):
         _print_baseline_line(message, color=color)
@@ -131,8 +132,7 @@ def _print_user_splice_progress(message: str, *, color: bool) -> None:
           or "new saved stage best" in message
           or "verified stage join" in message):
         _print_temporary_line(message, color=color)
-    elif (message.startswith(("[auto:user-splice] improved ",
-                              "[auto:user-splice:summary:propagated]"))
+    elif (message.startswith("[auto:user-splice] improved ")
           or "improved verified completed replay" in message
           or "verified completed join" in message):
         _print_best_line(message, color=color)
