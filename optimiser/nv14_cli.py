@@ -2740,7 +2740,7 @@ def build_parser() -> argparse.ArgumentParser:
                          help="random/complexity/physics: retain preceding N sampled "
                               "waypoint frontiers (default 1 preserves old behavior)")
     command.add_argument("--use-current-run", "--auto-splice-use-current-run",
-                         dest="use_current_run", modes=auto_modes,
+                         dest="auto_splice_use_current_run", modes=auto_modes,
                          action=argparse.BooleanOptionalAction, default=True,
                          help="named multi-splicer: include the input run as a search seed "
                               "(disable with --no-use-current-run; "
