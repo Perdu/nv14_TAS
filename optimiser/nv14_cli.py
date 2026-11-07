@@ -2191,18 +2191,18 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
                 continue
             for field in config_fields:
                 overrides[field] = local_values[local_key]
-        if (args.auto_splice_search in ("hybrid", "hybrid-restart", "hybrid-local-control") and
-                ("rounds" in local_values or "stagnation_rounds" in local_values)):
-            raise ValueError(f"splice {name!r} ({path}): Local rounds/stagnation settings "
-                             "conflict with hybrid; set hybrid-local-rounds, "
-                             "hybrid-cycles or hybrid-stagnation-cycles in [multi-splicer]")
-        if "rounds" in local_values:
+        # Per-stage Local stopping options are legitimate inherited settings.
+        # Hybrid uses its own cycles instead; do not reject shared goal files
+        # or turn the dormant settings into stage overrides.
+        hybrid_mode = args.auto_splice_search in (
+            "hybrid", "hybrid-restart", "hybrid-local-control")
+        if "rounds" in local_values and not hybrid_mode:
             if args.auto_splice_auto_stagnation_rounds or args.auto_splice_local_stagnation_rounds:
                 raise ValueError(f"splice {name!r} ({path}): rounds is unused with "
                                  "independent Auto/Local stagnation; remove it")
             if "auto_splice_rounds" not in cli_explicit:
                 overrides["splice_rounds"] = local_values["rounds"]
-        if "stagnation_rounds" in local_values:
+        if "stagnation_rounds" in local_values and not hybrid_mode:
             # An explicit per-stage population patience overrides both backend
             # patience limits when [multi-splicer] search="both". This remains
             # a backend-round threshold, NEVER the older whole-cycle limit.

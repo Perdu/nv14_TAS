@@ -127,21 +127,45 @@ def test_hybrid_stagnation_is_cycle_based_not_backend_based():
     assert len(seen) == 4
 
 
-def test_budget_validation_and_conflicting_phase_settings():
+def test_hybrid_budget_validation_still_rejects_invalid_cycle_limits():
     for kwargs in (
         {"hybrid_local_rounds": 0},
         {"hybrid_cycles": False},
         {"hybrid_stagnation_cycles": -1},
         {"hybrid_stagnation_cycles": 4, "hybrid_cycles": 3},
-        {"splice_rounds": 3},
-        {"splice_auto_stagnation_rounds": 2},
-        {"splice_local_stagnation_rounds": 3},
-        {"splice_stagnation_rounds": 1},
-        {"splice_speed": "slow"},
-        {"splice_round_speeds": ("current", "fast")},
     ):
         with pytest.raises(ValueError):
             RandomSpliceConfig(search_backend="hybrid", **kwargs)
+
+
+@pytest.mark.parametrize('mode', ('hybrid', 'hybrid-restart', 'hybrid-local-control'))
+def test_hybrid_ignores_unused_stagnation_rounds_and_speeds(mode):
+    from nv14_splice_backend import splice_config_for_round
+
+    config = RandomSpliceConfig(
+        search_backend=mode, hybrid_cycles=2, hybrid_local_rounds=3,
+        splice_rounds=7, splice_auto_stagnation_rounds=10,
+        splice_local_stagnation_rounds=50, splice_stagnation_rounds=4,
+        splice_speed='fast', splice_round_speeds=('current', 'slow'))
+    assert splice_config_for_round(config, 0) is config
+    assert splice_config_for_round(config, 2) is config
+
+    def run(legacy_settings):
+        seen = []
+        def search(_level, frames, _goal, *, config, iterations, rounds,
+                   seed, **kwargs):
+            seen.append((config.search_backend, frames, iterations, rounds, seed))
+            return (), 1
+        result = _search_stage(
+            None, (10,), stage(), legacy_settings, random.Random(44),
+            evaluator_factory=Evaluator, local_search=search)
+        return seen, result
+
+    baseline = RandomSpliceConfig(search_backend=mode, hybrid_cycles=2,
+                                  hybrid_local_rounds=3)
+    assert run(config) == run(baseline)
+    assert [c[3] for c in run(config)[0]] == [1, 3, 1, 3]
+
 
 
 def test_hybrid_shortcut_and_toml_configuration(tmp_path):
@@ -167,6 +191,27 @@ def test_hybrid_does_not_resume_a_incompatible_legacy_backend_phase():
     with pytest.raises(ValueError, match='does not support resuming'):
         _search_stage(None, (10,), stage(), RandomSpliceConfig(search_backend='hybrid'),
                       random.Random(3), resume_phase={'backend':'local'})
+
+
+@pytest.mark.parametrize('mode', ('hybrid', 'hybrid-restart', 'hybrid-local-control'))
+def test_real_native_hybrid_accepts_ignored_backend_phase_limits(mode):
+    from nv14_endpoint import EndpointGoal
+    from tests.test_random_splice import _baseline
+
+    level, source, _ = _baseline()
+    goal = EndpointGoal(10, 'min-x')
+    result, used, calls = _search_stage(
+        level, source, SpliceSearchStage('end', goal, 0, 10),
+        RandomSpliceConfig(
+            search_backend=mode, iterations=3, workers=1, beam=8,
+            hybrid_cycles=1, hybrid_local_rounds=2, endpoint_repair_steps=0,
+            splice_rounds=9, splice_stagnation_rounds=2,
+            splice_auto_stagnation_rounds=10,
+            splice_local_stagnation_rounds=50, splice_speed='slow',
+            splice_round_speeds=('fast', 'normal')),
+        random.Random(12))
+    assert calls == 2 and used >= 0
+    assert all(len(frames) == len(source) for frames, _ in result)
 
 
 def test_real_native_hybrid_and_control_preserve_completed_source():

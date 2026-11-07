@@ -1437,7 +1437,8 @@ def optimise_user_splices(
         begun = time.monotonic()
         selected = (config.splice_round_speeds[min(round_no, len(config.splice_round_speeds)-1)]
                     if config.splice_round_speeds else config.splice_speed)
-        if progress and selected:
+        if (progress and selected and config.search_backend not in
+                ("hybrid", "hybrid-restart", "hybrid-local-control")):
             progress(f"[auto:user-splice] round {round_no+1}: speed={selected} "
                      "(independent Auto/Local stagnation limits)")
         # A propagation run deliberately retries the archived splice-best
@@ -1713,8 +1714,11 @@ def optimise_user_splices(
 
                 resuming_this_seed = (active_phase is not None and
                                       index == stage_begin and seed_index == 1)
-                if (stage_config.splice_stagnation_rounds or stage_config.splice_auto_stagnation_rounds
-                        or stage_config.splice_local_stagnation_rounds):
+                if (stage_config.search_backend not in
+                        ("hybrid", "hybrid-restart", "hybrid-local-control") and
+                        (stage_config.splice_stagnation_rounds or
+                         stage_config.splice_auto_stagnation_rounds or
+                         stage_config.splice_local_stagnation_rounds)):
                     def admissible_rank(candidate, at=index):
                         # The Auto/Local leader must use the same acceptance
                         # rule as standalone Auto: this named goal only.

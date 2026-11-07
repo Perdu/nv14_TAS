@@ -132,9 +132,14 @@ class RandomSpliceConfig:
                 any(mode not in allowed_speeds for mode in self.splice_round_speeds)):
             raise ValueError("splice_round_speeds must be current,fast,normal,slow")
         object.__setattr__(self, "splice_round_speeds", tuple(self.splice_round_speeds))
+        hybrid_mode = self.search_backend in (
+            "hybrid", "hybrid-restart", "hybrid-local-control")
         phase_mode = (self.splice_auto_stagnation_rounds > 0 or
                       self.splice_local_stagnation_rounds > 0)
-        if phase_mode and self.splice_stagnation_rounds:
+        # Hybrid has its own cycle schedule. Older phase/stagnation/speed
+        # options can remain in shared TOML/CLI configurations, but they do
+        # not influence any of the three hybrid variants.
+        if not hybrid_mode and phase_mode and self.splice_stagnation_rounds:
             raise ValueError("use auto-stagnation-rounds/local-stagnation-rounds OR "
                              "legacy stagnation-rounds, not both")
         if phase_mode and ((self.search_backend in ("both", "endpoint-auto") and
@@ -157,13 +162,6 @@ class RandomSpliceConfig:
         if (type(self.hybrid_stagnation_cycles) is not int or
                 not 0 <= self.hybrid_stagnation_cycles <= self.hybrid_cycles):
             raise ValueError("hybrid_stagnation_cycles must be 0..hybrid_cycles")
-        if self.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control") and (
-            phase_mode or self.splice_stagnation_rounds or
-            self.splice_speed is not None or self.splice_round_speeds or
-            self.splice_rounds != 1
-        ):
-            raise ValueError("hybrid uses its own cycle limits; do not combine it "
-                             "with splice-rounds or Auto/Local phase stagnation/speed presets")
         if not 1 <= self.endpoint_max_retime <= 3:
             raise ValueError("random splice endpoint_max_retime must be between 1 and 3")
         from nv14_route_mutations import parse_operators

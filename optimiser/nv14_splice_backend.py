@@ -25,6 +25,8 @@ def splice_config_for_round(config: RandomSpliceConfig, round_no: int) -> Random
     A scheduled ``current`` round preserves explicitly configured patience.
     Once the schedule ends, repeat its last speed rather than silently reverting.
     """
+    if config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
+        return config  # The legacy speed schedule is irrelevant to hybrid.
     sequence = config.splice_round_speeds
     speed = sequence[min(round_no, len(sequence) - 1)] if sequence else config.splice_speed
     if speed is None or speed == "current":
@@ -252,7 +254,15 @@ def _search_stage_hybrid(
                 found, used = local_search(
                     level, search_seed, stage.goal, start=stage.start,
                     editable_end=stage.end,
-                    config=replace(config, search_backend=backend),
+                    # Hybrid owns these limits. Strip dormant settings before
+                    # constructing a standalone backend config, so they do not
+                    # trigger incompatible phase validation or affect its run.
+                    config=replace(
+                        config, search_backend=backend, splice_rounds=1,
+                        splice_stagnation_rounds=0,
+                        splice_auto_stagnation_rounds=0,
+                        splice_local_stagnation_rounds=0,
+                        splice_speed=None, splice_round_speeds=()),
                     iterations=config.iterations, rounds=rounds,
                     seed=turn_seed, include_partial=True,
                     live_update_interval=(0.0 if config.live_save_best else

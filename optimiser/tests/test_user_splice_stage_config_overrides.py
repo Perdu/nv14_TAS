@@ -127,6 +127,46 @@ rounds=2
         cli._load_named_splice_stages(level, frames, args, directory, args.auto_splice_files)
 
 
+
+@pytest.mark.parametrize('mode', ['hybrid', 'hybrid-restart', 'hybrid-local-control'])
+def test_named_hybrid_ignores_old_multi_and_local_round_settings(tmp_path, mode, monkeypatch):
+    args, directory = _setup(
+        tmp_path, 'objective="min-x"\ntarget-frame=10\nrange="0:10"\n'
+        'rounds=7\nstagnation-rounds=11\n',
+        shared='[multi-splicer]\nfiles=["230", "end"]\n'
+               f'search="{mode}"\nrounds=8\n'
+               'auto-stagnation-rounds=10\nlocal-stagnation-rounds=50\n'
+               'stagnation-rounds=4\nspeed="fast"\n'
+               'round-speeds=["current", "slow"]\n')
+    level, frames, _ = _baseline()
+    stages = cli._load_named_splice_stages(level, frames, args, directory,
+                                           args.auto_splice_files)
+    assert stages[0].config_overrides == {}
+    assert args.auto_splice_rounds == 8
+    assert args.auto_splice_auto_stagnation_rounds == 10
+    assert args.auto_splice_local_stagnation_rounds == 50
+    assert args.auto_splice_stagnation_rounds == 4
+    # Named-stage coordination must also ignore these dormant values. In
+    # particular, they must not activate the legacy continuous-phase branch
+    # or silently change the eligibility/ranking callback of the hybrid.
+    calls = []
+    def fake_search(_level, _branch, _stage, cfg, _rng, **kwargs):
+        calls.append((cfg.search_backend, tuple(kwargs)))
+        return (), 0, 1
+    monkeypatch.setattr(us, '_search_stage', fake_search)
+    inherited = RandomSpliceConfig(
+        search_backend=mode, rounds=1, splice_rounds=8,
+        splice_auto_stagnation_rounds=10, splice_local_stagnation_rounds=50,
+        splice_stagnation_rounds=4, splice_speed='fast',
+        splice_round_speeds=('current', 'slow'))
+    us.optimise_user_splices(level, frames, stages, inherited,
+                             completion_policy='checkpoint')
+    assert calls
+    assert all(backend == mode and 'stage_rank' not in kwargs
+               and 'resume_phase' not in kwargs for backend, kwargs in calls)
+
+
+
 @pytest.mark.parametrize('bad', ['window=4\n', 'checkpoint="saved.pkl"\n', 'search="windows"\n'])
 def test_nonapplicable_splice_settings_are_rejected(tmp_path, bad):
     args, directory = _setup(tmp_path, '''objective="min-x"

@@ -531,7 +531,10 @@ def test_local_population_receives_nested_round_count(monkeypatch):
     level, source, _reference = _baseline()
     calls = []
 
-    def fake_population(level, frames, *, goal, frame_ranges, config, progress=None, best_callback=None):
+    def fake_population(level, frames, *, goal, frame_ranges, config, progress=None,
+                        best_callback=None, initial_population=()):
+        # Patch 76 passes candidate donors even for the legacy Local path.
+        assert not initial_population
         calls.append((config.rounds, config.iterations, frame_ranges))
         return SimpleNamespace(candidates=(), evaluations=5)
 

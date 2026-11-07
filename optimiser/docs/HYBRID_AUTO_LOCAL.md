@@ -1,4 +1,4 @@
-# Experimental one-Auto / N-Local hybrid (patch 75, population handoff patch 76)
+# Experimental one-Auto / N-Local hybrid (patch 75, population handoff 76, config compatibility 77)
 
 This is a **bounded, opt-in scheduling experiment** for named splice goals,
 not a new physics engine or an assurance of better TAS quality. Starting in
@@ -66,11 +66,16 @@ backend round** in this mode. Thus one stage seed uses at most
 excluding any stage-specific repair overhead. Actual *distinct evaluations*
 are reported separately, as duplicate/early-stopped searches may use fewer.
 
-`hybrid` rejects the incompatible older phase-stagnation, speed-preset and
-`splice-rounds > 1` settings rather than silently reinterpreting them. Named
-Local goal files containing their own `rounds` or `stagnation_rounds` must
-have those stopping parameters moved to the hybrid settings above. Other Local
-goals/constraints and per-stage mutation/beam settings remain available.
+In Hybrid, Hybrid-Restart and Hybrid-Local-Control, older `splice-rounds`,
+`auto-stagnation-rounds`, `local-stagnation-rounds`, legacy
+`stagnation-rounds`, `speed` and `round-speeds` settings are **accepted but
+ignored**. The same applies to `rounds` and `stagnation-rounds` in each named
+`[local]` goal file. This lets existing TOML configurations switch to Hybrid
+without deleting the settings used by `both` or standalone Local. Only
+`hybrid-local-rounds`, `hybrid-cycles`, and `hybrid-stagnation-cycles` control
+**within-stage Hybrid scheduling**; `runs` remains the separate outer
+multi-splicer limit. Unused settings must still have valid values.
+Other Local goals/constraints and per-stage mutation/beam settings remain available.
 
 ## Matched restart experiment
 
