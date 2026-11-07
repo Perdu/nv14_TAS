@@ -234,3 +234,12 @@ recent sampled waypoint frontiers when preparing subsequent waypoints (default
 from `--splice-stage-lookback`, which applies to named multi-splicer stages.
 The setting affects the multi-waypoint search and endpoint-goal search; the
 single-anchor speedrun search still restarts from the latest verified route.
+
+### Fixed-budget Auto/Local hybrid experiment (patch 75)
+
+Named splice stages additionally support `search="hybrid"` for **one Auto
+round followed by N uninterrupted Local rounds** on each cycle, with a
+matched `hybrid-local-control` that replaces Auto with a Local restart. See
+[HYBRID_AUTO_LOCAL.md](HYBRID_AUTO_LOCAL.md) for scheduling details, budgets,
+configuration, and the comparison protocol. Existing `both` semantics are
+unchanged; this experiment does not modify the native physics.

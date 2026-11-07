@@ -38,7 +38,12 @@ class RandomSpliceConfig:
     radius: float = 16.0
     lookback: int = 32  # seam matching/maximum local mutation span, NOT a segment length
     iterations: int = 400  # proposals per worker, per anchor search round
-    search_backend: str = "local"  # local population or endpoint Auto hybrid
+    search_backend: str = "local"  # local, endpoint-auto, both, hybrid, hybrid-local-control
+    # Hybrid cycles: exactly 1 Auto round then N uninterrupted Local rounds.
+    # Control: replace Auto with one Local round at identical restarts/budget.
+    hybrid_local_rounds: int = 5
+    hybrid_cycles: int = 5
+    hybrid_stagnation_cycles: int = 0  # 0 = use all cycles
     endpoint_max_retime: int = 3
     endpoint_mutation_span: int = 24
     endpoint_route_mutations: str | tuple[str, ...] = "low"
@@ -141,8 +146,24 @@ class RandomSpliceConfig:
         for field in ("splice_rounds", "repair_rounds"):
             if type(getattr(self, field)) is not int or getattr(self, field) < 1:
                 raise ValueError(f"random splice {field} must be a positive integer")
-        if self.search_backend not in ("local", "endpoint-auto", "both"):
-            raise ValueError("random splice search_backend must be local, endpoint-auto or both")
+        if self.search_backend not in ("local", "endpoint-auto", "both",
+                                       "hybrid", "hybrid-local-control"):
+            raise ValueError("splice search_backend must be local, endpoint-auto, both, "
+                             "hybrid or hybrid-local-control")
+        for field in ("hybrid_local_rounds", "hybrid_cycles"):
+            value = getattr(self, field)
+            if type(value) is not int or not 1 <= value <= 10000:
+                raise ValueError(f"{field} must be an integer between 1 and 10000")
+        if (type(self.hybrid_stagnation_cycles) is not int or
+                not 0 <= self.hybrid_stagnation_cycles <= self.hybrid_cycles):
+            raise ValueError("hybrid_stagnation_cycles must be 0..hybrid_cycles")
+        if self.search_backend in ("hybrid", "hybrid-local-control") and (
+            phase_mode or self.splice_stagnation_rounds or
+            self.splice_speed is not None or self.splice_round_speeds or
+            self.splice_rounds != 1
+        ):
+            raise ValueError("hybrid uses its own cycle limits; do not combine it "
+                             "with splice-rounds or Auto/Local phase stagnation/speed presets")
         if not 1 <= self.endpoint_max_retime <= 3:
             raise ValueError("random splice endpoint_max_retime must be between 1 and 3")
         from nv14_route_mutations import parse_operators
@@ -545,6 +566,8 @@ def _local_search(level: Level, frames: tuple[InputFrame, ...], goal: EndpointGo
         return (), 0
     if config.search_backend == "both":
         raise ValueError("splice-search=both is only supported for user-defined splice-files")
+    if config.search_backend in ("hybrid", "hybrid-local-control"):
+        raise ValueError("hybrid splice search must be scheduled by the named-stage coordinator")
     if config.search_backend == "endpoint-auto":
         # Reuse the exact endpoint Hybrid search and evaluator, but *not* its
         # checkpoint publishing: only random-splice may commit a completed,

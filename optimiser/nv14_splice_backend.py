@@ -64,6 +64,13 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
     The odd proposal goes to Local, so the combined backend budget remains
     exactly config.iterations per worker and internal round.
     """
+    if config.search_backend in ("hybrid", "hybrid-local-control"):
+        if resume_phase is not None:
+            raise ValueError("hybrid does not support resuming a partially finished stage")
+        return _search_stage_hybrid(
+            level, branch, stage, config, rng, stage_rank=stage_rank,
+            progress=progress, candidate_callback=candidate_callback,
+            local_search=local_search, evaluator_factory=evaluator_factory)
     if (config.splice_auto_stagnation_rounds or config.splice_local_stagnation_rounds):
         return _search_stage_backend_phases(
             level, branch, stage, config, rng, stage_rank=stage_rank,
@@ -121,6 +128,94 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                               key=lambda frames: evaluator.evaluate(frames).progress_key)
     return tuple(merged.items()), evaluations, searches
 
+
+
+def _search_stage_hybrid(
+    level: Level, branch: tuple[InputFrame, ...], stage: SpliceSearchStage,
+    config: RandomSpliceConfig, rng: random.Random,
+    *, stage_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
+    progress: Callable[[str], None] | None = None,
+    candidate_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
+    local_search: Callable | None = None,
+    evaluator_factory: Callable | None = None,
+) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
+    """A bounded 1 Auto + N Local round *scheduler*, not a merged population.
+
+    Each backend receives a single incumbent and its own persistent population
+    for the duration of its invocation. Across cycles only the best admissible
+    candidate (or best progress when none is feasible) is inherited. The
+    matched restart control substitutes one Local round for Auto, keeping
+    proposal slots, two invocations per cycle, and RNG seed draws identical.
+    """
+    evaluator_factory = EndpointEvaluator if evaluator_factory is None else evaluator_factory
+    evaluator = evaluator_factory(level, stage.goal)
+    local_search = _default_local_search if local_search is None else local_search
+
+    def rank(frames: tuple[InputFrame, ...]) -> tuple | None:
+        if stage_rank is not None:
+            return stage_rank(frames)
+        state = evaluator.evaluate(frames)
+        return state.objective_key if state.feasible else None
+
+    merged: dict[tuple[InputFrame, ...], int] = {}
+    incumbent = search_seed = tuple(branch)
+    best_rank = rank(incumbent)
+    best_progress = evaluator.evaluate(incumbent).progress_key
+    evaluations = calls = stagnant = 0
+    first_backend = "endpoint-auto" if config.search_backend == "hybrid" else "local"
+    for cycle in range(1, config.hybrid_cycles + 1):
+        cycle_improved = False
+        for backend, rounds in ((first_backend, 1), ("local", config.hybrid_local_rounds)):
+            turn_seed = rng.getrandbits(63)
+            try:
+                found, used = local_search(
+                    level, search_seed, stage.goal, start=stage.start,
+                    editable_end=stage.end,
+                    config=replace(config, search_backend=backend),
+                    iterations=config.iterations, rounds=rounds,
+                    seed=turn_seed, include_partial=True,
+                    live_update_interval=(0.0 if config.live_save_best else
+                                          30.0 if config.workers > 1 else 0.75),
+                    **({"best_callback": candidate_callback} if candidate_callback else {}),
+                )
+            except ValueError as exc:
+                if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
+                    raise
+                found, used = (), 0
+            calls += 1
+            evaluations += used
+            best_partial = search_seed
+            best_partial_progress = best_progress
+            phase_improved = False
+            for candidate, frame in found:
+                candidate = tuple(candidate)
+                merged.setdefault(candidate, frame)
+                candidate_rank = rank(candidate)
+                if candidate_rank is not None and (best_rank is None or candidate_rank < best_rank):
+                    incumbent, best_rank = candidate, candidate_rank
+                    phase_improved = cycle_improved = True
+                candidate_progress = evaluator.evaluate(candidate).progress_key
+                if candidate_progress < best_partial_progress:
+                    best_partial, best_partial_progress = candidate, candidate_progress
+            if best_rank is not None:
+                # Never regress a feasible result or break an earlier stage goal.
+                search_seed = incumbent
+                best_progress = evaluator.evaluate(incumbent).progress_key
+            else:
+                search_seed, best_progress = best_partial, best_partial_progress
+            if progress:
+                progress(f"[auto:user-splice:hybrid] {stage.name!r} cycle {cycle}/"
+                         f"{config.hybrid_cycles}: {backend} {rounds} round(s), "
+                         f"seed {turn_seed}, {used} evaluations, "
+                         f"{'stage improved' if phase_improved else 'no eligible stage gain'}; "
+                         f"best eligible objective key {best_rank!r}")
+        stagnant = 0 if cycle_improved else stagnant + 1
+        if progress:
+            progress(f"[auto:user-splice:hybrid] {stage.name!r} cycle {cycle} complete; "
+                     f"stagnant {stagnant}; calls {calls}, evaluations {evaluations}")
+        if config.hybrid_stagnation_cycles and stagnant >= config.hybrid_stagnation_cycles:
+            break
+    return tuple(merged.items()), evaluations, calls
 
 
 def _search_stage_backend_phases(

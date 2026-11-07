@@ -5,8 +5,8 @@ Examples from optimiser/:
     ./tas.py auto 53-4
     ./tas.py local 55-1 end
     ./tas.py goal 53-4 591
-  ./tas.py both 53-4 591
     ./tas.py both 53-4 591
+    ./tas.py hybrid 53-4 591 --splice-hybrid-local-rounds 5
     ./tas.py random 55-1
     ./tas.py multi 97-2
     ./tas.py merge 88-4
@@ -27,7 +27,7 @@ import sys
 from collections.abc import Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parent
-_MODES = {"auto", "local", "goal", "both", "random", "multi", "merge", "repair"}
+_MODES = {"auto", "local", "goal", "both", "hybrid", "random", "multi", "merge", "repair"}
 _ALIASES = {"auto-local": "goal", "random-splicer": "random",
             "multi-splicer": "multi", "merge-repair": "repair"}
 _JAFFAR_AUTO = ("--auto-repair-beam-width", "32",
@@ -40,7 +40,8 @@ _HELP = """Usage:
   ./tas.py MODE [LEVEL] [SPLICE] [optimizer flags...]
   ./tas.py loop LEVEL [LEVEL ...] [-- optimizer flags...]
 
-Modes: auto, local, goal (Auto endpoint), both (single splice Auto/Local), random,
+Modes: auto, local, goal (Auto endpoint), both (continuous Auto/Local),
+       hybrid (one Auto round then N Local rounds), random,
        multi, merge (fast, standalone), repair (bounded, standalone), loop.
 LEVEL defaults to $TAS_LEVEL or $LEVEL. SPLICE to $TAS_SPLICE or $SPLICE.
 Examples:
@@ -48,6 +49,7 @@ Examples:
   ./tas.py local 55-1 end
   ./tas.py goal 53-4 591
   ./tas.py both 53-4 591
+  ./tas.py hybrid 53-4 591 --splice-hybrid-local-rounds 5
   ./tas.py multi 97-2 --auto-runs 5
   ./tas.py merge 88-4
   ./tas.py repair 88-4
@@ -92,7 +94,7 @@ def build_command(mode: str, level: str, splice: str | None = None,
         raise ValueError(f"unsupported TAS mode {mode!r}")
     if not level or level.startswith("-"):
         raise ValueError("a LEVEL is required (argument or TAS_LEVEL/LEVEL)")
-    if mode in ("local", "goal", "both") and not splice:
+    if mode in ("local", "goal", "both", "hybrid") and not splice:
         raise ValueError(f"{mode} requires SPLICE (argument or TAS_SPLICE/SPLICE)")
     env = os.environ if env is None else env
     def path(name: str, default: str) -> str:
@@ -111,7 +113,7 @@ def build_command(mode: str, level: str, splice: str | None = None,
                    "--config", path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt"),
                    "--stagnation-rounds", env.get("TAS_STAGNATION_LOCAL", "50"), *common]
     else:
-        command = ["both" if mode == "both" else "auto", input_file]
+        command = [mode if mode in ("both", "hybrid") else "auto", input_file]
         if mode == "random":
             command += ["--config", env.get("TAS_RANDOM_CONFIG", "../splices/random-splice.toml"),
                         "--simulate-enemies", "--auto-stagnation-runs",
@@ -120,7 +122,7 @@ def build_command(mode: str, level: str, splice: str | None = None,
             command += shared
             if mode == "auto":
                 command += ["--auto-runs", env.get("TAS_RUNS_AUTO", "10")]
-            if mode == "both":
+            if mode in ("both", "hybrid"):
                 command += ["--goal-config", path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt")]
             if mode == "goal":
                 command += ["--goal-config", path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt"),
@@ -165,7 +167,7 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
             raise ValueError(f"unknown mode {mode!r}; see --help")
         level = (args.pop(0) if args and not args[0].startswith("-")
                  else env.get("TAS_LEVEL") or env.get("LEVEL") or "")
-        splice = (args.pop(0) if mode in ("local", "goal", "both") and args and not args[0].startswith("-")
+        splice = (args.pop(0) if mode in ("local", "goal", "both", "hybrid") and args and not args[0].startswith("-")
                   else env.get("TAS_SPLICE") or env.get("SPLICE"))
         if args and args[0] == "--":
             args.pop(0)

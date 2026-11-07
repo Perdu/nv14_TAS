@@ -97,7 +97,7 @@ top-results = 10
 # fixed-jump-frames = [42, 73]
 
 [multi-splicer]
-search = "both"
+search = "hybrid"
 iterations = 10000
 auto-stagnation-rounds = 5
 local-stagnation-rounds = 20

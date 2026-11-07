@@ -1727,6 +1727,9 @@ def _load_config_defaults(
         "stagnation_rounds": "auto_splice_stagnation_rounds",
         "auto_stagnation_rounds": "auto_splice_auto_stagnation_rounds",
         "local_stagnation_rounds": "auto_splice_local_stagnation_rounds",
+        "hybrid_local_rounds": "auto_splice_hybrid_local_rounds",
+        "hybrid_cycles": "auto_splice_hybrid_cycles",
+        "hybrid_stagnation_cycles": "auto_splice_hybrid_stagnation_cycles",
         "speed": "auto_splice_speed",
         "round_speeds": "auto_splice_round_speeds",
         "frontier": "auto_splice_frontier",
@@ -1854,6 +1857,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_searches", "auto_splice_rounds",
     "auto_splice_stagnation_rounds", "auto_splice_auto_stagnation_rounds",
     "auto_splice_local_stagnation_rounds", "auto_splice_speed", "auto_splice_round_speeds",
+    "auto_splice_hybrid_local_rounds", "auto_splice_hybrid_cycles", "auto_splice_hybrid_stagnation_cycles",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_waypoint_lookback", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_directory",
     "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
@@ -2187,6 +2191,11 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
                 continue
             for field in config_fields:
                 overrides[field] = local_values[local_key]
+        if (args.auto_splice_search in ("hybrid", "hybrid-local-control") and
+                ("rounds" in local_values or "stagnation_rounds" in local_values)):
+            raise ValueError(f"splice {name!r} ({path}): Local rounds/stagnation settings "
+                             "conflict with hybrid; set hybrid-local-rounds, "
+                             "hybrid-cycles or hybrid-stagnation-cycles in [multi-splicer]")
         if "rounds" in local_values:
             if args.auto_splice_auto_stagnation_rounds or args.auto_splice_local_stagnation_rounds:
                 raise ValueError(f"splice {name!r} ({path}): rounds is unused with "
@@ -2233,14 +2242,14 @@ def parse_splice_interactions(value: str) -> tuple[str, ...]:
 def _single_splice_both_arguments(argv: Sequence[str]) -> list[str]:
     """Adapt `both IN.ltm --goal-config goal.txt` to one named stage.
 
-    This reuses multi-splicer's exact Auto/Local coordinator, checkpoint
-    verification and independent backend stagnation instead of maintaining a
-    second single-goal mutation engine. Explicit backend patience and run
-    counts are respected; otherwise one complete until-stagnant pass is run.
+    Both and hybrid reuse multi-splicer's exact Auto/Local coordinator,
+    goal verification and output checks rather than a second search engine.
+    Hybrid schedules fixed 1+N rounds; both retains its historical patience.
     """
     command = list(argv)
-    if not command or command[0] != "both":
+    if not command or command[0] not in ("both", "hybrid"):
         return command
+    hybrid = command[0] == "hybrid"
     command[0] = "auto"
     goal = None
     for index, item in enumerate(tuple(command)):
@@ -2253,19 +2262,21 @@ def _single_splice_both_arguments(argv: Sequence[str]) -> list[str]:
             command.remove(item)
             break
     if goal is None:
-        raise SystemExit("both mode requires --goal-config SPLICE.txt")
+        raise SystemExit(f"{'hybrid' if hybrid else 'both'} mode requires --goal-config SPLICE.txt")
     goal_path = Path(goal)
     if goal_path.suffix not in (".txt", ".toml"):
-        raise SystemExit("both goal must be a named .txt or .toml Local goal file")
+        raise SystemExit(f"{'hybrid' if hybrid else 'both'} goal must be a named "
+                         ".txt or .toml Local goal file")
     command.extend(("--auto-splice-directory", str(goal_path.parent),
                     "--auto-splice-files", goal_path.stem,
-                    "--auto-splice-search", "both"))
+                    "--auto-splice-search", "hybrid" if hybrid else "both"))
     explicit = {item.split("=", 1)[0] for item in command}
-    for options, default in (
+    defaults = ((("--auto-runs",), "1"),) if hybrid else (
         (("--splice-auto-stagnation-rounds", "--auto-splice-auto-stagnation-rounds"), "5"),
         (("--splice-local-stagnation-rounds", "--auto-splice-local-stagnation-rounds"), "20"),
         (("--auto-runs",), "1"),
-    ):
+    )
+    for options, default in defaults:
         if not any(option in explicit for option in options):
             command.extend((options[0], default))
     return command
@@ -2307,10 +2318,14 @@ def parse_arguments(
 ) -> argparse.Namespace:
     """Parse CLI arguments, applying TOML defaults before explicit CLI values."""
     actual_argv = list(sys.argv[1:] if argv is None else argv)
-    both_mode = bool(actual_argv and actual_argv[0] == "both")
+    both_mode = bool(actual_argv and actual_argv[0] in ("both", "hybrid"))
     actual_argv = _single_splice_both_arguments(actual_argv)
     namespace = build_parser().parse_args(actual_argv)
     namespace._both_mode = both_mode
+    if (namespace.mode == "auto" and namespace.auto_splice_search in
+            ("hybrid", "hybrid-local-control") and not namespace.auto_splice_files):
+        raise SystemExit("hybrid splice search currently requires named --auto-splice-files "
+                         "or the `hybrid` single-goal shortcut")
     if (getattr(namespace, "auto_splice_alt_route", ()) and
             getattr(namespace, "auto_splice_files", ())):
         try:
@@ -2343,7 +2358,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = _ConfigArgumentParser(
         description=(
             "Optimise an n v1.4 replay, dump player state, or encode video. Choose "
-            "auto, local, both (single-goal Auto -> Local), jump-pattern, dump-player, or encode-video."
+            "auto, local, both, hybrid (single-goal 1 Auto + N Local rounds), "
+            "jump-pattern, dump-player, or encode-video."
         )
     )
     subparsers = parser.add_subparsers(
@@ -2577,8 +2593,22 @@ def build_parser() -> argparse.ArgumentParser:
                          help="remove provably ineffective airborne Shift/jump pulses "
                               "from saved splice results; full replay trace is reverified")
     command.add_argument("--auto-splice-search", modes=auto_modes,
-                         choices=("local", "endpoint-auto", "both"), default="local",
-                         help="splice search: Local population (default), endpoint Auto Hybrid, or both (all splice modes; shared budget)")
+                         choices=("local", "endpoint-auto", "both", "hybrid", "hybrid-local-control"),
+                         default="local",
+                         help="splice search: Local, endpoint Auto, both, or fixed-cycle hybrid "
+                              "(control replaces each Auto round with Local)")
+    command.add_argument("--splice-hybrid-local-rounds", "--auto-splice-hybrid-local-rounds",
+                         dest="auto_splice_hybrid_local_rounds", modes=auto_modes,
+                         type=parse_positive_int, default=5, metavar="N",
+                         help="hybrid: uninterrupted Local rounds per 1 Auto round (default 5)")
+    command.add_argument("--splice-hybrid-cycles", "--auto-splice-hybrid-cycles",
+                         dest="auto_splice_hybrid_cycles", modes=auto_modes,
+                         type=parse_positive_int, default=5, metavar="K",
+                         help="hybrid: maximum 1+N round cycles per stage seed (default 5)")
+    command.add_argument("--splice-hybrid-stagnation-cycles", "--auto-splice-hybrid-stagnation-cycles",
+                         dest="auto_splice_hybrid_stagnation_cycles", modes=auto_modes,
+                         type=int, default=0, metavar="K",
+                         help="hybrid: stop after K cycles without stage-objective gain (0 uses all cycles)")
     command.add_argument("--auto-splice-mode", modes=auto_modes,
                          choices=("random", "complexity", "physics", "user"), default="random",
                          help="waypoint selection: random (default), complexity boundaries, physical interactions, or user-named goal files")
@@ -4555,6 +4585,9 @@ def main() -> None:
                     splice_stagnation_rounds=args.auto_splice_stagnation_rounds,
                     splice_auto_stagnation_rounds=args.auto_splice_auto_stagnation_rounds,
                     splice_local_stagnation_rounds=args.auto_splice_local_stagnation_rounds,
+                    hybrid_local_rounds=args.auto_splice_hybrid_local_rounds,
+                    hybrid_cycles=args.auto_splice_hybrid_cycles,
+                    hybrid_stagnation_cycles=args.auto_splice_hybrid_stagnation_cycles,
                     splice_speed=args.auto_splice_speed,
                     splice_round_speeds=args.auto_splice_round_speeds,
                     live_save_best=args.auto_splice_live_save_best,
@@ -5277,6 +5310,9 @@ def main() -> None:
                 splice_stagnation_rounds=args.auto_splice_stagnation_rounds,
                 splice_auto_stagnation_rounds=args.auto_splice_auto_stagnation_rounds,
                 splice_local_stagnation_rounds=args.auto_splice_local_stagnation_rounds,
+                hybrid_local_rounds=args.auto_splice_hybrid_local_rounds,
+                hybrid_cycles=args.auto_splice_hybrid_cycles,
+                hybrid_stagnation_cycles=args.auto_splice_hybrid_stagnation_cycles,
                 splice_speed=args.auto_splice_speed,
                 splice_round_speeds=args.auto_splice_round_speeds,
                 waypoint_stage_lookback=args.auto_splice_waypoint_lookback,

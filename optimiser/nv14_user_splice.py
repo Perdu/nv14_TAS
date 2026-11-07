@@ -824,9 +824,19 @@ def optimise_user_splices(
         if config.search_backend == "both":
             allocation = (f"endpoint Auto {config.iterations // 2} -> "
                           f"Local {(config.iterations + 1) // 2} (seeded from Auto best)")
+        elif config.search_backend in ("hybrid", "hybrid-local-control"):
+            first = "Auto" if config.search_backend == "hybrid" else "Local (restart control)"
+            allocation = (f"{first} 1 round -> Local {config.hybrid_local_rounds} "
+                          f"rounds, {config.hybrid_cycles} cycles per seed, "
+                          f"{config.iterations} proposals per worker per backend round")
         else:
             allocation = f"{config.search_backend} {config.iterations}"
-        if config.splice_auto_stagnation_rounds or config.splice_local_stagnation_rounds:
+        if config.search_backend in ("hybrid", "hybrid-local-control"):
+            progress(f"[auto:user-splice:budget] {allocation}; {config.workers} worker(s); "
+                     f"{config.rounds or 'unlimited'} outer multi-splice round(s); "
+                     "one evolving incumbent, independent populations per backend call; "
+                     "stage checkpoint and final replay verification unchanged")
+        elif config.splice_auto_stagnation_rounds or config.splice_local_stagnation_rounds:
             parts = []
             if config.search_backend in ("both", "endpoint-auto"):
                 parts.append(f"Auto: {config.splice_auto_stagnation_rounds} stagnant backend rounds")
@@ -1561,7 +1571,10 @@ def optimise_user_splices(
                 if progress:
                     phase_mode = (stage_config.splice_auto_stagnation_rounds or
                                   stage_config.splice_local_stagnation_rounds)
-                    if phase_mode:
+                    if stage_config.search_backend in ("hybrid", "hybrid-local-control"):
+                        allocation = (f"{stage_config.iterations * stage_config.workers * (1 + stage_config.hybrid_local_rounds) * stage_config.hybrid_cycles} "
+                                      "maximum nominal proposal slots per seed over all hybrid cycles")
+                    elif phase_mode:
                         allocation = (f"up to {stage_config.iterations * stage_config.workers * stage_config.splice_rounds} "
                                       "nominal proposal slots per backend batch; "
                                       "total depends on independent Auto/Local stagnation limits")
