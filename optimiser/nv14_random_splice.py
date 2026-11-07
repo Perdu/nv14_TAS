@@ -69,7 +69,7 @@ class RandomSpliceConfig:
     splice_stagnation_rounds: int = 0  # legacy: shared cycle-level stagnation stop
     splice_auto_stagnation_rounds: int = 0  # named stages: consecutive stagnant Auto backend rounds
     splice_local_stagnation_rounds: int = 0  # named stages: consecutive stagnant Local backend rounds
-    splice_speed: str | None = None  # optional fast/normal/slow phase patience
+    splice_speed: str | None = None  # Auto/Local patience or hybrid stagnant-cycle preset
     splice_round_speeds: tuple[str, ...] = ()  # schedule: current,fast,normal,slow
     repair_rounds: int = 1  # backend search rounds PER continuation repair
     repair_anchors: int = 2
@@ -136,9 +136,9 @@ class RandomSpliceConfig:
             "hybrid", "hybrid-restart", "hybrid-local-control")
         phase_mode = (self.splice_auto_stagnation_rounds > 0 or
                       self.splice_local_stagnation_rounds > 0)
-        # Hybrid has its own cycle schedule. Older phase/stagnation/speed
-        # options can remain in shared TOML/CLI configurations, but they do
-        # not influence any of the three hybrid variants.
+        # Hybrid has its own cycle schedule. Older phase/stagnation/round-speed
+        # options are allowed in shared configs; only splice_speed is also a
+        # hybrid preset for cycle-level patience.
         if not hybrid_mode and phase_mode and self.splice_stagnation_rounds:
             raise ValueError("use auto-stagnation-rounds/local-stagnation-rounds OR "
                              "legacy stagnation-rounds, not both")
@@ -159,9 +159,12 @@ class RandomSpliceConfig:
             value = getattr(self, field)
             if type(value) is not int or not 1 <= value <= 10000:
                 raise ValueError(f"{field} must be an integer between 1 and 10000")
+        # A preset may exceed the configured maximum cycle count (e.g. slow=10
+        # with the default 5 cycles). The upper bound still limits total work;
+        # the patience threshold simply will not be reached in that case.
         if (type(self.hybrid_stagnation_cycles) is not int or
-                not 0 <= self.hybrid_stagnation_cycles <= self.hybrid_cycles):
-            raise ValueError("hybrid_stagnation_cycles must be 0..hybrid_cycles")
+                not 0 <= self.hybrid_stagnation_cycles <= 10000):
+            raise ValueError("hybrid_stagnation_cycles must be 0..10000")
         if not 1 <= self.endpoint_max_retime <= 3:
             raise ValueError("random splice endpoint_max_retime must be between 1 and 3")
         from nv14_route_mutations import parse_operators

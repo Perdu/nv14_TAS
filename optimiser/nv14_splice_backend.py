@@ -17,16 +17,24 @@ from nv14_replay import editable_frames, encode_complex_replay, decode_complex_r
 
 
 SPLICE_SPEEDS = {"fast": (3, 10), "normal": (5, 20), "slow": (10, 50)}
+HYBRID_STAGNATION_SPEEDS = {"fast": 3, "normal": 5, "slow": 10}
 
 
 def splice_config_for_round(config: RandomSpliceConfig, round_no: int) -> RandomSpliceConfig:
-    """Apply an optional per-round stagnation preset, preserving mode selection.
+    """Apply a speed preset without changing the selected search backend.
 
-    A scheduled ``current`` round preserves explicitly configured patience.
-    Once the schedule ends, repeat its last speed rather than silently reverting.
+    Hybrid uses ``splice_speed`` as cycle patience; its legacy ``round-speeds``
+    schedule is ignored. For other modes, scheduled ``current`` preserves
+    explicit patience, and exhausted schedules repeat their last speed.
     """
     if config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
-        return config  # The legacy speed schedule is irrelevant to hybrid.
+        # The speed preset controls cycle-level patience, not the Auto/Local
+        # phase-specific limits. Per-outer-round speed schedules remain legacy
+        # settings and intentionally do not affect hybrid.
+        if config.splice_speed is None:
+            return config
+        return replace(config, hybrid_stagnation_cycles=
+                       HYBRID_STAGNATION_SPEEDS[config.splice_speed])
     sequence = config.splice_round_speeds
     speed = sequence[min(round_no, len(sequence) - 1)] if sequence else config.splice_speed
     if speed is None or speed == "current":

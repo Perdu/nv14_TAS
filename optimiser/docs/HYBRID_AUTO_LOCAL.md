@@ -68,13 +68,23 @@ are reported separately, as duplicate/early-stopped searches may use fewer.
 
 In Hybrid, Hybrid-Restart and Hybrid-Local-Control, older `splice-rounds`,
 `auto-stagnation-rounds`, `local-stagnation-rounds`, legacy
-`stagnation-rounds`, `speed` and `round-speeds` settings are **accepted but
-ignored**. The same applies to `rounds` and `stagnation-rounds` in each named
-`[local]` goal file. This lets existing TOML configurations switch to Hybrid
-without deleting the settings used by `both` or standalone Local. Only
-`hybrid-local-rounds`, `hybrid-cycles`, and `hybrid-stagnation-cycles` control
-**within-stage Hybrid scheduling**; `runs` remains the separate outer
-multi-splicer limit. Unused settings must still have valid values.
+`stagnation-rounds` and `round-speeds` settings are **accepted but ignored**.
+`speed` (`--splice-speed`) **does** control hybrid stagnant-cycle patience:
+`fast`=3, `normal`=5, `slow`=10. This preset overrides the numerical
+`hybrid-stagnation-cycles` setting; omit `speed` to set that limit manually or
+leave it at 0 (no stagnation early stop). The same legacy compatibility applies
+to `rounds` and `stagnation-rounds` in each named `[local]` goal file. Existing
+TOML configurations can therefore switch to Hybrid without deleting settings
+used by `both` or standalone Local. `hybrid-local-rounds` and `hybrid-cycles`
+continue to control round counts and maximum cycles; `runs` remains the separate
+outer multi-splicer limit. Unused settings must still have valid values.
+
+**The speed preset does not raise `hybrid-cycles`.** For example, with default
+`hybrid-cycles=5`, `speed="slow"` sets patience to 10 but a stage still runs at
+most 5 cycles. To allow 10 stagnant cycles, also set `hybrid-cycles` to 10 or
+higher. The same mapping applies to `hybrid-restart` and
+`hybrid-local-control`. Outer `round-speeds` schedules remain ignored in all
+three hybrid variants.
 Other Local goals/constraints and per-stage mutation/beam settings remain available.
 
 ## Matched restart experiment

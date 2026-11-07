@@ -146,12 +146,13 @@ def test_named_hybrid_ignores_old_multi_and_local_round_settings(tmp_path, mode,
     assert args.auto_splice_auto_stagnation_rounds == 10
     assert args.auto_splice_local_stagnation_rounds == 50
     assert args.auto_splice_stagnation_rounds == 4
-    # Named-stage coordination must also ignore these dormant values. In
-    # particular, they must not activate the legacy continuous-phase branch
-    # or silently change the eligibility/ranking callback of the hybrid.
+    # Named-stage coordination ignores obsolete phase settings, but the
+    # speed preset must now configure hybrid cycle patience (fast = 3).
+    # Neither may activate the old continuous-phase callback path.
     calls = []
     def fake_search(_level, _branch, _stage, cfg, _rng, **kwargs):
-        calls.append((cfg.search_backend, tuple(kwargs)))
+        calls.append((cfg.search_backend, cfg.hybrid_stagnation_cycles,
+                      tuple(kwargs)))
         return (), 0, 1
     monkeypatch.setattr(us, '_search_stage', fake_search)
     inherited = RandomSpliceConfig(
@@ -162,8 +163,9 @@ def test_named_hybrid_ignores_old_multi_and_local_round_settings(tmp_path, mode,
     us.optimise_user_splices(level, frames, stages, inherited,
                              completion_policy='checkpoint')
     assert calls
-    assert all(backend == mode and 'stage_rank' not in kwargs
-               and 'resume_phase' not in kwargs for backend, kwargs in calls)
+    assert all(backend == mode and patience == 3
+               and 'stage_rank' not in kwargs and 'resume_phase' not in kwargs
+               for backend, patience, kwargs in calls)
 
 
 

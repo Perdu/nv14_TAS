@@ -2055,6 +2055,14 @@ The same options can be set in `[multi-splicer]` as `speed = "fast"` and
 outer rounds; a schedule does not itself increase that number. Presets control
 named splice phases, not standalone Auto endpoint or standalone Local.
 
+In `hybrid`, `hybrid-restart`, and `hybrid-local-control`, `--splice-speed`
+sets **stagnant hybrid cycle patience** instead: `fast`=3, `normal`=5,
+`slow`=10. This replaces the configured `hybrid-stagnation-cycles` value;
+leave `--splice-speed` unset to use a manual value. `hybrid-cycles` remains a
+hard cap and is **not increased** by a speed preset: for `slow` to allow 10
+stagnant cycles, set `--splice-hybrid-cycles 10` or higher. Hybrid ignores
+`--splice-round-speeds` and the old Auto/Local phase stagnation limits.
+
 
 ### Alternative named splice route
 

@@ -50,6 +50,22 @@ def test_speed_cli_and_toml(tmp_path: Path):
     assert parsed.auto_splice_round_speeds == ('fast', 'slow')
 
 
+@pytest.mark.parametrize('speed,expected', [('fast', 3), ('normal', 5), ('slow', 10)])
+def test_named_hybrid_toml_speed_uses_cycle_patience(tmp_path: Path, speed, expected):
+    config = tmp_path / 'multi.toml'
+    config.write_text('[multi-splicer]\nfiles=["100", "end"]\n'
+                      'search="hybrid"\n'
+                      'hybrid-cycles=12\n'
+                      f'speed="{speed}"\n')
+    parsed = build_parser().parse_args(['auto', 'fake.ltm', '--splice-config', str(config)])
+    actual = splice_config_for_round(RandomSpliceConfig(
+        search_backend=parsed.auto_splice_search,
+        hybrid_cycles=parsed.auto_splice_hybrid_cycles,
+        splice_speed=parsed.auto_splice_speed), 0)
+    assert actual.hybrid_stagnation_cycles == expected
+    assert actual.hybrid_cycles == 12
+
+
 def test_invalid_schedules_rejected():
     with pytest.raises(ValueError):
         RandomSpliceConfig(splice_round_speeds=('extreme',))

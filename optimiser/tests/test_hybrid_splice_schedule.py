@@ -132,21 +132,21 @@ def test_hybrid_budget_validation_still_rejects_invalid_cycle_limits():
         {"hybrid_local_rounds": 0},
         {"hybrid_cycles": False},
         {"hybrid_stagnation_cycles": -1},
-        {"hybrid_stagnation_cycles": 4, "hybrid_cycles": 3},
+        {"hybrid_stagnation_cycles": 10001},
     ):
         with pytest.raises(ValueError):
             RandomSpliceConfig(search_backend="hybrid", **kwargs)
 
 
 @pytest.mark.parametrize('mode', ('hybrid', 'hybrid-restart', 'hybrid-local-control'))
-def test_hybrid_ignores_unused_stagnation_rounds_and_speeds(mode):
+def test_hybrid_ignores_unused_stagnation_rounds_and_round_speeds(mode):
     from nv14_splice_backend import splice_config_for_round
 
     config = RandomSpliceConfig(
         search_backend=mode, hybrid_cycles=2, hybrid_local_rounds=3,
         splice_rounds=7, splice_auto_stagnation_rounds=10,
         splice_local_stagnation_rounds=50, splice_stagnation_rounds=4,
-        splice_speed='fast', splice_round_speeds=('current', 'slow'))
+        splice_round_speeds=('current', 'slow'))
     assert splice_config_for_round(config, 0) is config
     assert splice_config_for_round(config, 2) is config
 
@@ -168,6 +168,68 @@ def test_hybrid_ignores_unused_stagnation_rounds_and_speeds(mode):
 
 
 
+@pytest.mark.parametrize('mode', ('hybrid', 'hybrid-restart', 'hybrid-local-control'))
+@pytest.mark.parametrize('speed,patience', [('fast', 3), ('normal', 5), ('slow', 10)])
+def test_hybrid_speed_presets_apply_only_to_cycle_stagnation(mode, speed, patience):
+    from nv14_splice_backend import splice_config_for_round
+
+    original = RandomSpliceConfig(
+        search_backend=mode, splice_speed=speed, hybrid_cycles=12,
+        hybrid_stagnation_cycles=2, hybrid_local_rounds=4,
+        splice_auto_stagnation_rounds=9,
+        splice_round_speeds=('current', 'fast'))
+    actual = splice_config_for_round(original, 0)
+    assert actual.hybrid_stagnation_cycles == patience
+    assert original.hybrid_stagnation_cycles == 2
+    assert actual.hybrid_cycles == original.hybrid_cycles
+    assert actual.hybrid_local_rounds == original.hybrid_local_rounds
+    assert actual.splice_auto_stagnation_rounds == original.splice_auto_stagnation_rounds
+    # `round-speeds` is deliberately ignored for all hybrid variants.
+    assert splice_config_for_round(original, 10) == actual
+
+
+@pytest.mark.parametrize('mode', ('hybrid', 'hybrid-restart', 'hybrid-local-control'))
+@pytest.mark.parametrize('speed,cycles', [('fast', 3), ('normal', 5), ('slow', 10)])
+def test_hybrid_speed_stops_after_correct_number_of_stagnant_cycles(mode, speed, cycles):
+    from nv14_splice_backend import splice_config_for_round
+
+    seen = []
+    def search(_level, _frames, _goal, **kwargs):
+        seen.append((kwargs['config'].search_backend, kwargs['rounds']))
+        return (), 1
+
+    config = splice_config_for_round(RandomSpliceConfig(
+        search_backend=mode, splice_speed=speed,
+        hybrid_cycles=12, hybrid_local_rounds=2), 0)
+    _, used, calls = _search_stage(None, (10,), stage(), config,
+                                   random.Random(18), local_search=search,
+                                   evaluator_factory=Evaluator)
+    assert (used, calls) == (cycles * 2, cycles * 2)
+    assert [rounds for _, rounds in seen] == [1, 2] * cycles
+    expected_first = 'local' if mode == 'hybrid-local-control' else 'endpoint-auto'
+    assert [backend for backend, _ in seen] == [expected_first, 'local'] * cycles
+
+
+def test_hybrid_slow_preset_does_not_raise_max_cycles():
+    from nv14_splice_backend import splice_config_for_round
+
+    config = splice_config_for_round(RandomSpliceConfig(
+        search_backend='hybrid', splice_speed='slow', hybrid_cycles=5), 0)
+    assert config.hybrid_stagnation_cycles == 10
+    calls = []
+    def search(_level, _frames, _goal, **kwargs):
+        calls.append(kwargs['rounds'])
+        return (), 1
+
+    _, used, phases = _search_stage(None, (10,), stage(), config,
+                                    random.Random(7), evaluator_factory=Evaluator,
+                                    local_search=search)
+    assert (used, phases) == (10, 10)
+    assert calls == [1, 5] * 5
+
+
+
+
 def test_hybrid_shortcut_and_toml_configuration(tmp_path):
     command = build_command("hybrid", "88-4", "522", env={})
     assert command[2] == "hybrid"
@@ -179,6 +241,14 @@ def test_hybrid_shortcut_and_toml_configuration(tmp_path):
     assert parsed.auto_splice_hybrid_local_rounds == 11
     assert parsed.auto_splice_hybrid_cycles == 3
     assert parsed.auto_runs == 1
+    speed_args = parse_arguments(["hybrid", "level.ltm", "--goal-config", "some/522.txt",
+                                  "--splice-speed", "slow", "--splice-hybrid-cycles", "12"])
+    from nv14_splice_backend import splice_config_for_round
+    effective = splice_config_for_round(RandomSpliceConfig(
+        search_backend=speed_args.auto_splice_search,
+        splice_speed=speed_args.auto_splice_speed,
+        hybrid_cycles=speed_args.auto_splice_hybrid_cycles), 0)
+    assert effective.hybrid_stagnation_cycles == 10
     config = tmp_path / "splices.toml"
     config.write_text('[multi-splicer]\nfiles=["522", "end"]\nsearch="hybrid-local-control"\n'
                       'hybrid-local-rounds=4\nhybrid-cycles=2\n')
