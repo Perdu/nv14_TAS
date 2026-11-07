@@ -49,7 +49,7 @@ def test_cli_searches_both_orders_and_shares_verified_best(tmp_path, monkeypatch
     main()
     assert len(calls) == 2
     assert calls[0][0] == ('230', 'end')
-    assert calls[1][0] == ('240',)
+    assert calls[1][0] == ('230', '240', 'end')
     assert calls[1][2] is None
     assert callable(calls[1][3])
     assert not output.exists()
@@ -375,3 +375,23 @@ def test_interleaved_merges_consider_both_routes_before_and_after_search(
         (('end',), False, False),
         (('230', '239', '240', '250', 'end'), True, False),
     ]
+
+
+def test_alt_summary_displays_all_route_lines_without_writes(tmp_path, monkeypatch, capsys):
+    """A summary includes divergent stages AND the shared prefix/rejoin."""
+    from nv14_replay import encode_complex_replay
+    _level, source, output, argv = _make_routes(tmp_path)
+    (tmp_path / '97-1_240.txt').write_text(encode_complex_replay(source) + '\n')
+    original = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    monkeypatch.setattr(us, '_search_stage', lambda *_a, **_kw:
+                        pytest.fail('summary invoked search'))
+    monkeypatch.setattr(sys, 'argv', argv + ['--ls-splice'])
+    main()
+    stdout = capsys.readouterr().out
+    assert '[auto:user-splice:summary:route] alternate: 230 -> 240 -> end' in stdout
+    assert "[auto:user-splice:summary:propagated] '240'" in stdout or (
+        "[auto:user-splice:summary:pending] '240'" in stdout)
+    assert "[auto:user-splice:summary:empty] 'end'" in stdout
+    assert '[alternate route]' in stdout
+    assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == original
+    assert not output.exists()

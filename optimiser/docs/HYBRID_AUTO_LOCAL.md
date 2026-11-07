@@ -178,3 +178,11 @@ file), nor the global seam-matching horizon (`--auto-splice-lookback`).
 Multi-splicer CLI status lines, including named-splice summaries, routes, and
 colourized improvement messages, are prefixed with local `[HH:MM:SS]`. This
 is only a presentation change; search state and checkpoints are unchanged.
+
+## Alternate-route summaries (patch 83)
+
+`--ls-splice` / `-l` now prints a separate `summary:route` heading for the
+configured alternate route, then shows every configured stage in that order
+(shared prefix, alternate-only stages, reconvergence, and suffix), labelled
+`[alternate route]`. Summary mode remains read-only. Normal search still
+executes only its planned divergent stages before reconvergence.

@@ -5248,6 +5248,17 @@ def main() -> None:
                     # The primary route may have saved fresh checkpoints.
                     # Re-load them for the alternate route, and compare against
                     # the primary's independently verified completed best.
+                    # A read-only summary must list the entire configured
+                    # alternate route, including shared prefix, divergent
+                    # stages, reconvergence, and suffix. The search remains
+                    # restricted to the divergent stages as before.
+                    alt_report_stages = (alternate_stages if args.auto_ls_splice
+                                         else alternate_branch)
+                    if args.auto_ls_splice:
+                        print(f"[{time.strftime('%H:%M:%S')}] "
+                              "[auto:user-splice:summary:route] alternate: " +
+                              " -> ".join(stage.name for stage in alt_report_stages),
+                              flush=True)
                     alt_candidates = _load_user_splice_checkpoints(
                         stage_outputs, output_path, replay_output_path)
                     alt_frontiers = ({} if args.auto_ls_splice else
@@ -5262,9 +5273,9 @@ def main() -> None:
                     def alt_backend_path(name, backend):
                         return str(stage_outputs[name][0].with_suffix(
                             f".alt.{backend}.round.json"))
-                    if alternate_branch:
+                    if alt_report_stages:
                         alt_result = optimise_user_splices(
-                            level, summary_frames, alternate_branch, splice_config,
+                            level, summary_frames, alt_report_stages, splice_config,
                             completion_policy=args.auto_completion_policy,
                             use_current_run=args.auto_splice_use_current_run,
                             start_from_stage_bests=args.auto_splice_each_best,
@@ -5289,7 +5300,9 @@ def main() -> None:
                             frontier_callback=save_frontier,
                             backend_checkpoint_path=alt_backend_path,
                             progress=lambda message: _print_user_splice_progress(
-                                message, color=common_config.color),
+                                message + (" [alternate route]" if args.auto_ls_splice
+                                           and ":summary" in message else ""),
+                                color=common_config.color),
                         )
                     else:
                         alt_result = type(result)(result.frames, 0, 0, 0)
