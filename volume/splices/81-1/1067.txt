@@ -1,0 +1,14 @@
+[local]
+search = "population"
+target_frame = 1080
+range = "1010:1080"
+simulate-enemies = false
+objective = "earliest-arrival"
+target_region = "684:764,96:116"
+secondary_objective = "min-y"
+require-interaction = ["testdoor:1"]
+
+iterations = 20000
+beam = 128
+mutation-span = 48
+repair-lookback = 48
