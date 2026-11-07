@@ -172,3 +172,9 @@ per-stage values. The coordinator retains enough preceding populations for
 the largest per-stage value, even if earlier stages use a smaller one. This
 is not the mutation/repair frame lookback (`repair-lookback` in a Local goal
 file), nor the global seam-matching horizon (`--auto-splice-lookback`).
+
+## Timestamps (patch 82)
+
+Multi-splicer CLI status lines, including named-splice summaries, routes, and
+colourized improvement messages, are prefixed with local `[HH:MM:SS]`. This
+is only a presentation change; search state and checkpoints are unchanged.

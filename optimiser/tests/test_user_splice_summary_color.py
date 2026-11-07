@@ -14,7 +14,7 @@ def test_propagated_summary_has_no_success_green(monkeypatch):
     buffer = TTY()
     monkeypatch.setattr(sys, 'stdout', buffer)
     _print_user_splice_progress('[auto:user-splice:summary:propagated] "end": in best', color=True)
-    assert buffer.getvalue() == '[auto:user-splice:summary:propagated] "end": in best\n'
+    assert buffer.getvalue().endswith('[auto:user-splice:summary:propagated] "end": in best\n')
 
 
 def test_real_completed_improvement_stays_green(monkeypatch):
