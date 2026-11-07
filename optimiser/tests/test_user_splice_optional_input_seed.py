@@ -18,8 +18,8 @@ def test_cli_and_toml_flag(tmp_path):
     def args(*flags):
         return parse_arguments(['auto', 'a.ltm', '--splice-config', str(p), *flags])
     assert args().auto_splice_use_current_run is False
-    assert args('--use-current-run').use_current_run is True
-    assert args('--no-use-current-run').use_current_run is False
+    assert args('--use-current-run').auto_splice_use_current_run is True
+    assert args('--no-use-current-run').auto_splice_use_current_run is False
     p.write_text('[multi-splicer]\nfiles=["522"]\nuse-current-run="false"\n')
     with pytest.raises(SystemExit, match='must be a boolean'):
         args()

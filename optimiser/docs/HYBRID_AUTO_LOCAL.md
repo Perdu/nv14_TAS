@@ -162,3 +162,13 @@ baseline and reporting metrics. Saved stage frontiers, saved checkpoints and
 a distinct saved completed replay can supply seeds instead; if none are
 available for a stage, an explicit error explains why the search cannot
 proceed. This does not disable `--splice-from-best` or resume recovery.
+
+## Per-splice history lookback (patch 80)
+
+In each goal file, e.g. `522.txt`, set `[local] lookback = 3` (or
+`stage-lookback = 3`) to use up to three preceding splice frontiers **as
+seeds for this stage**. An explicit `--splice-stage-lookback N` overrides
+per-stage values. The coordinator retains enough preceding populations for
+the largest per-stage value, even if earlier stages use a smaller one. This
+is not the mutation/repair frame lookback (`repair-lookback` in a Local goal
+file), nor the global seam-matching horizon (`--auto-splice-lookback`).

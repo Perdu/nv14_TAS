@@ -1845,6 +1845,9 @@ def _validate_local_strategy(args: argparse.Namespace, explicit: set[str]) -> No
         options = ", ".join("--" + name.replace("_", "-") for name in sorted(incompatible))
         needed = "windows" if args.search == "population" else "population"
         raise SystemExit(f"{options} require --search {needed}")
+    if "stage_lookback" in explicit:
+        raise SystemExit("--stage-lookback is only valid inside a named multi-splicer "
+                         "[local] stage file")
     if args.objective in EARLIEST_OBJECTIVES and args.search != "population":
         raise SystemExit(f"--objective {args.objective} requires --search population")
 
@@ -2160,7 +2163,7 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
             raise ValueError(f"splice {name!r} ({path}): search={search!r} is not supported "
                              "in the named Auto/Local population multi-splicer")
         permitted = (set(_LOCAL_GOAL_TO_AUTO) | set(_SPLICE_LOCAL_BACKEND_OPTIONS) |
-                     {"search", "rounds", "stagnation_rounds"})
+                     {"search", "rounds", "stagnation_rounds", "stage_lookback"})
         unsupported = sorted(set(local_values) - permitted)
         if unsupported:
             raise ValueError(f"splice {name!r} ({path}): unsupported per-splice "
@@ -2193,6 +2196,11 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
                 continue
             for field in config_fields:
                 overrides[field] = local_values[local_key]
+        # Per-stage lookback controls how many older stage frontiers can seed
+        # THIS splice. An explicit global CLI override takes precedence.
+        if ("stage_lookback" in local_values and
+                "auto_splice_stage_lookback" not in cli_explicit):
+            overrides["stage_lookback"] = local_values["stage_lookback"]
         # Per-stage Local stopping options are legitimate inherited settings.
         # Hybrid uses its own cycles instead; do not reject shared goal files
         # or turn the dormant settings into stage overrides.
@@ -3177,6 +3185,11 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         command.add_argument("--" + option, modes=local_modes, type=int, default=default,
                              metavar="N", help=f"population only: {help_text} (default: {default})")
+    command.add_argument("--stage-lookback", "--lookback", modes=local_modes,
+                         dest="stage_lookback", type=parse_positive_int, default=None,
+                         metavar="N",
+                         help="only in a named multi-splicer [local] stage file: "
+                              "use up to N previous stage frontiers as seeds")
     command.add_argument("--checkpoint", modes=local_modes, type=Path, metavar="FILE",
                          help="population only: save campaign state at completed round boundaries")
     command.add_argument("--resume", modes=local_modes, action="store_true",

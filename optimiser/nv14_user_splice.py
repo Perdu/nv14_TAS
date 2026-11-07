@@ -1436,6 +1436,9 @@ def optimise_user_splices(
         raise ValueError("invalid saved outer-round progress")
     first_round = (int(active_phase["round_no"]) if active_phase is not None
                    else resume_outer_round)
+    max_stage_lookback = max(
+        (int(stage.config_overrides.get("stage_lookback", config.stage_lookback))
+         for stage in stages), default=config.stage_lookback)
     for round_no in (itertools.count(first_round) if config.rounds == 0
                      else range(first_round, config.rounds)):
         begun = time.monotonic()
@@ -1468,14 +1471,14 @@ def optimise_user_splices(
                 history[0] = list(dict.fromkeys(
                     (*archived_frontiers[restore_index - 1][:config.frontier if use_current_run else max(1, config.frontier)], *history[0])))
                 history_origins[0] = restore_index - 1
-            for prior in range(restore_index - 2, max(-1, restore_index - config.stage_lookback - 1), -1):
+            for prior in range(restore_index - 2, max(-1, restore_index - max_stage_lookback - 1), -1):
                 if archived_frontiers[prior]:
                     history.append(archived_frontiers[prior][:config.frontier])
                 else:
                     history.append([])
                 history_origins.append(prior)
-            history = history[:config.stage_lookback]
-            history_origins = history_origins[:config.stage_lookback]
+            history = history[:max_stage_lookback]
+            history_origins = history_origins[:max_stage_lookback]
         improved = False
         unfulfilled: list[str] = []
         stage_begin = int(active_phase["stage_index"]) if active_phase is not None else first_stage
@@ -1493,14 +1496,16 @@ def optimise_user_splices(
             evaluations_before_stage = evaluations
             attempts_before_stage = attempts
             temp_gains = 0
-            branches = _stage_sources_history(history, config.frontier)
+            stage_history = history[:stage_config.stage_lookback]
+            stage_history_origins = history_origins[:stage_config.stage_lookback]
+            branches = _stage_sources_history(stage_history, config.frontier)
             if from_best_index is None:
                 # Selection quotas stay unchanged, but search the best seed
                 # from each prior stage before lower-ranked alternatives from
                 # that same stage: n-1 rank 1, n-2 rank 1, ..., n-1 rank 2.
                 # A replay in multiple pools takes its best (rank, recency).
                 priorities: dict[tuple[InputFrame, ...], tuple[int, int]] = {}
-                for depth, pool in enumerate(history):
+                for depth, pool in enumerate(stage_history):
                     for rank, candidate in enumerate(pool):
                         key = (rank, depth)
                         if candidate not in priorities or key < priorities[candidate]:
@@ -1548,16 +1553,16 @@ def optimise_user_splices(
             if progress and before_dedup != len(branches):
                 progress(f"[auto:user-splice] {stage.name!r}: skipped "
                          f"{before_dedup - len(branches)} physically duplicate seed(s)")
-            if progress and len(history) > 1:
-                labels = "/".join(f"n-{i}" for i in range(1, len(history) + 1))
-                counts = "/".join(str(len(pool)) for pool in history)
+            if progress and len(stage_history) > 1:
+                labels = "/".join(f"n-{i}" for i in range(1, len(stage_history) + 1))
+                counts = "/".join(str(len(pool)) for pool in stage_history)
                 order = ("current input, then " if from_best_index is None and
                          use_current_run else "")
                 if active_phase is not None and index == stage_begin:
                     order = "resumed backend, then " + order
                 progress(f"[auto:user-splice] {stage.name!r}: "
                          f"{len(branches)} seed(s): {order}{labels} frontiers "
-                         f"({counts} available; lookback {config.stage_lookback})")
+                         f"({counts} available; lookback {stage_config.stage_lookback})")
             # Previously discovered stage elites are valid candidates without
             # spending more simulation proposals to rediscover them.
             eligible: dict[tuple[InputFrame, ...], tuple] = {}
@@ -1578,7 +1583,7 @@ def optimise_user_splices(
                 else:
                     origins = [(pool.index(branch), depth, origin)
                                for depth, (pool, origin) in enumerate(
-                                   zip(history, history_origins)) if branch in pool]
+                                   zip(stage_history, stage_history_origins)) if branch in pool]
                     if origins:
                         rank, _depth, origin = min(origins)
                         if origin is not None:
@@ -1791,8 +1796,8 @@ def optimise_user_splices(
                              f"{stage.name!r}: no candidate met its own goal; "
                              f"continuing with {len(fallbacks)} fallback seed(s) "
                              "(completed replay verification remains strict)")
-                history = [fallbacks, *history][:config.stage_lookback]
-                history_origins = [index, *history_origins][:config.stage_lookback]
+                history = [fallbacks, *history][:max_stage_lookback]
+                history_origins = [index, *history_origins][:max_stage_lookback]
                 continue
             ordered = sorted(eligible.items(), key=lambda item: item[1])
             # Keep distinct earlier-stage frontiers independent of whether a
@@ -1802,8 +1807,8 @@ def optimise_user_splices(
             if stage_result_callback is not None:
                 stage_result_callback(stage.name, stage_export(selected[0]))
             publish_frontier(index, [candidate for candidate, _ in ordered])
-            history = [selected, *history][:config.stage_lookback]
-            history_origins = [index, *history_origins][:config.stage_lookback]
+            history = [selected, *history][:max_stage_lookback]
+            history_origins = [index, *history_origins][:max_stage_lookback]
             if reference is not None and selected:
                 # Use the best eligible checkpoint at this stage as a prefix;
                 # the reference supplies a known completed route suffix.
