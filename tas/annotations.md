@@ -2254,11 +2254,13 @@ rerecords: 0
 
 
 # 69-2
-rerecords: 812
+rerecords: 864
 
-There's a branch in which we avoid the cj on the way up to the middle section, which is slightly faster, to go to the left, but we get a worse angle
+It's possible to get to the second section a bit faster, but we get detected by the drone.
+There may be 1f to save in the last section I failed to propagate
 
 Branch 9: alt route jumping lower on the way back to the middle section, the walljumping on the left. The way to the left is faster, but walljumps lose time.
+Branch 8: faster way to 240 but getting detected by drone
 
 # 69-3
 rerecords: 0
@@ -2740,7 +2742,7 @@ rerecords: 150
 
 
 # 86-3
-rerecords: 172
+rerecords: 174
 
 
 
@@ -2871,9 +2873,9 @@ We're 0.18 pixels away from saving 1f. We can't make the third pipe jump earlier
 I can't land a proper cj on the way to the switch that's actually faster
 
 # 91-2
-rerecords: 0
+rerecords: 153
 
-
+Branch 9: attempt at going down and up after switch 1 like the rta run does; can't get to the upper wall of the platform directly
 
 # 91-3
 rerecords: 98
@@ -3127,4 +3129,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 271837
+# Total rerecords: 272044
