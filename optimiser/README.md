@@ -1623,32 +1623,62 @@ skipped on Ctrl+C. An explicit standalone `--splice-merge-repair-only` overrides
 `repair-at-end = true` TOML setting for that invocation.
 
 - `merge-repair-pairs` caps independent source/suffix pairs across the entire
-  pass, including unsuccessful pairs. A failed route never stops another pair.
-  **The positional input is always the first repair source**, even if it is
-  already the best completed run. A distinct, verified saved completed output
-  remains an available *suffix* instead of being replaced by the input.
-  The first attempt of each saved stage and archived-section source is scheduled
-  before repeated attempts from other sources. This avoids exhausting the
-  default 48 pairs on stage bests alone and losing locally faster sections whose
-  absolute arrival frames are later. Early saved gains then receive several
-  independent destination attempts, so an incompatible successor (e.g. 564)
-  does not prevent trying a later continuation (e.g. 614).
-  The repair log identifies the input/continuation provenance and counts how
-  many archived sections were actually attempted under the budget.
-- `merge-repair-window` bounds the mutable input interval near the bridge;
-  earlier edits are immutable. It is **not** ordinary `lookback`, and never
-  widens the normal multi-splicer's n-1/n-2 seed selection.
-- `merge-repair-targets` limits distinct physical states per pair. Each uses
-  `repair-iterations` proposals per worker, divided between Auto and Local
-  when `search = "both"`. There is no unbounded stagnation loop in repairs.
-  This is deliberately more expensive than direct merging.
+  pass, including unsuccessful pairs. A failed route never blocks another.
+  The positional current input retains its first opportunity by default.
+  Subsequent attempts **prioritise saved earliest-arrival checkpoints with
+  measured frame leads over the verified completed baseline**, giving each
+  high-value source more than one continuation early (for example 527 ->
+  completed and 527 -> 599). Less-promising stages and independent archived
+  sections remain eligible under the remaining budget. No assumed time gain
+  is assigned to spatial-only objectives or infeasible checkpoints.
+- To restrict the **mutation-based bridge repair** to a specific source and
+  destination, use `--splice-merge-repair-from 527 --splice-merge-repair-to 599`
+  (TOML: `merge-repair-from = "527"`, `merge-repair-to = "599"`). The aliases
+  `--splice-merge-repair-source` and `--splice-merge-repair-destination` also
+  work. The source `current` means the positional input; the destination
+  `completed` means any distinct verified completed suffix. A single filter
+  may be supplied alone. A named stage source also includes its independently
+  archived section when available. Direct mutation-free verified grafting
+  still runs across all pairs; these filters only limit bridge mutation work.
+  If a requested name does not exist on an alternate branch, that branch
+  reports zero matching mutation pairs instead of silently repairing others.
+- `merge-repair-window` bounds mutable inputs near the bridge, independent
+  of ordinary stage history lookback. For an earliest-arrival source, the
+  actual saved checkpoint arrival is a hard lower bound: the bridge cannot
+  change inputs through that frame, or graft the suffix before that checkpoint.
+  Live target ticks are sampled across the subsequent corridor instead of
+  only three ticks near the nominal stage deadline. Physical proximity still
+  guides the search, but reference states requiring lost frames are penalised.
+- `merge-repair-targets` limits distinct physical target ticks per pair.
+  `repair-iterations` is split across the selected bounded backend phases per
+  target. In bridge repair, `search = "hybrid"` runs one endpoint-Auto phase
+  followed by one Local phase *sharing candidate replays*, while the two
+  Hybrid restart controls use the same phases without population handoff.
+  This deliberately bounded bridge schedule does **not** run the full normal
+  `hybrid-cycles` / `hybrid-local-rounds` campaign. It avoids unsupported
+  Hybrid dispatch in the low-level search. `--splice-merge-verbose` reports
+  individual target-pair outcomes, including whether a verified graft merely
+  remains feasible or genuinely improves a stage or completion. The compact
+  final report separates these categories and aggregates rejection reasons.
+
+Example for the 527 corridor, with a larger target window if needed:
+
+```sh
+python3 optimize_replay.py auto ../n_levels/81-1.ltm \
+  --splice-config ../splices/81-1/multi-splicer.toml \
+  --splice-merge-repair-only \
+  --splice-merge-repair-from 527 --splice-merge-repair-to 599 \
+  --splice-merge-repair-pairs 16 --splice-merge-repair-targets 4 \
+  --splice-merge-repair-window 64 --splice-merge-verbose
+```
 
 A repair succeeds only if both the bridge and attached suffix pass native
 replay verification, canonical completion checks for a final result, and
 persistent route-control preservation. **Repair is best effort:** it cannot
 promise to connect every locally faster route, and does not erase a saved
 checkpoint or overwrite a verified completed output after an unsuccessful
-attempt. It prints counts of attempted, successful, and unsuccessful pairs.
+attempt. It prints separately counted feasible pairs, verified graft candidates,
+actual stage and completed improvements, and search/validation failures.
 
 Stage checkpoint summaries additionally report **section frames** between
 neighboring helpers when at least one endpoint measures an actual earliest

@@ -186,3 +186,33 @@ configured alternate route, then shows every configured stage in that order
 (shared prefix, alternate-only stages, reconvergence, and suffix), labelled
 `[alternate route]`. Summary mode remains read-only. Normal search still
 executes only its planned divergent stages before reconvergence.
+
+## Bounded Hybrid bridge repairs and targeted propagation (patch 84)
+
+Bridge repair accepts `search = "hybrid"`, `"hybrid-restart"`, and
+`"hybrid-local-control"`. To keep the repair work bounded, it runs a single
+Auto/Local handoff (or Local/Local for the control), dividing
+`repair-iterations` across those two calls; only the regular named-stage
+Hybrid campaign uses the configured `hybrid-cycles` and
+`hybrid-local-rounds`. The persistent variant carries candidate replays from
+Auto into Local. Existing canonical completion and persistent-control
+verification remain mandatory.
+
+For example, restrict bridge mutation searches to the saved 527 checkpoint
+and a later saved 599 route:
+
+```sh
+--splice-merge-repair-only \
+--splice-merge-repair-from 527 --splice-merge-repair-to 599 \
+--splice-merge-verbose
+```
+
+Or use `[multi-splicer] merge-repair-from = "527"` and
+`merge-repair-to = "599"`. The target `completed` selects a verified
+completed suffix, while source `current` selects the positional input.
+
+Repair no longer mutates or grafts before an already feasible
+`earliest-arrival` checkpoint's actual arrival frame. A gain remains pending
+if no later valid continuation can preserve it; an accepted repair candidate
+is not the same thing as an improved completed replay. Normal multi-splicer
+stage search, direct grafting, and the SWF verification hierarchy are unchanged.

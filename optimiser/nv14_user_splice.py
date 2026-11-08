@@ -344,6 +344,8 @@ def optimise_user_splices(
     merge_repair_pairs: int = 48,
     merge_repair_window: int = 48,
     merge_repair_targets: int = 2,
+    merge_repair_from: str | None = None,
+    merge_repair_to: str | None = None,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
@@ -376,6 +378,12 @@ def optimise_user_splices(
         raise ValueError("merge-repair-only requires merge-only")
     if merge_repair_at_end and not merge_stage_bests:
         raise ValueError("merge-repair-at-end requires merge-bests")
+    if merge_repair_from is not None and (not isinstance(merge_repair_from, str) or
+                                          not merge_repair_from.strip()):
+        raise ValueError("merge_repair_from must be a nonempty stage name or 'current'")
+    if merge_repair_to is not None and (not isinstance(merge_repair_to, str) or
+                                        not merge_repair_to.strip()):
+        raise ValueError("merge_repair_to must be a nonempty stage name or 'completed'")
     for name, value, minimum in (("merge_repair_pairs", merge_repair_pairs, 1),
                                  ("merge_repair_window", merge_repair_window, 2),
                                  ("merge_repair_targets", merge_repair_targets, 1)):
@@ -961,7 +969,7 @@ def optimise_user_splices(
                      f"all earlier stages eligible (normal search lookback "
                      f"remains {config.stage_lookback}); seam lookback "
                      f"{config.lookback} frame(s); "
-                     "no Auto/Local bridge mutation search")
+                     "direct-graft subpass only; bridge mutation search follows when enabled")
 
         # The CLI input is not automatically included in saved stage checkpoints
         # (especially in merge-only mode), so offer it separately as a prefix.
@@ -1283,7 +1291,10 @@ def optimise_user_splices(
                     score = stage_checkpoint_evals[index]
                     covered = (score is not None and
                                score.objective_key >= full_eval.objective_key)
-            if not covered and prefix != input_prefix_for_repair:
+            # Explicit source selection must not lose a saved candidate merely
+            # because the current completion already covers that *goal*; its
+            # downstream physics or interaction state may still differ.
+            if (not covered or merge_repair_from == stage.name) and prefix != input_prefix_for_repair:
                 sources.append((stage.name, prefix, index))
         primary_count = len(sources)
         # The saved archive has an independent fastest-section slot (when a
@@ -1326,37 +1337,96 @@ def optimise_user_splices(
                     if later_prefix is not None and later_prefix != prefix:
                         suffixes.append((stages[later].name, later_prefix, later, False))
             tasks.append((label, prefix, index, suffixes))
-        attempts_used = successes = search_calls = repair_evals = 0
+        attempts_used = feasible_pairs = search_calls = repair_evals = 0
+        improved_stages = improved_completions = candidate_grafts = endpoint_candidates = 0
+        failed_preflight = 0
+        failure_reasons: dict[str, int] = {}
         attempted_labels: set[str] = set()
         seen_pairs: set[tuple[tuple[InputFrame, ...], tuple[InputFrame, ...]]] = set()
-        primary_tasks, section_tasks = tasks[:primary_count], tasks[primary_count:]
-        # One pass over *every distinct source*, including locally fast saved
-        # sections, before giving any source a second destination.  Previously
-        # three attempts per primary source could exhaust all 48 default pairs
-        # before even the first archived section got a chance.
-        plan = []
-        if primary_tasks:
-            plan.append((primary_tasks[0], 0))  # positional input always first
-        for i in range(max(len(primary_tasks) - 1, len(section_tasks))):
-            if i + 1 < len(primary_tasks):
-                plan.append((primary_tasks[i + 1], 0))
-            if i < len(section_tasks):
-                plan.append((section_tasks[i], 0))
-        # Once every source has had a chance, give *early* gains two more
-        # independent destinations before moving on.  The first continuation
-        # after 522 can be unmergeable (564), while the next (614) is useful;
-        # neither failure should wait behind dozens of unrelated late splices.
-        for item in primary_tasks:
-            plan.extend((item, turn) for turn in (1, 2) if turn < len(item[3]))
-        for item in section_tasks:
-            plan.extend((item, turn) for turn in (1, 2) if turn < len(item[3]))
-        max_turn = max((len(item[3]) for item in tasks), default=0)
-        for turn in range(3, max_turn):
-            for i in range(max(len(primary_tasks), len(section_tasks))):
-                if i < len(primary_tasks):
-                    plan.append((primary_tasks[i], turn))
-                if i < len(section_tasks):
-                    plan.append((section_tasks[i], turn))
+        # Targeting applies to *bridge mutation searches*. Direct verified
+        # grafts remain a separate, inexpensive pass and are not suppressed.
+        source_name = merge_repair_from
+        destination_name = merge_repair_to
+        if source_name is not None and source_name != 'current' and not any(
+                stage.name == source_name for stage in stages):
+            if progress:
+                progress(f"{report} bridge repair: source {source_name!r} "
+                         "is not in this route; no bridge pairs selected")
+        if destination_name is not None and destination_name != 'completed' and not any(
+                stage.name == destination_name for stage in stages):
+            if progress:
+                progress(f"{report} bridge repair: destination {destination_name!r} "
+                         "is not in this route; no bridge pairs selected")
+        active_tasks = []
+        for label, prefix, index, suffixes in tasks:
+            if source_name is not None and (
+                    (source_name == 'current' and index is not None) or
+                    (source_name != 'current' and
+                     (index is None or stages[index].name != source_name))):
+                continue
+            filtered = [(name, candidate, later, complete)
+                        for name, candidate, later, complete in suffixes
+                        if (destination_name is None or
+                            (destination_name == 'completed' and complete) or
+                            (destination_name != 'completed' and later is not None and
+                             stages[later].name == destination_name))]
+            if filtered:
+                active_tasks.append((label, prefix, index, filtered))
+
+        def saved_frame_gain(item) -> int:
+            """Frame lead over best *completed* replay at this helper goal.
+
+            A spatial-only goal has no meaningful frame lead. Later-arriving
+            archived sections remain eligible irrespective of this priority.
+            """
+            _label, prefix, index, _suffixes = item
+            if index is None or not stages[index].goal.is_earliest:
+                return 0
+            best_completion = next((frames for _name, frames in completions), None)
+            if best_completion is None:
+                return 0
+            try:
+                prefix_eval = original_endpoints[index].evaluate(prefix)
+                completed_eval = original_endpoints[index].evaluate(
+                    _materialise_splice_tail(best_completion,
+                                             stages[index].goal.target_frame))
+                if prefix_eval.feasible and completed_eval.feasible:
+                    return max(0, completed_eval.frame - prefix_eval.frame)
+            except (ValueError, IndexError):
+                return 0
+            return 0
+
+        # Give a proven checkpoint lead several independent destinations
+        # early, rather than spending the whole default 48-pair budget on
+        # one pairing per unrelated source. Retain the positional input's
+        # legacy first opportunity when no explicit target was requested.
+        prioritized = sorted((item for item in active_tasks
+                              if saved_frame_gain(item) >= 2),
+                             key=saved_frame_gain, reverse=True)
+        ordinary = [item for item in active_tasks if item not in prioritized]
+        plan: list[tuple[tuple, int]] = []
+        if source_name is None and destination_name is None and ordinary and ordinary[0][2] is None:
+            plan.append((ordinary.pop(0), 0))
+        for item in prioritized:
+            plan.extend((item, turn) for turn in range(min(2, len(item[3]))))
+        # When the source is explicitly targeted, explore *every* requested
+        # destination before moving to other sources. This is useful for e.g.
+        # 527 -> 599 and 527 -> completed in a single pass.
+        if source_name is not None:
+            for item in ordinary:
+                plan.extend((item, turn) for turn in range(len(item[3])))
+        else:
+            for turn in range(max((len(item[3]) for item in ordinary), default=0)):
+                for item in ordinary:
+                    if turn < len(item[3]):
+                        plan.append((item, turn))
+        for item in prioritized:
+            plan.extend((item, turn) for turn in range(2, len(item[3])))
+        if progress and (source_name is not None or destination_name is not None):
+            progress(f"{report} bridge repair selection: "
+                     f"from={source_name or 'all'}, to={destination_name or 'all'}; "
+                     f"{len(active_tasks)} source(s), {len(plan)} candidate pair(s); "
+                     f"budget {merge_repair_pairs}")
         for (label, prefix, index, suffixes), turn in plan:
             if attempts_used >= merge_repair_pairs:
                 break
@@ -1368,12 +1438,23 @@ def optimise_user_splices(
             seen_pairs.add((prefix, suffix))
             attempts_used += 1
             attempted_labels.add(label)
+            protected_through = None
+            if index is not None:
+                try:
+                    evaluation = original_endpoints[index].evaluate(prefix)
+                    if evaluation.feasible and stages[index].goal.is_earliest:
+                        protected_through = evaluation.frame
+                except (ValueError, IndexError):
+                    pass
             seam = (stages[index].end if index is not None else
                     min(len(prefix) - 2, max(manual_repair_seam,
                         stages[later].end if later is not None else manual_repair_seam)))
+            if protected_through is not None:
+                seam = max(seam, protected_through + max(3, merge_repair_window // 2))
             if progress and merge_verbose:
                 progress(f"{report} bridge {attempts_used}/{merge_repair_pairs}: "
                          f"{label} -> {target_name}; seam {seam}; "
+                         f"protected checkpoint through frame {protected_through}; "
                          f"window {merge_repair_window}, targets {merge_repair_targets}, "
                          f"{config.workers} worker(s) x {config.repair_iterations} "
                          "proposals per target")
@@ -1382,16 +1463,19 @@ def optimise_user_splices(
                     level, prefix, suffix, seam_frame=seam, config=config,
                     window=merge_repair_window, targets=merge_repair_targets,
                     completion_required=needs_completion,
-                    seed=rng.getrandbits(63))
+                    seed=rng.getrandbits(63),
+                    protected_through=protected_through)
             except KeyboardInterrupt:
                 if progress:
                     progress(f"{report} bridge interrupted; verified results saved "
                              "before interruption are retained")
                 raise
             except (ValueError, RuntimeError) as exc:
-                # A corrupt or unrepairable saved section may fail the native
-                # search preflight. Treat that *pair* as unsuccessful, without
-                # preventing the 522 -> 614 path after 522 -> 564 fails.
+                failed_preflight += 1
+                reason = f"preflight {type(exc).__name__}"
+                failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+                # A corrupt or unrepairable section may fail its preflight.
+                # Do not lose other source/suffix opportunities.
                 if progress and merge_verbose:
                     progress(f"{report} bridge {label} -> {target_name}: "
                              f"failed ({type(exc).__name__}: {exc}); "
@@ -1399,28 +1483,61 @@ def optimise_user_splices(
                 continue
             search_calls += result.searches
             repair_evals += result.evaluations
-            found = False
+            endpoint_candidates += result.endpoint_candidates
+            candidate_grafts += len(result.grafts)
+            if not result.grafts:
+                reason = result.failure_reason or "no replay-verified graft"
+                failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+            any_feasible = False
+            before_stage_key = (stage_checkpoint_evals[later].objective_key
+                                if later is not None and stage_checkpoint_evals[later] is not None
+                                else None)
+            before_completion_rank = best_rank
             for repaired in result.grafts:
                 stage_ok, completed_ok = offer(repaired, later, f"repair {label} -> {target_name}")
-                found = stage_ok or completed_ok or found
-            if found:
-                successes += 1
+                any_feasible = stage_ok or completed_ok or any_feasible
+            if any_feasible:
+                feasible_pairs += 1
+            after_stage_key = (stage_checkpoint_evals[later].objective_key
+                               if later is not None and stage_checkpoint_evals[later] is not None
+                               else None)
+            stage_improved = (after_stage_key is not None and
+                              (before_stage_key is None or after_stage_key < before_stage_key))
+            completion_improved = (best_rank is not None and
+                                  (before_completion_rank is None or best_rank < before_completion_rank))
+            improved_stages += int(stage_improved)
+            improved_completions += int(completion_improved)
             if progress and merge_verbose:
-                progress(f"{report} bridge {label} -> {target_name}: "
-                         f"{'verified graft accepted' if found else 'no verified graft'}; "
+                status = ('improved completed replay' if completion_improved else
+                          'improved stage best' if stage_improved else
+                          'feasible but no improvement' if any_feasible else
+                          result.failure_reason or 'no verified graft')
+                progress(f"{report} bridge {label} -> {target_name}: {status}; "
+                         f"{len(result.grafts)} verified graft(s); "
+                         f"{result.endpoint_candidates} endpoint candidate(s), "
+                         f"{result.rejected_prefix} immutable-prefix violation(s); "
                          f"{result.searches} backend search(es), "
                          f"{result.evaluations} evaluations")
         evaluations += repair_evals
         attempts += search_calls
         if progress:
             progress(f"{report} bridge repair done: {attempts_used} independent "
-                     f"pair(s) attempted; {successes} accepted; "
-                     f"{attempts_used-successes} unsuccessful; "
+                     f"pair(s) attempted; {feasible_pairs} feasible; "
+                     f"{improved_stages} stage best(s) improved; "
+                     f"{improved_completions} completed best(s) improved; "
+                     f"{candidate_grafts} verified graft candidate(s), "
+                     f"{endpoint_candidates} endpoint candidate(s); "
+                     f"{attempts_used-feasible_pairs} not feasible; "
+                     f"{failed_preflight} failed preflight(s); "
                      f"{search_calls} backend search(es), {repair_evals} evaluations; "
                      f"positional input {'attempted' if 'current input' in attempted_labels else 'not attempted'}, "
-                     f"archived sections {sum(item[0] in attempted_labels for item in section_tasks)}"
-                     f"/{len(section_tasks)} attempted; "
+                     f"archived sections {sum(label in attempted_labels for label, _, _, _ in active_tasks if 'archived' in label)}"
+                     f"/{sum('archived' in label for label, _, _, _ in active_tasks)} attempted; "
                      "failed pairs do not stop other attempts")
+            if failure_reasons:
+                progress(f"{report} bridge rejection reasons: " +
+                         "; ".join(f"{name}: {count}" for name, count in
+                                   sorted(failure_reasons.items())))
 
     # The input must remain a separate repair source even when saved final
     # state is used for other search or reporting paths.
