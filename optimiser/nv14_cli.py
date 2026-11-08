@@ -1756,6 +1756,7 @@ def _load_config_defaults(
         "merge_repair_targets": "auto_splice_merge_repair_targets",
         "merge_repair_from": "auto_splice_merge_repair_from",
         "merge_repair_to": "auto_splice_merge_repair_to",
+        "merge_repair_at_frame": "auto_splice_merge_repair_at_frame",
         "repair_iterations": "auto_splice_repair_iterations",
         "mutations": "auto_mutations",  # endpoint Auto, not Local mutation selection
     })
@@ -2688,6 +2689,12 @@ def build_parser() -> argparse.ArgumentParser:
                          metavar="NAME",
                          help="only bridge to this later named stage (e.g. 599), "
                               "or 'completed' for a verified full-run suffix")
+    command.add_argument("--merge-repair-at-frame", "--splice-merge-repair-at-frame", "--at",
+                         dest="auto_splice_merge_repair_at_frame", modes=auto_modes,
+                         type=parse_positive_int, metavar="FRAME", default=None,
+                         help="centre bridge repair target ticks around this replay frame "
+                              "(not a stage name); fails visibly if source cannot reach it; "
+                              "only affects mutation-based repair")
     command.add_argument("--splice-merge-repair-window", dest="auto_splice_merge_repair_window",
                          modes=auto_modes, type=parse_positive_int, default=48, metavar="N",
                          help="editable bridge frames, independent of stage lookback (default 48)")
@@ -4751,6 +4758,7 @@ def main() -> None:
                     "merge_repair_targets": args.auto_splice_merge_repair_targets,
                     "merge_repair_from": args.auto_splice_merge_repair_from,
                     "merge_repair_to": args.auto_splice_merge_repair_to,
+                    "merge_repair_at_frame": args.auto_splice_merge_repair_at_frame,
                     "start_at": args.auto_splice_start,
                     "stop_at": args.auto_splice_stop,
                 }
@@ -4933,6 +4941,7 @@ def main() -> None:
                                 merge_repair_targets=args.auto_splice_merge_repair_targets,
                                 merge_repair_from=args.auto_splice_merge_repair_from,
                                 merge_repair_to=args.auto_splice_merge_repair_to,
+                                merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
                                 best_callback=phase_best_callback,
                                 stage_best_callback=(checkpoint_writer if checkpoint_writer is not None
                                                      else save_stage_best),
@@ -4991,6 +5000,7 @@ def main() -> None:
                                 merge_repair_targets=args.auto_splice_merge_repair_targets,
                                 merge_repair_from=args.auto_splice_merge_repair_from,
                                 merge_repair_to=args.auto_splice_merge_repair_to,
+                                merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
                                 saved_final_frames=completed_best[0],
                                 saved_stage_candidates=_load_user_splice_checkpoints(
                                     stage_outputs, output_path, replay_output_path),
@@ -5204,6 +5214,7 @@ def main() -> None:
                     merge_repair_targets=args.auto_splice_merge_repair_targets,
                     merge_repair_from=args.auto_splice_merge_repair_from,
                     merge_repair_to=args.auto_splice_merge_repair_to,
+                    merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path,
@@ -5310,6 +5321,7 @@ def main() -> None:
                             merge_repair_targets=args.auto_splice_merge_repair_targets,
                             merge_repair_from=args.auto_splice_merge_repair_from,
                             merge_repair_to=args.auto_splice_merge_repair_to,
+                            merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
                             summary_only=args.auto_ls_splice,
                             best_callback=lambda frames: _write_result(
                                 source, output_path, replay_output_path,

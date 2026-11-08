@@ -217,6 +217,15 @@ The same command with short CLI flags is:
 bridge repairs). The long flag names remain supported; these options are
 accepted by `optimize_replay.py auto` and forwarded by `tas.py multi`.
 
+To target the bridge around a specific source replay frame, add
+`--merge-repair-at-frame 800` or the shorter `--at 800` (TOML:
+`[multi-splicer] merge-repair-at-frame = 800`). This centres a bounded
+neighbourhood of target ticks around frame 800; it does not force a single
+reference tick and does not move the immutable checkpoint prefix. If the
+source replay cannot reach frame 800 alive, the repair reports the unavailable
+frame rather than silently picking a different seam. For example:
+`--repair --from 527 --to completed --at 800 --splice-merge-verbose`.
+
 Or use `[multi-splicer] merge-repair-from = "527"` and
 `merge-repair-to = "599"`. The target `completed` selects a verified
 completed suffix, while source `current` selects the positional input.

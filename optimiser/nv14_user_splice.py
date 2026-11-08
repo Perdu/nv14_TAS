@@ -346,6 +346,7 @@ def optimise_user_splices(
     merge_repair_targets: int = 2,
     merge_repair_from: str | None = None,
     merge_repair_to: str | None = None,
+    merge_repair_at_frame: int | None = None,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
@@ -384,6 +385,9 @@ def optimise_user_splices(
     if merge_repair_to is not None and (not isinstance(merge_repair_to, str) or
                                         not merge_repair_to.strip()):
         raise ValueError("merge_repair_to must be a nonempty stage name or 'completed'")
+    if merge_repair_at_frame is not None and (
+            type(merge_repair_at_frame) is not int or merge_repair_at_frame < 2):
+        raise ValueError("merge_repair_at_frame must be an integer >= 2")
     for name, value, minimum in (("merge_repair_pairs", merge_repair_pairs, 1),
                                  ("merge_repair_window", merge_repair_window, 2),
                                  ("merge_repair_targets", merge_repair_targets, 1)):
@@ -1426,7 +1430,8 @@ def optimise_user_splices(
             progress(f"{report} bridge repair selection: "
                      f"from={source_name or 'all'}, to={destination_name or 'all'}; "
                      f"{len(active_tasks)} source(s), {len(plan)} candidate pair(s); "
-                     f"budget {merge_repair_pairs}")
+                     f"budget {merge_repair_pairs}; "
+                     f"repair frame {merge_repair_at_frame if merge_repair_at_frame is not None else 'automatic'}")
         for (label, prefix, index, suffixes), turn in plan:
             if attempts_used >= merge_repair_pairs:
                 break
@@ -1449,8 +1454,14 @@ def optimise_user_splices(
             seam = (stages[index].end if index is not None else
                     min(len(prefix) - 2, max(manual_repair_seam,
                         stages[later].end if later is not None else manual_repair_seam)))
-            if protected_through is not None:
+            if protected_through is not None and merge_repair_at_frame is None:
                 seam = max(seam, protected_through + max(3, merge_repair_window // 2))
+            if merge_repair_at_frame is not None:
+                # This is a *physical target frame* in the faster prefix,
+                # not a stage name or the old replay's reference tick. Do
+                # not silently clamp an infeasible request back to a stage
+                # boundary (which used to conceal scheduling mistakes).
+                seam = merge_repair_at_frame
             if progress and merge_verbose:
                 progress(f"{report} bridge {attempts_used}/{merge_repair_pairs}: "
                          f"{label} -> {target_name}; seam {seam}; "
@@ -1464,7 +1475,8 @@ def optimise_user_splices(
                     window=merge_repair_window, targets=merge_repair_targets,
                     completion_required=needs_completion,
                     seed=rng.getrandbits(63),
-                    protected_through=protected_through)
+                    protected_through=protected_through,
+                    at_frame=merge_repair_at_frame)
             except KeyboardInterrupt:
                 if progress:
                     progress(f"{report} bridge interrupted; verified results saved "

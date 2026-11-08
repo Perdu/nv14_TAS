@@ -119,6 +119,7 @@ def repair_suffix_grafts(
     *, seam_frame: int, config, window: int, targets: int,
     completion_required: bool, seed: int,
     local_search=None, protected_through: int | None = None,
+    at_frame: int | None = None,
 ) -> BridgeRepairResult:
     """Repair a *bounded bridge* and try to graft the untouched saved suffix.
 
@@ -141,6 +142,8 @@ def repair_suffix_grafts(
 
     if window < 2 or targets < 1:
         return BridgeRepairResult((), failure_reason="invalid repair window/targets")
+    if at_frame is not None and (type(at_frame) is not int or at_frame < 2):
+        raise ValueError("at_frame must be an integer >= 2")
     modes = repair_backend_schedule(config.search_backend)
     search = _local_search if local_search is None else local_search
     reference = tuple(editable_frames(reference))
@@ -178,13 +181,34 @@ def repair_suffix_grafts(
     # prefix is essential: a repaired 527 -> 599 must not buy reconnection by
     # giving back the ten frames gained at checkpoint 527.
     protected = max(-1, protected_through if protected_through is not None else -1)
-    first_tick = max(2, protected + 2, seam - window // 2)
-    last_tick = min(target_limit, seam + window)
+    if at_frame is not None:
+        if at_frame <= protected + 1:
+            return BridgeRepairResult((), failure_reason=(
+                f"requested repair frame {at_frame} is at/before protected checkpoint "
+                f"{protected}; select a later frame"))
+        if at_frame > target_limit:
+            return BridgeRepairResult((), failure_reason=(
+                f"requested repair frame {at_frame} exceeds live prefix frame "
+                f"{target_limit}; cannot anchor repair there"))
+        # An explicit frame is a *local* seam centre, not permission to scan
+        # the whole later stage. The window still determines editable inputs
+        # and reference search range; use a small bounded frame neighbourhood
+        # for candidate seam ticks and guarantee that the centre is sampled.
+        seam = at_frame
+        radius = min(16, max(2, window // 4))
+        first_tick = max(2, protected + 2, seam - radius)
+        last_tick = min(target_limit, seam + radius)
+        spacing = max(1, radius // 4)
+        ticks = [seam, *range(first_tick, last_tick + 1, spacing),
+                 first_tick, last_tick]
+    else:
+        first_tick = max(2, protected + 2, seam - window // 2)
+        last_tick = min(target_limit, seam + window)
+        spacing = max(3, window // 6)
+        ticks = list(range(first_tick, last_tick + 1, spacing))
+        ticks.extend((first_tick, max(first_tick, min(last_tick, seam)), last_tick))
     if first_tick > last_tick:
         return BridgeRepairResult((), failure_reason="no live editable corridor after protected checkpoint")
-    spacing = max(3, window // 6)
-    ticks = list(range(first_tick, last_tick + 1, spacing))
-    ticks.extend((first_tick, max(first_tick, min(last_tick, seam)), last_tick))
     # Sample candidate/reference pairs around each live tick. Match quality is
     # primary, but a reference tick behind the candidate loses frames and is
     # penalised heavily to favour preserving (not fabricating) the TAS gain.

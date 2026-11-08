@@ -1648,6 +1648,18 @@ skipped on Ctrl+C. An explicit standalone `--splice-merge-repair-only` overrides
   still runs across all pairs; these filters only limit bridge mutation work.
   If a requested name does not exist on an alternate branch, that branch
   reports zero matching mutation pairs instead of silently repairing others.
+- To **centre a bridge repair near a particular replay frame**, use
+  `--merge-repair-at-frame 800` (alias `--at 800`, also accepts
+  `--splice-merge-repair-at-frame 800`) or `[multi-splicer]
+  merge-repair-at-frame = 800`. This is a frame in the **source replay**, not
+  the destination stage name or an exact reference-tick match. Repair samples
+  a small neighbourhood (at most 16 ticks either side) around that frame;
+  `merge-repair-targets` still caps chosen anchors, and `merge-repair-window`
+  bounds editable inputs and reference-tick exploration. The selected centre
+  must be after the protected saved checkpoint and within the source replay's
+  live portion. Invalid centres report a reason and do **not** silently
+  fall back to the nominal stage boundary. Direct mutation-free grafting is
+  unaffected. For example: `--repair --from 527 --to completed --at 800`.
 - `merge-repair-window` bounds mutable inputs near the bridge, independent
   of ordinary stage history lookback. For an earliest-arrival source, the
   actual saved checkpoint arrival is a hard lower bound: the bridge cannot
