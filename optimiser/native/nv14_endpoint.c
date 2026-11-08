@@ -91,14 +91,15 @@ nv14_status nv14_endpoint_scan(
     uint8_t *previous = NULL, *events = NULL;
     endpoint_rank best_rank = {0};
     nv14_endpoint_jump jump = {-1, 0.0, 0.0};
-    int64_t *seen_drones = NULL;
-    nv14_drone_snapshot *before = NULL;
+    int64_t *seen_drones = NULL, *forbidden_hits = NULL;
+    nv14_drone_snapshot *before = NULL, *before_forbidden = NULL;
     nv14_error error = {0};
     nv14_status status = NV14_STATUS_OK;
     int ambiguous = 0, overflow = 0;
     if (!p || !prefix || !out || !inputs || p->target_frame >= input_count ||
         prefix->frame > p->target_frame + 1 || (p->target_count && !out->events) ||
-        (p->required_drone_count && (!out->drone_frames || !p->required_drones)))
+        (p->required_drone_count && (!out->drone_frames || !p->required_drones)) ||
+        (p->forbidden_drone_count && (!out->forbidden_drone_frames || !p->forbidden_drones)))
         return NV14_STATUS_INVALID_ARGUMENT;
     if (p->has_jump_region) jump = p->prefix_jump;
     out->jump = jump;
@@ -118,6 +119,13 @@ nv14_status nv14_endpoint_scan(
         if (!seen_drones || !before) { status = NV14_STATUS_OUT_OF_MEMORY; goto done; }
         for (size_t i = 0; i < p->required_drone_count; ++i)
             out->drone_frames[i] = seen_drones[i] = -1;
+    }
+    if (p->forbidden_drone_count) {
+        forbidden_hits = malloc(p->forbidden_drone_count * sizeof(*forbidden_hits));
+        before_forbidden = calloc(p->forbidden_drone_count, sizeof(*before_forbidden));
+        if (!forbidden_hits || !before_forbidden) { status = NV14_STATUS_OUT_OF_MEMORY; goto done; }
+        for (size_t i = 0; i < p->forbidden_drone_count; ++i)
+            out->forbidden_drone_frames[i] = forbidden_hits[i] = -1;
     }
     state = nv14_state_clone(prefix, &error);
     if (!state) { status = error.code; goto done; }
@@ -139,6 +147,13 @@ nv14_status nv14_endpoint_scan(
                 if (status != NV14_STATUS_OK) goto done;
             }
         }
+        if (forbidden_hits && frame >= p->no_drone_start && frame <= p->no_drone_end) {
+            for (size_t i = 0; i < p->forbidden_drone_count; ++i) {
+                if (forbidden_hits[i] >= 0) continue;
+                status = nv14_objects_drones_snapshot(state, p->forbidden_drones[i], &before_forbidden[i]);
+                if (status != NV14_STATUS_OK) goto done;
+            }
+        }
         status = nv14_state_step(state, input, &step);
         if (status == NV14_STATUS_OK && before &&
             frame >= p->drone_start && frame <= p->drone_end) {
@@ -150,6 +165,18 @@ nv14_status nv14_endpoint_scan(
                 if ((before[i].mode == 0 && after.mode == 1) ||
                     (!before[i].is_chasing && after.is_chasing))
                     seen_drones[i] = (int64_t)frame;
+            }
+        }
+        if (status == NV14_STATUS_OK && forbidden_hits &&
+            frame >= p->no_drone_start && frame <= p->no_drone_end) {
+            for (size_t i = 0; i < p->forbidden_drone_count; ++i) {
+                nv14_drone_snapshot after;
+                if (forbidden_hits[i] >= 0) continue;
+                status = nv14_objects_drones_snapshot(state, p->forbidden_drones[i], &after);
+                if (status != NV14_STATUS_OK) break;
+                if (before_forbidden[i].mode == 1 || after.mode == 1 ||
+                    before_forbidden[i].is_chasing || after.is_chasing)
+                    forbidden_hits[i] = (int64_t)frame;
             }
         }
         if (status != NV14_STATUS_OK) goto done;
@@ -198,6 +225,15 @@ nv14_status nv14_endpoint_scan(
             if (seen_drones[i] < 0) {
                 ++rank.missing;
                 if (frame >= p->drone_end) rank.exhausted = 1;
+            }
+        }
+        /* A clean prefix is not enough for earliest-arrival: observe the
+           entire forbidden interval before promoting a feasible endpoint. */
+        if (p->forbidden_drone_count && frame < p->no_drone_end) ++rank.missing;
+        for (size_t i = 0; i < p->forbidden_drone_count; ++i) {
+            if (forbidden_hits[i] >= 0) {
+                ++rank.violated;
+                rank.exhausted = 1;
             }
         }
         if (!p->target_count || rank.events) target_distance = 0.0;
@@ -273,6 +309,8 @@ nv14_status nv14_endpoint_scan(
             if (p->target_count) memcpy(out->events, events, p->target_count);
             if (seen_drones)
                 memcpy(out->drone_frames, seen_drones, p->required_drone_count * sizeof(*seen_drones));
+            if (forbidden_hits)
+                memcpy(out->forbidden_drone_frames, forbidden_hits, p->forbidden_drone_count * sizeof(*forbidden_hits));
         }
         if (feasible) { ambiguous = 0; break; }
     }
@@ -283,6 +321,8 @@ nv14_status nv14_endpoint_scan(
         best = state; state = NULL; out->jump = jump;
         if (seen_drones)
             memcpy(out->drone_frames, seen_drones, p->required_drone_count * sizeof(*seen_drones));
+        if (forbidden_hits)
+            memcpy(out->forbidden_drone_frames, forbidden_hits, p->forbidden_drone_count * sizeof(*forbidden_hits));
     }
     out->state = best;
     best = NULL;
@@ -293,5 +333,7 @@ done:
     free(events);
     free(seen_drones);
     free(before);
+    free(forbidden_hits);
+    free(before_forbidden);
     return status;
 }

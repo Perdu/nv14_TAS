@@ -620,7 +620,8 @@ def optimise_local_population(
                               required_interactions=(), require_jump_region=None, require_jump_frames=None, required_jumps=(),
                               # Prefix safety checks must not enforce events that can
                               # only occur inside the subsequent editable interval.
-                              required_drone_detections=(), require_drone_detection_frames=None)
+                              required_drone_detections=(), require_drone_detection_frames=None,
+                              forbidden_drone_detections=(), no_drone_detection_frames=None)
         prefix = EndpointEvaluator(level, prefix_goal).evaluate(source)
         if prefix.dead:
             raise ValueError("the immutable prefix dies before the editable ranges; move the range start earlier")

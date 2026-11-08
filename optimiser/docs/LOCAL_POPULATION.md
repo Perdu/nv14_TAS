@@ -450,3 +450,29 @@ generated C, so installing Cython is not required for that build. No new
 runtime dependencies are introduced. See the
 [v4.28 changelog](changelog/CHANGELOG_v4.28.md) for benchmark conditions; the
 speedup depends on the goal, replay length and object workload.
+
+## Forbidding drone detection during a frame interval
+
+Set `no-drone-detection = ["drone:0"]` and
+`no-drone-detection-frames = "650:800"` in a `[local]` population goal,
+or in an Auto `[goal]` goal file. Both values use the same selectors and
+zero-based **inclusive** frame interval as `require-drone-detection`.
+Repeat `--no-drone-detection drone:N` for multiple drones (all must stay
+undetected). With no interval, the full interval `0:target-frame` is checked.
+
+Unlike `require-drone-detection`, which asks for a **new acquisition**
+within the interval, `no-drone-detection` forbids both acquisition and a
+previously acquired drone remaining in PREFIRE or chasing state when the
+interval starts. A goal cannot pass before the last forbidden tick has been
+checked. Requires `simulate-enemies = true`. It can be combined with positive
+requirements on other drones or nonoverlapping intervals, and is available
+through both Local population and Auto endpoint searches. The native endpoint
+scanner enforces this on every candidate; full replay verification is unchanged.
+
+```toml
+[local]
+search = "population"
+simulate-enemies = true
+no-drone-detection = ["drone:0"]
+no-drone-detection-frames = "650:800"
+```

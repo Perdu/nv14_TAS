@@ -220,6 +220,8 @@ class LocalConfig:
     required_jumps: tuple[RequiredJump, ...] = ()
     require_drone_detection: tuple[str, ...] = ()
     require_drone_detection_frames: tuple[int, int] | None = None
+    no_drone_detection: tuple[str, ...] = ()
+    no_drone_detection_frames: tuple[int, int] | None = None
     survive_after_goal: int = 0
     top_results: int = 1
     iterations: int = 10000
@@ -439,6 +441,8 @@ class LocalConfig:
             required_jumps=tuple(args.require_jumps),
             require_drone_detection=tuple(args.require_drone_detection),
             require_drone_detection_frames=args.require_drone_detection_frames,
+            no_drone_detection=tuple(args.no_drone_detection),
+            no_drone_detection_frames=args.no_drone_detection_frames,
             survive_after_goal=getattr(args, "survive_after_goal", 0),
             top_results=args.top_results,
             iterations=args.iterations,
@@ -1378,6 +1382,7 @@ _CONFIG_APPEND_DESTS = frozenset(
      "auto_require_interaction", "auto_avoid_interaction",
      "require_jumps", "auto_require_jumps",
      "require_drone_detection", "auto_require_drone_detection",
+     "no_drone_detection", "auto_no_drone_detection",
      "secondary_replays", "secondary_colors", "secondary_labels"}
 )
 _CONFIG_RESERVED_DESTS = frozenset({"config", "goal_config", "splice_config", "input", "mode"})
@@ -1809,6 +1814,8 @@ _LOCAL_GOAL_TO_AUTO = {
     "require_jumps": "auto_require_jumps",
     "require_drone_detection": "auto_require_drone_detection",
     "require_drone_detection_frames": "auto_require_drone_detection_frames",
+    "no_drone_detection": "auto_no_drone_detection",
+    "no_drone_detection_frames": "auto_no_drone_detection_frames",
     "survive_after_goal": "auto_survive_after_goal",
     "simulate_enemies": "simulate_enemies",
 }
@@ -1842,7 +1849,8 @@ _LOCAL_POPULATION_OPTIONS = frozenset({
     "target_region", "arrival_start",
     "require_region", "require_region_frames",
     "require_jump_region", "require_jump_frames", "require_jumps",
-    "require_drone_detection", "require_drone_detection_frames", "survive_after_goal",
+    "require_drone_detection", "require_drone_detection_frames",
+    "no_drone_detection", "no_drone_detection_frames", "survive_after_goal",
     "secondary_objective",
 })
 
@@ -1888,7 +1896,9 @@ _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
     "auto_vx_window", "auto_vy_window", "auto_require_interaction", "auto_avoid_interaction",
     "auto_require_reference_interactions", "auto_require_region", "auto_require_region_frames", "auto_require_jump_region",
     "auto_require_jump_frames", "auto_require_jumps",
-    "auto_require_drone_detection", "auto_require_drone_detection_frames", "auto_survive_after_goal", "auto_completion_policy", "auto_mutation_span",
+    "auto_require_drone_detection", "auto_require_drone_detection_frames",
+    "auto_no_drone_detection", "auto_no_drone_detection_frames",
+    "auto_survive_after_goal", "auto_completion_policy", "auto_mutation_span",
 })
 
 
@@ -2848,6 +2858,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-require-drone-detection-frames", "--require-drone-detection-frames", modes=auto_modes,
                          type=parse_drone_detection_frames, metavar="START:END",
                          help="inclusive detection interval for all required drones")
+    command.add_argument("--auto-no-drone-detection", "--no-drone-detection", modes=auto_modes,
+                         action="append", default=[], metavar="drone:INDEX",
+                         help="forbid the named drone from detecting the player in the chosen interval (repeatable)")
+    command.add_argument("--auto-no-drone-detection-frames", "--no-drone-detection-frames", modes=auto_modes,
+                         type=parse_drone_detection_frames, metavar="START:END",
+                         help="inclusive interval during which selected drones must not detect the player")
     command.add_argument("--auto-completion-policy", modes=auto_modes,
                          choices=("checkpoint", "complete"), default="checkpoint",
                          help="endpoint search: allow a partial route or require a full verified finish")
@@ -3258,6 +3274,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--require-drone-detection-frames", modes=local_modes,
                          type=parse_drone_detection_frames, metavar="START:END",
                          help="population only: inclusive required detection interval")
+    command.add_argument("--no-drone-detection", modes=local_modes,
+                         action="append", default=[], metavar="drone:INDEX",
+                         help="population only: forbid selected drone detection (repeatable)")
+    command.add_argument("--no-drone-detection-frames", modes=local_modes,
+                         type=parse_drone_detection_frames, metavar="START:END",
+                         help="population only: inclusive interval without detection")
     command.add_argument("--arrival-start", modes=local_modes, type=parse_nonnegative_int,
                          metavar="FRAME", help="first eligible arrival or interaction frame (default: first editable frame)")
     command.add_argument("--secondary-objective", modes=local_modes,
@@ -3926,6 +3948,8 @@ def _run_local_population(
             require_region_frames=config.require_region_frames,
             required_drone_detections=_resolve_drone_detection(level, config.require_drone_detection),
             require_drone_detection_frames=config.require_drone_detection_frames,
+            forbidden_drone_detections=_resolve_drone_detection(level, config.no_drone_detection, option="no-drone-detection"),
+            no_drone_detection_frames=config.no_drone_detection_frames,
             survive_after_goal=config.survive_after_goal,
             require_jump_region=config.require_jump_region,
             require_jump_frames=(config.require_jump_frames or (ranges[0][0], target_frame))
@@ -4071,12 +4095,12 @@ def _run_local_population(
         raise SystemExit(130)
 
 
-def _resolve_drone_detection(level, selectors: Sequence[str]) -> tuple[int, ...]:
+def _resolve_drone_detection(level, selectors: Sequence[str], *, option: str = "require-drone-detection") -> tuple[int, ...]:
     """Resolve drone:N as the Nth type-6 object, not a native scene id."""
     if not selectors:
         return ()
     if not getattr(level, "simulate_enemies", False):
-        raise ValueError("require-drone-detection needs simulate-enemies = true for this stage")
+        raise ValueError(f"{option} needs simulate-enemies = true for this stage")
     descriptors = (level.object_descriptors() if hasattr(level, "object_descriptors") else
                    ({"object_type": spec.obj_type, "load_index": spec.load_index}
                     for spec in level.all_specs))
@@ -4091,12 +4115,12 @@ def _resolve_drone_detection(level, selectors: Sequence[str]) -> tuple[int, ...]
         elif selector.startswith("drone:") and selector[6:].isdigit():
             index = int(selector[6:])
         else:
-            raise ValueError(f"require-drone-detection needs a drone:N selector, got {selector!r}")
+            raise ValueError(f"{option} needs a drone:N selector, got {selector!r}")
         if index >= len(drones):
             raise ValueError(f"drone:{index} does not exist (level has {len(drones)} drones)")
         result.append(drones[index])
     if len(result) != len(set(result)):
-        raise ValueError("require-drone-detection contains duplicate drones")
+        raise ValueError(f"{option} contains duplicate drones")
     return tuple(result)
 
 
@@ -4154,6 +4178,8 @@ def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
         require_region_frames=args.auto_require_region_frames,
         required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
         require_drone_detection_frames=args.auto_require_drone_detection_frames,
+        forbidden_drone_detections=_resolve_drone_detection(level, args.auto_no_drone_detection, option="no-drone-detection"),
+        no_drone_detection_frames=args.auto_no_drone_detection_frames,
         survive_after_goal=getattr(args, "auto_survive_after_goal", 0),
         require_jump_region=args.auto_require_jump_region,
         require_jump_frames=(args.auto_require_jump_frames or (start, frame))
@@ -5552,6 +5578,8 @@ def main() -> None:
                 require_region_frames=args.auto_require_region_frames,
                 required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
                 require_drone_detection_frames=args.auto_require_drone_detection_frames,
+                forbidden_drone_detections=_resolve_drone_detection(level, args.auto_no_drone_detection, option="no-drone-detection"),
+                no_drone_detection_frames=args.auto_no_drone_detection_frames,
                 survive_after_goal=getattr(args, "auto_survive_after_goal", 0),
                 require_jump_region=args.auto_require_jump_region,
                 require_jump_frames=(args.auto_require_jump_frames or (start, frame))

@@ -40,6 +40,10 @@ typedef struct nv14_endpoint_plan {
        [drone_start,drone_end]. Indices are serialized level load indices. */
     uint32_t *required_drones;
     size_t required_drone_count, drone_start, drone_end;
+    /* Reject if any selected drone is already in prefire or chasing, or
+       enters either state, on a tick within the inclusive forbidden interval. */
+    uint32_t *forbidden_drones;
+    size_t forbidden_drone_count, no_drone_start, no_drone_end;
 } nv14_endpoint_plan;
 
 typedef struct nv14_endpoint_result {
@@ -49,6 +53,7 @@ typedef struct nv14_endpoint_result {
     uint8_t terminal_dead, eligible, needs_reference;
     nv14_endpoint_jump jump; /* history at the selected state, not the terminal state */
     int64_t *drone_frames; /* caller allocated required_drone_count items, -1 means missing */
+    int64_t *forbidden_drone_frames; /* first forbidden tick, -1 if clean */
     /* Position immediately BEFORE the selected tick, exact native double. */
     double pre_x, pre_y;
     uint8_t has_pre_position;
