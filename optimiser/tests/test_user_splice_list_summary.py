@@ -154,3 +154,53 @@ def test_ltm_splice_summary_is_read_only(tmp_path, monkeypatch, capsys):
     assert after == before
     assert not output.exists()
     assert LtmMovie.load(movie).replay_frames
+
+
+@pytest.mark.parametrize("extra", [
+    ["--merge"],
+    ["--repair"],
+    ["--retime-gains"],
+    ["--merge", "--repair", "--retime-gains", "--from", "230",
+     "--to", "completed", "--at", "10"],
+    ["--splice-from-best", "end"],
+    ["--splice-start", "end", "--splice-stop", "end"],
+])
+def test_summary_takes_priority_over_merge_repair_and_search_options(
+        tmp_path, monkeypatch, capsys, extra):
+    level, _source, saved, output, _packed, argv = _setup(tmp_path)
+    _write_combined(output, level, saved)
+    (tmp_path / '97-1_230.txt').write_text(encode_complex_replay(saved) + '\n')
+    before = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    monkeypatch.setattr(us, '_search_stage',
+                        lambda *a, **kw: pytest.fail('summary started search'))
+    monkeypatch.setattr(us, 'repair_suffix_grafts',
+                        lambda *a, **kw: pytest.fail('summary started repair'))
+    monkeypatch.setattr(sys, 'argv', [*argv, '-l', *extra])
+    main()
+    text = capsys.readouterr().out
+    assert 'checkpoint propagation' in text
+    assert 'before merges' not in text
+    assert 'bridge repair' not in text
+    assert '[auto:user-splice:merge-only]' not in text
+    assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == before
+
+
+def test_summary_ignores_merge_only_and_repair_in_splice_toml(
+        tmp_path, monkeypatch, capsys):
+    level, _source, saved, output, _packed, argv = _setup(tmp_path)
+    _write_combined(output, level, saved)
+    config = tmp_path / 'multi-splicer.toml'
+    config.write_text('[multi-splicer]\n'
+                      'merge-only=true\nmerge-repair-only=true\n'
+                      'merge-retime-gains=true\nmerge-repair-at-end=true\n')
+    before = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    monkeypatch.setattr(us, '_search_stage',
+                        lambda *a, **kw: pytest.fail('summary started search'))
+    monkeypatch.setattr(us, 'repair_suffix_grafts',
+                        lambda *a, **kw: pytest.fail('summary started repair'))
+    monkeypatch.setattr(sys, 'argv', [*argv, '--splice-config', str(config), '-l'])
+    main()
+    text = capsys.readouterr().out
+    assert 'checkpoint propagation' in text
+    assert '[auto:user-splice:merge-only]' not in text
+    assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == before

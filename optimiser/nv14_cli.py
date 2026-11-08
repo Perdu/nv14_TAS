@@ -4219,15 +4219,18 @@ def main() -> None:
         args.mode == "auto" and args.auto_random_splice and args.auto_splice_mode == "user"
     ):
         raise SystemExit("-l/--ls-splice/--ls-splices requires named multi-splicer Auto mode with splice files")
-    if getattr(args, "auto_ls_splice", False) and args.auto_splice_from_best:
-        raise SystemExit("--ls-splice cannot be combined with --splice-from-best")
-    repair_only = getattr(args, "auto_splice_merge_repair_only", False)
-    repair_at_end = getattr(args, "auto_splice_merge_repair_at_end", False)
-    retime_gains = getattr(args, "auto_splice_merge_retime_gains", False)
+    # Listing saved checkpoints is read-only, and must take precedence over
+    # merge/search settings inherited from TOML or supplied on the CLI.
+    # In particular, a persistent merge-only=true must never block `-l`.
+    summary_only = bool(getattr(args, "auto_ls_splice", False))
+    repair_only = bool(getattr(args, "auto_splice_merge_repair_only", False)) and not summary_only
+    repair_at_end = bool(getattr(args, "auto_splice_merge_repair_at_end", False)) and not summary_only
+    retime_gains = bool(getattr(args, "auto_splice_merge_retime_gains", False)) and not summary_only
     # A requested deterministic sweep is a standalone merge operation even
     # when the user's persistent config also enables ordinary merge-bests.
     # Explicit --repair still runs bridge mutations *after* the cheap sweep.
-    merge_only = getattr(args, "auto_splice_merge_only", False) or repair_only or retime_gains
+    merge_only = (not summary_only and
+                  (getattr(args, "auto_splice_merge_only", False) or repair_only or retime_gains))
     if (repair_only or repair_at_end) and not (args.mode == "auto" and
             args.auto_random_splice and args.auto_splice_mode == "user" and
             args.auto_splice_files):
@@ -4241,8 +4244,6 @@ def main() -> None:
         if not (args.mode == "auto" and args.auto_random_splice and
                 args.auto_splice_mode == "user" and args.auto_splice_files):
             raise SystemExit("--splice-merge-only requires named multi-splicer Auto mode with splice files")
-        if args.auto_ls_splice:
-            raise SystemExit("--splice-merge-only cannot be combined with --ls-splice")
         if (args.auto_splice_from_best or args.auto_splice_start or
                 args.auto_splice_stop or args.auto_splice_reference is not None):
             raise SystemExit("--splice-merge-only uses all saved named splice bests; "
@@ -5214,8 +5215,9 @@ def main() -> None:
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
                     use_current_run=args.auto_splice_use_current_run,
-                    start_at=args.auto_splice_start, stop_at=args.auto_splice_stop,
-                    from_best=args.auto_splice_from_best,
+                    start_at=(None if summary_only else args.auto_splice_start),
+                    stop_at=(None if summary_only else args.auto_splice_stop),
+                    from_best=(None if summary_only else args.auto_splice_from_best),
                     start_from_stage_bests=args.auto_splice_each_best,
                     reference_frames=reference_frames,
                     merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end,
@@ -5268,7 +5270,8 @@ def main() -> None:
                     # start is already at/past the rejoin, the branch lies
                     # entirely before the requested starting point.
                     skipped_before_start = False
-                    if (args.auto_splice_start is not None and rejoin_name is not None and
+                    if (not summary_only and args.auto_splice_start is not None and
+                            rejoin_name is not None and
                             primary_names.index(args.auto_splice_start) >=
                             primary_names.index(rejoin_name)):
                         alternate_branch = ()

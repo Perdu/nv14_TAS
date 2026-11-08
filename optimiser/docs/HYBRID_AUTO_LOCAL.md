@@ -181,6 +181,11 @@ is only a presentation change; search state and checkpoints are unchanged.
 
 ## Alternate-route summaries (patch 83)
 
+`-l` / `--ls-splice` is strictly read-only and overrides any `--merge`,
+`--repair`, `--retime-gains`, or related search mode configured in TOML or
+specified on the command line. It ignores splice start/stop/from-best filters
+and reports all configured saved checkpoints without modifying any replay.
+
 `--ls-splice` / `-l` now prints a separate `summary:route` heading for the
 configured alternate route, then shows every configured stage in that order
 (shared prefix, alternate-only stages, reconvergence, and suffix), labelled

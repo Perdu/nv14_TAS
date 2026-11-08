@@ -198,7 +198,6 @@ def test_merge_only_keeps_better_verified_final(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('extra, message', [
-    (['--ls-splice'], 'cannot be combined with --ls-splice'),
     (['--splice-from-best', '230'], 'uses all saved named splice bests'),
     (['--splice-reference', 'reference.txt'], 'uses all saved named splice bests'),
     (['--splice-start', '230'], 'uses all saved named splice bests'),
