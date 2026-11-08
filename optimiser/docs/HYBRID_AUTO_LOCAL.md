@@ -271,3 +271,29 @@ Repair no longer mutates or grafts before an already feasible
 if no later valid continuation can preserve it; an accepted repair candidate
 is not the same thing as an improved completed replay. Normal multi-splicer
 stage search, direct grafting, and the SWF verification hierarchy are unchanged.
+
+## Partial checkpoint propagation from saved replays (patch 90)
+
+`--merge` and `--repair` now independently check whether every saved stage
+winner (and one archived sectional alternative) already reaches **later** named
+goals. A subsequent death does not erase an earlier valid stage result. Each
+proposed checkpoint is evaluated by its own named goal **and** checked against
+the enemy-enabled physical replay: a goal reached only in an enemy-disabled
+stage world after real-physics death is not promoted. A verified intermediate
+stage best is saved to that stage's checkpoint/frontier, **not** published as a
+completed replay. This pass does not invoke stochastic search and does not
+require `--retime-gains`.
+
+Direct suffix grafting also checks seam windows around a source's **actual**
+earliest-arrival tick, including earlier windows, rather than searching only
+near its nominal `target_frame`. In stage-only grafts, a reference route that
+dies *after* a useful section can provide its still-live portion; completed
+suffix grafts retain the original strict completion and control requirements.
+
+For example, if a 442-stage replay reaches 630 at frame 554 but dies near the
+exit, a normal merge can save a verified 630 checkpoint without claiming an
+improved completion. `--retime-gains` remains a separate deterministic
+**input-shift** search: it may still be necessary when the saved 442 movie does
+not itself reach 630, and it can be combined with `--repair`. Neither feature
+makes a dead movie into a valid final replay; the next task is to reconnect or
+repair its continuation past the enemy.

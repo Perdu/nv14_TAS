@@ -90,7 +90,9 @@ def test_merge_only_physically_verified_join_upgrades_saved_stage(monkeypatch):
 def test_merge_only_reports_failed_physical_join_without_writes(monkeypatch):
     level, source, _ = _baseline()
     earlier = (InputFrame(left=True),) + source[1:]
-    stages = [UserSpliceStage(name, EndpointGoal(10, 'min-x'), 0, 10)
+    # This altered prefix is worse at max-x; it has no independently valid
+    # downstream improvement, so a rejected graft must not save anything.
+    stages = [UserSpliceStage(name, EndpointGoal(10, 'max-x'), 0, 10)
               for name in ('first', 'last')]
     monkeypatch.setattr(us, '_search_stage', _forbid_search)
     monkeypatch.setattr(us, 'verified_suffix_grafts', lambda *_a, **_kw: ())

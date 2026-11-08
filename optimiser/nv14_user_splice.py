@@ -1129,20 +1129,40 @@ def optimise_user_splices(
             accepted = False
             completed_join = False
             stage_join = False
-            for graft in verified_suffix_grafts(
-                    level, prefix, suffix, seam_frame=seam,
-                    lookback=config.lookback,
-                    completion_required=require_suffix_completion,
-                    min_prefix_frame=min_prefix_frame):
-                physically_verified += 1
-                stage_ok, completion_ok = offer_candidate(graft, later, label)
-                if stage_ok or completion_ok:
-                    accepted = True
-                    completed_join = completed_join or completion_ok
-                    stage_join = stage_join or stage_ok
-                    # Inspect all independently verified grafts (at most four),
-                    # rather than stopping after the first valid but suboptimal
-                    # seam. Completion and stage best have separate rankings.
+            centres = [seam]
+            # A splice's configured deadline is often much later than its
+            # *actual* first arrival. For a 442 checkpoint reached at 375,
+            # scanning only 410..474 can miss a clean ceiling contact near
+            # 375 or earlier. Try the arrival and a preceding neighbourhood
+            # as additional seam centres, without changing normal lookback.
+            if not manual_input:
+                source_index = next((i for i, stage in enumerate(stages)
+                                     if label.startswith(stage.name + " ->") or
+                                     label.startswith(stage.name + " archived ")), None)
+                if source_index is not None and stages[source_index].goal.is_earliest:
+                    arrival = original_endpoints[source_index].evaluate(prefix)
+                    if arrival.feasible and arrival.frame < seam - config.lookback // 2:
+                        centres.extend((arrival.frame,
+                                        max(2, arrival.frame - config.lookback),
+                                        max(2, arrival.frame - 2 * config.lookback)))
+            seen_grafts: set[tuple[InputFrame, ...]] = set()
+            for centre in dict.fromkeys(centres):
+                for graft in verified_suffix_grafts(
+                        level, prefix, suffix, seam_frame=centre,
+                        lookback=config.lookback,
+                        completion_required=require_suffix_completion,
+                        min_prefix_frame=min_prefix_frame):
+                    if graft in seen_grafts:
+                        continue
+                    seen_grafts.add(graft)
+                    physically_verified += 1
+                    stage_ok, completion_ok = offer_candidate(graft, later, label)
+                    if stage_ok or completion_ok:
+                        accepted = True
+                        completed_join = completed_join or completion_ok
+                        stage_join = stage_join or stage_ok
+                        # A verified partial stage route remains useful even
+                        # when it has no valid completion yet.
             if accepted:
                 joined += 1
                 if merge_only and progress and merge_verbose:
@@ -1155,6 +1175,69 @@ def optimise_user_splices(
                 reason = ("no physically compatible seam" if not physically_verified
                           else "no join satisfies its destination objective or completion")
                 progress(f"{report} {label}: rejected ({reason})")
+
+        # Promote later checkpoints already achieved by a saved stage replay,
+        # WITHOUT requiring a completed run or a new suffix graft. A saved 442
+        # movie may reach 553 and 630 earlier, then die just before the exit:
+        # that death must not erase its earlier, independently verified gains.
+        # The ordinary stage objective and real-physics live trace both have
+        # to reach the destination; only canonical completions reach best_output.
+        promoted_sources = promoted_checks = promoted_stages = 0
+        promoted_seen: set[tuple[int, tuple[InputFrame, ...]]] = set()
+        for earlier in range(len(stages) - 1):
+            # Freeze this source list: offering a later checkpoint can update
+            # its frontier, but must not trigger a second pass on the same
+            # physical replay under another source label.
+            for source_name, prefix in merge_routes(earlier):
+                if (earlier, prefix) in promoted_seen:
+                    continue
+                promoted_seen.add((earlier, prefix))
+                promoted_sources += 1
+                physical = evaluate_replay_with_sentinel(level, prefix)
+                # A checkpoint is a replay prefix, not a completed run. Trim
+                # the fatal input itself so a useful earlier checkpoint is
+                # persisted as a live replay rather than one ending in death.
+                # A sentinel step is part of evaluation; exclude the last
+                # explicit input before the fatal state as well so a short
+                # checkpoint cannot instantly die in its sentinel frame.
+                live_prefix = (prefix[:max(0, physical.dead_tick - 1)]
+                               if physical.dead_tick is not None else prefix)
+                if len(live_prefix) < 2:
+                    continue
+                padded = _materialise_splice_tail(live_prefix, len(current) - 1)
+                for later in range(earlier + 1, len(stages)):
+                    # A completed movie is handled by the normal completion
+                    # rank; helper checkpoints past death are not promoted.
+                    score = original_endpoints[later].evaluate(padded)
+                    promoted_checks += 1
+                    if not score.feasible:
+                        continue
+                    if ((physical.dead_tick is not None and
+                         physical.dead_tick <= score.frame) or
+                        (physical.finish_tick is not None and
+                         physical.finish_tick < score.frame)):
+                        continue
+                    old_score = stage_checkpoint_evals[later]
+                    if old_score is not None and score.objective_key >= old_score.objective_key:
+                        continue
+                    before = old_score.objective_key if old_score is not None else None
+                    offer_candidate(live_prefix, later,
+                                    f"{source_name} already reaches {stages[later].name}")
+                    after = stage_checkpoint_evals[later]
+                    if after is not None and (before is None or after.objective_key < before):
+                        promoted_stages += 1
+                        if progress:
+                            status = (f"; source dies later at frame {physical.dead_tick}"
+                                      if physical.dead_tick is not None else "")
+                            progress(f"{report} {source_name} -> {stages[later].name}: "
+                                     "existing replay propagated to later checkpoint"
+                                     f" (arrival frame {score.frame}){status}")
+        if progress:
+            progress(f"{report} existing replay propagation: "
+                     f"{promoted_sources} saved source(s), "
+                     f"{promoted_checks} later checkpoint(s) checked, "
+                     f"{promoted_stages} stage best(s) improved; "
+                     "a later death does not invalidate an earlier checkpoint")
 
         # A manually edited positional replay is the first source, not a
         # fallback after all saved-splice pairings. First try to reconnect it

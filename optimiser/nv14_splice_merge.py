@@ -1,7 +1,8 @@
 """Verified splice-to-suffix grafting shared by reference and archive propagation.
 
-A seam is just a *proposal*, not proof. Only canonically completed, replayed
-movies whose persistent controls survive can be offered to the optimiser.
+A seam is just a *proposal*, not proof. Completed grafts must satisfy
+canonical replay and persistent-control verification; intermediate-stage
+grafts may retain only a death-free prefix for separate endpoint validation.
 """
 from __future__ import annotations
 
@@ -23,8 +24,8 @@ def verified_suffix_grafts(
     """Try matching prefix states to nearby reference ticks and verify joins.
 
     Does not assume a join is valid merely because (x,y) match. Retains only
-    independently replayed canonical completions that preserve reference
-    switches, doors, and other persistent controls. No inputs are interpolated.
+    independently verified canonical completions when required, or live stage
+    prefixes for separate endpoint validation. No inputs are interpolated.
     """
     if lookback < 1 or max_results < 1:
         return ()
@@ -36,7 +37,19 @@ def verified_suffix_grafts(
         if not original.valid or original.finish_tick != len(reference):
             return ()
     elif original.dead_tick is not None and original.finish_tick is None:
-        return ()
+        # A stage suffix can be useful *before* its eventual death. In
+        # particular, an earlier gain may reach the next two checkpoints and
+        # then collide with an enemy near the exit. Keep the live section;
+        # the caller must still independently verify its destination goal.
+        # The trace includes one implicit sentinel step. Keeping the last
+        # explicit input immediately before a reported death may still die on
+        # that sentinel; trim the fatal tick as well.
+        reference = reference[:max(0, original.dead_tick - 1)]
+        if len(reference) < 3:
+            return ()
+        original = evaluate_replay_with_sentinel(level, reference)
+        if original.dead_tick is not None:
+            return ()
     options: list[tuple[float, int, int]] = []
     low = max(1, min_prefix_frame, seam_frame - lookback)
     high = min(seam_frame + lookback, len(candidate)-2)
@@ -73,11 +86,23 @@ def verified_suffix_grafts(
                 checked = verify_trimmed_replay(level, trimmed)
             except ValueError:
                 continue
-        elif not completion_required and check.dead_tick is None:
-            trimmed, checked = joined, check
+        elif not completion_required:
+            # Do not discard a valid earlier checkpoint solely because this
+            # full-length replay dies *after* the checkpoint. A truncated
+            # replay is a stage-only candidate, never a claimed completion.
+            trimmed = (joined[:max(0, check.dead_tick - 1)]
+                       if check.dead_tick is not None else joined)
+            if len(trimmed) < 2:
+                continue
+            checked = evaluate_replay_with_sentinel(level, trimmed)
+            if checked.dead_tick is not None:
+                continue
         else:
             continue
-        if not _control_preserved(original, checked):
+        # A stage-only live prefix need not replay *future* control events.
+        # But a fully completed graft retains the ordinary strict control
+        # preservation requirement, even when offered to a stage helper.
+        if (completion_required or checked.finish_tick is not None) and not _control_preserved(original, checked):
             continue
         accepted.append(trimmed)
         if len(accepted) == max_results:
