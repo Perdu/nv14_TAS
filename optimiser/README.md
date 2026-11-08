@@ -1734,9 +1734,13 @@ across a discontinuous section.
 To keep the one-shot behavior in a splice TOML, put `merge-only = true` under
 `[multi-splicer]` (or use `--splice-merge-only` on the command line).
 `--ls-splice` is the separate read-only summary command: unlike merge-only,
-it never attempts or saves joins. Do not combine merge-only with
-`--splice-from-best`, `--splice-start`, `--splice-stop`, or `--splice-reference`;
-it uses all saved named splice bests.
+it never attempts or saves joins. Standalone merge-only uses all saved
+named splice bests. A stage selection (`--start-at-splice` / `--splice-start`,
+`--splice-stop`, `--splice-from-best`, or `--splice-reference`) instead starts
+normal splice optimisation for the selected stages, even when standalone
+`merge-only`, `merge-repair-only`, or `merge-retime-gains` is enabled in TOML.
+The same precedence applies if both switches are explicitly passed on the CLI;
+use `--splice-merge-bests` to request merges during normal stage optimisation.
 
 `--splice-config` overlays all preceding `--config` files; explicit CLI
 options win regardless of argument order. Splice goals are resolved relative

@@ -197,16 +197,69 @@ def test_merge_only_keeps_better_verified_final(tmp_path, monkeypatch):
     assert output.read_bytes() == original
 
 
-@pytest.mark.parametrize('extra, message', [
-    (['--splice-from-best', '230'], 'uses all saved named splice bests'),
-    (['--splice-reference', 'reference.txt'], 'uses all saved named splice bests'),
-    (['--splice-start', '230'], 'uses all saved named splice bests'),
+@pytest.mark.parametrize('selection, selected_key, expected', [
+    (['--start-at-splice', 'end'], 'start_at', 'end'),
+    (['--splice-start', '230'], 'start_at', '230'),
+    (['--splice-stop', '230'], 'stop_at', '230'),
+    (['--splice-from-best', '230'], 'from_best', '230'),
+    (['--splice-reference', 'source.txt'], 'reference_frames', 'reference'),
 ])
-def test_cli_rejects_conflicting_modes(tmp_path, monkeypatch, extra, message):
+@pytest.mark.parametrize('standalone', [
+    'merge-only=true',
+    'merge-repair-only=true',
+    'merge-retime-gains=true',
+    '--merge',
+    '--repair',
+    '--retime-gains',
+])
+def test_stage_selection_runs_search_instead_of_blocked_standalone_mode(
+        tmp_path, monkeypatch, capsys, selection, selected_key, expected, standalone):
+    """A selected stage overrides inherited or explicit merge/repair modes."""
+    _level, source, _saved, _output, _packed, argv = _setup(tmp_path)
+    if standalone.startswith('--'):
+        argv.append(standalone)
+    else:
+        config = tmp_path / 'config.toml'
+        with config.open('a') as stream:
+            stream.write('\n[multi-splicer]\n' + standalone + '\n')
+    if selected_key == 'reference_frames':
+        selection = ['--splice-reference', str(tmp_path / 'source.txt')]
+    seen = []
+
+    def record_search(level, frames, stages, config, **kwargs):
+        seen.append(kwargs)
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', record_search)
+    monkeypatch.setattr(sys, 'argv', [*argv, *selection])
+    main()
+    assert len(seen) == 1
+    assert seen[0]['merge_only'] is False
+    assert seen[0]['merge_repair_only'] is False
+    assert seen[0]['merge_retime_gains'] is False
+    if selected_key == 'reference_frames':
+        assert seen[0][selected_key] == tuple(source)
+    else:
+        assert seen[0][selected_key] == expected
+    assert 'stage selection overrides standalone' in capsys.readouterr().out
+
+
+def test_stage_selection_truly_searches_only_requested_stage(tmp_path, monkeypatch):
     _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
-    monkeypatch.setattr(sys, 'argv', [*argv, '--splice-merge-only', *extra])
-    with pytest.raises(SystemExit, match=message):
-        main()
+    config = tmp_path / 'config.toml'
+    with config.open('a') as stream:
+        stream.write('\n[multi-splicer]\nmerge-only=true\n')
+    visited = []
+
+    def fake_stage_search(level, branch, stage, config, rng, **kwargs):
+        visited.append(stage.name)
+        return (), 0, 1
+
+    monkeypatch.setattr(us, '_search_stage', fake_stage_search)
+    monkeypatch.setattr(sys, 'argv', [*argv, '--start-at-splice', 'end',
+                                     '--auto-runs', '1', '--auto-splice-rounds', '1'])
+    main()
+    assert visited == ['end']
 
 
 def test_merge_only_rejected_outside_named_multi_splicer(tmp_path, monkeypatch):

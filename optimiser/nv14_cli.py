@@ -4223,14 +4223,29 @@ def main() -> None:
     # merge/search settings inherited from TOML or supplied on the CLI.
     # In particular, a persistent merge-only=true must never block `-l`.
     summary_only = bool(getattr(args, "auto_ls_splice", False))
-    repair_only = bool(getattr(args, "auto_splice_merge_repair_only", False)) and not summary_only
+    # A stage selector requests normal stage optimisation, even if a reusable
+    # [multi-splicer] config enables standalone --merge/--repair/--retime-gains.
+    # This is intentionally independent of TOML vs CLI origin: mixing the
+    # switches must not block a more specific --start-at-splice request.
+    stage_selection = bool(args.mode == "auto" and (
+        getattr(args, "auto_splice_start", None) or
+        getattr(args, "auto_splice_stop", None) or
+        getattr(args, "auto_splice_from_best", None) or
+        getattr(args, "auto_splice_reference", None) is not None))
+    standalone_mode = not (summary_only or stage_selection)
+    repair_only = bool(getattr(args, "auto_splice_merge_repair_only", False)) and standalone_mode
     repair_at_end = bool(getattr(args, "auto_splice_merge_repair_at_end", False)) and not summary_only
-    retime_gains = bool(getattr(args, "auto_splice_merge_retime_gains", False)) and not summary_only
-    # A requested deterministic sweep is a standalone merge operation even
-    # when the user's persistent config also enables ordinary merge-bests.
-    # Explicit --repair still runs bridge mutations *after* the cheap sweep.
-    merge_only = (not summary_only and
+    retime_gains = bool(getattr(args, "auto_splice_merge_retime_gains", False)) and standalone_mode
+    # Deterministic retiming and bridge repair imply standalone merging only
+    # when no stage search selection was requested.
+    merge_only = (standalone_mode and
                   (getattr(args, "auto_splice_merge_only", False) or repair_only or retime_gains))
+    if stage_selection and not summary_only and (
+            args.auto_splice_merge_only or args.auto_splice_merge_repair_only or
+            args.auto_splice_merge_retime_gains):
+        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:mode] "
+              "stage selection overrides standalone merge/repair/retiming; "
+              "running selected splice search", flush=True)
     if (repair_only or repair_at_end) and not (args.mode == "auto" and
             args.auto_random_splice and args.auto_splice_mode == "user" and
             args.auto_splice_files):
@@ -4244,10 +4259,6 @@ def main() -> None:
         if not (args.mode == "auto" and args.auto_random_splice and
                 args.auto_splice_mode == "user" and args.auto_splice_files):
             raise SystemExit("--splice-merge-only requires named multi-splicer Auto mode with splice files")
-        if (args.auto_splice_from_best or args.auto_splice_start or
-                args.auto_splice_stop or args.auto_splice_reference is not None):
-            raise SystemExit("--splice-merge-only uses all saved named splice bests; "
-                             "omit --splice-from-best, --splice-start/stop and --splice-reference")
     try:
         source = _load_source(
             input_path,
@@ -4544,9 +4555,7 @@ def main() -> None:
                 all_stages = tuple({stage.name: stage for stage in
                                     (*stages, *alternate_stages)}.values())
                 all_names = tuple(stage.name for stage in all_stages)
-                if (alternate_stages and not (args.auto_ls_splice or
-                                               args.auto_splice_merge_only or
-                                               args.auto_splice_merge_repair_only) and
+                if (alternate_stages and not (summary_only or merge_only) and
                         args.auto_runs == 0):
                     raise SystemExit("alt-route requires finite --auto-runs: "
                                      "an unlimited primary campaign would never reach "
