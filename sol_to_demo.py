@@ -471,6 +471,7 @@ def main(argv=None):
                 authors=authors,
                 optimization_level=optimization_level,
                 highscore_ticks=highscore_ticks,
+                preserve_default_authors=not interactive_replay,
             )
     except (NHighError, DistanceToDoorError) as exc:
         print(f'Error: {exc}', file=sys.stderr)
