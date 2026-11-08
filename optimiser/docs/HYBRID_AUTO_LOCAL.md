@@ -207,6 +207,16 @@ and a later saved 599 route:
 --splice-merge-verbose
 ```
 
+The same command with short CLI flags is:
+
+```sh
+--repair --from 527 --to 599 --splice-merge-verbose
+```
+
+`--merge` is the short form of `--splice-merge-only` (without mutation-based
+bridge repairs). The long flag names remain supported; these options are
+accepted by `optimize_replay.py auto` and forwarded by `tas.py multi`.
+
 Or use `[multi-splicer] merge-repair-from = "527"` and
 `merge-repair-to = "599"`. The target `completed` selects a verified
 completed suffix, while source `current` selects the positional input.

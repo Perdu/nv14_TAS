@@ -113,7 +113,7 @@ merge-repair-at-end = true
 merge-repair-pairs = 48
 merge-repair-window = 48
 merge-repair-targets = 2
-repair-iterations = 250
+repair-iterations = 10000
 merge-verbose = false
 # how many rounds of local mode for 1 round of auto mode
 hybrid-local-rounds = 5

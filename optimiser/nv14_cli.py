@@ -2662,12 +2662,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-merge-verbose", dest="auto_splice_merge_verbose",
                          modes=auto_modes, action="store_true",
                          help="log every merge pairing/rejection (default: compact progress and saved gains)")
-    command.add_argument("--splice-merge-only", dest="auto_splice_merge_only",
+    command.add_argument("--splice-merge-only", "--merge", dest="auto_splice_merge_only",
                          modes=auto_modes, action="store_true",
                          help="attempt verified merges of saved named-splice bests, "
                               "report rejected joins and saved gains, then exit "
                               "without Auto/Local search (implies --splice-merge-bests)")
-    command.add_argument("--splice-merge-repair-only", dest="auto_splice_merge_repair_only",
+    command.add_argument("--splice-merge-repair-only", "--repair", dest="auto_splice_merge_repair_only",
                          modes=auto_modes, action="store_true",
                          help="standalone: try fast saved-route merges, then bounded Auto/Local "
                               "bridge repairs; save verified gains and exit (implies --splice-merge-only)")
@@ -2678,12 +2678,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-merge-repair-pairs", dest="auto_splice_merge_repair_pairs",
                          modes=auto_modes, type=parse_positive_int, default=48, metavar="N",
                          help="maximum independent source/suffix repair pairs per pass (default 48)")
-    command.add_argument("--splice-merge-repair-from", "--splice-merge-repair-source",
+    command.add_argument("--splice-merge-repair-from", "--splice-merge-repair-source", "--from",
                          dest="auto_splice_merge_repair_from", modes=auto_modes,
                          metavar="NAME",
                          help="only mutate a saved source stage (e.g. 527), "
                               "or 'current' for the positional input; direct grafts still run")
-    command.add_argument("--splice-merge-repair-to", "--splice-merge-repair-destination",
+    command.add_argument("--splice-merge-repair-to", "--splice-merge-repair-destination", "--to",
                          dest="auto_splice_merge_repair_to", modes=auto_modes,
                          metavar="NAME",
                          help="only bridge to this later named stage (e.g. 599), "

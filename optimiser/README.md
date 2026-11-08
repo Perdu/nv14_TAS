@@ -1631,6 +1631,12 @@ skipped on Ctrl+C. An explicit standalone `--splice-merge-repair-only` overrides
   completed and 527 -> 599). Less-promising stages and independent archived
   sections remain eligible under the remaining budget. No assumed time gain
   is assigned to spatial-only objectives or infeasible checkpoints.
+- Short CLI aliases (patch 85): `--merge` for `--splice-merge-only`,
+  `--repair` for `--splice-merge-repair-only`, `--from NAME` for
+  `--splice-merge-repair-from NAME`, and `--to NAME` for
+  `--splice-merge-repair-to NAME`. All long forms and TOML keys remain valid.
+  For example: `--repair --from 527 --to 599`. These are command-line flags,
+  not aliases for the `tas.py merge` / `tas.py repair` positional modes.
 - To restrict the **mutation-based bridge repair** to a specific source and
   destination, use `--splice-merge-repair-from 527 --splice-merge-repair-to 599`
   (TOML: `merge-repair-from = "527"`, `merge-repair-to = "599"`). The aliases
