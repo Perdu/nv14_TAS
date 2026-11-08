@@ -322,3 +322,46 @@ def repair_suffix_grafts(
               "no replay-verified graft")
     return BridgeRepairResult(tuple(grafts), searches, evaluations, len(chosen),
                               endpoint_candidates, rejected_prefix, reason)
+
+
+def gain_aware_suffix_retimes(
+    prefix: Sequence[InputFrame], reference: Sequence[InputFrame],
+    *, prefix_arrival: int, reference_arrival: int,
+    offsets: Sequence[int] = (0, -1, 1, -2, 2),
+) -> tuple[tuple[int, tuple[InputFrame, ...]], ...]:
+    """Deterministically advance a saved continuation by a verified frame lead.
+
+    The checkpoint is aligned at its *actual earliest-arrival frame*, not at
+    the nominal stage deadline. Keep the faster replay through that frame,
+    and take all later held input states from the reference at its (later)
+    arrival. Nearby reference-tick offsets provide a few alternate timing
+    boundaries; they do not mutate or erase any of the checkpoint's prefix.
+
+    Results are only **proposals**. The caller must replay, verify persistent
+    controls, and compare objective ranks before saving anything. These raw
+    inputs do not assert that physics states match at the seam.
+    """
+    fast = tuple(editable_frames(prefix))
+    old = tuple(editable_frames(reference))
+    if (type(prefix_arrival) is not int or type(reference_arrival) is not int or
+            not 0 <= prefix_arrival < len(fast) or
+            not 0 <= reference_arrival < len(old) - 1 or
+            reference_arrival <= prefix_arrival):
+        return ()
+    result: list[tuple[int, tuple[InputFrame, ...]]] = []
+    seen: set[tuple[InputFrame, ...]] = set()
+    preserved = fast[:prefix_arrival + 1]
+    for offset in offsets:
+        if type(offset) is not int:
+            raise ValueError("retime offsets must be integers")
+        take_after = reference_arrival + offset
+        if take_after < 0 or take_after >= len(old) - 1:
+            continue
+        # Do not include a fully old prefix with zero/negative time saving.
+        # If the old suffix is already identical to the current fast suffix,
+        # deduplicating avoids repeatedly verifying the same full replay.
+        trial = preserved + old[take_after + 1:]
+        if trial not in seen and trial != fast:
+            result.append((offset, trial))
+            seen.add(trial)
+    return tuple(result)

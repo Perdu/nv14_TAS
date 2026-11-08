@@ -120,3 +120,4 @@ hybrid-local-rounds = 5
 hybrid-cycles = 8
 hybrid-stagnation-cycles = 5
 use-current-run = true
+merge-retime-gains = true

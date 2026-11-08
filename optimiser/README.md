@@ -1631,6 +1631,28 @@ skipped on Ctrl+C. An explicit standalone `--splice-merge-repair-only` overrides
   completed and 527 -> 599). Less-promising stages and independent archived
   sections remain eligible under the remaining budget. No assumed time gain
   is assigned to spatial-only objectives or infeasible checkpoints.
+- **Gain-aware suffix retiming (patch 87):** add `--retime-gains` (long form
+  `--splice-merge-retime-gains`) to try deterministic input-continuation
+  advances derived from **measured earliest-arrival savings** at saved splice
+  checkpoints. By default, it sweeps all eligible saved stages, trying their
+  saved completed continuations and the nearest later saved checkpoint; use
+  `--from 777 --to completed` to restrict the pass. Each trial preserves the
+  saved input prefix through the actual checkpoint arrival and appends the
+  reference's later held input sequence advanced by the measured gain, plus
+  small nearby offsets (0, -1, +1, -2, +2 frames). Stage/complete results are
+  accepted only through existing replay, route-control and objective gates.
+  `--retime-gains` alone performs **direct grafting + retiming and exits**,
+  without stochastic bridge search. `--repair --retime-gains` also runs the
+  normal bridge mutation search **after** retiming; its `repair-pairs` and
+  `repair-iterations` budgets are independent of the deterministic sweep.
+  `[multi-splicer] merge-retime-gains = true` is equivalent. `--at` is a
+  *bridge mutation* seam selector and does not move the retiming boundary,
+  which is the measured goal arrival. Only already-saved trajectories can be
+  retimed; spatial-only goals and non-positive/unavailable savings are skipped.
+  A retime is a hypothesis, **not** proof of a valid join or SWF-equivalent
+  simulation. The run logs attempted and feasible trials separately from
+  actual saved improvements, and never overwrites a completed best with an
+  unverified replay. The sweep can be retried after saving new splices.
 - Short CLI aliases (patch 85): `--merge` for `--splice-merge-only`,
   `--repair` for `--splice-merge-repair-only`, `--from NAME` for
   `--splice-merge-repair-from NAME`, and `--to NAME` for

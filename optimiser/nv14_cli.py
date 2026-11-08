@@ -1757,6 +1757,7 @@ def _load_config_defaults(
         "merge_repair_from": "auto_splice_merge_repair_from",
         "merge_repair_to": "auto_splice_merge_repair_to",
         "merge_repair_at_frame": "auto_splice_merge_repair_at_frame",
+        "merge_retime_gains": "auto_splice_merge_retime_gains",
         "repair_iterations": "auto_splice_repair_iterations",
         "mutations": "auto_mutations",  # endpoint Auto, not Local mutation selection
     })
@@ -2695,6 +2696,12 @@ def build_parser() -> argparse.ArgumentParser:
                          help="centre bridge repair target ticks around this replay frame "
                               "(not a stage name); fails visibly if source cannot reach it; "
                               "only affects mutation-based repair")
+    command.add_argument("--splice-merge-retime-gains", "--retime-gains",
+                         dest="auto_splice_merge_retime_gains", modes=auto_modes,
+                         action="store_true",
+                         help="deterministically advance saved continuations by measured "
+                              "earliest-arrival gains; default sweeps all saved gains; "
+                              "--from/--to filter the sweep; standalone implies --merge")
     command.add_argument("--splice-merge-repair-window", dest="auto_splice_merge_repair_window",
                          modes=auto_modes, type=parse_positive_int, default=48, metavar="N",
                          help="editable bridge frames, independent of stage lookback (default 48)")
@@ -4216,7 +4223,11 @@ def main() -> None:
         raise SystemExit("--ls-splice cannot be combined with --splice-from-best")
     repair_only = getattr(args, "auto_splice_merge_repair_only", False)
     repair_at_end = getattr(args, "auto_splice_merge_repair_at_end", False)
-    merge_only = getattr(args, "auto_splice_merge_only", False) or repair_only
+    retime_gains = getattr(args, "auto_splice_merge_retime_gains", False)
+    # A requested deterministic sweep is a standalone merge operation even
+    # when the user's persistent config also enables ordinary merge-bests.
+    # Explicit --repair still runs bridge mutations *after* the cheap sweep.
+    merge_only = getattr(args, "auto_splice_merge_only", False) or repair_only or retime_gains
     if (repair_only or repair_at_end) and not (args.mode == "auto" and
             args.auto_random_splice and args.auto_splice_mode == "user" and
             args.auto_splice_files):
@@ -4759,6 +4770,7 @@ def main() -> None:
                     "merge_repair_from": args.auto_splice_merge_repair_from,
                     "merge_repair_to": args.auto_splice_merge_repair_to,
                     "merge_repair_at_frame": args.auto_splice_merge_repair_at_frame,
+                    "merge_retime_gains": retime_gains,
                     "start_at": args.auto_splice_start,
                     "stop_at": args.auto_splice_stop,
                 }
@@ -4942,6 +4954,7 @@ def main() -> None:
                                 merge_repair_from=args.auto_splice_merge_repair_from,
                                 merge_repair_to=args.auto_splice_merge_repair_to,
                                 merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
+                                merge_retime_gains=retime_gains,
                                 best_callback=phase_best_callback,
                                 stage_best_callback=(checkpoint_writer if checkpoint_writer is not None
                                                      else save_stage_best),
@@ -5001,6 +5014,7 @@ def main() -> None:
                                 merge_repair_from=args.auto_splice_merge_repair_from,
                                 merge_repair_to=args.auto_splice_merge_repair_to,
                                 merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
+                                merge_retime_gains=retime_gains,
                                 saved_final_frames=completed_best[0],
                                 saved_stage_candidates=_load_user_splice_checkpoints(
                                     stage_outputs, output_path, replay_output_path),
@@ -5215,6 +5229,7 @@ def main() -> None:
                     merge_repair_from=args.auto_splice_merge_repair_from,
                     merge_repair_to=args.auto_splice_merge_repair_to,
                     merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
+                    merge_retime_gains=retime_gains,
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path,
@@ -5322,6 +5337,7 @@ def main() -> None:
                             merge_repair_from=args.auto_splice_merge_repair_from,
                             merge_repair_to=args.auto_splice_merge_repair_to,
                             merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
+                            merge_retime_gains=retime_gains,
                             summary_only=args.auto_ls_splice,
                             best_callback=lambda frames: _write_result(
                                 source, output_path, replay_output_path,

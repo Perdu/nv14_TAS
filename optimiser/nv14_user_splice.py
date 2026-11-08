@@ -23,7 +23,8 @@ from nv14_random_splice import (RandomSpliceConfig, _control_preserved,
                                 _local_search, _completed_rank)
 from nv14_auto import verify_trimmed_replay
 from nv14_replay import editable_frames, decode_complex_replay, encode_complex_replay
-from nv14_splice_merge import verified_suffix_grafts, repair_suffix_grafts
+from nv14_splice_merge import (verified_suffix_grafts, repair_suffix_grafts,
+                               gain_aware_suffix_retimes)
 from nv14_splice_backend import (_search_stage as search_splice_stage, splice_config_for_round)
 
 
@@ -347,6 +348,7 @@ def optimise_user_splices(
     merge_repair_from: str | None = None,
     merge_repair_to: str | None = None,
     merge_repair_at_frame: int | None = None,
+    merge_retime_gains: bool = False,
     saved_stage_candidates: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
@@ -385,6 +387,10 @@ def optimise_user_splices(
     if merge_repair_to is not None and (not isinstance(merge_repair_to, str) or
                                         not merge_repair_to.strip()):
         raise ValueError("merge_repair_to must be a nonempty stage name or 'completed'")
+    if type(merge_retime_gains) is not bool:
+        raise ValueError("merge_retime_gains must be a boolean")
+    if merge_retime_gains and not merge_stage_bests:
+        raise ValueError("merge_retime_gains requires saved-stage merging")
     if merge_repair_at_frame is not None and (
             type(merge_repair_at_frame) is not int or merge_repair_at_frame < 2):
         raise ValueError("merge_repair_at_frame must be an integer >= 2")
@@ -1216,6 +1222,8 @@ def optimise_user_splices(
                         try_join(prefix, suffix, stages[earlier].end, later,
                                  f"{source_name} -> {suffix_name}")
 
+        if merge_retime_gains:
+            run_gain_retime_pass(report, offer_candidate)
         if repair:
             run_bridge_repair_pass(report, offer_candidate)
         if progress:
@@ -1226,6 +1234,132 @@ def optimise_user_splices(
                      f"{pairs-attempted} skipped; {attempted-joined} rejected; "
                      f"{input_attempted} current-input graft attempt(s); "
                      f"{section_attempted} archived-alternative graft attempt(s)")
+
+    def run_gain_retime_pass(report: str, offer) -> None:
+        """Cheap deterministic sweep before stochastic repair, with no pair cap.
+
+        Scan every eligible saved earliest-arrival stage gain, unless --from
+        selects one. Use the old completed continuation and the *nearest*
+        later saved stage to avoid the quadratic number of section pairs.
+        --to can override that choice. Invalid/incomplete results are merely
+        proposals: normal stage/complete ranking and verification still apply.
+        """
+        nonlocal evaluations
+        completions: list[tuple[str, tuple[InputFrame, ...]]] = []
+        for name, frames in (("saved completed", saved_final),
+                             ("current best completed", best_output if best_rank else None)):
+            if frames is None or any(frames == other for _, other in completions):
+                continue
+            checked = evaluate_replay_with_sentinel(level, frames)
+            if checked.valid and checked.finish_tick == len(frames):
+                completions.append((name, tuple(frames)))
+        pairs = proposals = feasible = stage_gains = completed_gains = 0
+        skipped = 0
+        if progress and merge_repair_from == "current":
+            progress(f"{report} gain-aware suffix retime: --from current has "
+                     "no named earliest-arrival checkpoint to measure a gain; "
+                     "select a saved splice name instead")
+        # Read from independent checkpoint/archive records. A later improved
+        # completion should not turn an earlier saved source into itself.
+        for index, stage in enumerate(stages):
+            if merge_repair_from is not None and merge_repair_from != stage.name:
+                continue
+            if not stage.goal.is_earliest:
+                continue
+            variants = []
+            checkpoint = stage_checkpoints[index]
+            if checkpoint is not None:
+                variants.append((stage.name, checkpoint))
+            # Include the fastest archived alternative if it has a distinct
+            # physical trajectory and an actual positive frame lead.
+            for archive in archived_frontiers[index]:
+                if archive != checkpoint:
+                    variants.append((stage.name + " archived", archive))
+                    break
+            suffixes: list[tuple[str, tuple[InputFrame, ...], int | None]] = []
+            if merge_repair_to is None or merge_repair_to == "completed":
+                suffixes.extend((name, frames, None) for name, frames in completions)
+            if merge_repair_to != "completed":
+                for later in range(index+1, len(stages)):
+                    if merge_repair_to is not None and stages[later].name != merge_repair_to:
+                        continue
+                    later_saved = stage_checkpoints[later]
+                    if later_saved is not None:
+                        suffixes.append((stages[later].name, later_saved, later))
+                        if merge_repair_to is None:
+                            break  # only the next available continuation
+            for source_label, prefix in variants:
+                try:
+                    arrival = original_endpoints[index].evaluate(
+                        _materialise_splice_tail(prefix, stage.goal.target_frame))
+                except (ValueError, IndexError):
+                    continue
+                if not arrival.feasible:
+                    continue
+                for destination, reference, later in suffixes:
+                    try:
+                        old = original_endpoints[index].evaluate(
+                            _materialise_splice_tail(reference, stage.goal.target_frame))
+                    except (ValueError, IndexError):
+                        skipped += 1
+                        continue
+                    if not old.feasible or old.frame <= arrival.frame:
+                        skipped += 1
+                        continue
+                    # A stored first-arrival result may have no live prefix at
+                    # that tick. Never search after the end of its recording.
+                    gain = old.frame - arrival.frame
+                    candidates = gain_aware_suffix_retimes(
+                        prefix, reference, prefix_arrival=arrival.frame,
+                        reference_arrival=old.frame)
+                    if not candidates:
+                        skipped += 1
+                        continue
+                    pairs += 1
+                    old_eval = evaluate_replay_with_sentinel(level, reference)
+                    for offset, proposal in candidates:
+                        proposals += 1
+                        # If a completed reference opened controls the new
+                        # replay never activates, do not publish that shortcut.
+                        checked = evaluate_replay_with_sentinel(level, proposal)
+                        evaluations += 1
+                        if (old_eval.valid and old_eval.finish_tick == len(reference)
+                                and not _control_preserved(old_eval, checked)):
+                            continue
+                        before_stage = (stage_checkpoint_evals[later].objective_key
+                                        if later is not None and
+                                        stage_checkpoint_evals[later] is not None else None)
+                        before_best = best_rank
+                        stage_ok, completion_ok = offer(
+                            proposal, later,
+                            f"gain retime {source_label} -> {destination} "
+                            f"({gain:+d}f, offset {offset:+d})")
+                        feasible += int(stage_ok or completion_ok)
+                        after_stage = (stage_checkpoint_evals[later].objective_key
+                                       if later is not None and
+                                       stage_checkpoint_evals[later] is not None else None)
+                        new_stage = (after_stage is not None and
+                                     (before_stage is None or after_stage < before_stage))
+                        new_best = (best_rank is not None and
+                                    (before_best is None or best_rank < before_best))
+                        stage_gains += int(new_stage)
+                        completed_gains += int(new_best)
+                        if merge_verbose and progress and (new_stage or new_best):
+                            progress(f"{report} retime {source_label} -> {destination}: "
+                                     f"saved {gain}f; offset {offset:+d}; "
+                                     f"improved {'completed' if new_best else 'stage'}")
+                    if merge_verbose and progress:
+                        progress(f"{report} retime {source_label} -> {destination}: "
+                                 f"checkpoint {arrival.frame}, old {old.frame}, "
+                                 f"gain {gain}f, {len(candidates)} tested")
+        if progress:
+            progress(f"{report} gain-aware suffix retime: "
+                     f"{pairs} gain/source-destination pair(s); "
+                     f"{proposals} deterministic proposal(s); "
+                     f"{feasible} feasible; {stage_gains} stage best(s) improved; "
+                     f"{completed_gains} completed best(s) improved; "
+                     f"{skipped} unavailable/non-positive comparisons; "
+                     "no stochastic repair budget consumed")
 
     def run_bridge_repair_pass(report: str, offer) -> None:
         """Repair independent saved-prefix routes without blocking on failures.

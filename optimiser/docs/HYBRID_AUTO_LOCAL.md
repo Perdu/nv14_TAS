@@ -230,6 +230,37 @@ Or use `[multi-splicer] merge-repair-from = "527"` and
 `merge-repair-to = "599"`. The target `completed` selects a verified
 completed suffix, while source `current` selects the positional input.
 
+### Deterministic gain-aware suffix retiming
+
+Before spending on stochastic bridge mutations, try the saved measured frame
+lead itself: `--retime-gains` (alias `--splice-merge-retime-gains`). For each
+saved earliest-arrival stage that is ahead of an available saved continuation
+at that same helper, preserve all of the faster replay through its **actual**
+arrival frame, then splice in the reference's later input sequence at the
+reference's actual arrival. It also tests nearby offsets of +/-1 and +/-2.
+The shifted replay is fully re-evaluated; no equality of physical states is
+assumed at the seam. Only existing independent stage/completion verification
+can save a result. The original SWF is still authoritative.
+
+```sh
+# Sweep all saved gains, no expensive Auto/Local bridge mutation search:
+python3 tas.py multi 69-2 --retime-gains
+# Focus on one source -> saved completed continuation:
+python3 tas.py multi 69-2 --retime-gains --from 777 --to completed
+# Do the deterministic pass, then bounded stochastic repair:
+python3 tas.py multi 69-2 --repair --retime-gains --from 777 --to completed
+```
+
+With no `--from` restriction the sweep considers each saved earliest-arrival
+checkpoint, and when no `--to` is given it uses verified completed continuations
+and the next available later saved stage. `[multi-splicer]
+merge-retime-gains = true` enables the same path. Unlike the mutation search,
+retiming is not limited by `merge-repair-pairs` or `repair-iterations`; it
+reports how many candidates were actually tested. A standalone `--retime-gains`
+implies the merge-only pass. `--at` only affects the subsequent bridge search;
+retiming always aligns the measured source/destination checkpoint arrivals.
+If the source checkpoint has no measured gain, the sweep skips it.
+
 Repair no longer mutates or grafts before an already feasible
 `earliest-arrival` checkpoint's actual arrival frame. A gain remains pending
 if no later valid continuation can preserve it; an accepted repair candidate
