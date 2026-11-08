@@ -297,3 +297,9 @@ improved completion. `--retime-gains` remains a separate deterministic
 not itself reach 630, and it can be combined with `--repair`. Neither feature
 makes a dead movie into a valid final replay; the next task is to reconnect or
 repair its continuation past the enemy.
+
+When `merge-retime-gains = true` is set in `[multi-splicer]`, it augments
+normal search/merge operations and does not switch to standalone merge-only.
+To request only a deterministic retiming sweep, pass `--retime-gains` on the
+command line. `merge-only = true` and `merge-repair-only = true` in TOML
+retain their explicit standalone semantics.

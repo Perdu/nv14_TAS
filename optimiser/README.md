@@ -1733,6 +1733,11 @@ across a discontinuous section.
 
 To keep the one-shot behavior in a splice TOML, put `merge-only = true` under
 `[multi-splicer]` (or use `--splice-merge-only` on the command line).
+In contrast, `merge-retime-gains = true` in TOML enables deterministic
+retiming alongside **normal named-splice searching**; it does not select
+standalone merge-only mode. Use `--retime-gains` on the CLI to run the
+standalone retiming sweep. `merge-bests = true` and `merge-repair-at-end = true`
+also retain their normal-search behaviour.
 `--ls-splice` is the separate read-only summary command: unlike merge-only,
 it never attempts or saves joins. Standalone merge-only uses all saved
 named splice bests. A stage selection (`--start-at-splice` / `--splice-start`,

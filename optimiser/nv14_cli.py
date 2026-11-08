@@ -4262,10 +4262,17 @@ def main() -> None:
     repair_only = bool(getattr(args, "auto_splice_merge_repair_only", False)) and standalone_mode
     repair_at_end = bool(getattr(args, "auto_splice_merge_repair_at_end", False)) and not summary_only
     retime_gains = bool(getattr(args, "auto_splice_merge_retime_gains", False)) and standalone_mode
-    # Deterministic retiming and bridge repair imply standalone merging only
-    # when no stage search selection was requested.
-    merge_only = (standalone_mode and
-                  (getattr(args, "auto_splice_merge_only", False) or repair_only or retime_gains))
+    # TOML merge-retime-gains=true enables a search *feature*, not the
+    # standalone --retime-gains mode. Preserve the existing TOML merge-only and
+    # repair-only switches, but require an explicit CLI --retime-gains for a
+    # retime-only pass; otherwise run the normal named-splice search.
+    retime_only_requested = (
+        "auto_splice_merge_retime_gains" in
+        getattr(args, "_cli_explicit_options", frozenset())
+    )
+    merge_only = (standalone_mode and (
+        getattr(args, "auto_splice_merge_only", False) or repair_only or
+        (retime_gains and retime_only_requested)))
     if stage_selection and not summary_only and (
             args.auto_splice_merge_only or args.auto_splice_merge_repair_only or
             args.auto_splice_merge_retime_gains):
@@ -4981,7 +4988,7 @@ def main() -> None:
                                 start_from_stage_bests=(args.auto_splice_each_best
                                                        if from_saved_final else False),
                                 reference_frames=reference_frames,
-                                merge_stage_bests=merge_at_start or repair_at_finish,
+                                merge_stage_bests=merge_at_start or repair_at_finish or retime_gains,
                                 merge_verbose=args.auto_splice_merge_verbose,
                                 merge_repair_at_end=repair_at_finish,
                                 merge_repair_pairs=args.auto_splice_merge_repair_pairs,
@@ -5068,7 +5075,7 @@ def main() -> None:
                             phase_evaluations += merged.evaluations
                             phase_improvements += merged.improvements
 
-                        if args.auto_splice_merge_bests or repair_at_end:
+                        if args.auto_splice_merge_bests or repair_at_end or retime_gains:
                             merge_all_saved_stages('startup')
                         shared_seed = initial_input
                         if shared_prefix:
@@ -5239,7 +5246,7 @@ def main() -> None:
                                 run_route_phase('shared-suffix', shared_suffix, main_seed,
                                                 extra_seeds=(alt_seed,),
                                                 repair_at_finish=False)
-                        if args.auto_splice_merge_bests or repair_at_end:
+                        if args.auto_splice_merge_bests or repair_at_end or retime_gains:
                             merge_all_saved_stages('final', repair=repair_at_end)
                         print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice] {phase_attempts} stage searches; "
                               f"{phase_evaluations} evaluations; "
@@ -5255,7 +5262,7 @@ def main() -> None:
                     from_best=(None if summary_only else args.auto_splice_from_best),
                     start_from_stage_bests=args.auto_splice_each_best,
                     reference_frames=reference_frames,
-                    merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end,
+                    merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end or retime_gains,
                     merge_only=merge_only,
                     merge_verbose=args.auto_splice_merge_verbose,
                     merge_repair_only=repair_only,
@@ -5364,7 +5371,7 @@ def main() -> None:
                             use_current_run=args.auto_splice_use_current_run,
                             start_from_stage_bests=args.auto_splice_each_best,
                             reference_frames=reference_frames,
-                            merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end,
+                            merge_stage_bests=args.auto_splice_merge_bests or merge_only or repair_at_end or retime_gains,
                             merge_only=merge_only,
                             merge_verbose=args.auto_splice_merge_verbose,
                             merge_repair_only=repair_only,

@@ -157,6 +157,67 @@ def test_cli_merge_only_can_be_enabled_via_multi_splicer_toml(tmp_path, monkeypa
     assert '[auto:user-splice:merge-only] done:' in capsys.readouterr().out
 
 
+@pytest.mark.parametrize('retime_toml', [
+    'merge-retime-gains=true',
+    'merge-bests=true\nmerge-repair-at-end=true\nmerge-retime-gains=true',
+])
+def test_toml_retiming_augments_normal_search_not_merge_only(
+        tmp_path, monkeypatch, capsys, retime_toml):
+    """An unsuffixed auto invocation must search even with no saved stages."""
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    config = tmp_path / 'config.toml'
+    with config.open('a') as stream:
+        stream.write('\n[multi-splicer]\n' + retime_toml + '\n')
+    seen = []
+
+    def record_run(level, frames, stages, config, **kwargs):
+        seen.append(kwargs)
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', record_run)
+    monkeypatch.setattr(sys, 'argv', [*argv, '--auto-runs', '1'])
+    main()
+    assert len(seen) == 1
+    assert seen[0]['merge_only'] is False
+    assert seen[0]['merge_stage_bests'] is True
+    assert seen[0]['merge_retime_gains'] is True
+    assert seen[0]['merge_repair_at_end'] is ('merge-repair-at-end=true' in retime_toml)
+    assert '[auto:user-splice:merge-only]' not in capsys.readouterr().out
+
+
+def test_toml_retime_with_no_saved_checkpoints_still_searches(
+        tmp_path, monkeypatch, capsys):
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    config = tmp_path / 'config.toml'
+    with config.open('a') as stream:
+        stream.write('\n[multi-splicer]\nmerge-bests=true\n'
+                     'merge-repair-at-end=true\nmerge-retime-gains=true\n')
+    visited = []
+
+    def record_stage(level, branch, stage, config, rng, **kwargs):
+        visited.append(stage.name)
+        return (), 0, 1
+
+    monkeypatch.setattr(us, '_search_stage', record_stage)
+    monkeypatch.setattr(sys, 'argv', [*argv, '--auto-runs', '1',
+                                     '--auto-splice-rounds', '1'])
+    main()
+    assert visited == ['230', 'end']
+    assert '[auto:user-splice:merge-only]' not in capsys.readouterr().out
+
+
+def test_explicit_retime_still_selects_standalone_mode_from_toml(
+        tmp_path, monkeypatch, capsys):
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    config = tmp_path / 'config.toml'
+    with config.open('a') as stream:
+        stream.write('\n[multi-splicer]\nmerge-retime-gains=true\n')
+    monkeypatch.setattr(us, '_search_stage', _forbid_search)
+    monkeypatch.setattr(sys, 'argv', [*argv, '--retime-gains'])
+    main()
+    assert '[auto:user-splice:merge-only] done:' in capsys.readouterr().out
+
+
 def test_cli_merge_only_writes_only_genuinely_improved_saved_stages(tmp_path, monkeypatch, capsys):
     level, source, _saved, output, _packed, argv = _setup(tmp_path)
     earlier = (InputFrame(left=True),) + source[1:]
