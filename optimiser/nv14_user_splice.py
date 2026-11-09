@@ -898,6 +898,70 @@ def optimise_user_splices(
                  "earlier named goals are non-binding helpers; "
                  "partial-run outputs remain stage checkpoints")
 
+    def same_replay_gain_reach(index: int, replay: tuple[InputFrame, ...],
+                               candidate: EndpointEvaluation,
+                               best_workspace: tuple[InputFrame, ...]) -> str:
+        """Find the furthest downstream gain on this SAME saved replay.
+
+        Named goals are optional helpers: failing an intermediate goal does
+        not rule out a later objective gain. Track gaps instead of falsely
+        treating a collection of independent stage winners as one route.
+        The full-physics death/finish trace bounds all claims of reachability.
+        """
+        if index == len(stages) - 1:
+            return "; downstream gain: final named splice"
+        full = _materialise_splice_tail(replay, max(s.goal.target_frame for s in stages))
+        physical = evaluate_replay_with_sentinel(level, full)
+        if physical.dead_tick is not None and physical.dead_tick <= candidate.frame:
+            return "; same-replay downstream gain: unavailable (dies before this checkpoint in full physics)"
+        if physical.finish_tick is not None and physical.finish_tick < candidate.frame:
+            return "; same-replay downstream gain: unavailable (finishes before this checkpoint)"
+        last_gain = index
+        last_detail = ""
+        missed: list[tuple[int, str]] = []
+        for later in range(index + 1, len(stages)):
+            later_stage = stages[later]
+            result = original_endpoints[later].evaluate(full)
+            if not result.feasible:
+                missed.append((later, "goal not reached"))
+                continue
+            if physical.dead_tick is not None and physical.dead_tick <= result.frame:
+                missed.append((later, f"dies at frame {physical.dead_tick}"))
+                continue
+            if physical.finish_tick is not None and physical.finish_tick < result.frame:
+                missed.append((later, f"already finished at frame {physical.finish_tick}"))
+                continue
+            reference = (original_endpoints[later].evaluate(best_workspace)
+                         if best_rank is not None else input_stage_evals[later])
+            if reference is None or not reference.feasible:
+                missed.append((later, "no comparable baseline"))
+                continue
+            if result.objective_key >= reference.objective_key:
+                missed.append((later, "no objective gain vs " + (
+                    "best" if best_rank is not None else "input")))
+                continue
+            last_gain = later
+            label = "best" if best_rank is not None else "input"
+            last_detail = (f" ({reference.frame - result.frame:+d}f vs {label})"
+                           if later_stage.goal.is_earliest else
+                           f" (better stage objective vs {label}; no frame saving implied)")
+        if last_gain == index:
+            text = "; same-replay downstream gain: none"
+        else:
+            text = (f"; same-replay downstream gain: as far as {stages[last_gain].name!r}"
+                    f"{last_detail}")
+        gaps = [stages[j].name for j, _ in missed if j < last_gain]
+        if gaps:
+            examples = ", ".join(repr(name) for name in gaps[:3])
+            if len(gaps) > 3:
+                examples += f", +{len(gaps) - 3} more"
+            text += f"; nonconsecutive (no gain at {examples})"
+        after = next(((j, why) for j, why in missed if j > last_gain), None)
+        if after is not None:
+            j, why = after
+            text += f"; next {stages[j].name!r} ({why})"
+        return text
+
     def report_checkpoint_summary(label: str) -> None:
         """Show verified full-run propagation, not misleading stage-only ranks.
 
@@ -922,6 +986,7 @@ def optimise_user_splices(
             if best_rank is not None and stage_feasible(best_workspace, i):
                 best_stage = original_endpoints[i].evaluate(best_workspace)
             detail = _stage_summary_text(stage.goal, candidate)
+            reach = same_replay_gain_reach(i, archived, candidate, best_workspace)
             elapsed = section_duration(i, archived)
             if elapsed is not None:
                 detail += f"; from {stages[i-1].name}: {elapsed} section frames"
@@ -933,7 +998,7 @@ def optimise_user_splices(
                 against = ("best run has no feasible checkpoint" if best_stage is None
                            else "full run: " + _stage_summary_text(stage.goal, best_stage))
                 progress(f"[auto:user-splice:summary:pending] {stage.name!r}: "
-                         f"pending ({stage_checkpoint_origin[i]}); "
+                         f"pending ({stage_checkpoint_origin[i]}){reach}; "
                          f"splice: {detail}; {against}"
                          f"{reported_savings(i, candidate, archived)}")
             else:
@@ -946,7 +1011,7 @@ def optimise_user_splices(
                          tuple(editable_frames(best_prefix[:stage.end])))
                 state = "in best (same input prefix)" if exact else "covered by best (different route)"
                 progress(f"[auto:user-splice:summary:propagated] {stage.name!r}: "
-                         f"{state} ({stage_checkpoint_origin[i]}); "
+                         f"{state} ({stage_checkpoint_origin[i]}){reach}; "
                          f"splice: {detail}; full run: "
                          f"{_stage_summary_text(stage.goal, best_stage)}"
                          f"{reported_savings(i, candidate, archived)}")

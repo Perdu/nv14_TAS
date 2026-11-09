@@ -303,3 +303,24 @@ normal search/merge operations and does not switch to standalone merge-only.
 To request only a deterministic retiming sweep, pass `--retime-gains` on the
 command line. `merge-only = true` and `merge-repair-only = true` in TOML
 retain their explicit standalone semantics.
+
+## Interpreting named multi-splicer checkpoint propagation
+
+Full named multi-splicer summaries (`-l` or periodic progress) report a
+**same-replay downstream gain** alongside each saved stage. This field evaluates
+that stage's *own saved replay* at each subsequent named goal in route order,
+using the goal's configured enemy simulation. A gain is reported only while
+that replay remains alive under the full level physics and beats the verified
+completed baseline (or positional input if no completed baseline exists).
+The report gives the furthest later stage with a measurable advantage,
+flags intermediate helper goals that had no gain (nonconsecutive propagation),
+and identifies the first following stage without a gain when one exists.
+For earliest-arrival stages it includes the frame saving at the downstream
+checkpoint; for fixed-frame spatial stages it says "better stage objective"
+and does not mislabel spatial improvement as saved frames.
+
+A later stage's independently saved candidate can have a better result even if
+this particular replay cannot get there. The summary does **not** combine
+unrelated stage winners into one claimed route. Reaching a stage does not imply
+full-level completion, and a death after a valid checkpoint does not erase
+that checkpoint's earlier gain.
