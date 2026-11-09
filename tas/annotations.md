@@ -2885,9 +2885,9 @@ Branch 8: end with an rcj
 Branch 7: end with a cj
 
 # 91-4
-rerecords: 0
+rerecords: 62
 
-
+Branch 9: jumping around 449
 
 # 92-0
 rerecords: 0
@@ -3129,4 +3129,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 272044
+# Total rerecords: 272106
