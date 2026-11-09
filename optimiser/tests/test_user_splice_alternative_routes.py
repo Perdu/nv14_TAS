@@ -6,7 +6,8 @@ import sys
 import pytest
 
 import nv14_user_splice as us
-from nv14_cli import main, parse_arguments, _expand_named_splice_alt_route
+from nv14_cli import (main, parse_arguments, _expand_named_splice_alt_route,
+                     _start_selects_alternate_route)
 from tests.test_user_splice_list_summary import _setup
 
 
@@ -395,3 +396,103 @@ def test_alt_summary_displays_all_route_lines_without_writes(tmp_path, monkeypat
     assert '[alternate route]' in stdout
     assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == original
     assert not output.exists()
+
+
+
+def _setup_alt_start_dispatch(tmp_path, monkeypatch, primary, alt):
+    """Build a real CLI fixture; mock only the native completion probe."""
+    from types import SimpleNamespace
+    import nv14_cli as cli
+    from nv14_engine import InputFrame
+    from nv14_replay import encode_complex_replay
+    from tests.test_auto import _running_exit_level
+
+    level = _running_exit_level()
+    frames = (InputFrame(right=True),) * 29
+    source = tmp_path / 'source.txt'
+    source.write_text(f'$test#author#{level.source_level_string}#'
+                      f'{encode_complex_replay(frames)}#\n')
+    goals = tmp_path / 'goals'
+    goals.mkdir()
+    for name in set((*primary, *alt)):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    cfg = tmp_path / 'config.toml'
+    cfg.write_text('[auto]\nsplice-search="both"\nsplice-iterations=4\n'
+                   'runs=1\nseed=0\n')
+    routes = tmp_path / 'routes.toml'
+    import json
+    routes.write_text('[multi-splicer]\n'
+                      'splice-files=' + json.dumps(list(primary)) + '\n'
+                      'alt-route=' + json.dumps(list(alt)) + '\n')
+    monkeypatch.setattr(cli, 'evaluate_replay_with_sentinel',
+                        lambda _level, replay, **_kw: SimpleNamespace(
+                            valid=True, finish_tick=len(replay)))
+    return ['optimize_replay.py', 'auto', str(source), '--config', str(cfg),
+            '--auto-splice-directory', str(goals),
+            '--output', str(tmp_path / 'best.txt'),
+            '--replay-output', str(tmp_path / 'best-replay.txt'),
+            '--splice-config', str(routes), '--auto-runs', '1']
+
+
+def test_start_at_alternate_exclusive_stage_searches_its_route_suffix(
+    tmp_path, monkeypatch, capsys,
+):
+    """Reproduce --start-at-splice 211 with the user's exact short branch."""
+    primary = ('98', '159', '236', '272', 'end')
+    alternate = ('98', '211', '246', '272')
+    argv = _setup_alt_start_dispatch(tmp_path, monkeypatch, primary, alternate)
+    parsed = parse_arguments(argv[1:] + ['--start-at-splice', '211'])
+    assert parsed.auto_splice_alt_route == ('98', '211', '246', '272', 'end')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages), kwargs.get('start_at')))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--start-at-splice', '211', '--splice-speed', 'fast'])
+    main()
+    assert calls == [(('98', '211', '246', '272', 'end'), '211')]
+    output = capsys.readouterr().out
+    assert "'211' selects the alternate route" in output
+    assert 'alternate-branch:' not in output
+
+
+def test_start_at_second_alternate_stage_keeps_shared_rejoin_and_end(
+    tmp_path, monkeypatch,
+):
+    argv = _setup_alt_start_dispatch(
+        tmp_path, monkeypatch, ('230', '239', '250', 'end'),
+        ('230', '240', '241', '250'))
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages), kwargs.get('start_at')))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--start-at-splice', '241'])
+    main()
+    assert calls == [(('230', '240', '241', '250', 'end'), '241')]
+
+
+def test_start_at_unlisted_stage_reports_both_routes(tmp_path, monkeypatch):
+    argv = _setup_alt_start_dispatch(
+        tmp_path, monkeypatch, ('98', '159', '236', '272', 'end'),
+        ('98', '211', '246', '272'))
+    monkeypatch.setattr(sys, 'argv', argv + ['--start-at-splice', '212'])
+    with pytest.raises(SystemExit, match='start splice .*not in either named route'):
+        main()
+
+
+@pytest.mark.parametrize(('start', 'expected'), [
+    ('211', True), ('246', True), ('98', False), ('272', False),
+    ('159', False), ('236', False), ('missing', False), (None, False),
+])
+def test_explicit_start_route_selection_for_primary_and_short_alt(start, expected):
+    primary = ('98', '159', '236', '272', 'end')
+    alternate = _expand_named_splice_alt_route(primary, ('98', '211', '246', '272'))
+    assert alternate == ('98', '211', '246', '272', 'end')
+    assert _start_selects_alternate_route(primary, alternate, start) is expected

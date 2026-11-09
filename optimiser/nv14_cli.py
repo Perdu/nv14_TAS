@@ -2346,6 +2346,19 @@ def _expand_named_splice_alt_route(
     return primary[:start + 1] + alternate[1:-1] + primary[stop:]
 
 
+def _start_selects_alternate_route(
+    primary_names: Sequence[str], alternate_names: Sequence[str],
+    start_at: str | None,
+) -> bool:
+    """Select the alternate route only for an exclusively alternate start.
+
+    Names shared between routes still use the existing interleaved search.
+    Unknown names are left for the normal named-stage validation error.
+    """
+    return bool(start_at is not None and start_at not in primary_names and
+                start_at in alternate_names)
+
+
 def parse_arguments(
     argv: Sequence[str] | None = None,
 ) -> argparse.Namespace:
@@ -4585,6 +4598,26 @@ def main() -> None:
                 alternate_stages = (_load_named_splice_stages(
                     level, replay.frames, args, directory, args.auto_splice_alt_route)
                     if args.auto_splice_alt_route else ())
+                # A --start-at-splice name may belong only to the alternate
+                # route. In that case search its suffix (including the shared
+                # rejoin and end) rather than trying to index it in the primary
+                # route. Never launch the unrelated primary branch first.
+                # Shared names retain the existing interleaved-route behavior.
+                selected = args.auto_splice_start
+                if alternate_stages and not args.auto_ls_splice and selected is not None:
+                    available = {stage.name for stage in (*stages, *alternate_stages)}
+                    if selected not in available:
+                        raise ValueError(
+                            f"start splice {selected!r} is not in either named route; "
+                            f"available splices: {', '.join(sorted(available))}")
+                if (alternate_stages and not args.auto_ls_splice and
+                        _start_selects_alternate_route(
+                            tuple(stage.name for stage in stages),
+                            tuple(stage.name for stage in alternate_stages), selected)):
+                    stages, alternate_stages = alternate_stages, ()
+                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                          f"--start-at-splice {selected!r} selects the alternate route; "
+                          "searching from that splice through its shared suffix", flush=True)
                 all_stages = tuple({stage.name: stage for stage in
                                     (*stages, *alternate_stages)}.values())
                 all_names = tuple(stage.name for stage in all_stages)

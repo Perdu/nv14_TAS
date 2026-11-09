@@ -2196,6 +2196,12 @@ branch at its first divergent stage. The execution order is then
 `479`, `482 -> 485`, `527` from **both** branch results, and finally
 `599 -> ... -> end`. The initial seam `403` is not searched. If the requested
 primary start is at or after reconvergence `527`, the earlier alternative
-branch is skipped. `--splice-stop` and `--splice-from-best` remain incompatible
+branch is skipped. If instead the requested start is **exclusive to the alternate
+route** (e.g. `--start-at-splice 482`), only that alternate route is searched,
+starting at `482` and continuing through `485`, the shared rejoin `527`, and
+then the shared suffix to `end`. This works for both short and full alt-route
+notations. Shared stage names retain the interleaved two-route behavior;
+`--ls-splice` still lists both routes in full. `--splice-stop` and
+`--splice-from-best` remain incompatible
 with alternative routes. Each phase has its own backend checkpoint filename,
 so its in-flight state cannot be mistaken for another branch's work.
