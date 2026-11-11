@@ -37,18 +37,13 @@ def verified_suffix_grafts(
         if not original.valid or original.finish_tick != len(reference):
             return ()
     elif original.dead_tick is not None and original.finish_tick is None:
-        # A stage suffix can be useful *before* its eventual death. In
-        # particular, an earlier gain may reach the next two checkpoints and
-        # then collide with an enemy near the exit. Keep the live section;
-        # the caller must still independently verify its destination goal.
-        # The trace includes one implicit sentinel step. Keeping the last
-        # explicit input immediately before a reported death may still die on
-        # that sentinel; trim the fatal tick as well.
-        reference = reference[:max(0, original.dead_tick - 1)]
-        if len(reference) < 3:
-            return ()
-        original = evaluate_replay_with_sentinel(level, reference)
-        if original.dead_tick is not None:
+        # A replay that dies *after* a useful stage remains a valid source of
+        # inputs. Its physical trace cannot supply a live seam beyond death,
+        # but deleting its later inputs would permanently destroy downstream
+        # continuation instructions when the joined movie is saved as a stage
+        # checkpoint. Filter dead/terminal seam states below instead of
+        # shortening the reference replay.
+        if original.dead_tick <= 2:
             return ()
     options: list[tuple[float, int, int]] = []
     low = max(1, min_prefix_frame, seam_frame - lookback)
@@ -87,16 +82,19 @@ def verified_suffix_grafts(
             except ValueError:
                 continue
         elif not completion_required:
-            # Do not discard a valid earlier checkpoint solely because this
-            # full-length replay dies *after* the checkpoint. A truncated
-            # replay is a stage-only candidate, never a claimed completion.
-            trimmed = (joined[:max(0, check.dead_tick - 1)]
-                       if check.dead_tick is not None else joined)
-            if len(trimmed) < 2:
+            # A death after the checkpoint must not discard the checkpoint.
+            # Verify a live prefix where needed, but return the *original*
+            # joined replay below. Cutting at death and then neutral-padding
+            # it in the coordinator used to erase every downstream input in
+            # the saved stage LTM/TXT (and contaminate subsequent stage seeds).
+            live = (joined[:max(0, check.dead_tick - 1)]
+                    if check.dead_tick is not None else joined)
+            if len(live) < 2:
                 continue
-            checked = evaluate_replay_with_sentinel(level, trimmed)
+            checked = evaluate_replay_with_sentinel(level, live)
             if checked.dead_tick is not None:
                 continue
+            trimmed = joined
         else:
             continue
         # A stage-only live prefix need not replay *future* control events.
@@ -178,13 +176,13 @@ def repair_suffix_grafts(
         if not reference_eval.valid or reference_eval.finish_tick != len(reference):
             return BridgeRepairResult((), failure_reason="reference is not a canonical completion")
     elif reference_eval.dead_tick is not None and reference_eval.finish_tick is None:
-        # An intermediate stage movie may meet its helper before dying in
-        # unrelated later inputs. Keep its live, replayable section for a
-        # possible *stage-only* bridge; never treat this as a completion.
-        reference = reference[:reference_eval.dead_tick]
-        reference_eval = evaluate_replay_with_sentinel(level, reference)
-        if reference_eval.dead_tick is not None:
-            return BridgeRepairResult((), failure_reason="reference section dies before a live suffix")
+        # A reference that dies *later* may still supply valid earlier seam
+        # states. Keep its full recorded input suffix: cropping it here used to
+        # make otherwise useful repaired stage checkpoints lose all inputs
+        # after the death. Target selection below excludes dead states, and
+        # the final checkpoint is independently checked by the coordinator.
+        if reference_eval.dead_tick <= 2:
+            return BridgeRepairResult((), failure_reason="reference dies before a live suffix")
     if len(reference) < 5 or len(candidate) < 5:
         return BridgeRepairResult((), failure_reason="prefix or suffix is too short")
     prefix_eval = evaluate_replay_with_sentinel(level, candidate)

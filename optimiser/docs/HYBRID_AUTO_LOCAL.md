@@ -290,6 +290,17 @@ near its nominal `target_frame`. In stage-only grafts, a reference route that
 dies *after* a useful section can provide its still-live portion; completed
 suffix grafts retain the original strict completion and control requirements.
 
+**Stage-only outputs retain their complete recorded input sequence (patch 98).**
+An intermediate replay may reach a useful checkpoint and die at a later tick.
+That later death disqualifies it as a completed run, **not** as a saved stage
+checkpoint. The merge, bridge-repair and direct-checkpoint-promotion paths now
+verify the live segment through the target goal without cutting off the later
+recorded inputs or replacing them with neutral padding. This matters for a
+later stage seeded from that checkpoint: its existing continuation remains
+available to mutate or retime. An already truncated checkpoint cannot have its
+previously discarded inputs inferred; recover those from an intact LTM/TXT or
+frontier member when available.
+
 For example, if a 442-stage replay reaches 630 at frame 554 but dies near the
 exit, a normal merge can save a verified 630 checkpoint without claiming an
 improved completion. `--retime-gains` remains a separate deterministic

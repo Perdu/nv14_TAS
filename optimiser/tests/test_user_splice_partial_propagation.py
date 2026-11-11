@@ -11,7 +11,7 @@ from nv14_auto import evaluate_replay_with_sentinel
 from nv14_engine import InputFrame, parse_level_string
 from nv14_endpoint import EndpointEvaluator, EndpointGoal
 from nv14_random_splice import RandomSpliceConfig
-from nv14_splice_merge import verified_suffix_grafts
+from nv14_splice_merge import verified_suffix_grafts, repair_suffix_grafts
 from nv14_user_splice import UserSpliceStage, optimise_user_splices
 from tests.test_auto import _running_exit_level
 from tests.test_user_splice_manual_input_merge import _finished_slow_run
@@ -52,6 +52,11 @@ def test_dead_later_saved_route_promotes_later_stage_without_any_graft(monkeypat
     assert completed == []
     assert [name for name, _ in saved] == ['later']
     assert later_eval.evaluate(saved[0][1]).feasible
+    # The stage is reached before the guard kills the player at tick 24.
+    # Saving the checkpoint MUST NOT replace the rest of the original replay
+    # with neutral inputs: those inputs are useful in later-stage searches.
+    assert saved[0][1][:len(fast)] == fast
+    assert saved[0][1][24].right and saved[0][1][28].right
     assert any('existing replay propagated to later checkpoint' in msg and
                'dies later at frame 24' in msg for msg in logs)
 
@@ -81,19 +86,49 @@ def test_cannot_promote_goal_reached_only_in_enemy_free_world(monkeypatch):
 
 def test_stage_grafting_accepts_live_section_from_reference_that_dies_later():
     level = _guarded(240)
-    replay = (InputFrame(right=True),) * 29
+    # The tail is intentionally non-neutral. Trimming it at death loses
+    # irreversible TAS inputs that may be needed at a later splice.
+    replay = ((InputFrame(right=True),) * 29 +
+              (InputFrame(left=True),) * 8)
     assert evaluate_replay_with_sentinel(level, replay).dead_tick == 24
     grafts = verified_suffix_grafts(level, replay, replay,
                                     seam_frame=19, lookback=3,
                                     completion_required=False)
     assert grafts
+    # A stage-only graft may still die after the independently valid goal,
+    # but must preserve those inputs and never claim a completed replay.
+    assert replay in grafts
     for graft in grafts:
-        assert evaluate_replay_with_sentinel(level, graft).dead_tick is None
-        assert len(graft) <= 24
+        assert len(graft) >= len(replay) - 2
+        assert graft[-8:] == replay[-8:]
         assert EndpointEvaluator(level, EndpointGoal(20, 'max-x')).evaluate(graft).feasible
     assert verified_suffix_grafts(level, replay, replay, seam_frame=19,
                                   lookback=3, completion_required=True) == ()
 
+
+
+
+def test_repair_keeps_recorded_suffix_when_reference_dies_after_stage():
+    level = _guarded(240)
+    replay = ((InputFrame(right=True),) * 29 +
+              (InputFrame(left=True),) * 8)
+    assert evaluate_replay_with_sentinel(level, replay).dead_tick == 24
+    seen = []
+
+    def search(_level, candidate, goal, **kwargs):
+        seen.append((tuple(candidate), goal.target_frame))
+        return ((tuple(candidate), goal.target_frame),), 1
+
+    result = repair_suffix_grafts(
+        level, replay, replay, seam_frame=18,
+        config=RandomSpliceConfig(search_backend='local', repair_iterations=2),
+        window=8, targets=2, completion_required=False,
+        seed=1, local_search=search,
+    )
+    assert seen and result.grafts
+    assert replay in result.grafts
+    assert all(graft[-8:] == replay[-8:] for graft in result.grafts)
+    assert all(len(graft) >= 35 for graft in result.grafts)
 
 def test_direct_grafting_checks_actual_arrival_and_earlier_seam_windows(monkeypatch):
     level, fast, _ = _baseline()

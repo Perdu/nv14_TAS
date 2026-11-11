@@ -1119,6 +1119,14 @@ def optimise_user_splices(
             stage_ok = later is not None and stage_feasible(padded, later)
             if stage_ok:
                 score = original_endpoints[later].evaluate(padded)
+                # Stage search may use simulate-enemies=false. The canonical
+                # full-physics trace must still be alive at this checkpoint;
+                # death *after* the goal is allowed for stage-only saves.
+                physical = evaluate_replay_with_sentinel(level, padded)
+                if (physical.dead_tick is not None and physical.dead_tick <= score.frame or
+                        physical.finish_tick is not None and physical.finish_tick < score.frame):
+                    stage_ok = False
+            if stage_ok:
                 pool = {frames: original_endpoints[later].evaluate(frames).objective_key
                         for frames in archived_frontiers[later]}
                 pool[padded] = score.objective_key
@@ -1259,17 +1267,13 @@ def optimise_user_splices(
                 promoted_seen.add((earlier, prefix))
                 promoted_sources += 1
                 physical = evaluate_replay_with_sentinel(level, prefix)
-                # A checkpoint is a replay prefix, not a completed run. Trim
-                # the fatal input itself so a useful earlier checkpoint is
-                # persisted as a live replay rather than one ending in death.
-                # A sentinel step is part of evaluation; exclude the last
-                # explicit input before the fatal state as well so a short
-                # checkpoint cannot instantly die in its sentinel frame.
-                live_prefix = (prefix[:max(0, physical.dead_tick - 1)]
-                               if physical.dead_tick is not None else prefix)
-                if len(live_prefix) < 2:
-                    continue
-                padded = _materialise_splice_tail(live_prefix, len(current) - 1)
+                # Check liveness at each later goal using the canonical trace,
+                # but NEVER crop the stored replay at a subsequent death.
+                # Such cropping was neutral-padding the saved stage movie and
+                # permanently erasing useful inputs after the checkpoint.
+                # A dead-after-goal replay remains a valid stage seed; it is
+                # never promoted to a verified completed run.
+                padded = _materialise_splice_tail(prefix, len(current) - 1)
                 for later in range(earlier + 1, len(stages)):
                     # A completed movie is handled by the normal completion
                     # rank; helper checkpoints past death are not promoted.
@@ -1286,7 +1290,7 @@ def optimise_user_splices(
                     if old_score is not None and score.objective_key >= old_score.objective_key:
                         continue
                     before = old_score.objective_key if old_score is not None else None
-                    offer_candidate(live_prefix, later,
+                    offer_candidate(prefix, later,
                                     f"{source_name} already reaches {stages[later].name}")
                     after = stage_checkpoint_evals[later]
                     if after is not None and (before is None or after.objective_key < before):
