@@ -1775,7 +1775,7 @@ rerecords: 0
 
 
 # 52-4
-rerecords: 119
+rerecords: 234
 
 
 
@@ -2906,10 +2906,12 @@ rerecords: 161
 
 
 # 92-3
-rerecords: 151
+rerecords: 264
 
+Branch 9: alt route reaching the switch much faster but overall slower because of the drones
 Branch 8: rcj on the way up
 Branch 7: turnaround on the switch
+Branch 6: double slope jump after the switch
 
 # 92-4
 rerecords: 13
@@ -3131,4 +3133,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 272310
+# Total rerecords: 272538
