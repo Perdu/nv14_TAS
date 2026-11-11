@@ -1887,6 +1887,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_directory",
     "auto_splice_use_current_run",
     "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
+    "auto_splice_single",
 })
 
 
@@ -1917,7 +1918,7 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
     # A primary-route start can skip the shared prefix while the alternate
     # campaign still searches its divergent stages. Stop/from-best remain
     # ambiguous across independently ordered named routes.
-    if args.auto_splice_alt_route and (args.auto_splice_stop or args.auto_splice_from_best):
+    if args.auto_splice_alt_route and (args.auto_splice_stop or args.auto_splice_from_best) and not args.auto_splice_single:
         raise SystemExit("alternate routes cannot be combined with --splice-stop/from-best")
     if args.auto_random_splice and args.auto_splice_files and args.auto_splice_mode != "user":
         raise SystemExit("splice-files requires --auto-splice-mode user")
@@ -2368,6 +2369,17 @@ def parse_arguments(
     actual_argv = _single_splice_both_arguments(actual_argv)
     namespace = build_parser().parse_args(actual_argv)
     namespace._both_mode = both_mode
+    # The whole named route remains available for checkpoint promotion and
+    # propagation. Only this one stage is searched; in particular Hybrid must
+    # never fall through to the following splice.
+    single = getattr(namespace, "auto_splice_single", None)
+    if single is not None:
+        if not (namespace.mode == "auto" and namespace.auto_splice_files):
+            raise SystemExit("--single-splice requires a named multi-splicer route")
+        if ((namespace.auto_splice_start is not None and namespace.auto_splice_start != single) or
+                (namespace.auto_splice_stop is not None and namespace.auto_splice_stop != single)):
+            raise SystemExit("--single-splice cannot select a different --splice-start/stop")
+        namespace.auto_splice_start = namespace.auto_splice_stop = single
     if (namespace.mode == "auto" and namespace.auto_splice_search in
             ("hybrid", "hybrid-restart", "hybrid-local-control") and not namespace.auto_splice_files):
         raise SystemExit("hybrid splice search currently requires named --auto-splice-files "
@@ -2669,6 +2681,11 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-directory", modes=auto_modes,
                          type=Path, metavar="DIR",
                          help="directory containing named .txt/.toml goals (default: ../splices/LEVEL relative to input)")
+    command.add_argument("--single-splice", dest="auto_splice_single", modes=auto_modes,
+                         metavar="NAME", help="search only this named splice, retaining the full route for checkpoint saving, merges, repair and retiming")
+    command.add_argument("--no-splice-propagation", "--no-propagation", dest="auto_no_splice_propagation",
+                         modes=auto_modes, action="store_true",
+                         help="skip merge, bridge repair and gain retiming; still save and validate named splice checkpoints")
     command.add_argument("--splice-start", "--start-at-splice", "--auto-splice-start", dest="auto_splice_start",
                          modes=auto_modes, metavar="NAME",
                          help="first named splice to optimise (inclusive; earlier helper goals are non-binding)")
@@ -4235,6 +4252,26 @@ def _splice_enemy_cli_explicit(args: argparse.Namespace) -> bool:
                for arg in sys.argv[1:])
 
 
+def _apply_no_splice_propagation(args: argparse.Namespace) -> None:
+    """Disable only propagation phases, never stage checkpoint persistence.
+
+    This applies to a named single-splice search and to full multi-splicer
+    runs. Explicit standalone merge/repair/retime operations cannot also be
+    disabled: reject that contradictory request instead of silently skipping.
+    """
+    if not getattr(args, "auto_no_splice_propagation", False):
+        return
+    if any(name in getattr(args, "_cli_explicit_options", ()) for name in (
+            "auto_splice_merge_only", "auto_splice_merge_repair_only",
+            "auto_splice_merge_retime_gains")):
+        raise SystemExit("--no-propagation cannot be combined with explicit --merge/--repair/--retime-gains")
+    args.auto_splice_merge_only = False
+    args.auto_splice_merge_repair_only = False
+    args.auto_splice_merge_bests = False
+    args.auto_splice_merge_repair_at_end = False
+    args.auto_splice_merge_retime_gains = False
+
+
 def main() -> None:
     args = parse_arguments()
     if args.mode == "dump-player":
@@ -4258,6 +4295,7 @@ def main() -> None:
         args.mode == "auto" and args.auto_random_splice and args.auto_splice_mode == "user"
     ):
         raise SystemExit("-l/--ls-splice/--ls-splices requires named multi-splicer Auto mode with splice files")
+    _apply_no_splice_propagation(args)
     # Listing saved checkpoints is read-only, and must take precedence over
     # merge/search settings inherited from TOML or supplied on the CLI.
     # In particular, a persistent merge-only=true must never block `-l`.
@@ -4274,7 +4312,10 @@ def main() -> None:
     standalone_mode = not (summary_only or stage_selection)
     repair_only = bool(getattr(args, "auto_splice_merge_repair_only", False)) and standalone_mode
     repair_at_end = bool(getattr(args, "auto_splice_merge_repair_at_end", False)) and not summary_only
-    retime_gains = bool(getattr(args, "auto_splice_merge_retime_gains", False)) and standalone_mode
+    # Retiming is a normal search feature for a selected splice too. Only
+    # explicit CLI --retime-gains without a stage selector is standalone.
+    retime_gains = (bool(getattr(args, "auto_splice_merge_retime_gains", False))
+                    and (standalone_mode or bool(getattr(args, "auto_splice_single", None))))
     # TOML merge-retime-gains=true enables a search *feature*, not the
     # standalone --retime-gains mode. Preserve the existing TOML merge-only and
     # repair-only switches, but require an explicit CLI --retime-gains for a
@@ -4290,7 +4331,7 @@ def main() -> None:
             args.auto_splice_merge_only or args.auto_splice_merge_repair_only or
             args.auto_splice_merge_retime_gains):
         print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:mode] "
-              "stage selection overrides standalone merge/repair/retiming; "
+              "stage selection overrides standalone merge/repair/retiming mode; "
               "running selected splice search", flush=True)
     if (repair_only or repair_at_end) and not (args.mode == "auto" and
             args.auto_random_splice and args.auto_splice_mode == "user" and
@@ -4618,6 +4659,18 @@ def main() -> None:
                     print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
                           f"--start-at-splice {selected!r} selects the alternate route; "
                           "searching from that splice through its shared suffix", flush=True)
+                if args.auto_splice_single is not None:
+                    # All stages on the selected route are still loaded for
+                    # saved candidates, suffix merges and reporting, but there
+                    # must never be a second route search (or a later stage).
+                    if args.auto_splice_single not in {stage.name for stage in stages}:
+                        available = {stage.name for stage in (*stages, *alternate_stages)}
+                        raise ValueError(f"single splice {args.auto_splice_single!r} not in named route; "
+                                         f"available: {', '.join(sorted(available))}")
+                    alternate_stages = ()
+                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:mode] "
+                          f"single splice {args.auto_splice_single!r}: search only this stage; "
+                          "other stages are checkpoint/propagation sources", flush=True)
                 all_stages = tuple({stage.name: stage for stage in
                                     (*stages, *alternate_stages)}.values())
                 all_names = tuple(stage.name for stage in all_stages)

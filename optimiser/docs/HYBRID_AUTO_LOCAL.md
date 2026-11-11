@@ -335,3 +335,56 @@ this particular replay cannot get there. The summary does **not** combine
 unrelated stage winners into one claimed route. Reaching a stage does not imply
 full-level completion, and a death after a valid checkpoint does not erase
 that checkpoint's earlier gain.
+
+## Unified named checkpoints for Auto, Local population and Hybrid (patch 96)
+
+When a level has `../splices/LEVEL/multi-splicer.toml`, the `tas.py` shortcuts
+`auto`, `local`, `goal`, `both` and `hybrid` use the **same named-stage
+coordinator** as `tas.py multi`. They write the same per-stage verified best
+LTMs and companion TXT/frontier files, for example `wip/91-2_442.ltm`,
+`wip/91-2_442.txt` and `wip/91-2_442.frontier.json`. Checkpoints remain
+separate from `wip/91-2.ltm` (the completed-run output); an incomplete stage
+result cannot replace a verified completed replay.
+
+The backend selected by the shortcut overrides `[multi-splicer] search`:
+
+| Shortcut | Managed search backend | Stages actually searched |
+|---|---|---|
+| `tas.py auto LEVEL` | endpoint-auto | Whole named route |
+| `tas.py auto LEVEL NAME` | endpoint-auto | NAME only |
+| `tas.py local LEVEL NAME` | local population | NAME only |
+| `tas.py goal LEVEL NAME` | endpoint-auto | NAME only |
+| `tas.py both LEVEL NAME` | both | NAME only |
+| `tas.py hybrid LEVEL NAME` | hybrid | **NAME only**, never subsequent stages |
+
+For single-splice searches the full configured route is **loaded for
+checkpoint/merge sources**, but normal search is strictly restricted to NAME.
+An alternate-only NAME selects its alternate route; a shared NAME defaults to
+the primary route. The existing full multi-splicer path remains `tas.py multi`.
+
+These managed modes honor `[multi-splicer] merge-bests`,
+`merge-repair-at-end`, and `merge-retime-gains` settings, running the enabled
+passes around the search as in the named multi-splicer. A cheap direct merge
+may update later saved stages without any later **search**. To disable all
+three propagation passes for one run, use `--no-propagation`
+(`--no-splice-propagation`); verified stage checkpoints are still saved.
+The standalone `--merge`, `--repair` and `--retime-gains` commands retain their
+existing explicit meanings and cannot be combined with `--no-propagation`.
+
+When no per-level multi-splicer file exists, `tas.py` retains its legacy
+standalone modes. In particular, managed `tas.py local` uses the **named Local
+population backend**, not the legacy standalone Local window-search engine.
+Direct `optimize_replay.py local` remains the original standalone command;
+for managed Local use `tas.py local` or the equivalent:
+
+```sh
+python3 optimize_replay.py auto ../n_levels/91-2.ltm \
+  --config examples/config.toml \
+  --splice-config ../splices/91-2/multi-splicer.toml \
+  --auto-splice-search local --single-splice 442 \
+  --output wip/91-2.ltm --replay-output wip/91-2.txt
+```
+
+Single-splice runs still load and independently verify existing checkpoint
+files before replacing them, and still use strict full-level physics for
+completed output. No physics or native precision changes are involved.

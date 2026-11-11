@@ -3,6 +3,7 @@
 
 Examples from optimiser/:
     ./tas.py auto 53-4
+  ./tas.py auto 53-4 591  # one named splice if multi-splicer.toml exists
     ./tas.py local 55-1 end
     ./tas.py goal 53-4 591
     ./tas.py both 53-4 591
@@ -71,8 +72,13 @@ Defaults (all optional env overrides):
   TAS_JAFFAR=1 enables the mode-specific preset (or use --jaffar).
 
 Commands execute from the optimiser directory (independent of launch cwd).
-Extra optimizer flags appended after defaults take precedence. For merge and
-repair modes, no normal Auto/Local optimisation is started. --dry-run only
+Extra optimizer flags appended after defaults take precedence. When the level
+has a multi-splicer.toml, auto/local/goal/both/hybrid share its named checkpoint
+and propagation pipeline. A specified SPLICE searches only that stage (Hybrid
+never advances to the next splice); auto without SPLICE searches the named route.
+Use --no-propagation to skip merges/repair/retiming while saving stage checkpoints.
+Without that config the legacy standalone commands remain unchanged. For merge
+and repair modes, no normal Auto/Local optimisation is started. --dry-run only
 prints the expanded command and never touches replay/output files.
 """
 
@@ -108,7 +114,33 @@ def build_command(mode: str, level: str, splice: str | None = None,
     common = ["--output", output, "--replay-output", replay,
               "--workers", env.get("TAS_WORKERS", "15")]
     shared = ["--config", env.get("TAS_CONFIG", "examples/config.toml")]
-    if mode == "local":
+    named_route = path("TAS_MULTI_TEMPLATE", "../splices/{level}/multi-splicer.toml")
+    # When the level has a named route, Auto/Local/Hybrid share its verified
+    # checkpoint, frontier and propagation pipeline.  For a named splice,
+    # limit the actual search to that goal; the other goals are just sources
+    # and destinations for merges.  No route config => retain legacy modes.
+    managed = mode in ("auto", "local", "goal", "both", "hybrid") and (
+        (ROOT / named_route).is_file())
+    if mode == "auto" and splice and not managed:
+        raise ValueError("auto LEVEL SPLICE needs the level's multi-splicer.toml")
+    if managed:
+        backend = {"auto": "endpoint-auto", "goal": "endpoint-auto",
+                   "local": "local", "both": "both", "hybrid": "hybrid"}[mode]
+        command = ["auto", input_file, *shared,
+                   "--splice-config", named_route,
+                   "--auto-splice-search", backend]
+        if splice:
+            command += ["--single-splice", splice]
+        if mode == "hybrid":
+            command += ["--auto-runs", "1"]
+        elif mode == "auto":
+            command += ["--auto-runs", env.get("TAS_RUNS_AUTO", "10")]
+        elif mode == "goal":
+            command += ["--auto-runs", env.get("TAS_RUNS_GOAL", "10")]
+        else:
+            command += ["--auto-runs", "1"]
+        command += common
+    elif mode == "local":
         command = ["local", input_file,
                    "--config", path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt"),
                    "--stagnation-rounds", env.get("TAS_STAGNATION_LOCAL", "50"), *common]
@@ -137,7 +169,9 @@ def build_command(mode: str, level: str, splice: str | None = None,
                 command += ["--splice-merge-repair-only"]
         command += common
     if jaffar:
-        command.extend(_JAFFAR_LOCAL if mode == "local" else _JAFFAR_AUTO)
+        # Managed Local runs through the named Auto coordinator, not the
+        # legacy Local-only window engine.
+        command.extend(_JAFFAR_LOCAL if mode == "local" and not managed else _JAFFAR_AUTO)
     # Caller-controlled flags at the end override the shortcut defaults.
     return [sys.executable, str(ROOT / "optimize_replay.py"), *command, *extra]
 
@@ -167,7 +201,7 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
             raise ValueError(f"unknown mode {mode!r}; see --help")
         level = (args.pop(0) if args and not args[0].startswith("-")
                  else env.get("TAS_LEVEL") or env.get("LEVEL") or "")
-        splice = (args.pop(0) if mode in ("local", "goal", "both", "hybrid") and args and not args[0].startswith("-")
+        splice = (args.pop(0) if mode in ("auto", "local", "goal", "both", "hybrid") and args and not args[0].startswith("-")
                   else env.get("TAS_SPLICE") or env.get("SPLICE"))
         if args and args[0] == "--":
             args.pop(0)
