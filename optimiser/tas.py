@@ -3,7 +3,7 @@
 
 Examples from optimiser/:
     ./tas.py auto 53-4
-  ./tas.py auto 53-4 591  # one named splice if multi-splicer.toml exists
+    ./tas.py auto 53-4 591  # named checkpoint without route TOML
     ./tas.py local 55-1 end
     ./tas.py goal 53-4 591
     ./tas.py both 53-4 591
@@ -25,6 +25,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+import tomllib
 from collections.abc import Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parent
@@ -72,13 +73,17 @@ Defaults (all optional env overrides):
   TAS_JAFFAR=1 enables the mode-specific preset (or use --jaffar).
 
 Commands execute from the optimiser directory (independent of launch cwd).
-Extra optimizer flags appended after defaults take precedence. When the level
-has a multi-splicer.toml, auto/local/goal/both/hybrid share its named checkpoint
-and propagation pipeline. A specified SPLICE searches only that stage (Hybrid
-never advances to the next splice); auto without SPLICE searches the named route.
-Use --no-propagation to skip merges/repair/retiming while saving stage checkpoints.
-Without that config the legacy standalone commands remain unchanged. For merge
-and repair modes, no normal Auto/Local optimisation is started. --dry-run only
+Extra optimizer flags appended after defaults take precedence. When the
+level has multi-splicer.toml, auto/local/goal/both/hybrid share its named
+checkpoint and propagation pipeline. With no multi-splicer.toml,
+specifying SPLICE and having its .txt/.toml goal file activates a one-stage
+named checkpoint run: the verified best is saved as wip/LEVEL_SPLICE.ltm (plus
+replay TXT and frontier) for later multi-splicer reuse. No merge/repair/retiming
+is attempted without a route. Hybrid never advances to another splice.
+Auto without SPLICE retains the legacy standalone mode. Use --no-propagation
+to skip merges/repair/retiming with a configured route while retaining checkpoint
+saving. For merge and repair modes, no normal Auto/Local optimisation is
+started. --dry-run only
 prints the expanded command and never touches replay/output files.
 """
 
@@ -115,20 +120,53 @@ def build_command(mode: str, level: str, splice: str | None = None,
               "--workers", env.get("TAS_WORKERS", "15")]
     shared = ["--config", env.get("TAS_CONFIG", "examples/config.toml")]
     named_route = path("TAS_MULTI_TEMPLATE", "../splices/{level}/multi-splicer.toml")
-    # When the level has a named route, Auto/Local/Hybrid share its verified
-    # checkpoint, frontier and propagation pipeline.  For a named splice,
-    # limit the actual search to that goal; the other goals are just sources
-    # and destinations for merges.  No route config => retain legacy modes.
+    # Named checkpoint persistence is independent of a multi-splicer route:
+    # the same verified per-stage writer also supports a one-goal route.
+    # A standalone Auto launch *without* a named SPLICE still behaves as before.
+    has_route = (ROOT / named_route).is_file()
+    goal_file = (path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt")
+                 if splice else None)
+    if (goal_file and not (ROOT / goal_file).is_file() and
+            goal_file.endswith(".txt") and
+            (ROOT / (goal_file[:-4] + ".toml")).is_file()):
+        # Named stages accept either extension, even if the shortcut's
+        # default goal template happens to spell out the .txt suffix.
+        goal_file = goal_file[:-4] + ".toml"
+    has_named_goal = bool(splice and goal_file and
+                          (ROOT / goal_file).is_file() and
+                          Path(goal_file).name in (splice + ".txt", splice + ".toml"))
+    if has_named_goal and not has_route:
+        try:
+            with (ROOT / goal_file).open("rb") as stream:
+                goal_settings = tomllib.load(stream)
+            strategy = goal_settings.get("local", {}).get("search", "population")
+        except (OSError, ValueError, TypeError, AttributeError):
+            # Let the real config loader show the malformed-file error.
+            strategy = "population"
+        if strategy != "population":
+            # Legacy Local window goals are not compatible with the managed
+            # population backend. Never silently switch their search engine.
+            has_named_goal = False
     managed = mode in ("auto", "local", "goal", "both", "hybrid") and (
-        (ROOT / named_route).is_file())
+        has_route or has_named_goal)
     if mode == "auto" and splice and not managed:
-        raise ValueError("auto LEVEL SPLICE needs the level's multi-splicer.toml")
+        raise ValueError(f"auto {level} {splice} needs a named goal file "
+                         f"(expected {goal_file}) or multi-splicer.toml")
     if managed:
         backend = {"auto": "endpoint-auto", "goal": "endpoint-auto",
                    "local": "local", "both": "both", "hybrid": "hybrid"}[mode]
-        command = ["auto", input_file, *shared,
-                   "--splice-config", named_route,
-                   "--auto-splice-search", backend]
+        command = ["auto", input_file, *shared]
+        if has_route:
+            command += ["--splice-config", named_route]
+        else:
+            # With no named route there are no configured downstream stages.
+            # Run the real named-stage coordinator with precisely one goal,
+            # retaining its LTM/TXT and frontier checkpoint compatibility.
+            command += ["--auto-splice-files", splice,
+                        "--auto-splice-mode", "user", "--auto-random-splice",
+                        "--auto-splice-directory", str(Path(goal_file).parent),
+                        "--no-propagation"]
+        command += ["--auto-splice-search", backend]
         if splice:
             command += ["--single-splice", splice]
         if mode == "hybrid":

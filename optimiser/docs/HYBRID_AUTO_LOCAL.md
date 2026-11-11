@@ -371,11 +371,46 @@ three propagation passes for one run, use `--no-propagation`
 The standalone `--merge`, `--repair` and `--retime-gains` commands retain their
 existing explicit meanings and cannot be combined with `--no-propagation`.
 
-When no per-level multi-splicer file exists, `tas.py` retains its legacy
-standalone modes. In particular, managed `tas.py local` uses the **named Local
-population backend**, not the legacy standalone Local window-search engine.
-Direct `optimize_replay.py local` remains the original standalone command;
-for managed Local use `tas.py local` or the equivalent:
+### A named goal without `multi-splicer.toml` (patch 99)
+
+A route file is **no longer required to persist a named splice result**.
+When `tas.py auto/local/goal/both/hybrid LEVEL NAME` finds the corresponding
+`../splices/LEVEL/NAME.txt` (or `NAME.toml`), it runs a **one-stage named
+campaign**, saving a verified best to `wip/LEVEL_NAME.ltm`, its replay TXT,
+and its stage frontier exactly as in the multi-splicer. The stage is the
+**only** stage searched, including in Hybrid mode. No downstream goals or
+merge/bridge repair/retime phases are implied: in the absence of a named
+route they are disabled. `tas.py auto LEVEL` without NAME continues to run
+ordinary standalone Auto. Without an existing named goal, the older Local,
+Hybrid, Both, and Goal shortcuts keep their standalone operation.
+
+The goal file must use `[local] search = "population"` (the named-stage
+coordinator's supported backend). A Local `search = "windows"` goal is still
+handled by the legacy Local command, rather than changing its search engine;
+that legacy window-search path does not yet publish named checkpoints.
+Direct `optimize_replay.py local` likewise remains the original standalone
+command. To use the same checkpoint writer directly without a route TOML:
+
+```sh
+python3 optimize_replay.py auto ../n_levels/91-2.ltm \
+  --config examples/config.toml \
+  --auto-splice-files 442 --auto-splice-mode user --auto-random-splice \
+  --auto-splice-directory ../splices/91-2 \
+  --auto-splice-search hybrid --single-splice 442 --no-propagation \
+  --output wip/91-2.ltm --replay-output wip/91-2.txt
+```
+
+The checkpoint is independently goal-verified, and a worse checkpoint does
+not overwrite a better one. If a multi-splicer route file is created later,
+it can load and re-evaluate the already saved LTM/TXT stage best. Saved
+frontier metadata is checked against the current stage identity; incompatible
+frontiers may be skipped, but the verified per-stage replay remains eligible.
+With an actual multi-splicer route, the normal merging and propagation
+behavior remains unchanged.
+
+Managed `tas.py local` uses the **named Local population backend**, not the
+legacy standalone Local window-search engine. For managed Local with an
+existing route use `tas.py local` or the equivalent:
 
 ```sh
 python3 optimize_replay.py auto ../n_levels/91-2.ltm \
