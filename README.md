@@ -215,7 +215,8 @@ The different commands are:
 - `w`: creates the `switch.txt` splice at the current frame, using the switch as target object.
 - `0` to `6`: create the `switchN.txt` splice at the current frame, using the related locked door switch as target object.
 - `S`: create a normal square splice, smaller than `s`.
-
+- `b`: create splice file using best run position (created with space key) instead of current position
+- `g`: create splice file using position of ghost of previous TAS run instead of current position
 
 ### Contributing to this repository
 
