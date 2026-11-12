@@ -504,12 +504,18 @@ function create_splice_file(key)
    local y1 = y_int - splice_region_size_big
    local y2 = y_int + splice_region_size_big
 
-   if key == 'r' or key == 'R' or key == 'l' or key == 'L' then
-      x1 = x_int - splice_region_size_small
-      x2 = x_int + splice_region_size_small
-   elseif key == 'u' or key == 'U' or key == 'd' or key == 'D' then
-      y1 = y_int - splice_region_size_small
-      y2 = y_int + splice_region_size_small
+   if key == 'r' or key == 'R' then
+      x1 = x_int
+      x2 = x_int + 2 * splice_region_size_small
+   elseif key == 'l' or key == 'L' then
+      x1 = x_int - 2 * splice_region_size_small
+      x2 = x_int
+   elseif key == 'u' or key == 'U' then
+      y1 = y_int - 2 * splice_region_size_small
+      y2 = y_int
+   elseif key == 'd' or key == 'D' then
+      y1 = y_int
+      y2 = y_int + 2 * splice_region_size_small
    elseif key == 'S' then
       x1 = x_int - splice_region_size_small
       x2 = x_int + splice_region_size_small
