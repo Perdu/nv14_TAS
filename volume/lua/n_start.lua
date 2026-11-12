@@ -8,6 +8,7 @@ dofile("/home/lua/lib/ghost.lua")
 dofile("/home/lua/lib/speed.lua")
 dofile("/home/lua/lib/drones.lua")
 dofile("/home/lua/lib/splices.lua")
+dofile("/home/lua/lib/compare.lua")
 grounded_levels = dofile("/home/lua/data/grounded_levels.lua")
 levels = dofile("/home/lua/data/levels.lua")
 
@@ -128,7 +129,7 @@ function onPaint()
          local best_path_exists = bestPath[f]
          if best_path_exists then
             -- move ghost text to the right to display best path instead
-            ghost_text_position = 600
+            ghost_text_position = 620
          end
          gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), color, 0, 0, 15)
          -- speed
@@ -181,30 +182,19 @@ function onPaint()
    -- display help comparison to either ghost or best path
    -- we can only compare 5 first digits as the full value isn't dumped to file
    compare = nil
+   local display_position_x = 140
+   local display_position_y = 587
+
    if bestPath[f] then
-      compare = bestPath[f]
-   elseif space_frame ~= -100 and ghostData2[f - space_frame] then
-      compare = ghostData2[f - space_frame]
-   elseif space_frame ~= -100 and ghostData[f - space_frame] then
-      compare = ghostData[f - space_frame]
+      compare_positions(bestPath[f], display_position_x, display_position_y)
+      display_position_x = 600
+      display_position_y = 575
    end
-   if compare then
-      if float_eq(compare.x, x, 1e-5) then
-         sign = "="
-      elseif compare.x > x then
-         sign = "<"
-      else
-         sign = ">"
-      end
-      gui.text(140, 587, sign, 0xffffffff, 0, 0, 15)
-      if float_eq(compare.y, y, 1e-5) then
-         sign = "="
-      elseif compare.y > y then
-         sign = "^"
-      else
-         sign = "v"
-      end
-      gui.text(150, 587, sign, 0xffffffff, 0, 0, 15)
+
+   if space_frame ~= -100 and ghostData2[f - space_frame] then
+      compare_positions(ghostData2[f - space_frame], display_position_x, display_position_y)
+   elseif space_frame ~= -100 and ghostData[f - space_frame] then
+      compare_positions(ghostData[f - space_frame], display_position_x, display_position_y)
    end
 
    if display_current_path then
