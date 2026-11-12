@@ -25,38 +25,36 @@ def _setup(tmp_path: Path, monkeypatch, *, extension: str = '.txt'):
         'merge-bests=true\nmerge-repair-at-end=true\n'
         'merge-retime-gains=true\nmerge-only=true\n')
     monkeypatch.setattr(tas, 'ROOT', root)
+    monkeypatch.chdir(root)
     return root, goals
 
 
-@pytest.mark.parametrize('mode,backend', [
-    ('auto', 'endpoint-auto'), ('goal', 'endpoint-auto'),
-    ('local', 'local'), ('both', 'both'), ('hybrid', 'hybrid'),
+@pytest.mark.parametrize('mode,command_mode', [
+    ('auto', 'auto'), ('goal', 'auto'), ('local', 'local'),
+    ('both', 'both'), ('hybrid', 'hybrid'),
 ])
-def test_no_route_named_goal_uses_one_stage_checkpoint_writer(tmp_path, monkeypatch, mode, backend):
+def test_no_route_named_goal_uses_standalone_search(tmp_path, monkeypatch, mode, command_mode):
     _setup(tmp_path, monkeypatch)
     argv = tas.build_command(mode, '00-0', '442', env={})
-    assert argv[2] == 'auto'
+    assert argv[2] == command_mode
     assert '--splice-config' not in argv
-    assert '--no-propagation' in argv
-    assert argv[argv.index('--auto-splice-files') + 1] == '442'
-    assert argv[argv.index('--single-splice') + 1] == '442'
-    assert argv[argv.index('--auto-splice-search') + 1] == backend
-    args = parse_arguments(argv[2:])
-    assert args.auto_splice_files == ('442',)
-    assert args.auto_splice_start == args.auto_splice_stop == '442'
-    assert args.auto_splice_search == backend
-    _apply_no_splice_propagation(args)
-    assert not args.auto_splice_merge_only
-    assert not args.auto_splice_merge_bests
-    assert not args.auto_splice_merge_repair_at_end
-    assert not args.auto_splice_merge_retime_gains
+    assert '--single-splice' not in argv
+    if mode in ('both', 'hybrid'):
+        args = parse_arguments(argv[2:])
+        assert args.auto_splice_files == ('442',)
+        assert args.auto_splice_search == mode
+        _apply_no_splice_propagation(args)
+        assert not args.auto_splice_merge_bests
+    elif mode in ('auto', 'goal'):
+        args = parse_arguments(argv[2:])
+        assert not args.auto_splice_files
+        assert args.auto_objective == 'min-x'
 
 
 def test_no_route_named_toml_goal_is_discovered(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch, extension='.toml')
     argv = tas.build_command('hybrid', '00-0', '442', env={})
-    assert argv[argv.index('--single-splice') + 1] == '442'
-    assert argv[argv.index('--auto-splice-directory') + 1] == '../splices/00-0'
+    assert argv[argv.index('--goal-config') + 1].endswith('442.toml')
 
 
 def test_unrelated_legacy_launches_are_unchanged(tmp_path, monkeypatch):

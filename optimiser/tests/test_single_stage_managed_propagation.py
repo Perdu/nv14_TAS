@@ -22,6 +22,10 @@ def _config(root: Path, *, alternate: bool = False) -> Path:
         'merge-bests = true\nmerge-repair-at-end = true\n'
         'merge-retime-gains = true\n'
     )
+    for name in ("98", "159", "236", "272", "211", "246", "end"):
+        (directory / (name + ".txt")).write_text(
+            '[local]\nsearch="population"\nobjective="min-x"\n'
+            'target-frame=25\nrange="0:25"\n')
     return file
 
 
@@ -35,39 +39,40 @@ def _workspace(tmp_path: Path, monkeypatch):
     return root
 
 
-@pytest.mark.parametrize('mode,backend', [
-    ('auto', 'endpoint-auto'), ('local', 'local'), ('goal', 'endpoint-auto'),
+@pytest.mark.parametrize('mode,command_mode', [
+    ('auto', 'auto'), ('goal', 'auto'), ('local', 'local'),
     ('both', 'both'), ('hybrid', 'hybrid')])
-def test_named_shortcuts_use_full_checkpoint_route_but_single_stage(tmp_path, monkeypatch, mode, backend):
+def test_named_shortcuts_keep_the_standalone_backend(tmp_path, monkeypatch, mode, command_mode):
     _config(_workspace(tmp_path, monkeypatch))
     argv = tas.build_command(mode, '92-3', '159', env={})
-    assert argv[2] == 'auto'
-    assert argv[argv.index('--auto-splice-search')+1] == backend
-    assert argv[argv.index('--single-splice')+1] == '159'
-    assert argv[argv.index('--splice-config')+1] == '../splices/92-3/multi-splicer.toml'
-    parsed = parse_arguments(argv[2:])
-    assert parsed.auto_splice_files == ('98', '159', '236', '272', 'end')
-    assert parsed.auto_splice_start == parsed.auto_splice_stop == '159'
-    assert parsed.auto_splice_merge_bests
-    assert parsed.auto_splice_merge_repair_at_end
-    assert parsed.auto_splice_merge_retime_gains
+    assert argv[2] == command_mode
+    assert '--goal-config' in argv if mode != 'local' else '--config' in argv
+    assert '--single-splice' not in argv
+    assert '--splice-config' not in argv
+    if mode in ('auto', 'goal'):
+        parsed = parse_arguments(argv[2:])
+        assert not parsed.auto_splice_files
+        assert not parsed.auto_random_splice
+    if mode == 'hybrid':
+        parsed = parse_arguments(argv[2:])
+        assert parsed.auto_splice_files == ('159',)
+        assert parsed.auto_splice_search == 'hybrid'
 
 
-def test_auto_without_selected_splice_defaults_to_named_auto_route(tmp_path, monkeypatch):
+def test_auto_without_selected_splice_stays_standalone(tmp_path, monkeypatch):
     _config(_workspace(tmp_path, monkeypatch))
     argv = tas.build_command('auto', '92-3', env={})
-    assert '--single-splice' not in argv
-    assert argv[argv.index('--auto-splice-search')+1] == 'endpoint-auto'
-    assert '--splice-config' in argv
-    parsed = parse_arguments(argv[2:])
-    assert parsed.auto_splice_start is None and parsed.auto_splice_stop is None
+    assert argv[2] == 'auto'
+    assert '--splice-config' not in argv and '--single-splice' not in argv
+    assert '--goal-config' not in argv
 
 
-def test_auto_named_splice_shortcut_is_not_lost_in_tas_arg_handling(tmp_path, monkeypatch, capsys):
+def test_auto_named_splice_shortcut_uses_direct_goal(tmp_path, monkeypatch, capsys):
     _config(_workspace(tmp_path, monkeypatch))
     assert tas.main(['auto', '92-3', '159', '--dry-run'], env={}) == 0
     output = capsys.readouterr().out
-    assert '--single-splice 159' in output
+    assert '--goal-config ../splices/92-3/159.txt' in output
+    assert '--single-splice' not in output
 
 
 def test_no_route_preserves_standalone_local_hybrid_auto(tmp_path, monkeypatch):
@@ -75,7 +80,7 @@ def test_no_route_preserves_standalone_local_hybrid_auto(tmp_path, monkeypatch):
     assert tas.build_command('local', '92-3', '159', env={})[2] == 'local'
     assert tas.build_command('hybrid', '92-3', '159', env={})[2] == 'hybrid'
     assert tas.build_command('auto', '92-3', env={})[2] == 'auto'
-    with pytest.raises(ValueError, match='multi-splicer.toml'):
+    with pytest.raises(ValueError, match='named goal file'):
         tas.build_command('auto', '92-3', '159', env={})
 
 

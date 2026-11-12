@@ -12,7 +12,9 @@ def test_modes_and_templates_generate_existing_cli_options():
     local = tas.build_command('local', '55-1', 'end', env=env)
     assert local[2:4] == ['local', '../n_levels/55-1.ltm']
     assert '../splices/55-1/end.txt' in local
-    assert '--stagnation-rounds' in local
+    assert '--stagnation-rounds' not in local
+    assert '--stagnation-rounds' in tas.build_command(
+        'local', '55-1', 'end', env={'TAS_STAGNATION_LOCAL': '50'})
     goal = tas.build_command('goal', '53-4', '591', env=env)
     assert '--goal-config' in goal and '../splices/53-4/591.txt' in goal
     random = tas.build_command('random', '55-1', env=env)

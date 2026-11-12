@@ -48,10 +48,25 @@ class UserSpliceResult:
 
 def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                   stage: UserSpliceStage, config: RandomSpliceConfig,
-                  rng: random.Random, **kwargs):
-    """Named-stage adapter; search machinery is shared with sampled splicers."""
+                  rng: random.Random, *, backend_progress: bool = False, **kwargs):
+    """Named-stage adapter, optionally showing the normal backend progress.
+
+    The shared stage scheduler traditionally reports only phase/stage totals;
+    its Auto and Local engines also produce detailed per-round progress. Show
+    those messages for an explicitly selected *single* stage, but keep the
+    existing compact multi-splicer output for a full route.
+    """
+    backend_search = _local_search
+    if backend_progress and kwargs.get("progress") is not None:
+        report = kwargs["progress"]
+
+        def backend_search(*args, **search_kwargs):
+            search_kwargs.setdefault("progress", report)
+            return _local_search(*args, **search_kwargs)
+
     return search_splice_stage(level, branch, stage, config, rng,
-                               local_search=_local_search, evaluator_factory=EndpointEvaluator, **kwargs)
+                               local_search=backend_search,
+                               evaluator_factory=EndpointEvaluator, **kwargs)
 
 
 def _unique_search_seeds(
@@ -332,6 +347,7 @@ def optimise_user_splices(
     seed_from_saved_final: bool = True,
     use_current_run: bool = True,
     progress: Callable[[str], None] | None = None,
+    show_backend_progress: bool = False,
     completion_policy: str = "complete",
     start_at: str | None = None, stop_at: str | None = None,
     from_best: str | None = None,
@@ -2147,6 +2163,27 @@ def optimise_user_splices(
                                 "phase": state}
                     save_resume_state(envelope)
 
+                def report_backend(message: str) -> None:
+                    if progress is None:
+                        return
+                    if message.startswith("baseline:"):
+                        # Match standalone endpoint-Auto's baseline category.
+                        progress(f"[auto:baseline] {stage.name!r}: "
+                                 f"{message[len('baseline:'):].strip()}")
+                    elif message.startswith("["):
+                        # Local population and scheduler diagnostics already
+                        # carry their own mode tag; preserve that normal text.
+                        progress(message)
+                    else:
+                        progress(f"[auto:parallel] {stage.name!r}: {message}")
+
+                # A selected Auto/Local/Hybrid stage should display the same
+                # frame/position/round information as its underlying search,
+                # alongside the saved-splice checkpoint messages.
+                selected_progress = (report_backend if show_backend_progress and progress
+                                     else progress)
+                details = ({"backend_progress": True} if show_backend_progress and progress
+                           else {})
                 resuming_this_seed = (active_phase is not None and
                                       index == stage_begin and seed_index == 1)
                 if (stage_config.search_backend not in
@@ -2161,8 +2198,8 @@ def optimise_user_splices(
                         return evaluation.objective_key if evaluation.feasible else None
                     found, used, calls = _search_stage(
                         stage_levels[index], branch, stage, stage_config, rng,
-                        stage_rank=admissible_rank, progress=progress,
-                        candidate_callback=live_candidate,
+                        stage_rank=admissible_rank, progress=selected_progress,
+                        candidate_callback=live_candidate, **details,
                         **({"resume_phase": active_phase["phase"] if resuming_this_seed else None,
                             "phase_started": save_phase,
                             "backend_checkpoint_path":
@@ -2173,7 +2210,9 @@ def optimise_user_splices(
                 else:
                     found, used, calls = _search_stage(
                         stage_levels[index], branch, stage, stage_config, rng,
-                        candidate_callback=live_candidate)
+                        candidate_callback=live_candidate,
+                        **({"progress": selected_progress, **details}
+                           if show_backend_progress and progress else {}))
                 if save_resume_state is not None:
                     save_resume_state(None)
                 active_phase = None

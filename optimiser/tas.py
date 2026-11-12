@@ -74,21 +74,22 @@ Defaults (all optional env overrides):
   TAS_RANDOM_CONFIG=../splices/random-splice.toml
   TAS_WORKERS=15
   TAS_RUNS_AUTO=10, TAS_RUNS_GOAL=10, TAS_RUNS_MULTI=50
-  TAS_STAGNATION_LOCAL=50, TAS_STAGNATION_RANDOM=10
+  TAS_STAGNATION_LOCAL (optional override), TAS_STAGNATION_RANDOM=10
   TAS_JAFFAR=1 enables the mode-specific preset (or use --jaffar).
 
 Commands execute from the optimiser directory (independent of launch cwd).
 Extra optimizer flags appended after defaults take precedence. When the
-level has multi-splicer.toml, auto/local/goal/both/hybrid share its named
-checkpoint and propagation pipeline. With no multi-splicer.toml,
-specifying SPLICE and having its .txt/.toml goal file activates a one-stage
-named checkpoint run: the verified best is saved as wip/LEVEL_SPLICE.ltm (plus
-replay TXT and frontier) for later multi-splicer reuse. No merge/repair/retiming
-is attempted without a route. Hybrid never advances to another splice.
-Auto without SPLICE retains the legacy standalone mode. Use --no-propagation
-to skip merges/repair/retiming with a configured route while retaining checkpoint
-saving. Check mode reads only the positional input and individual goal files, checks
-all primary/alternate route splices or one named splice, and never writes
+specifying SPLICE runs the *ordinary* standalone Auto/Local/Hybrid backend
+with its usual progress, search budget, and output path. After the search,
+verified Auto/Local results are also published as wip/LEVEL_SPLICE.ltm (plus
+replay TXT and frontier); Hybrid/Both already use the same stage writer.
+If a multi-splicer.toml exists, configured merging/retiming/repair may run
+AFTER standalone search, never as an implicit startup operation. Use
+--no-propagation to skip those post-search operations while retaining checkpoint
+saving. Hybrid stays on its requested splice. Auto without SPLICE retains
+the legacy standalone mode. Check mode reads only the positional input and
+individual goal files, checks all primary/alternate route splices or one named
+splice, and never writes
 checkpoints or starts search/merge/repair. A single splice can be checked
 without multi-splicer.toml when its goal file exists.
 For merge and repair modes, no normal Auto/Local optimisation is
@@ -156,8 +157,9 @@ def build_command(mode: str, level: str, splice: str | None = None,
             # Legacy Local window goals are not compatible with the managed
             # population backend. Never silently switch their search engine.
             has_named_goal = False
-    managed = mode in ("auto", "local", "goal", "both", "hybrid") and (
-        has_route or has_named_goal)
+    # A named goal is a search target, not a request to change backends.
+    # Use the normal Auto/Local/Hybrid command; checkpoint publication happens
+    # separately *after* it finishes so the direct search remains identical.
     if mode == "check":
         if splice is None and not has_route:
             raise ValueError("check without SPLICE requires a multi-splicer.toml route")
@@ -174,39 +176,16 @@ def build_command(mode: str, level: str, splice: str | None = None,
         if splice:
             command += ["--check-splice", splice]
         return [sys.executable, str(ROOT / "optimize_replay.py"), *command, *extra]
-    if mode == "auto" and splice and not managed:
-        raise ValueError(f"auto {level} {splice} needs a named goal file "
-                         f"(expected {goal_file}) or multi-splicer.toml")
-    if managed:
-        backend = {"auto": "endpoint-auto", "goal": "endpoint-auto",
-                   "local": "local", "both": "both", "hybrid": "hybrid"}[mode]
-        command = ["auto", input_file, *shared]
-        if has_route:
-            command += ["--splice-config", named_route]
-        else:
-            # With no named route there are no configured downstream stages.
-            # Run the real named-stage coordinator with precisely one goal,
-            # retaining its LTM/TXT and frontier checkpoint compatibility.
-            command += ["--auto-splice-files", splice,
-                        "--auto-splice-mode", "user", "--auto-random-splice",
-                        "--auto-splice-directory", str(Path(goal_file).parent),
-                        "--no-propagation"]
-        command += ["--auto-splice-search", backend]
-        if splice:
-            command += ["--single-splice", splice]
-        if mode == "hybrid":
-            command += ["--auto-runs", "1"]
-        elif mode == "auto":
-            command += ["--auto-runs", env.get("TAS_RUNS_AUTO", "10")]
-        elif mode == "goal":
-            command += ["--auto-runs", env.get("TAS_RUNS_GOAL", "10")]
-        else:
-            command += ["--auto-runs", "1"]
-        command += common
-    elif mode == "local":
+    if mode in ("auto", "goal", "local", "both", "hybrid") and splice and not has_named_goal:
+        if mode == "auto" or has_route:
+            raise ValueError(f"{mode} {level} {splice} needs a named goal file "
+                             f"(expected {goal_file})")
+    if mode == "local":
         command = ["local", input_file,
-                   "--config", path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt"),
-                   "--stagnation-rounds", env.get("TAS_STAGNATION_LOCAL", "50"), *common]
+                   "--config", goal_file or path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt"),
+                   *common]
+        if "TAS_STAGNATION_LOCAL" in env:
+            command += ["--stagnation-rounds", env["TAS_STAGNATION_LOCAL"]]
     else:
         command = [mode if mode in ("both", "hybrid") else "auto", input_file]
         if mode == "random":
@@ -217,11 +196,10 @@ def build_command(mode: str, level: str, splice: str | None = None,
             command += shared
             if mode == "auto":
                 command += ["--auto-runs", env.get("TAS_RUNS_AUTO", "10")]
-            if mode in ("both", "hybrid"):
-                command += ["--goal-config", path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt")]
+            if mode in ("auto", "goal", "both", "hybrid") and splice:
+                command += ["--goal-config", goal_file]
             if mode == "goal":
-                command += ["--goal-config", path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt"),
-                            "--auto-runs", env.get("TAS_RUNS_GOAL", "10")]
+                command += ["--auto-runs", env.get("TAS_RUNS_GOAL", "10")]
             if mode in ("multi", "merge", "repair"):
                 command += ["--splice-config", path("TAS_MULTI_TEMPLATE", "../splices/{level}/multi-splicer.toml")]
             if mode == "multi":
@@ -230,11 +208,19 @@ def build_command(mode: str, level: str, splice: str | None = None,
                 command += ["--splice-merge-only"]
             elif mode == "repair":
                 command += ["--splice-merge-repair-only"]
+            if mode in ("both", "hybrid"):
+                # These shortcuts internally reuse the named Hybrid coordinator;
+                # disable inherited route operations before search, as the
+                # direct Auto/Local paths already do by construction.
+                command += ["--no-propagation"]
         command += common
     if jaffar:
-        # Managed Local runs through the named Auto coordinator, not the
-        # legacy Local-only window engine.
-        command.extend(_JAFFAR_LOCAL if mode == "local" and not managed else _JAFFAR_AUTO)
+        command.extend(_JAFFAR_LOCAL if mode == "local" else _JAFFAR_AUTO)
+    # The user-facing propagation opt-out is interpreted here for direct
+    # Auto/Local; it isn't a valid option of their standalone search backend.
+    if mode not in ("both", "hybrid"):
+        extra = tuple(item for item in extra if item not in
+                      ("--no-propagation", "--no-splice-propagation"))
     # Caller-controlled flags at the end override the shortcut defaults.
     return [sys.executable, str(ROOT / "optimize_replay.py"), *command, *extra]
 
@@ -270,18 +256,97 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
             args.pop(0)
         tasks = [(mode, level, splice, args)]
     for selected, level, splice, extra in tasks:
+        skip_propagation = any(flag in extra for flag in
+                               ("--no-propagation", "--no-splice-propagation"))
         command = build_command(selected, level, splice, env=env, extra=extra, jaffar=jaffar)
         print(shlex.join(command), flush=True)
-        if not dry:
-            if selected != "check":
-                (ROOT / "wip").mkdir(parents=True, exist_ok=True)
-            # The user may override output directory; create its parent too.
-            if "--output" in command:
-                output_index = command.index("--output") + 1
-                (ROOT / command[output_index]).parent.mkdir(parents=True, exist_ok=True)
-            code = subprocess.run(command, cwd=ROOT, check=False).returncode
-            if code:
-                return code
+        if dry:
+            continue
+        if selected != "check":
+            (ROOT / "wip").mkdir(parents=True, exist_ok=True)
+
+        def last_option(option: str, default: str | None = None) -> str | None:
+            value = default
+            for index, item in enumerate(command[:-1]):
+                if item == option:
+                    value = command[index + 1]
+                elif item.startswith(option + "="):
+                    value = item.split("=", 1)[1]
+            return value
+
+        output_name = last_option("--output")
+        if output_name is not None:
+            (ROOT / output_name).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            result = subprocess.run(command, cwd=ROOT, check=False)
+            exit_code = result.returncode
+        except KeyboardInterrupt:
+            # Direct optimisers save individual verified improvements while
+            # running. Publish the most recent file even when stopped early.
+            exit_code = 130
+        if not splice or selected not in ("auto", "local", "goal", "both", "hybrid"):
+            if exit_code:
+                return exit_code
+            continue
+        if exit_code not in (0, 130):
+            return exit_code
+        input_name = command[3]
+        replay_name = last_option("--replay-output")
+        goal_name = _template(env, "TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt",
+                              level=level, splice=splice)
+        goal_path = ROOT / goal_name
+        if not goal_path.exists() and goal_path.suffix == ".txt":
+            goal_path = goal_path.with_suffix(".toml")
+        legacy_goal = False
+        if selected in ("auto", "local", "goal") and goal_path.is_file():
+            from nv14_standalone_checkpoint import (publish_named_checkpoint,
+                                                    supports_named_publication)
+            legacy_goal = not supports_named_publication(goal_path)
+            if legacy_goal:
+                print("[standalone:checkpoint] legacy Local window goal; "
+                      "shared population checkpoint publishing skipped", flush=True)
+            else:
+                try:
+                    publish_named_checkpoint(
+                        input_path=ROOT / input_name, output_path=ROOT / output_name,
+                        replay_output_path=(ROOT / replay_name if replay_name else None),
+                        goal_path=goal_path, name=splice,
+                        config_path=(ROOT / last_option("--config")
+                                     if selected != "local" and last_option("--config") else None),
+                        levels_file_path=(ROOT / last_option("--levels-file")
+                                          if last_option("--levels-file") else None),
+                    )
+                except (ValueError, RuntimeError, OSError) as exc:
+                    # Publishing is an add-on, not a reason to invalidate an
+                    # otherwise successful direct Auto/Local search.
+                    print(f"[standalone:checkpoint] unable to publish {splice!r}: "
+                          f"{exc}", file=sys.stderr, flush=True)
+        # Keep the existing named-stage propagation as an optional *post*-pass.
+        # Crucially, it cannot consume any of the standalone search budget or
+        # alter which seeds the direct backend explores.
+        if exit_code:
+            return exit_code
+        route = _template(env, "TAS_MULTI_TEMPLATE",
+                          "../splices/{level}/multi-splicer.toml", level=level)
+        if skip_propagation or legacy_goal or not (ROOT / route).is_file():
+            continue
+        from nv14_standalone_checkpoint import post_search_propagation_requested
+        config_name = last_option("--config", env.get("TAS_CONFIG", "examples/config.toml"))
+        repair, merge = post_search_propagation_requested(ROOT / config_name, ROOT / route)
+        if not (repair or merge):
+            continue
+        follow_up = [sys.executable, str(ROOT / "optimize_replay.py"),
+                     "auto", input_name, "--config", config_name,
+                     "--splice-config", route, "--output", output_name]
+        if replay_name:
+            follow_up += ["--replay-output", replay_name]
+        follow_up += ["--workers", last_option("--workers", "15"),
+                      "--repair" if repair else "--merge"]
+        print("[standalone:propagation] post-search merge/repair (no startup merge)", flush=True)
+        print(shlex.join(follow_up), flush=True)
+        code = subprocess.run(follow_up, cwd=ROOT, check=False).returncode
+        if code:
+            return code
     return 0
 
 

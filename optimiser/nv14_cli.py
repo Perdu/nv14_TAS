@@ -134,7 +134,8 @@ def _print_user_splice_progress(message: str, *, color: bool) -> None:
     improvement; a propagated checkpoint summary is informational, not a
     new gain, even if the saved prefix appears in the best completed replay.
     """
-    if message.startswith("[auto:user-splice:baseline]"):
+    if message.startswith(("[auto:user-splice:baseline]", "[auto:baseline]",
+                           "[local:population:baseline]")):
         _print_baseline_line(_timestamped_line(message), color=color)
     elif (message.startswith(("[auto:user-splice:temporary]",
                               "[auto:user-splice:summary:pending]"))
@@ -5476,6 +5477,7 @@ def main() -> None:
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
                     use_current_run=args.auto_splice_use_current_run,
+                    show_backend_progress=bool(args.auto_splice_single),
                     start_at=(None if summary_only else args.auto_splice_start),
                     stop_at=(None if summary_only else args.auto_splice_stop),
                     from_best=(None if summary_only else args.auto_splice_from_best),

@@ -401,7 +401,15 @@ python3 optimize_replay.py auto ../n_levels/91-2.ltm \
 ```
 
 The checkpoint is independently goal-verified, and a worse checkpoint does
-not overwrite a better one. If a multi-splicer route file is created later,
+not overwrite a better one. **Single-splice Auto/Local/Hybrid output is not
+replaced by the multi-splicer summary.** The underlying endpoint-Auto and Local
+population backends also print their usual per-round progress, including best
+frame and objective/position information; Hybrid shows both backend phases.
+The named-stage summary and checkpoint-save messages remain visible alongside
+those mode-specific logs, so search progress is distinguishable from a saved
+checkpoint and from an independently verified full-level completion. A full
+`tas.py multi LEVEL` route retains its compact stage-level output.
+If a multi-splicer route file is created later,
 it can load and re-evaluate the already saved LTM/TXT stage best. Saved
 frontier metadata is checked against the current stage identity; incompatible
 frontiers may be skipped, but the verified per-stage replay remains eligible.
