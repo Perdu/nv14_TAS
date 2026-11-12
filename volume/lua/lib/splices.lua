@@ -99,6 +99,58 @@ local function parse_require_jump_text(value)
 end
 
 
+local function parse_toml_string_array(value)
+   local items = {}
+
+   if not value then
+      return items
+   end
+
+   for item in value:gmatch('"([^"]+)"') do
+      items[item] = true
+   end
+
+   return items
+end
+
+
+local function read_multi_splice_routes(level_path)
+   local routes = {
+      main = {},
+      alt = {}
+   }
+
+   local file = io.open(level_path .. "/multi-splicer.toml", "r")
+   if not file then
+      return routes
+   end
+   print("Found multi-splicer file")
+
+   local in_multi_splicer = false
+
+   for line in file:lines() do
+      local section = line:match("^%s*%[([^%]]+)%]%s*$")
+
+      if section then
+         in_multi_splicer = section == "multi-splicer"
+      elseif in_multi_splicer and not line:match("^%s*#") then
+         local key, value = line:match("^%s*([%w_-]+)%s*=%s*(.-)%s*$")
+
+         if key == "splice-files" then
+            routes.main = parse_toml_string_array(value)
+            print("Found main route")
+         elseif key == "alt-route" then
+            routes.alt = parse_toml_string_array(value)
+            print("Found alt route")
+         end
+      end
+   end
+
+   file:close()
+   return routes
+end
+
+
 -- Return the point where a line from the rectangle centre toward (tx, ty)
 -- meets the rectangle edge. Used to keep connector lines short and outside
 -- the interiors of the two rectangles.
@@ -133,6 +185,7 @@ function read_splice_files()
    print("reading splices file")
 
    local level_path = splice_files_path .. "/" .. level
+   local multi_splice_routes = read_multi_splice_routes(level_path)
 
    -- Standard Lua has no directory-listing API, so use find to enumerate
    -- the splice files in this level directory.
@@ -198,6 +251,14 @@ function read_splice_files()
                   direction_objective = config.objective
                end
 
+               local route = nil
+               -- Main route wins if a splice is listed in both arrays.
+               if multi_splice_routes.main[splice_name] then
+                  route = "main"
+               elseif multi_splice_routes.alt[splice_name] then
+                  route = "alt"
+               end
+
                local region = {
                   name = splice_name,
                   frame = splice_frame,
@@ -209,7 +270,8 @@ function read_splice_files()
                   direction = splice_direction(direction_objective),
                   interaction = splice_interaction_marker(config.require_interaction),
                   jump_region = parse_spatial_region(config.require_jump_region),
-                  jump_frames = config.require_jump_frames
+                  jump_frames = config.require_jump_frames,
+                  route = route
                }
 
                -- Preserve numeric frame keys where possible, so a newly
@@ -233,13 +295,24 @@ function display_splices()
       -- Backward-compatible with newly created regions that still use "P"/"W".
       local population = region.search == "population" or region.search == "P"
       local color = population and rgb(255, 0, 0) or rgb(0, 0, 255)
+      local thickness = 1
+
+      -- Highlight splices referenced by multi-splice.toml.
+      -- Main route: green. Alternate route: orange.
+      if region.route == "alt" then
+         color = rgb(255, 0, 255)
+         -- thickness = 2
+      elseif region.route == "main" then
+         color = rgb(255, 255, 255)
+         -- thickness = 2
+      end
 
       gui.rectangle(
          region.x1,
          region.y1,
          region.x2 - region.x1,
          region.y2 - region.y1,
-         1,
+         thickness,
          color
       )
 
