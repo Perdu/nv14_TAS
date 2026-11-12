@@ -22,6 +22,11 @@ function get_player_speed()
    end
 end
 
+function get_best_run_position()
+   local f = movie.currentFrame()
+   return bestPath[f]
+end
+
 function float_eq(a, b, tol)
     tol = tol or 1e-5  -- default tolerance
     return math.abs(a - b) < tol

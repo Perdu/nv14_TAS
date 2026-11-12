@@ -435,6 +435,7 @@ end
 
 
 local splice_modes = {
+   b = {},
    s = {},
    w = {},
    s0 = {},
@@ -485,6 +486,12 @@ function create_splice_file(key)
    os.execute('mkdir -p "' .. level_path .. '"')
 
    local x, y = get_player_position()
+   if input.getKey(KEY_b) ~= 0 then
+      best_position = get_best_run_position()
+      x = best_position.x
+      y = best_position.y
+      input.setKey(KEY_b, 0)
+   end
    local x_int = math.floor(x + 0.5)
    local y_int = math.floor(y + 0.5)
 
