@@ -491,6 +491,11 @@ function create_splice_file(key)
       x = best_position.x
       y = best_position.y
       input.setKey(KEY_b, 0)
+   elseif input.getKey(KEY_g) ~= 0 then
+      ghost_tas_position = get_ghost_tas_position()
+      x = ghost_tas_position.x
+      y = ghost_tas_position.y
+      input.setKey(KEY_g, 0)
    end
    local x_int = math.floor(x + 0.5)
    local y_int = math.floor(y + 0.5)

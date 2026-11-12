@@ -27,6 +27,11 @@ function get_best_run_position()
    return bestPath[f]
 end
 
+function get_ghost_tas_position()
+   local f = movie.currentFrame()
+   return ghostData2[f - space_frame]
+end
+
 function float_eq(a, b, tol)
     tol = tol or 1e-5  -- default tolerance
     return math.abs(a - b) < tol
