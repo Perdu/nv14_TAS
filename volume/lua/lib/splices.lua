@@ -435,7 +435,6 @@ end
 
 
 local splice_modes = {
-   b = {},
    s = {},
    w = {},
    s0 = {},
