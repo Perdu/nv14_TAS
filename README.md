@@ -217,6 +217,7 @@ The different commands are:
 - `S`: create a normal square splice, smaller than `s`.
 - `b`: create splice file using best run position (created with space key) instead of current position
 - `g`: create splice file using position of ghost of previous TAS run instead of current position
+- full arrows: add a vx/vx-window condition
 
 ### Contributing to this repository
 

@@ -559,6 +559,25 @@ function create_splice_file(key)
       input.setKey(KEY_t, 0)
    end
 
+   local vx_window = ""
+   local vy_window = ""
+   if input.getKey(KEY_V) ~= 0 then
+      vx_window = 'vx-window = "-20:0"'
+      input.setKey(KEY_V, 0)
+   end
+   if input.getKey(KEY_X) ~= 0 then
+      vx_window = 'vx-window = "0:20"'
+      input.setKey(KEY_X, 0)
+   end
+   if input.getKey(KEY_Y) ~= 0 then
+      vy_window = 'vy-window = "-20:0"'
+      input.setKey(KEY_Y, 0)
+   end
+   if input.getKey(KEY_Z) ~= 0 then
+      vy_window = 'vy-window = "0:20"'
+      input.setKey(KEY_Z, 0)
+   end
+
    local interaction_keys = {
       { KEY_0, "testdoor:0" },
       { KEY_1, "testdoor:1" },
@@ -652,6 +671,8 @@ simulate-enemies = %s
 %s
 %s
 %s
+%s
+%s
 ]],
          f_ig,
          target_prev, f_ig,
@@ -659,7 +680,9 @@ simulate-enemies = %s
          objective_string,
          secondary_objective,
          require_interaction,
-         require_jump
+         require_jump,
+         vx_window,
+         vy_window
       ))
 
       print("Created splice file ", f_ig)
