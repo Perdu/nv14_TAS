@@ -36,6 +36,7 @@ class UserSpliceStage:
     end: int
     config_overrides: Mapping[str, object] = field(default_factory=dict)
     simulate_enemies: bool | None = None
+    dead_end: bool = False  # Reporting only; never exclude this stage as a seed.
 
 
 @dataclass(frozen=True)
@@ -1013,8 +1014,11 @@ def optimise_user_splices(
             if best_stage is None or candidate.objective_key < best_stage.objective_key:
                 against = ("best run has no feasible checkpoint" if best_stage is None
                            else "full run: " + _stage_summary_text(stage.goal, best_stage))
-                progress(f"[auto:user-splice:summary:pending] {stage.name!r}: "
-                         f"pending ({stage_checkpoint_origin[i]}){reach}; "
+                summary_tag = ("summary:dead-end" if stage.dead_end else "summary:pending")
+                status = ("dead-end (reporting only; " + stage_checkpoint_origin[i] + ")"
+                          if stage.dead_end else "pending (" + stage_checkpoint_origin[i] + ")")
+                progress(f"[auto:user-splice:{summary_tag}] {stage.name!r}: "
+                         f"{status}{reach}; "
                          f"splice: {detail}; {against}"
                          f"{reported_savings(i, candidate, archived)}")
             else:
@@ -1158,9 +1162,10 @@ def optimise_user_splices(
                     if stage_best_callback:
                         stage_best_callback(stages[later].name, stage_export(padded))
                     if merge_only and progress:
+                        annotation = " [dead-end]" if stages[later].dead_end else ""
                         progress(f"{report} {label}: new saved stage best; "
                                  f"{_stage_improvement_text(stages[later].goal, None, score)}"
-                                 f"{reported_savings(later, score, padded)}")
+                                 f"{reported_savings(later, score, padded)}{annotation}")
                 if frontier_callback and (not merge_only or changed_archive):
                     frontier_callback(stages[later].name,
                                       tuple(archived_frontiers[later]))
@@ -1259,7 +1264,9 @@ def optimise_user_splices(
                               if completed_join and later is not None and not stage_join else
                               "verified completed join" if completed_join else
                               "verified stage join")
-                    progress(f"{report} {label}: {result} accepted")
+                    annotation = (" [dead-end]" if stage_join and not completed_join and
+                                  later is not None and stages[later].dead_end else "")
+                    progress(f"{report} {label}: {result} accepted{annotation}")
             elif merge_only and progress and merge_verbose:
                 reason = ("no physically compatible seam" if not physically_verified
                           else "no join satisfies its destination objective or completion")
@@ -2095,7 +2102,9 @@ def optimise_user_splices(
                             if progress and not is_final_gain:
                                 label = ("first feasible" if old_stage_rank is None
                                          else "new stage best")
-                                progress(f"[auto:user-splice:temporary] "
+                                temporary_tag = ("temporary:dead-end" if stage.dead_end
+                                                 else "temporary")
+                                progress(f"[auto:user-splice:{temporary_tag}] "
                                          f"round {round_no+1} stage {index+1}/{len(stages)} "
                                          f"{stage.name!r}: {label}; "
                                          f"{_stage_improvement_text(stage.goal, old_evaluation, evaluation)}"

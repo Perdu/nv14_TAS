@@ -431,3 +431,22 @@ python3 optimize_replay.py auto ../n_levels/91-2.ltm \
 Single-splice runs still load and independently verify existing checkpoint
 files before replacing them, and still use strict full-level physics for
 completed output. No physics or native precision changes are involved.
+
+## Reporting-only dead ends
+
+A named splice goal can declare `dead-end = true` under `[local]`. This
+marks a saved checkpoint as a **dead end for reporting only**, so pending
+summary lines and temporary best messages for that goal use neutral rather than
+yellow terminal colouring:
+
+```toml
+[local]
+search = "population"
+objective = "earliest-arrival"
+target-frame = 442
+dead-end = true
+```
+
+This flag **does not** disable checkpoint storage, Auto/Local/Hybrid search,
+future seeding, merge, repair, retiming, or canonical completion verification.
+To restore yellow pending-state reporting, omit the flag or set it to `false`.

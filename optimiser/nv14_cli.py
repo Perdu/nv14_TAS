@@ -134,7 +134,11 @@ def _print_user_splice_progress(message: str, *, color: bool) -> None:
     improvement; a propagated checkpoint summary is informational, not a
     new gain, even if the saved prefix appears in the best completed replay.
     """
-    if message.startswith(("[auto:user-splice:baseline]", "[auto:baseline]",
+    if message.endswith(" [dead-end]"):
+        # A dead-end stage is still searched and saved; only its visual
+        # pending/improvement emphasis is suppressed.
+        print(_timestamped_line(message), flush=True)
+    elif message.startswith(("[auto:user-splice:baseline]", "[auto:baseline]",
                            "[local:population:baseline]")):
         _print_baseline_line(_timestamped_line(message), color=color)
     elif (message.startswith(("[auto:user-splice:temporary]",
@@ -2188,7 +2192,7 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
             raise ValueError(f"splice {name!r} ({path}): search={search!r} is not supported "
                              "in the named Auto/Local population multi-splicer")
         permitted = (set(_LOCAL_GOAL_TO_AUTO) | set(_SPLICE_LOCAL_BACKEND_OPTIONS) |
-                     {"search", "rounds", "stagnation_rounds", "stage_lookback"})
+                     {"search", "rounds", "stagnation_rounds", "stage_lookback", "dead_end"})
         unsupported = sorted(set(local_values) - permitted)
         if unsupported:
             raise ValueError(f"splice {name!r} ({path}): unsupported per-splice "
@@ -2258,7 +2262,8 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
         stages.append(UserSpliceStage(name, goal, start,
                                       goal.target_frame if end is None else end,
                                       config_overrides=overrides,
-                                      simulate_enemies=stage_enemies))
+                                      simulate_enemies=stage_enemies,
+                                      dead_end=local_values.get("dead_end", False)))
     return tuple(stages)
 
 
@@ -3273,6 +3278,11 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument(
         "--search", modes=local_modes, choices=("windows", "population"),
         default="windows", help="local search strategy (default: windows)",
+    )
+    command.add_argument(
+        "--dead-end", modes=local_modes, action="store_true", default=False,
+        help="named splice only: show pending checkpoint gains without yellow highlighting; "
+             "does not disable search, saved seeds, or propagation",
     )
     command.add_argument(
         "--local-beam-width", "--beam-width", modes=local_modes,
