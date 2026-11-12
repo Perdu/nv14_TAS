@@ -114,19 +114,26 @@ function onPaint()
 
    local f = movie.currentFrame()
    if space_frame ~= - 100 then
-      local ghost = ghostData[f - space_frame]
+      local ghost
+      local color
+      if ghostData2 then
+         ghost = ghostData2[f - space_frame]
+         color = GHOST2_COLOR
+      else
+         ghost = ghostData[f - space_frame]
+         color = GHOST_COLOR
+      end
       if ghost then
-         gui.ellipse(ghost.x, ghost.y, HITBOX_PLAYER, HITBOX_PLAYER, 1, GHOST_COLOR)
          local ghost_text_position = 160
          local best_path_exists = bestPath[f]
          if best_path_exists then
             -- move ghost text to the right to display best path instead
             ghost_text_position = 600
          end
-         gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), GHOST_COLOR, 0, 0, 15)
+         gui.text(ghost_text_position, 575, string.format("%f ; %f", ghost.x, ghost.y), color, 0, 0, 15)
          -- speed
-         gui.text(415, 575, string.format("vx: %f", ghost.vx), GHOST_COLOR, 0, 0, 15)
-         gui.text(415, 585, string.format("vy: %f", ghost.vy), GHOST_COLOR, 0, 0, 15)
+         gui.text(415, 575, string.format("vx: %f", ghost.vx), color, 0, 0, 15)
+         gui.text(415, 585, string.format("vy: %f", ghost.vy), color, 0, 0, 15)
          if display_ghost_moves_under_ghost then
             if ghost.shift == 1 then
                gui.text(ghost.x - 14, ghost.y + 13, "J", 0xffffffff)
@@ -139,6 +146,11 @@ function onPaint()
             end
          end
       end
+      ghost = ghostData[f - space_frame]
+      if ghost then
+         gui.ellipse(ghost.x, ghost.y, HITBOX_PLAYER, HITBOX_PLAYER, 1, GHOST_COLOR)
+      end
+
       local ghost2 = ghostData2[f - space_frame]
       if ghost2 then
          gui.ellipse(ghost2.x, ghost2.y, HITBOX_PLAYER, HITBOX_PLAYER, 1, GHOST2_COLOR)
@@ -171,7 +183,9 @@ function onPaint()
    compare = nil
    if bestPath[f] then
       compare = bestPath[f]
-   elseif space_frame ~= -100 and ghostData[f - space_frame]  then
+   elseif space_frame ~= -100 and ghostData2[f - space_frame] then
+      compare = ghostData2[f - space_frame]
+   elseif space_frame ~= -100 and ghostData[f - space_frame] then
       compare = ghostData[f - space_frame]
    end
    if compare then
