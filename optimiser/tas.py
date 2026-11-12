@@ -10,6 +10,8 @@ Examples from optimiser/:
     ./tas.py hybrid 53-4 591 --splice-hybrid-local-rounds 5
     ./tas.py random 55-1
     ./tas.py multi 97-2
+    ./tas.py check 97-2      # input feasibility for all route splices
+    ./tas.py check 97-2 591  # input feasibility for one splice
     ./tas.py merge 88-4
     ./tas.py repair 88-4
     ./tas.py loop 97-2 88-4
@@ -29,7 +31,7 @@ import tomllib
 from collections.abc import Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parent
-_MODES = {"auto", "local", "goal", "both", "hybrid", "random", "multi", "merge", "repair"}
+_MODES = {"auto", "local", "goal", "both", "hybrid", "random", "multi", "merge", "repair", "check"}
 _ALIASES = {"auto-local": "goal", "random-splicer": "random",
             "multi-splicer": "multi", "merge-repair": "repair"}
 _JAFFAR_AUTO = ("--auto-repair-beam-width", "32",
@@ -44,7 +46,8 @@ _HELP = """Usage:
 
 Modes: auto, local, goal (Auto endpoint), both (continuous Auto/Local),
        hybrid (one Auto round then N Local rounds), random,
-       multi, merge (fast, standalone), repair (bounded, standalone), loop.
+       multi, merge (fast, standalone), repair (bounded, standalone),
+       check (read-only input feasibility), loop.
 LEVEL defaults to $TAS_LEVEL or $LEVEL. SPLICE to $TAS_SPLICE or $SPLICE.
 Examples:
   ./tas.py auto 53-4
@@ -53,6 +56,8 @@ Examples:
   ./tas.py both 53-4 591
   ./tas.py hybrid 53-4 591 --splice-hybrid-local-rounds 5
   ./tas.py multi 97-2 --auto-runs 5
+  ./tas.py check 97-2
+  ./tas.py check 97-2 591
   ./tas.py merge 88-4
   ./tas.py repair 88-4
   ./tas.py loop 97-2 88-4
@@ -82,7 +87,11 @@ replay TXT and frontier) for later multi-splicer reuse. No merge/repair/retiming
 is attempted without a route. Hybrid never advances to another splice.
 Auto without SPLICE retains the legacy standalone mode. Use --no-propagation
 to skip merges/repair/retiming with a configured route while retaining checkpoint
-saving. For merge and repair modes, no normal Auto/Local optimisation is
+saving. Check mode reads only the positional input and individual goal files, checks
+all primary/alternate route splices or one named splice, and never writes
+checkpoints or starts search/merge/repair. A single splice can be checked
+without multi-splicer.toml when its goal file exists.
+For merge and repair modes, no normal Auto/Local optimisation is
 started. --dry-run only
 prints the expanded command and never touches replay/output files.
 """
@@ -114,7 +123,7 @@ def build_command(mode: str, level: str, splice: str | None = None,
     output = path("TAS_OUTPUT_TEMPLATE", "wip/{level}.ltm")
     replay = path("TAS_REPLAY_TEMPLATE", "wip/{level}.txt")
     # Do not permit a shortcut to silently overwrite its own input movie.
-    if (ROOT / input_file).resolve() == (ROOT / output).resolve():
+    if mode != "check" and (ROOT / input_file).resolve() == (ROOT / output).resolve():
         raise ValueError("input and output are the same file; change TAS_OUTPUT_TEMPLATE")
     common = ["--output", output, "--replay-output", replay,
               "--workers", env.get("TAS_WORKERS", "15")]
@@ -149,6 +158,22 @@ def build_command(mode: str, level: str, splice: str | None = None,
             has_named_goal = False
     managed = mode in ("auto", "local", "goal", "both", "hybrid") and (
         has_route or has_named_goal)
+    if mode == "check":
+        if splice is None and not has_route:
+            raise ValueError("check without SPLICE requires a multi-splicer.toml route")
+        if splice is not None and not has_named_goal and not has_route:
+            raise ValueError(f"check {level} {splice} needs a named goal file "
+                             f"(expected {goal_file})")
+        command = ["auto", input_file, *shared, "--check-splices"]
+        if has_route:
+            command += ["--splice-config", named_route]
+        else:
+            command += ["--auto-splice-files", splice,
+                        "--auto-splice-mode", "user", "--auto-random-splice",
+                        "--auto-splice-directory", str(Path(goal_file).parent)]
+        if splice:
+            command += ["--check-splice", splice]
+        return [sys.executable, str(ROOT / "optimize_replay.py"), *command, *extra]
     if mode == "auto" and splice and not managed:
         raise ValueError(f"auto {level} {splice} needs a named goal file "
                          f"(expected {goal_file}) or multi-splicer.toml")
@@ -239,8 +264,8 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
             raise ValueError(f"unknown mode {mode!r}; see --help")
         level = (args.pop(0) if args and not args[0].startswith("-")
                  else env.get("TAS_LEVEL") or env.get("LEVEL") or "")
-        splice = (args.pop(0) if mode in ("auto", "local", "goal", "both", "hybrid") and args and not args[0].startswith("-")
-                  else env.get("TAS_SPLICE") or env.get("SPLICE"))
+        splice = (args.pop(0) if mode in ("auto", "local", "goal", "both", "hybrid", "check") and args and not args[0].startswith("-")
+                  else None if mode == "check" else env.get("TAS_SPLICE") or env.get("SPLICE"))
         if args and args[0] == "--":
             args.pop(0)
         tasks = [(mode, level, splice, args)]
@@ -248,10 +273,12 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
         command = build_command(selected, level, splice, env=env, extra=extra, jaffar=jaffar)
         print(shlex.join(command), flush=True)
         if not dry:
-            (ROOT / "wip").mkdir(parents=True, exist_ok=True)
+            if selected != "check":
+                (ROOT / "wip").mkdir(parents=True, exist_ok=True)
             # The user may override output directory; create its parent too.
-            output_index = command.index("--output") + 1
-            (ROOT / command[output_index]).parent.mkdir(parents=True, exist_ok=True)
+            if "--output" in command:
+                output_index = command.index("--output") + 1
+                (ROOT / command[output_index]).parent.mkdir(parents=True, exist_ok=True)
             code = subprocess.run(command, cwd=ROOT, check=False).returncode
             if code:
                 return code

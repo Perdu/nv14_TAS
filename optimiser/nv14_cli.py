@@ -2360,11 +2360,42 @@ def _start_selects_alternate_route(
                 start_at in alternate_names)
 
 
+def _check_mode_arguments(argv: Sequence[str]) -> list[str]:
+    """Translate `check INPUT [SPLICE]` into read-only named Auto checking.
+
+    Keep one goal/level parser rather than introducing a competing endpoint
+    interpretation. The tas.py shortcut uses the same --check-splices mode.
+    """
+    command = list(argv)
+    if not command or command[0] != "check":
+        return command
+    if len(command) >= 2 and command[1] in ("-h", "--help"):
+        return ["auto", "--help"]
+    if len(command) < 2 or command[1].startswith("-"):
+        raise SystemExit("check requires INPUT (a positional replay path)")
+    input_path = Path(command[1])
+    extra = command[2:]
+    single = None
+    if extra and not extra[0].startswith("-"):
+        single = extra.pop(0)
+    if not _find_option_paths(extra, "--splice-config") and not _find_option_paths(
+            extra, "--auto-splice-files"):
+        inferred = (input_path.parent.parent / "splices" / input_path.stem /
+                    "multi-splicer.toml")
+        if inferred.is_file():
+            extra = ["--splice-config", str(inferred), *extra]
+    result = ["auto", str(input_path), *extra, "--check-splices"]
+    if single is not None:
+        result += ["--check-splice", single]
+    return result
+
+
 def parse_arguments(
     argv: Sequence[str] | None = None,
 ) -> argparse.Namespace:
     """Parse CLI arguments, applying TOML defaults before explicit CLI values."""
     actual_argv = list(sys.argv[1:] if argv is None else argv)
+    actual_argv = _check_mode_arguments(actual_argv)
     both_mode = bool(actual_argv and actual_argv[0] in ("both", "hybrid"))
     actual_argv = _single_splice_both_arguments(actual_argv)
     namespace = build_parser().parse_args(actual_argv)
@@ -2416,14 +2447,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = _ConfigArgumentParser(
         description=(
             "Optimise an n v1.4 replay, dump player state, or encode video. Choose "
-            "auto, local, both, hybrid (single-goal 1 Auto + N Local rounds), "
+            "auto, check (read-only splice feasibility), local, both, hybrid "
+            "(single-goal 1 Auto + N Local rounds), "
             "jump-pattern, dump-player, or encode-video."
         )
     )
     subparsers = parser.add_subparsers(
         dest="mode",
         required=True,
-        metavar="{auto,local,jump-pattern,dump-player,encode-video}",
+        metavar="{auto,check,local,jump-pattern,dump-player,encode-video}",
         title="subcommands",
         description="select an optimisation strategy, player dump, or video export",
     )
@@ -2681,6 +2713,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-splice-directory", modes=auto_modes,
                          type=Path, metavar="DIR",
                          help="directory containing named .txt/.toml goals (default: ../splices/LEVEL relative to input)")
+    command.add_argument("--check-splices", modes=auto_modes, action="store_true",
+                         help="read-only: check the positional input against every named splice "
+                              "(including alternate-route goals), without searching or saving")
+    command.add_argument("--check-splice", modes=auto_modes, metavar="NAME",
+                         help="with --check-splices, check only this named splice; "
+                              "also works without a multi-splicer route")
     command.add_argument("--single-splice", dest="auto_splice_single", modes=auto_modes,
                          metavar="NAME", help="search only this named splice, retaining the full route for checkpoint saving, merges, repair and retiming")
     command.add_argument("--no-splice-propagation", "--no-propagation", dest="auto_no_splice_propagation",
@@ -4272,6 +4310,77 @@ def _apply_no_splice_propagation(args: argparse.Namespace) -> None:
     args.auto_splice_merge_retime_gains = False
 
 
+def _check_input_splices(level: Level, frames: Sequence[InputFrame],
+                         args: argparse.Namespace) -> bool:
+    """Read-only endpoint feasibility for the *positional input*, not saved bests.
+
+    Use the very same goal loader / per-stage physics and native endpoint
+    evaluation as the named-stage optimiser. No output paths, frontiers,
+    checkpoints or search backends are opened here.
+    """
+    from nv14_endpoint import EndpointEvaluator
+    from nv14_user_splice import _materialise_splice_tail, _stage_summary_text
+
+    directory = _named_splice_directory(args)
+    primary = tuple(args.auto_splice_files or ())
+    alternate = tuple(args.auto_splice_alt_route or ())
+    requested = args.check_splice
+    if requested is not None:
+        # A named goal can be checked independently of the configured route.
+        names = (requested,)
+    else:
+        names = tuple(dict.fromkeys((*primary, *alternate)))
+        if not names:
+            raise ValueError("check requires a multi-splicer.toml with splice-files "
+                             "or an explicit splice name (tas.py check LEVEL SPLICE)")
+    stages = _load_named_splice_stages(level, frames, args, directory, names)
+    checked = 0
+    feasible = 0
+    for stage in stages:
+        # Each goal may explicitly choose simulate-enemies=false. This matches
+        # the physics used for stage checkpoints, not the global final-run gate.
+        stage_level = (level if level.simulate_enemies == stage.simulate_enemies
+                       else parse_level_string(level.source_level_string,
+                                               simulate_enemies=stage.simulate_enemies))
+        workspace = _materialise_splice_tail(frames, stage.goal.target_frame)
+        evaluation = EndpointEvaluator(stage_level, stage.goal).evaluate(workspace)
+        checked += 1
+        if evaluation.feasible:
+            feasible += 1
+            print(f"[check:feasible] {stage.name!r}: "
+                  f"{_stage_summary_text(stage.goal, evaluation)}; "
+                  f"simulate-enemies={str(stage.simulate_enemies).lower()}", flush=True)
+        else:
+            reasons = []
+            if evaluation.dead or evaluation.terminal_dead:
+                reasons.append(f"player died (last simulated frame {evaluation.terminal_frame})")
+            if evaluation.missing_interactions:
+                reasons.append("missing required interactions")
+            if evaluation.violated_interactions:
+                reasons.append("forbidden interactions")
+            if evaluation.missing_jump or evaluation.missing_jump_indices:
+                reasons.append("missing required jump")
+            if evaluation.missing_region:
+                reasons.append("required region not visited")
+            if evaluation.missing_drone_indices:
+                reasons.append("required drone detection missing")
+            if evaluation.violated_drone_indices:
+                reasons.append("forbidden drone detection")
+            if evaluation.pending_no_drone_detection:
+                reasons.append("no-drone-detection interval incomplete")
+            if evaluation.missing_survival:
+                reasons.append("survival requirement not met")
+            if not reasons:
+                reasons.append("objective/goal constraints not met")
+            print(f"[check:infeasible] {stage.name!r}: "
+                  f"{', '.join(reasons)}; "
+                  f"target frame {stage.goal.target_frame}; "
+                  f"simulate-enemies={str(stage.simulate_enemies).lower()}", flush=True)
+    print(f"[check:summary] input run: {feasible}/{checked} named splices feasible; "
+          "no search or files written", flush=True)
+    return feasible == checked
+
+
 def main() -> None:
     args = parse_arguments()
     if args.mode == "dump-player":
@@ -4295,6 +4404,11 @@ def main() -> None:
         args.mode == "auto" and args.auto_random_splice and args.auto_splice_mode == "user"
     ):
         raise SystemExit("-l/--ls-splice/--ls-splices requires named multi-splicer Auto mode with splice files")
+    if args.mode == "auto" and args.check_splice is not None and not args.check_splices:
+        raise SystemExit("--check-splice requires --check-splices")
+    if args.mode == "auto" and args.check_splices:
+        if not args.auto_splice_files and args.check_splice is None:
+            raise SystemExit("--check-splices needs a named splice route or --check-splice NAME")
     _apply_no_splice_propagation(args)
     # Listing saved checkpoints is read-only, and must take precedence over
     # merge/search settings inherited from TOML or supplied on the CLI.
@@ -4367,7 +4481,8 @@ def main() -> None:
     # Full-run verification retains guards when any named splice needs them.
     # Each named stage separately constructs its selected physics world.
     try:
-        simulate_enemies = _named_splice_enemy_simulation(args, simulate_enemies)
+        if not getattr(args, "check_splices", False):
+            simulate_enemies = _named_splice_enemy_simulation(args, simulate_enemies)
     except (ValueError, OSError, tomllib.TOMLDecodeError) as exc:
         raise SystemExit(str(exc)) from exc
     level = parse_level_string(
@@ -4383,6 +4498,24 @@ def main() -> None:
 
     if args.list_objects:
         print(format_level_objects(level))
+        return
+    if args.mode == "auto" and args.check_splices:
+        # Must run before mandatory output-path checks, checkpoint loading,
+        # cleanup, and any merge/repair/search dispatch.
+        replay_to_check = decode_complex_replay(combined.replay_string)
+        if source.promote_ltm_neutral_tail:
+            assert source.ltm_movie is not None
+            try:
+                replay_to_check = ComplexReplay(
+                    _probe_auto_ltm_completion_tail(level, source.ltm_movie))
+            except (RuntimeError, ValueError) as exc:
+                raise SystemExit(str(exc)) from exc
+        try:
+            all_feasible = _check_input_splices(level, replay_to_check.frames, args)
+        except (ValueError, RuntimeError, OSError, tomllib.TOMLDecodeError) as exc:
+            raise SystemExit(str(exc)) from exc
+        if not all_feasible:
+            raise SystemExit(1)
         return
 
     if common_config.output_path is None:
