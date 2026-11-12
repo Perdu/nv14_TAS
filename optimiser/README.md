@@ -1808,6 +1808,17 @@ enemy-disabled checkpoint may still be unsuitable for real playback until a
 later stage successfully repairs the route.
 
 
+**Standalone Hybrid Auto-budget parity:** `tas.py hybrid LEVEL SPLICE` now gives
+its Auto phase the same per-worker endpoint proposal budget as
+`tas.py auto LEVEL SPLICE` (including `[auto] endpoint-iterations-per-frame`),
+instead of limiting Auto to `[multi-splicer] iterations`. Local retains
+`[multi-splicer] iterations`. To choose a separate Auto budget explicitly, use
+`--splice-hybrid-auto-iterations N` or `[multi-splicer] hybrid-auto-iterations=N`.
+The shortcut displays the backend's normal Auto/Local round and worker updates,
+while full multi-splicer search retains compact logging and its previous
+per-phase budget defaults. The search remains stochastic, so equal Auto budgets
+are not a promise of identical winners or equal elapsed times.
+
 To use **both** Local population and endpoint Auto Hybrid at each named
 checkpoint, set `splice-search = "both"`. **Endpoint Auto runs first**;
 Local then starts from Auto's best stage candidate, or the original seed if

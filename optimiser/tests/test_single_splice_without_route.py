@@ -94,6 +94,8 @@ def test_no_route_cli_saves_ltm_and_later_named_route_can_load_it(tmp_path, monk
 
     searched = []
     def no_candidates(_level, _branch, stage, _config, _rng, **_kwargs):
+        assert _kwargs.get('backend_progress') is True, (
+            'single Hybrid must forward native Auto/Local worker progress')
         searched.append(stage.name)
         return (), 0, 1
     monkeypatch.setattr(us, '_search_stage', no_candidates)

@@ -1747,6 +1747,7 @@ def _load_config_defaults(
         "auto_stagnation_rounds": "auto_splice_auto_stagnation_rounds",
         "local_stagnation_rounds": "auto_splice_local_stagnation_rounds",
         "hybrid_local_rounds": "auto_splice_hybrid_local_rounds",
+        "hybrid_auto_iterations": "auto_splice_hybrid_auto_iterations",
         "hybrid_cycles": "auto_splice_hybrid_cycles",
         "hybrid_stagnation_cycles": "auto_splice_hybrid_stagnation_cycles",
         "speed": "auto_splice_speed",
@@ -1889,7 +1890,8 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_searches", "auto_splice_rounds",
     "auto_splice_stagnation_rounds", "auto_splice_auto_stagnation_rounds",
     "auto_splice_local_stagnation_rounds", "auto_splice_speed", "auto_splice_round_speeds",
-    "auto_splice_hybrid_local_rounds", "auto_splice_hybrid_cycles", "auto_splice_hybrid_stagnation_cycles",
+    "auto_splice_hybrid_local_rounds", "auto_splice_hybrid_auto_iterations",
+    "auto_splice_hybrid_cycles", "auto_splice_hybrid_stagnation_cycles",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_waypoint_lookback", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_directory",
     "auto_splice_use_current_run",
@@ -2261,6 +2263,18 @@ def _load_named_splice_stages(level, frames, args, directory: Path, names: Seque
             goal, start, end = _auto_goal_from_options(stage_level, goal_frames, stage_args)
         except (ValueError, RuntimeError) as exc:
             raise ValueError(f"invalid splice {name!r} ({path}): {exc}") from exc
+        if (getattr(args, "_single_hybrid_mode", False) and
+                args.auto_splice_hybrid_auto_iterations is None):
+            # The direct Hybrid shortcut uses the *same per-worker Auto round*
+            # budget as `auto INPUT --goal-config GOAL`, based on the actual
+            # editable window. Local keeps its independent splice budget.
+            # Full multi-splicer Hybrid deliberately retains its own budget.
+            overrides["hybrid_auto_iterations"] = resolve_auto_endpoint_iterations(
+                full_run_iterations=args.iterations,
+                endpoint_iterations=args.auto_endpoint_iterations,
+                endpoint_iterations_per_frame=args.auto_endpoint_iterations_per_frame,
+                range_start=start, range_end=(goal.target_frame if end is None else end),
+            )
         stages.append(UserSpliceStage(name, goal, start,
                                       goal.target_frame if end is None else end,
                                       config_overrides=overrides,
@@ -2405,9 +2419,11 @@ def parse_arguments(
     actual_argv = list(sys.argv[1:] if argv is None else argv)
     actual_argv = _check_mode_arguments(actual_argv)
     both_mode = bool(actual_argv and actual_argv[0] in ("both", "hybrid"))
+    single_hybrid_mode = bool(actual_argv and actual_argv[0] == "hybrid")
     actual_argv = _single_splice_both_arguments(actual_argv)
     namespace = build_parser().parse_args(actual_argv)
     namespace._both_mode = both_mode
+    namespace._single_hybrid_mode = single_hybrid_mode
     # The whole named route remains available for checkpoint promotion and
     # propagation. Only this one stage is searched; in particular Hybrid must
     # never fall through to the following splice.
@@ -2695,6 +2711,12 @@ def build_parser() -> argparse.ArgumentParser:
                          default="local",
                          help="splice search: Local, endpoint Auto, both, or fixed-cycle hybrid "
                               "(hybrid shares populations; restart controls do not)")
+    command.add_argument("--splice-hybrid-auto-iterations",
+                         "--auto-splice-hybrid-auto-iterations",
+                         dest="auto_splice_hybrid_auto_iterations", modes=auto_modes,
+                         type=parse_positive_int, default=None, metavar="N",
+                         help="Hybrid: independent Auto proposals per worker per round; "
+                              "single-goal hybrid defaults to standalone Auto endpoint budget")
     command.add_argument("--splice-hybrid-local-rounds", "--auto-splice-hybrid-local-rounds",
                          dest="auto_splice_hybrid_local_rounds", modes=auto_modes,
                          type=parse_positive_int, default=5, metavar="N",
@@ -4933,6 +4955,7 @@ def main() -> None:
                     splice_auto_stagnation_rounds=args.auto_splice_auto_stagnation_rounds,
                     splice_local_stagnation_rounds=args.auto_splice_local_stagnation_rounds,
                     hybrid_local_rounds=args.auto_splice_hybrid_local_rounds,
+                    hybrid_auto_iterations=args.auto_splice_hybrid_auto_iterations,
                     hybrid_cycles=args.auto_splice_hybrid_cycles,
                     hybrid_stagnation_cycles=args.auto_splice_hybrid_stagnation_cycles,
                     splice_speed=args.auto_splice_speed,
@@ -5507,7 +5530,7 @@ def main() -> None:
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
                     use_current_run=args.auto_splice_use_current_run,
-                    show_backend_progress=bool(args.auto_splice_single),
+                    show_backend_progress=bool(args.auto_splice_single or args._both_mode),
                     start_at=(None if summary_only else args.auto_splice_start),
                     stop_at=(None if summary_only else args.auto_splice_stop),
                     from_best=(None if summary_only else args.auto_splice_from_best),
@@ -5707,6 +5730,7 @@ def main() -> None:
                 splice_auto_stagnation_rounds=args.auto_splice_auto_stagnation_rounds,
                 splice_local_stagnation_rounds=args.auto_splice_local_stagnation_rounds,
                 hybrid_local_rounds=args.auto_splice_hybrid_local_rounds,
+                hybrid_auto_iterations=args.auto_splice_hybrid_auto_iterations,
                 hybrid_cycles=args.auto_splice_hybrid_cycles,
                 hybrid_stagnation_cycles=args.auto_splice_hybrid_stagnation_cycles,
                 splice_speed=args.auto_splice_speed,

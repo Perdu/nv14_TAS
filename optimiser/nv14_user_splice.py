@@ -870,9 +870,13 @@ def optimise_user_splices(
         elif config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
             first = ("Auto" if config.search_backend in ("hybrid", "hybrid-restart")
                      else "Local (restart control)")
-            allocation = (f"{first} 1 round -> Local {config.hybrid_local_rounds} "
-                          f"rounds, {config.hybrid_cycles} cycles per seed, "
-                          f"{config.iterations} proposals per worker per backend round")
+            auto_iterations = (config.hybrid_auto_iterations
+                               if config.hybrid_auto_iterations is not None
+                               else config.iterations)
+            allocation = (f"{first} 1 round ({auto_iterations} proposals/worker) -> "
+                          f"Local {config.hybrid_local_rounds} rounds "
+                          f"({config.iterations} proposals/worker/round), "
+                          f"{config.hybrid_cycles} cycles per seed")
         else:
             allocation = f"{config.search_backend} {config.iterations}"
         if config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
@@ -2124,8 +2128,13 @@ def optimise_user_splices(
                     phase_mode = (stage_config.splice_auto_stagnation_rounds or
                                   stage_config.splice_local_stagnation_rounds)
                     if stage_config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
-                        allocation = (f"{stage_config.iterations * stage_config.workers * (1 + stage_config.hybrid_local_rounds) * stage_config.hybrid_cycles} "
-                                      "maximum nominal proposal slots per seed over all hybrid cycles")
+                        auto_per_worker = (stage_config.hybrid_auto_iterations
+                                           if stage_config.hybrid_auto_iterations is not None
+                                           else stage_config.iterations)
+                        allocation = (f"{stage_config.workers * (auto_per_worker + stage_config.iterations * stage_config.hybrid_local_rounds) * stage_config.hybrid_cycles} "
+                                      "maximum nominal proposal slots per seed over all hybrid cycles "
+                                      f"(Auto {auto_per_worker}, Local {stage_config.iterations} "
+                                      "proposals/worker/round)")
                     elif phase_mode:
                         allocation = (f"up to {stage_config.iterations * stage_config.workers * stage_config.splice_rounds} "
                                       "nominal proposal slots per backend batch; "

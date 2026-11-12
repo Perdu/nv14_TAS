@@ -85,6 +85,7 @@ class RandomSpliceConfig:
     live_save_best: bool = False  # bypass parent live-best throttling on named stages
     exit_lookback: int = 96  # minimum editable horizon of the exit approach
     seed: int = 0
+    hybrid_auto_iterations: int | None = None  # independent per-worker Auto budget
 
     def __post_init__(self) -> None:
         if type(self.live_save_best) is not bool:
@@ -155,6 +156,10 @@ class RandomSpliceConfig:
                                        "hybrid", "hybrid-restart", "hybrid-local-control"):
             raise ValueError("splice search_backend must be local, endpoint-auto, both, "
                              "hybrid, hybrid-restart or hybrid-local-control")
+        if (self.hybrid_auto_iterations is not None and
+                (type(self.hybrid_auto_iterations) is not int or
+                 self.hybrid_auto_iterations < 1)):
+            raise ValueError("hybrid_auto_iterations must be a positive integer or None")
         for field in ("hybrid_local_rounds", "hybrid_cycles"):
             value = getattr(self, field)
             if type(value) is not int or not 1 <= value <= 10000:

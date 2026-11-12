@@ -15,7 +15,7 @@ restart-only controls permit a more informative comparison.
 
 For each named stage seed, `hybrid` runs up to `K` cycles:
 
-1. One **endpoint Auto** campaign round, `I` proposals per worker.
+1. One **endpoint Auto** campaign round, `A` proposals per worker.
 2. **N consecutive Local** population rounds *inside one Local invocation*,
    `I` proposals per worker per round. Local retains its population across
    these N rounds.
@@ -60,11 +60,32 @@ hybrid-stagnation-cycles = 0
 ```
 
 The existing `--auto-runs` controls **outer named-splicer rounds**, not Auto
-rounds inside a hybrid cycle. `--auto-splice-iterations` is **per worker, per
-backend round** in this mode. Thus one stage seed uses at most
-`workers * iterations * cycles * (1 + local_rounds)` nominal proposal slots,
-excluding any stage-specific repair overhead. Actual *distinct evaluations*
-are reported separately, as duplicate/early-stopped searches may use fewer.
+rounds inside a hybrid cycle. The Local budget `I` is supplied by
+`--auto-splice-iterations` or `[multi-splicer] iterations`. The Auto budget `A`
+can be explicitly supplied by `--splice-hybrid-auto-iterations` or
+`[multi-splicer] hybrid-auto-iterations`; otherwise, full-route multi-splicer
+Hybrid keeps its previous `A = I` default.
+
+**The standalone `tas.py hybrid LEVEL SPLICE` (or `optimize_replay.py hybrid`
+shortcut) is different by default:** its first Auto phase and every subsequent
+Auto phase now use exactly the same *per-worker proposal budget* as standalone
+`auto --goal-config`: explicit `--auto-endpoint-iterations`, otherwise
+`--auto-endpoint-iterations-per-frame * inclusive_editable_frames`, otherwise
+`[auto] iterations`. Local retains its separate `I` budget. For instance,
+`range="160:234"` at `[auto] endpoint-iterations-per-frame=500` gives
+**37,500 Auto proposals/worker** rather than the inherited 10,000
+`[multi-splicer]` proposals/worker; five Local rounds may still use 10,000
+proposals each. The standalone Hybrid shortcut now forwards backend Auto/Local
+worker progress and intermediate checkpoint updates. This prevents the first
+Auto attempt being underfunded and hidden, but it does not guarantee identical
+random candidates, elapsed time, or outcomes versus separate Auto, because
+Hybrid uses different seed streams and a shared candidate population.
+
+With separate budgets one stage seed uses at most
+`workers * cycles * (auto_budget + local_budget * local_rounds)` nominal
+proposal slots, excluding stage-specific repair overhead. Actual *distinct
+evaluations* are reported separately, as duplicate/early-stopped searches may
+use fewer.
 
 In Hybrid, Hybrid-Restart and Hybrid-Local-Control, older `splice-rounds`,
 `auto-stagnation-rounds`, `local-stagnation-rounds`, legacy
@@ -115,7 +136,7 @@ To run either restart control, use `auto` with `--auto-splice-files` and
 version. Distinct seed streams at the worker level can result even with equal
 coordinator draws once a backend receives a different population.
 
-The hybrid progress log records the backend, round count, per-turn random
+The hybrid progress log records the backend, per-backend proposal budget, round count, per-turn random
 seed, evaluation count and best eligible objective key after every turn; use
 those records to determine **which phase** produces a gain and how frequently
 restarts without Auto or without population handoff find comparable gains.

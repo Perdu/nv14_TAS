@@ -256,6 +256,14 @@ def _search_stage_hybrid(
     for cycle in range(1, config.hybrid_cycles + 1):
         cycle_improved = False
         for backend, rounds in ((first_backend, 1), ("local", config.hybrid_local_rounds)):
+            # A standalone Auto endpoint budget may differ substantially from
+            # the named-splice Local budget (e.g. 75 frames x 500 = 37,500
+            # Auto proposals versus 10,000 Local). Never silently throttle
+            # the Auto phase to the Local budget.
+            phase_iterations = (config.hybrid_auto_iterations
+                                if backend == "endpoint-auto" and
+                                config.hybrid_auto_iterations is not None
+                                else config.iterations)
             turn_seed = rng.getrandbits(63)
             phase_population: list[tuple[InputFrame, ...]] = []
             def collect_population(donors: tuple[tuple[InputFrame, ...], ...]) -> None:
@@ -273,7 +281,7 @@ def _search_stage_hybrid(
                         splice_auto_stagnation_rounds=0,
                         splice_local_stagnation_rounds=0,
                         splice_speed=None, splice_round_speeds=()),
-                    iterations=config.iterations, rounds=rounds,
+                    iterations=phase_iterations, rounds=rounds,
                     seed=turn_seed, include_partial=True,
                     live_update_interval=(0.0 if config.live_save_best else
                                           30.0 if config.workers > 1 else 0.75),
@@ -316,6 +324,7 @@ def _search_stage_hybrid(
             if progress:
                 progress(f"[auto:user-splice:hybrid] {stage.name!r} cycle {cycle}/"
                          f"{config.hybrid_cycles}: {backend} {rounds} round(s), "
+                         f"{phase_iterations} proposals/worker/round, "
                          f"seed {turn_seed}, {used} evaluations, "
                          f"{'stage improved' if phase_improved else 'no eligible stage gain'}; "
                          f"best eligible objective key {best_rank!r}"
