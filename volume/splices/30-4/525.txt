@@ -1,0 +1,12 @@
+[local]
+search = "population"
+target_frame = 525
+range = "395:525"
+simulate-enemies = false
+objective = "earliest-arrival"
+target_region = "183:223,343:363"
+secondary_objective = "max-y"
+require-interaction = ["switch", "testdoor:3", "testdoor:4"]
+
+
+
