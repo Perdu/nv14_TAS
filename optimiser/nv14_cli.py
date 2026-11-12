@@ -1764,6 +1764,8 @@ def _load_config_defaults(
         "merge_repair_pairs": "auto_splice_merge_repair_pairs",
         "merge_repair_window": "auto_splice_merge_repair_window",
         "merge_repair_targets": "auto_splice_merge_repair_targets",
+        "merge_repair_seams": "auto_splice_merge_repair_seams",
+        "merge_repair_sweep_iterations": "auto_splice_merge_repair_sweep_iterations",
         "merge_repair_from": "auto_splice_merge_repair_from",
         "merge_repair_to": "auto_splice_merge_repair_to",
         "merge_repair_at_frame": "auto_splice_merge_repair_at_frame",
@@ -2792,6 +2794,18 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-merge-repair-targets", dest="auto_splice_merge_repair_targets",
                          modes=auto_modes, type=parse_positive_int, default=2, metavar="N",
                          help="distinct physical suffix targets to try per pair (default 2)")
+    command.add_argument("--splice-merge-repair-seams",
+                         dest="auto_splice_merge_repair_seams",
+                         modes=auto_modes, type=parse_positive_int, default=3, metavar="N",
+                         help="distinct physical seam centres per selected source/suffix "
+                              "pair (default 3; --at selects exactly one); each centre "
+                              "gets the full repair-iterations budget")
+    command.add_argument("--splice-merge-repair-sweep-iterations",
+                         dest="auto_splice_merge_repair_sweep_iterations",
+                         modes=auto_modes, type=parse_positive_int, default=2000, metavar="N",
+                         help="per-worker proposals per target before moving to other repair "
+                              "pairs (default 2000); repair-iterations remains the total "
+                              "budget per target")
     command.add_argument("--splice-reference", dest="auto_splice_reference",
                          modes=auto_modes, type=Path, metavar="FILE",
                          help="completed same-level replay to use as a reference suffix "
@@ -5040,6 +5054,8 @@ def main() -> None:
                     "merge_repair_pairs": args.auto_splice_merge_repair_pairs,
                     "merge_repair_window": args.auto_splice_merge_repair_window,
                     "merge_repair_targets": args.auto_splice_merge_repair_targets,
+                    "merge_repair_seams": args.auto_splice_merge_repair_seams,
+                    "merge_repair_sweep_iterations": args.auto_splice_merge_repair_sweep_iterations,
                     "merge_repair_from": args.auto_splice_merge_repair_from,
                     "merge_repair_to": args.auto_splice_merge_repair_to,
                     "merge_repair_at_frame": args.auto_splice_merge_repair_at_frame,
@@ -5224,6 +5240,8 @@ def main() -> None:
                                 merge_repair_pairs=args.auto_splice_merge_repair_pairs,
                                 merge_repair_window=args.auto_splice_merge_repair_window,
                                 merge_repair_targets=args.auto_splice_merge_repair_targets,
+                                merge_repair_seams=args.auto_splice_merge_repair_seams,
+                                merge_repair_sweep_iterations=args.auto_splice_merge_repair_sweep_iterations,
                                 merge_repair_from=args.auto_splice_merge_repair_from,
                                 merge_repair_to=args.auto_splice_merge_repair_to,
                                 merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
@@ -5284,6 +5302,8 @@ def main() -> None:
                                 merge_repair_pairs=args.auto_splice_merge_repair_pairs,
                                 merge_repair_window=args.auto_splice_merge_repair_window,
                                 merge_repair_targets=args.auto_splice_merge_repair_targets,
+                                merge_repair_seams=args.auto_splice_merge_repair_seams,
+                                merge_repair_sweep_iterations=args.auto_splice_merge_repair_sweep_iterations,
                                 merge_repair_from=args.auto_splice_merge_repair_from,
                                 merge_repair_to=args.auto_splice_merge_repair_to,
                                 merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
@@ -5501,6 +5521,8 @@ def main() -> None:
                     merge_repair_pairs=args.auto_splice_merge_repair_pairs,
                     merge_repair_window=args.auto_splice_merge_repair_window,
                     merge_repair_targets=args.auto_splice_merge_repair_targets,
+                    merge_repair_seams=args.auto_splice_merge_repair_seams,
+                                merge_repair_sweep_iterations=args.auto_splice_merge_repair_sweep_iterations,
                     merge_repair_from=args.auto_splice_merge_repair_from,
                     merge_repair_to=args.auto_splice_merge_repair_to,
                     merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,
@@ -5610,6 +5632,8 @@ def main() -> None:
                             merge_repair_pairs=args.auto_splice_merge_repair_pairs,
                             merge_repair_window=args.auto_splice_merge_repair_window,
                             merge_repair_targets=args.auto_splice_merge_repair_targets,
+                            merge_repair_seams=args.auto_splice_merge_repair_seams,
+                                merge_repair_sweep_iterations=args.auto_splice_merge_repair_sweep_iterations,
                             merge_repair_from=args.auto_splice_merge_repair_from,
                             merge_repair_to=args.auto_splice_merge_repair_to,
                             merge_repair_at_frame=args.auto_splice_merge_repair_at_frame,

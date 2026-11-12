@@ -106,18 +106,22 @@ frontier = 3
 # Number of candidates to save per splice on disk
 save-frontier = 64
 runs = 3
-# Fast repair
-merge-bests = true
-# Cost-intensive repair
-merge-repair-at-end = true
-merge-repair-pairs = 48
-merge-repair-window = 48
-merge-repair-targets = 2
-repair-iterations = 1000
-merge-verbose = false
 # how many rounds of local mode for 1 round of auto mode
 hybrid-local-rounds = 5
 hybrid-cycles = 8
 hybrid-stagnation-cycles = 5
 use-current-run = true
 merge-retime-gains = true
+
+# Fast repair
+merge-bests = true
+
+# Cost-intensive repair
+merge-repair-at-end = true
+merge-repair-pairs = 48
+merge-repair-window = 48
+merge-repair-seams = 3
+merge-repair-targets = 2
+repair-iterations = 100000
+merge-repair-sweep-iterations = 2000
+merge-verbose = false

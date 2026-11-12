@@ -362,6 +362,8 @@ def optimise_user_splices(
     merge_repair_pairs: int = 48,
     merge_repair_window: int = 48,
     merge_repair_targets: int = 2,
+    merge_repair_seams: int = 3,
+    merge_repair_sweep_iterations: int = 2000,
     merge_repair_from: str | None = None,
     merge_repair_to: str | None = None,
     merge_repair_at_frame: int | None = None,
@@ -413,7 +415,9 @@ def optimise_user_splices(
         raise ValueError("merge_repair_at_frame must be an integer >= 2")
     for name, value, minimum in (("merge_repair_pairs", merge_repair_pairs, 1),
                                  ("merge_repair_window", merge_repair_window, 2),
-                                 ("merge_repair_targets", merge_repair_targets, 1)):
+                                 ("merge_repair_targets", merge_repair_targets, 1),
+                                 ("merge_repair_seams", merge_repair_seams, 1),
+                                 ("merge_repair_sweep_iterations", merge_repair_sweep_iterations, 1)):
         if type(value) is not int or value < minimum:
             raise ValueError(f"{name} must be an integer >= {minimum}")
     # Named goals are independent helpers, not route requirements.
@@ -1430,6 +1434,10 @@ def optimise_user_splices(
                 completions.append((name, tuple(frames)))
         pairs = proposals = feasible = stage_gains = completed_gains = 0
         skipped = 0
+        retime_started = time.monotonic()
+        if progress:
+            progress(f"{report} gain-aware suffix retime: scanning saved "
+                     "earliest-arrival gains before bridge search")
         if progress and merge_repair_from == "current":
             progress(f"{report} gain-aware suffix retime: --from current has "
                      "no named earliest-arrival checkpoint to measure a gain; "
@@ -1494,6 +1502,11 @@ def optimise_user_splices(
                     old_eval = evaluate_replay_with_sentinel(level, reference)
                     for offset, proposal in candidates:
                         proposals += 1
+                        if progress and (proposals == 1 or proposals % 25 == 0):
+                            progress(f"{report} gain-aware suffix retime progress: "
+                                     f"{proposals} proposal(s) checked/queued, "
+                                     f"source {source_label} -> {destination}; "
+                                     f"{time.monotonic() - retime_started:.1f}s elapsed")
                         # If a completed reference opened controls the new
                         # replay never activates, do not publish that shortcut.
                         checked = evaluate_replay_with_sentinel(level, proposal)
@@ -1741,8 +1754,11 @@ def optimise_user_splices(
                      f"{len(active_tasks)} source(s), {len(plan)} candidate pair(s); "
                      f"budget {merge_repair_pairs}; "
                      f"repair frame {merge_repair_at_frame if merge_repair_at_frame is not None else 'automatic'}")
+        # Build the set of independent pairings once. A large per-target
+        # budget must not monopolise one seam before other sources are tried.
+        selected_pairs = []
         for (label, prefix, index, suffixes), turn in plan:
-            if attempts_used >= merge_repair_pairs:
+            if len(selected_pairs) >= merge_repair_pairs:
                 break
             if turn >= len(suffixes):
                 continue
@@ -1750,8 +1766,26 @@ def optimise_user_splices(
             if (prefix, suffix) in seen_pairs:
                 continue
             seen_pairs.add((prefix, suffix))
-            attempts_used += 1
-            attempted_labels.add(label)
+            selected_pairs.append((label, prefix, index, target_name, suffix,
+                                   later, needs_completion))
+        attempts_used = len(selected_pairs)
+        if progress:
+            progress(f"{report} bridge pair selection: {len(plan)} planned pairing "
+                     f"slot(s); {attempts_used} distinct pair(s) selected "
+                     f"(merge-repair-pairs cap {merge_repair_pairs}); "
+                     f"{max(0, len(plan) - attempts_used)} remaining or "
+                     "duplicate slot(s); prioritized saved frame leads first, "
+                     "ordinary sources round-robin")
+        budget = config.repair_iterations
+        chunk = min(budget, merge_repair_sweep_iterations)
+        total_sweeps = (budget + chunk - 1) // chunk
+        feasible_pair_keys: set[tuple] = set()
+        # A sweep is ONLY a scheduling quantum, never a new physical seam.
+        # Plan distinct centres first, then grant EACH centre its own complete
+        # repair-iterations budget (per worker/target). Otherwise moving the
+        # centre on every sweep silently divides the intended seam budget.
+        pair_seams: list[tuple[tuple[int, ...], int | None]] = []
+        for label, prefix, index, target_name, suffix, later, needs_completion in selected_pairs:
             protected_through = None
             if index is not None:
                 try:
@@ -1760,85 +1794,141 @@ def optimise_user_splices(
                         protected_through = evaluation.frame
                 except (ValueError, IndexError):
                     pass
-            seam = (stages[index].end if index is not None else
+            if merge_repair_at_frame is not None:
+                # An explicit physical target is always exact; no clamping,
+                # additional centres, or surprise extra repair campaigns.
+                pair_seams.append(((merge_repair_at_frame,), protected_through))
+                continue
+            base = (stages[index].end if index is not None else
                     min(len(prefix) - 2, max(manual_repair_seam,
                         stages[later].end if later is not None else manual_repair_seam)))
-            if protected_through is not None and merge_repair_at_frame is None:
-                seam = max(seam, protected_through + max(3, merge_repair_window // 2))
-            if merge_repair_at_frame is not None:
-                # This is a *physical target frame* in the faster prefix,
-                # not a stage name or the old replay's reference tick. Do
-                # not silently clamp an infeasible request back to a stage
-                # boundary (which used to conceal scheduling mistakes).
-                seam = merge_repair_at_frame
-            if progress and merge_verbose:
-                progress(f"{report} bridge {attempts_used}/{merge_repair_pairs}: "
-                         f"{label} -> {target_name}; seam {seam}; "
-                         f"protected checkpoint through frame {protected_through}; "
-                         f"window {merge_repair_window}, targets {merge_repair_targets}, "
-                         f"{config.workers} worker(s) x {config.repair_iterations} "
-                         "proposals per target")
-            try:
-                result = repair_suffix_grafts(
-                    level, prefix, suffix, seam_frame=seam, config=config,
-                    window=merge_repair_window, targets=merge_repair_targets,
-                    completion_required=needs_completion,
-                    seed=rng.getrandbits(63),
-                    protected_through=protected_through,
-                    at_frame=merge_repair_at_frame)
-            except KeyboardInterrupt:
-                if progress:
-                    progress(f"{report} bridge interrupted; verified results saved "
-                             "before interruption are retained")
-                raise
-            except (ValueError, RuntimeError) as exc:
-                failed_preflight += 1
-                reason = f"preflight {type(exc).__name__}"
-                failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
-                # A corrupt or unrepairable section may fail its preflight.
-                # Do not lose other source/suffix opportunities.
-                if progress and merge_verbose:
+            if protected_through is not None:
+                base = max(base, protected_through + max(3, merge_repair_window // 2))
+            # Match the physical prefix's live horizon. The native bridge
+            # evaluator will clamp dead/finished sources as well; planning
+            # within the same corridor avoids paying for duplicate centres.
+            physical = evaluate_replay_with_sentinel(level, prefix)
+            live = (physical.dead_tick - 1 if physical.dead_tick is not None else
+                    physical.finish_tick - 2 if physical.finish_tick is not None else
+                    len(prefix) - 2)
+            latest = min(len(prefix) - 2, len(suffix) - 2,
+                         live + max(2, merge_repair_window // 4))
+            earliest = max(2, protected_through + 2 if protected_through is not None else 2)
+            if latest < earliest:
+                # Keep one visible preflight attempt to explain why this
+                # pairing cannot be repaired after its protected checkpoint.
+                centres = (max(earliest, base),)
+            else:
+                first = max(earliest, min(base, latest))
+                available = latest - first
+                count = min(merge_repair_seams, available + 1)
+                centres = tuple(dict.fromkeys(
+                    first + (available * i) // max(1, count - 1)
+                    for i in range(count)))
+            pair_seams.append((centres, protected_through))
+        # Interleave by centre before pairing: every selected pairing/seam
+        # gets its first quantum before any receives its second quantum.
+        jobs = [(pair_number, seam_number, seam, protected)
+                for seam_number in range(1, max((len(seams) for seams, _ in pair_seams), default=0) + 1)
+                for pair_number, (seams, protected) in enumerate(pair_seams, 1)
+                if seam_number <= len(seams)
+                for seam in (seams[seam_number - 1],)]
+        if progress:
+            progress(f"{report} bridge scheduling: {len(selected_pairs)} independent "
+                     f"pair(s); {len(jobs)} physical seam centre(s); "
+                     f"{total_sweeps} sweep(s) per seam; {chunk} proposals "
+                     f"per worker per target per full sweep; "
+                     f"{budget} per worker/target FOR EACH seam, not globally; "
+                     f"targets {merge_repair_targets}; "
+                     f"explicit seam {merge_repair_at_frame if merge_repair_at_frame is not None else 'automatic'}")
+        for sweep_number in range(1, total_sweeps + 1):
+            batch_iterations = min(chunk, budget - (sweep_number - 1) * chunk)
+            if progress:
+                progress(f"{report} bridge sweep {sweep_number}/{total_sweeps}: "
+                         f"{len(jobs)} independent seam job(s); "
+                         f"{batch_iterations} proposals/worker/target for each job")
+            for job_number, (pair_number, seam_number, seam, protected_through) in enumerate(jobs, 1):
+                label, prefix, index, target_name, suffix, later, needs_completion = selected_pairs[pair_number - 1]
+                attempted_labels.add(label)
+                if progress and (merge_verbose or job_number == 1 or
+                                 job_number == len(jobs) or
+                                 job_number % max(1, len(jobs) // 8) == 0):
                     progress(f"{report} bridge {label} -> {target_name}: "
-                             f"failed ({type(exc).__name__}: {exc}); "
-                             "continuing with independent repair pairs")
-                continue
-            search_calls += result.searches
-            repair_evals += result.evaluations
-            endpoint_candidates += result.endpoint_candidates
-            candidate_grafts += len(result.grafts)
-            if not result.grafts:
-                reason = result.failure_reason or "no replay-verified graft"
-                failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
-            any_feasible = False
-            before_stage_key = (stage_checkpoint_evals[later].objective_key
-                                if later is not None and stage_checkpoint_evals[later] is not None
-                                else None)
-            before_completion_rank = best_rank
-            for repaired in result.grafts:
-                stage_ok, completed_ok = offer(repaired, later, f"repair {label} -> {target_name}")
-                any_feasible = stage_ok or completed_ok or any_feasible
-            if any_feasible:
-                feasible_pairs += 1
-            after_stage_key = (stage_checkpoint_evals[later].objective_key
-                               if later is not None and stage_checkpoint_evals[later] is not None
-                               else None)
-            stage_improved = (after_stage_key is not None and
-                              (before_stage_key is None or after_stage_key < before_stage_key))
-            completion_improved = (best_rank is not None and
-                                  (before_completion_rank is None or best_rank < before_completion_rank))
-            improved_stages += int(stage_improved)
-            improved_completions += int(completion_improved)
-            if progress and merge_verbose:
-                status = ('improved completed replay' if completion_improved else
-                          'improved stage best' if stage_improved else
-                          'feasible but no improvement' if any_feasible else
-                          result.failure_reason or 'no verified graft')
-                progress(f"{report} bridge {label} -> {target_name}: {status}; "
-                         f"{len(result.grafts)} verified graft(s); "
-                         f"{result.endpoint_candidates} endpoint candidate(s), "
-                         f"{result.rejected_prefix} immutable-prefix violation(s); "
-                         f"{result.searches} backend search(es), "
-                         f"{result.evaluations} evaluations")
+                             f"sweep {sweep_number}/{total_sweeps}, "
+                             f"pair {pair_number}/{len(selected_pairs)}, "
+                             f"seam {seam_number}/{len(pair_seams[pair_number - 1][0])} "
+                             f"(frame {seam}); job {job_number}/{len(jobs)}; "
+                             f"protected checkpoint through frame {protected_through}; "
+                             f"window {merge_repair_window}, targets {merge_repair_targets}, "
+                             f"{config.workers} worker(s) x {batch_iterations} "
+                             "proposals per target and backend batch")
+                try:
+                    result = repair_suffix_grafts(
+                        level, prefix, suffix, seam_frame=seam,
+                        config=replace(config, repair_iterations=batch_iterations),
+                        window=merge_repair_window, targets=merge_repair_targets,
+                        completion_required=needs_completion,
+                        seed=rng.getrandbits(63),
+                        protected_through=protected_through,
+                        at_frame=merge_repair_at_frame,
+                        progress=(lambda line, prefix_name=label, suffix_name=target_name:
+                                  progress(f"{report} bridge {prefix_name} -> {suffix_name}: {line}")
+                                  if progress and merge_verbose else None))
+                except KeyboardInterrupt:
+                    if progress:
+                        progress(f"{report} bridge interrupted; verified results saved "
+                                 "before interruption are retained")
+                    raise
+                except (ValueError, RuntimeError) as exc:
+                    failed_preflight += 1
+                    reason = f"preflight {type(exc).__name__}"
+                    failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+                    # A corrupt or unrepairable section may fail its preflight.
+                    # Do not lose other source/suffix opportunities.
+                    if progress and merge_verbose:
+                        progress(f"{report} bridge {label} -> {target_name}: "
+                                 f"failed ({type(exc).__name__}: {exc}); "
+                                 "continuing with independent repair pairs")
+                    continue
+                search_calls += result.searches
+                repair_evals += result.evaluations
+                endpoint_candidates += result.endpoint_candidates
+                candidate_grafts += len(result.grafts)
+                if not result.grafts:
+                    reason = result.failure_reason or "no replay-verified graft"
+                    failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+                any_feasible = False
+                before_stage_key = (stage_checkpoint_evals[later].objective_key
+                                    if later is not None and stage_checkpoint_evals[later] is not None
+                                    else None)
+                before_completion_rank = best_rank
+                for repaired in result.grafts:
+                    stage_ok, completed_ok = offer(repaired, later, f"repair {label} -> {target_name}")
+                    any_feasible = stage_ok or completed_ok or any_feasible
+                if any_feasible:
+                    feasible_pair_keys.add((prefix, suffix))
+                after_stage_key = (stage_checkpoint_evals[later].objective_key
+                                   if later is not None and stage_checkpoint_evals[later] is not None
+                                   else None)
+                stage_improved = (after_stage_key is not None and
+                                  (before_stage_key is None or after_stage_key < before_stage_key))
+                completion_improved = (best_rank is not None and
+                                      (before_completion_rank is None or best_rank < before_completion_rank))
+                improved_stages += int(stage_improved)
+                improved_completions += int(completion_improved)
+                if progress and merge_verbose:
+                    status = ('improved completed replay' if completion_improved else
+                              'improved stage best' if stage_improved else
+                              'feasible but no improvement' if any_feasible else
+                              result.failure_reason or 'no verified graft')
+                    progress(f"{report} bridge {label} -> {target_name}: "
+                             f"sweep {sweep_number}; {status}; "
+                             f"{len(result.grafts)} verified graft(s); "
+                             f"{result.endpoint_candidates} endpoint candidate(s), "
+                             f"{result.rejected_prefix} immutable-prefix violation(s); "
+                             f"{result.searches} backend search(es), "
+                             f"{result.evaluations} evaluations")
+        feasible_pairs = len(feasible_pair_keys)
         evaluations += repair_evals
         attempts += search_calls
         if progress:
@@ -1850,7 +1940,8 @@ def optimise_user_splices(
                      f"{endpoint_candidates} endpoint candidate(s); "
                      f"{attempts_used-feasible_pairs} not feasible; "
                      f"{failed_preflight} failed preflight(s); "
-                     f"{search_calls} backend search(es), {repair_evals} evaluations; "
+                     f"{search_calls} backend search(es), {repair_evals} evaluations "
+                     f"over {len(jobs)} seam centre(s) x {total_sweeps} budget sweep(s); "
                      f"positional input {'attempted' if 'current input' in attempted_labels else 'not attempted'}, "
                      f"archived sections {sum(label in attempted_labels for label, _, _, _ in active_tasks if 'archived' in label)}"
                      f"/{sum('archived' in label for label, _, _, _ in active_tasks)} attempted; "

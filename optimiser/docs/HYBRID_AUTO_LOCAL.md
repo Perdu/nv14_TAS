@@ -450,3 +450,63 @@ dead-end = true
 This flag **does not** disable checkpoint storage, Auto/Local/Hybrid search,
 future seeding, merge, repair, retiming, or canonical completion verification.
 To restore yellow pending-state reporting, omit the flag or set it to `false`.
+
+## Fair bridge-repair sweeps (patch 105)
+
+A repair-only log can appear idle *before* bridge mutation begins: the separate
+`gain-aware suffix retime` pass checks deterministic grafts first, and may take
+significant replay-verification time. It now logs its start and periodic proposal
+counts. The `bridge sources` line marks the beginning of actual bridge search.
+
+Repair no longer spends an entire large `repair-iterations` budget on the first
+source/suffix pair before considering the next. It selects at most
+`merge-repair-pairs` independent pairs, gives **each** a small first sweep, then
+returns for deeper sweeps. By default a sweep consumes at most **2000 proposals
+per worker per physical target**. The overall `repair-iterations` value is the total per-target budget
+**for each selected physical seam centre**, across all its sweeps. It is not
+a shared pool between seams or between source/suffix pairs.
+Hybrid still divides each sweep across Auto and Local phases, with the existing
+verified-graft and protected-prefix rules unchanged.
+
+```toml
+[multi-splicer]
+merge-repair-pairs = 48
+merge-repair-targets = 2
+merge-repair-seams = 3 # distinct seam centres per selected pair
+repair-iterations = 100000 # full budget for EACH seam centre and target
+merge-repair-sweep-iterations = 2000
+```
+
+Use `--splice-merge-repair-seams N` to control the number of distinct physical
+seam centres in each pair (default 3). Automatic centres are spread across the
+available live prefix/reference corridor, with duplicate centres eliminated
+when the corridor is short. An explicit `--at FRAME` always means **one** seam
+centre per pair at that exact frame, regardless of this setting.
+
+Use `--splice-merge-repair-sweep-iterations N` to control the scheduling quantum
+(default 2000 per worker/target). Every planned pair/seam combination receives
+one sweep before any receives a second; subsequent sweeps return to the **same**
+centre until its own complete `repair-iterations` budget has been allotted.
+No seam loses its budget merely because the coordinator moves on to another.
+Each centre can select up to `merge-repair-targets` distinct physical anchors
+(default 2), each with its own per-worker budget; Hybrid divides that target's
+quantum between the Auto and Local phases. The logs identify pair, seam
+centre, sweep and budget. `--splice-merge-verbose` also shows anchor ticks
+and backend evaluations. All joins require replay/endpoint verification.
+
+`merge-repair-pairs` (default 48) **still limits how many distinct source/suffix
+pairs are selected**; an explicit `--from` and `--to` restrict these further.
+The pairing priority is based on verified earliest-arrival gains (at least +2f
+first), with an initial positional-input opportunity and round-robin
+coverage of ordinary sources. This is a *pair-count cap*, not an iteration
+pool. When more candidates are available, raise the cap to check more pairs.
+The selection log now distinguishes candidate pairs, selected pairs and seam
+centres, so omissions are visible.
+
+The maximum nominal proposal count is proportional to selected pairs, distinct
+seam centres, targets, workers and `repair-iterations`: for example, 2 pairs x
+3 seam centres x 2 targets x 15 workers x 100000 iterations is up to 18 million
+proposal slots, before Hybrid phase splitting. Failed preflight attempts and
+early successful grafts may use much less; a large per-seam budget can make
+repair considerably slower. Change `repair-iterations`, `merge-repair-seams`
+or `merge-repair-pairs` if you want a smaller search.

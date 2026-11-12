@@ -143,6 +143,7 @@ def repair_suffix_grafts(
     completion_required: bool, seed: int,
     local_search=None, protected_through: int | None = None,
     at_frame: int | None = None,
+    progress=None,
 ) -> BridgeRepairResult:
     """Repair a *bounded bridge* and try to graft the untouched saved suffix.
 
@@ -257,11 +258,20 @@ def repair_suffix_grafts(
     proposed.sort()
     chosen: list[tuple[int, int]] = []
     seen_ticks: set[int] = set()
-    for _distance, target_tick, ref_tick in proposed:
-        if target_tick in seen_ticks:
-            continue
-        chosen.append((target_tick, ref_tick))
-        seen_ticks.add(target_tick)
+    # Select distinct *physical* anchors, not two adjacent ticks that happen
+    # to be closest to the suffix. A second anchor should explore a different
+    # portion of the corridor. Fall back to close anchors in short corridors.
+    minimum_separation = max(2, window // max(2, targets * 2))
+    for separation in (minimum_separation, 1):
+        for _distance, target_tick, ref_tick in proposed:
+            if target_tick in seen_ticks or any(
+                    abs(target_tick - existing) < separation
+                    for existing, _ref in chosen):
+                continue
+            chosen.append((target_tick, ref_tick))
+            seen_ticks.add(target_tick)
+            if len(chosen) >= targets:
+                break
         if len(chosen) >= targets:
             break
     if not chosen:
@@ -271,7 +281,10 @@ def repair_suffix_grafts(
     grafts: list[tuple[InputFrame, ...]] = []
     seen_grafts: set[tuple[InputFrame, ...]] = set()
     searches = evaluations = endpoint_candidates = rejected_prefix = 0
-    for target_tick, ref_tick in chosen:
+    for anchor_index, (target_tick, ref_tick) in enumerate(chosen, 1):
+        if progress is not None:
+            progress(f"anchor {anchor_index}/{len(chosen)}: "
+                     f"prefix tick {target_tick}, reference tick {ref_tick}")
         target_state = reference_eval.point(ref_tick)
         if target_state is None:
             continue
@@ -315,6 +328,10 @@ def repair_suffix_grafts(
                 found, used = (), 0
             searches += 1
             evaluations += used
+            if progress is not None:
+                progress(f"anchor {anchor_index}/{len(chosen)}: {mode} "
+                         f"finished; {used} evaluations, {len(found)} "
+                         "endpoint candidate(s)")
             endpoint_candidates += len(found)
             if config.search_backend == "hybrid":
                 handoff.extend(tuple(editable_frames(frames)) for frames, _ in found[:12])
