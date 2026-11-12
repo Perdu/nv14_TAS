@@ -70,7 +70,8 @@ In Hybrid, Hybrid-Restart and Hybrid-Local-Control, older `splice-rounds`,
 `auto-stagnation-rounds`, `local-stagnation-rounds`, legacy
 `stagnation-rounds` and `round-speeds` settings are **accepted but ignored**.
 `speed` (`--splice-speed`) **does** control hybrid stagnant-cycle patience:
-`fast`=3, `normal`=5, `slow`=10. This preset overrides the numerical
+`very-fast`/`vfast`=1, `fast`=3, `normal`=5, `slow`=10. This preset
+overrides the numerical
 `hybrid-stagnation-cycles` setting; omit `speed` to set that limit manually or
 leave it at 0 (no stagnation early stop). The same legacy compatibility applies
 to `rounds` and `stagnation-rounds` in each named `[local]` goal file. Existing

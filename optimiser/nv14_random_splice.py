@@ -70,7 +70,7 @@ class RandomSpliceConfig:
     splice_auto_stagnation_rounds: int = 0  # named stages: consecutive stagnant Auto backend rounds
     splice_local_stagnation_rounds: int = 0  # named stages: consecutive stagnant Local backend rounds
     splice_speed: str | None = None  # Auto/Local patience or hybrid stagnant-cycle preset
-    splice_round_speeds: tuple[str, ...] = ()  # schedule: current,fast,normal,slow
+    splice_round_speeds: tuple[str, ...] = ()  # schedule: current,vfast/very-fast,fast,normal,slow
     repair_rounds: int = 1  # backend search rounds PER continuation repair
     repair_anchors: int = 2
     beam: int = 16
@@ -125,12 +125,12 @@ class RandomSpliceConfig:
                       "splice_local_stagnation_rounds"):
             if type(getattr(self, field)) is not int or getattr(self, field) < 0:
                 raise ValueError(f"{field} must be a nonnegative integer")
-        allowed_speeds = {"current", "fast", "normal", "slow"}
+        allowed_speeds = {"current", "vfast", "very-fast", "fast", "normal", "slow"}
         if self.splice_speed is not None and self.splice_speed not in allowed_speeds - {"current"}:
-            raise ValueError("splice_speed must be fast, normal or slow")
+            raise ValueError("splice_speed must be very-fast/vfast, fast, normal or slow")
         if (not isinstance(self.splice_round_speeds, (tuple, list)) or
                 any(mode not in allowed_speeds for mode in self.splice_round_speeds)):
-            raise ValueError("splice_round_speeds must be current,fast,normal,slow")
+            raise ValueError("splice_round_speeds must be current,very-fast/vfast,fast,normal,slow")
         object.__setattr__(self, "splice_round_speeds", tuple(self.splice_round_speeds))
         hybrid_mode = self.search_backend in (
             "hybrid", "hybrid-restart", "hybrid-local-control")

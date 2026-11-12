@@ -16,8 +16,10 @@ from nv14_random_splice import RandomSpliceConfig, _local_search as _default_loc
 from nv14_replay import editable_frames, encode_complex_replay, decode_complex_replay
 
 
-SPLICE_SPEEDS = {"fast": (3, 10), "normal": (5, 20), "slow": (10, 50)}
-HYBRID_STAGNATION_SPEEDS = {"fast": 3, "normal": 5, "slow": 10}
+SPLICE_SPEEDS = {"very-fast": (1, 1), "vfast": (1, 1),
+                 "fast": (3, 10), "normal": (5, 20), "slow": (10, 50)}
+HYBRID_STAGNATION_SPEEDS = {"very-fast": 1, "vfast": 1,
+                            "fast": 3, "normal": 5, "slow": 10}
 
 
 def splice_config_for_round(config: RandomSpliceConfig, round_no: int) -> RandomSpliceConfig:

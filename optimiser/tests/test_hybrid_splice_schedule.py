@@ -169,7 +169,8 @@ def test_hybrid_ignores_unused_stagnation_rounds_and_round_speeds(mode):
 
 
 @pytest.mark.parametrize('mode', ('hybrid', 'hybrid-restart', 'hybrid-local-control'))
-@pytest.mark.parametrize('speed,patience', [('fast', 3), ('normal', 5), ('slow', 10)])
+@pytest.mark.parametrize('speed,patience', [('very-fast', 1), ('vfast', 1),
+                                            ('fast', 3), ('normal', 5), ('slow', 10)])
 def test_hybrid_speed_presets_apply_only_to_cycle_stagnation(mode, speed, patience):
     from nv14_splice_backend import splice_config_for_round
 
@@ -189,7 +190,8 @@ def test_hybrid_speed_presets_apply_only_to_cycle_stagnation(mode, speed, patien
 
 
 @pytest.mark.parametrize('mode', ('hybrid', 'hybrid-restart', 'hybrid-local-control'))
-@pytest.mark.parametrize('speed,cycles', [('fast', 3), ('normal', 5), ('slow', 10)])
+@pytest.mark.parametrize('speed,cycles', [('very-fast', 1), ('vfast', 1),
+                                          ('fast', 3), ('normal', 5), ('slow', 10)])
 def test_hybrid_speed_stops_after_correct_number_of_stagnant_cycles(mode, speed, cycles):
     from nv14_splice_backend import splice_config_for_round
 

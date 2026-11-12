@@ -9,6 +9,7 @@ from nv14_splice_backend import splice_config_for_round
 
 
 @pytest.mark.parametrize('name,limits', [
+    ('very-fast', (1, 1)), ('vfast', (1, 1)),
     ('fast', (3, 10)), ('normal', (5, 20)), ('slow', (10, 50)),
 ])
 def test_speed_presets(name, limits):
@@ -50,7 +51,8 @@ def test_speed_cli_and_toml(tmp_path: Path):
     assert parsed.auto_splice_round_speeds == ('fast', 'slow')
 
 
-@pytest.mark.parametrize('speed,expected', [('fast', 3), ('normal', 5), ('slow', 10)])
+@pytest.mark.parametrize('speed,expected', [('very-fast', 1), ('vfast', 1),
+                                            ('fast', 3), ('normal', 5), ('slow', 10)])
 def test_named_hybrid_toml_speed_uses_cycle_patience(tmp_path: Path, speed, expected):
     config = tmp_path / 'multi.toml'
     config.write_text('[multi-splicer]\nfiles=["100", "end"]\n'
@@ -64,6 +66,35 @@ def test_named_hybrid_toml_speed_uses_cycle_patience(tmp_path: Path, speed, expe
         splice_speed=parsed.auto_splice_speed), 0)
     assert actual.hybrid_stagnation_cycles == expected
     assert actual.hybrid_cycles == 12
+
+
+@pytest.mark.parametrize('speed', ['very-fast', 'vfast'])
+def test_very_fast_cli_and_toml_scheduled_speed(tmp_path: Path, speed):
+    config = tmp_path / 'multi.toml'
+    config.write_text('[multi-splicer]\nfiles=["100", "end"]\n'
+                      f'speed="{speed}"\nround-speeds=["current", "{speed}"]\n')
+    parsed = build_parser().parse_args(['auto', 'fake.ltm', '--splice-config', str(config)])
+    assert parsed.auto_splice_speed == speed
+    assert parsed.auto_splice_round_speeds == ('current', speed)
+    actual = splice_config_for_round(RandomSpliceConfig(
+        search_backend='both', splice_speed=parsed.auto_splice_speed,
+        splice_round_speeds=parsed.auto_splice_round_speeds), 1)
+    assert (actual.splice_auto_stagnation_rounds, actual.splice_local_stagnation_rounds) == (1, 1)
+    parsed_cli = build_parser().parse_args(['auto', 'fake.ltm', '--auto-random-splice',
+                                            '--splice-speed', speed,
+                                            '--splice-round-speeds', f'current,{speed}'])
+    assert parsed_cli.auto_splice_speed == speed
+    assert parsed_cli.auto_splice_round_speeds == ('current', speed)
+
+
+@pytest.mark.parametrize('mode,expected', [
+    ('endpoint-auto', (1, 0)), ('local', (0, 1)), ('both', (1, 1)),
+])
+def test_very_fast_only_affects_selected_backend(mode, expected):
+    config = RandomSpliceConfig(search_backend=mode, splice_speed='vfast')
+    actual = splice_config_for_round(config, 0)
+    assert (actual.splice_auto_stagnation_rounds,
+            actual.splice_local_stagnation_rounds) == expected
 
 
 def test_invalid_schedules_rejected():

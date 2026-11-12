@@ -2093,8 +2093,8 @@ def parse_splice_round_speeds(value: str) -> tuple[str, ...]:
     if not isinstance(value, str):
         raise argparse.ArgumentTypeError("round-speeds requires comma-separated preset names")
     modes = tuple(mode.strip().lower() for mode in value.split(","))
-    if not modes or any(mode not in ("current", "fast", "normal", "slow") for mode in modes):
-        raise argparse.ArgumentTypeError("round-speeds requires current,fast,normal,slow")
+    if not modes or any(mode not in ("current", "very-fast", "vfast", "fast", "normal", "slow") for mode in modes):
+        raise argparse.ArgumentTypeError("round-speeds requires current,very-fast/vfast,fast,normal,slow")
     return modes
 
 
@@ -2858,8 +2858,8 @@ def build_parser() -> argparse.ArgumentParser:
                          type=int, default=0, metavar="N",
                          help="Local phase stops after N consecutive Local backend rounds without an eligible improvement")
     command.add_argument("--splice-speed", "--auto-splice-speed", dest="auto_splice_speed",
-                         modes=auto_modes, choices=("fast", "normal", "slow"),
-                         help="stagnation preset: Auto/Local fast=3/10, normal=5/20, slow=10/50; hybrid fast=3, normal=5, slow=10 stagnant cycles")
+                         modes=auto_modes, choices=("very-fast", "vfast", "fast", "normal", "slow"),
+                         help="stagnation patience: very-fast/vfast=1 Auto, Local or hybrid cycle; fast=3/10 Auto/Local and 3 hybrid cycles; normal=5/20 or 5; slow=10/50 or 10")
     command.add_argument("--splice-round-speeds", "--auto-splice-round-speeds",
                          dest="auto_splice_round_speeds", modes=auto_modes,
                          type=parse_splice_round_speeds, default=(), metavar="MODES",
