@@ -12,7 +12,7 @@ import tempfile
 import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from nv14_auto import (
@@ -5085,6 +5085,10 @@ def main() -> None:
                     "merge_retime_gains": retime_gains,
                     "start_at": args.auto_splice_start,
                     "stop_at": args.auto_splice_stop,
+                    # A route round now covers every branch and the shared
+                    # suffix; old phase-by-phase campaigns cannot resume as
+                    # though their pass counter had the same meaning.
+                    "interleaved_route_rounds": 1 if alternate_stages else 0,
                 }
                 completed_passes = 0
                 if not (args.auto_ls_splice or merge_only) and progress_file.is_file():
@@ -5248,10 +5252,20 @@ def main() -> None:
                             def phase_backend(name, backend):
                                 return str(stage_outputs[name][0].with_suffix(
                                     f".{label}.{backend}.round.json"))
-                            print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] {label}: " +
+                            print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                                  f"round {outer_round+1}/{splice_config.rounds} {label}: " +
                                   ' -> '.join(item.name for item in phase_stages), flush=True)
+                            # Run exactly this outer round in the current phase.
+                            # Passing its real index preserves round-specific
+                            # speed presets and in-flight backend checkpoints.
+                            # Vary the stochastic seed between outer rounds,
+                            # rather than replaying identical random proposals.
+                            phase_config = replace(
+                                splice_config, rounds=outer_round + 1,
+                                seed=splice_config.seed + outer_round)
                             phase_result = optimise_user_splices(
-                                level, phase_input, phase_stages, splice_config,
+                                level, phase_input, phase_stages, phase_config,
+                                resume_outer_round=outer_round,
                                 completion_policy=args.auto_completion_policy,
                                 use_current_run=args.auto_splice_use_current_run,
                                 start_from_stage_bests=(args.auto_splice_each_best
@@ -5350,175 +5364,199 @@ def main() -> None:
 
                         if args.auto_splice_merge_bests or repair_at_end or retime_gains:
                             merge_all_saved_stages('startup')
-                        shared_seed = initial_input
-                        if shared_prefix:
-                            _, prefix_results = run_route_phase(
-                                'shared-prefix', shared_prefix, shared_seed)
-                            shared_seed = (prefix_results.get(shared_prefix[-1].name)
-                                           or saved_stage_seed(shared_prefix[-1].name)
-                                           or initial_input)
-                        elif prefix_count:
-                            shared_seed = (saved_stage_seed(stages[prefix_count - 1].name)
-                                           or initial_input)
-                        main_seed = shared_seed
-                        alt_seed = shared_seed
-                        _, main_results = run_route_phase(
-                            'primary-branch', primary_branch, main_seed,
-                            extra_seeds=(initial_input,), from_saved_final=False)
-                        if primary_branch:
-                            main_seed = (main_results.get(primary_branch[-1].name)
-                                         or saved_stage_seed(primary_branch[-1].name)
-                                         or main_seed)
-                        _, other_results = run_route_phase(
-                            'alternate-branch', other_branch, alt_seed,
-                            extra_seeds=(initial_input,), from_saved_final=False)
-                        if other_branch:
-                            alt_seed = (other_results.get(other_branch[-1].name)
-                                        or saved_stage_seed(other_branch[-1].name)
-                                        or alt_seed)
+                        # A round is one complete pass across both routes, not
+                        # all rounds of the prefix before either branch starts.
+                        # Saved stage and branch checkpoints are reloaded by each
+                        # phase so the next outer round inherits earlier gains.
+                        stagnant_route_rounds = 0
+                        for outer_round in range(completed_passes, splice_config.rounds):
+                            gains_before_round = phase_improvements
+                            print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                                  f"full route round {outer_round+1}/{splice_config.rounds}: "
+                                  "shared prefix -> primary branch -> alternate branch -> "
+                                  "both rejoins -> shared suffix", flush=True)
+                            shared_seed = initial_input
+                            if shared_prefix:
+                                _, prefix_results = run_route_phase(
+                                    'shared-prefix', shared_prefix, shared_seed)
+                                shared_seed = (prefix_results.get(shared_prefix[-1].name)
+                                               or saved_stage_seed(shared_prefix[-1].name)
+                                               or initial_input)
+                            elif prefix_count:
+                                shared_seed = (saved_stage_seed(stages[prefix_count - 1].name)
+                                               or initial_input)
+                            main_seed = shared_seed
+                            alt_seed = shared_seed
+                            _, main_results = run_route_phase(
+                                'primary-branch', primary_branch, main_seed,
+                                extra_seeds=(initial_input,), from_saved_final=False)
+                            if primary_branch:
+                                main_seed = (main_results.get(primary_branch[-1].name)
+                                             or saved_stage_seed(primary_branch[-1].name)
+                                             or main_seed)
+                            _, other_results = run_route_phase(
+                                'alternate-branch', other_branch, alt_seed,
+                                extra_seeds=(initial_input,), from_saved_final=False)
+                            if other_branch:
+                                alt_seed = (other_results.get(other_branch[-1].name)
+                                            or saved_stage_seed(other_branch[-1].name)
+                                            or alt_seed)
 
-                        rejoin_candidates = {}
-                        frontier_additions = []
-                        for branch_label, branch_seed in (('primary', main_seed),
-                                                          ('alternate', alt_seed)):
-                            def capture_rejoin(_name, candidates):
-                                for candidate in candidates:
-                                    frontier_additions.append(tuple(editable_frames(candidate)))
-                            _, join_results = run_route_phase(
-                                branch_label + '-rejoin', (shared_rejoin,), branch_seed,
-                                checkpoints={}, frontiers={}, from_saved_final=False,
-                                checkpoint_writer=lambda _name, _frames: None,
-                                frontier_writer=capture_rejoin)
-                            candidate = join_results.get(rejoin_name)
-                            if candidate is not None and stage_rank(shared_rejoin, candidate) is not None:
-                                rejoin_candidates[branch_label] = candidate
-                                frontier_additions.append(candidate)
-                        # Recover the best saved replay for each *route* before
-                        # ranking this run. A good alternative must not vanish
-                        # merely because it was not rediscovered today.
-                        main_path, main_text = stage_outputs[rejoin_name]
-                        other_main = main_path.with_name(
-                            f"{main_path.stem}_other_route{main_path.suffix}")
-                        other_text = (main_text.with_name(
-                            f"{main_text.stem}_other_route{main_text.suffix}")
-                            if main_text is not None else None)
-                        main_meta = main_path.with_suffix('.route.json')
-                        other_meta = other_main.with_suffix('.other_route.json')
-                        checkpoint_identity = _user_splice_frontier_identity(
-                            level, shared_rejoin)
-                        protected = (input_path, output_path, replay_output_path,
-                                     args.config, args.splice_config, source.levels_file_path,
-                                     *alias_outputs.values(),
-                                     *(path for pair in stage_outputs.values()
-                                       for path in pair if path is not None))
-                        for destination in (other_main, other_text, other_meta, main_meta):
-                            if destination is not None and any(
-                                    path is not None and _paths_alias(destination, path)
-                                    for path in protected):
-                                raise ValueError(
-                                    f"other-route checkpoint {destination} aliases a protected file")
+                            rejoin_candidates = {}
+                            frontier_additions = []
+                            for branch_label, branch_seed in (('primary', main_seed),
+                                                              ('alternate', alt_seed)):
+                                def capture_rejoin(_name, candidates):
+                                    for candidate in candidates:
+                                        frontier_additions.append(tuple(editable_frames(candidate)))
+                                _, join_results = run_route_phase(
+                                    branch_label + '-rejoin', (shared_rejoin,), branch_seed,
+                                    checkpoints={}, frontiers={}, from_saved_final=False,
+                                    checkpoint_writer=lambda _name, _frames: None,
+                                    frontier_writer=capture_rejoin)
+                                candidate = join_results.get(rejoin_name)
+                                if candidate is not None and stage_rank(shared_rejoin, candidate) is not None:
+                                    rejoin_candidates[branch_label] = candidate
+                                    frontier_additions.append(candidate)
+                            # Recover the best saved replay for each *route* before
+                            # ranking this run. A good alternative must not vanish
+                            # merely because it was not rediscovered today.
+                            main_path, main_text = stage_outputs[rejoin_name]
+                            other_main = main_path.with_name(
+                                f"{main_path.stem}_other_route{main_path.suffix}")
+                            other_text = (main_text.with_name(
+                                f"{main_text.stem}_other_route{main_text.suffix}")
+                                if main_text is not None else None)
+                            main_meta = main_path.with_suffix('.route.json')
+                            other_meta = other_main.with_suffix('.other_route.json')
+                            checkpoint_identity = _user_splice_frontier_identity(
+                                level, shared_rejoin)
+                            protected = (input_path, output_path, replay_output_path,
+                                         args.config, args.splice_config, source.levels_file_path,
+                                         *alias_outputs.values(),
+                                         *(path for pair in stage_outputs.values()
+                                           for path in pair if path is not None))
+                            for destination in (other_main, other_text, other_meta, main_meta):
+                                if destination is not None and any(
+                                        path is not None and _paths_alias(destination, path)
+                                        for path in protected):
+                                    raise ValueError(
+                                        f"other-route checkpoint {destination} aliases a protected file")
 
-                        def read_routed_checkpoint(path, meta_path):
-                            if not path.is_file() or not meta_path.is_file():
-                                return None, None
-                            try:
-                                record = json.loads(meta_path.read_text(encoding='utf-8'))
-                                if (record.get('version') != 1 or
-                                        record.get('identity') != checkpoint_identity or
-                                        record.get('route') not in ('primary', 'alternate')):
+                            def read_routed_checkpoint(path, meta_path):
+                                if not path.is_file() or not meta_path.is_file():
                                     return None, None
-                                if path.suffix.lower() == '.ltm':
-                                    frames = LtmMovie.load(path).replay_frames
-                                else:
-                                    text = path.read_text(encoding='utf-8').strip()
-                                    try:
-                                        frames = decode_complex_replay(text).frames
-                                    except (ValueError, TypeError):
-                                        frames = decode_complex_replay(
-                                            parse_combined_level_replay(text).replay_string).frames
-                                frames = tuple(editable_frames(frames))
-                                if stage_rank(shared_rejoin, frames) is not None:
-                                    return record['route'], frames
-                            except (OSError, UnicodeError, ValueError, TypeError, LtmError):
-                                pass
-                            return None, None
-
-                        for path, meta in ((main_path, main_meta),
-                                           (other_main, other_meta)):
-                            old_route, old_frames = read_routed_checkpoint(path, meta)
-                            if old_route is not None:
-                                rejoin_candidates[old_route] = better_stage(
-                                    shared_rejoin, rejoin_candidates.get(old_route), old_frames)
-
-                        ranked_routes = sorted(rejoin_candidates.items(),
-                                               key=lambda item: stage_rank(shared_rejoin, item[1]))
-                        if ranked_routes:
-                            preferred_route, preferred = ranked_routes[0]
-                            old_saved = saved_stage_seed(rejoin_name)
-                            old_rank = stage_rank(shared_rejoin, old_saved)
-                            new_rank = stage_rank(shared_rejoin, preferred)
-                            if old_rank is None or new_rank < old_rank:
-                                save_stage_best(rejoin_name, preferred)
-                            if old_rank is None or new_rank <= old_rank:
-                                _atomic_write_text(main_meta, json.dumps({
-                                    'version': 1, 'route': preferred_route,
-                                    'identity': checkpoint_identity,
-                                }, sort_keys=True) + '\n')
-                            if (len(ranked_routes) > 1 and
-                                    ranked_routes[1][1] != preferred):
-                                slower_route, slower = ranked_routes[1]
-                                # One named stage has one overall checkpoint;
-                                # the lower-ranked *branch* gets a separate LTM
-                                # and companion TXT for future merge/searches.
-                                old_route, old_other = read_routed_checkpoint(
-                                    other_main, other_meta)
-                                if (old_route != slower_route or old_other != slower):
-                                    _protect_unreadable_splice_output(other_main)
-                                    _protect_unreadable_splice_output(other_text)
-                                    slower_replay = encode_complex_replay(clean_splice_output(slower))
-                                    if source.ltm_movie is not None and other_text is not None:
-                                        _write_result(source, other_main, None, slower_replay)
-                                        # Reflect the exact replay the LTM stores,
-                                        # including its implicit neutral post-roll.
-                                        loaded = LtmMovie.load(other_main)
-                                        _atomic_write_text(other_text,
-                                            encode_complex_replay(loaded.replay_frames) + '\n')
+                                try:
+                                    record = json.loads(meta_path.read_text(encoding='utf-8'))
+                                    if (record.get('version') != 1 or
+                                            record.get('identity') != checkpoint_identity or
+                                            record.get('route') not in ('primary', 'alternate')):
+                                        return None, None
+                                    if path.suffix.lower() == '.ltm':
+                                        frames = LtmMovie.load(path).replay_frames
                                     else:
-                                        _write_result(source, other_main, other_text, slower_replay)
-                                    _atomic_write_text(other_meta, json.dumps({
-                                        'version': 1, 'route': slower_route,
+                                        text = path.read_text(encoding='utf-8').strip()
+                                        try:
+                                            frames = decode_complex_replay(text).frames
+                                        except (ValueError, TypeError):
+                                            frames = decode_complex_replay(
+                                                parse_combined_level_replay(text).replay_string).frames
+                                    frames = tuple(editable_frames(frames))
+                                    if stage_rank(shared_rejoin, frames) is not None:
+                                        return record['route'], frames
+                                except (OSError, UnicodeError, ValueError, TypeError, LtmError):
+                                    pass
+                                return None, None
+
+                            for path, meta in ((main_path, main_meta),
+                                               (other_main, other_meta)):
+                                old_route, old_frames = read_routed_checkpoint(path, meta)
+                                if old_route is not None:
+                                    rejoin_candidates[old_route] = better_stage(
+                                        shared_rejoin, rejoin_candidates.get(old_route), old_frames)
+
+                            ranked_routes = sorted(rejoin_candidates.items(),
+                                                   key=lambda item: stage_rank(shared_rejoin, item[1]))
+                            if ranked_routes:
+                                preferred_route, preferred = ranked_routes[0]
+                                old_saved = saved_stage_seed(rejoin_name)
+                                old_rank = stage_rank(shared_rejoin, old_saved)
+                                new_rank = stage_rank(shared_rejoin, preferred)
+                                if old_rank is None or new_rank < old_rank:
+                                    save_stage_best(rejoin_name, preferred)
+                                if old_rank is None or new_rank <= old_rank:
+                                    _atomic_write_text(main_meta, json.dumps({
+                                        'version': 1, 'route': preferred_route,
                                         'identity': checkpoint_identity,
                                     }, sort_keys=True) + '\n')
-                                frontier_additions.append(tuple(editable_frames(slower)))
+                                if (len(ranked_routes) > 1 and
+                                        ranked_routes[1][1] != preferred):
+                                    slower_route, slower = ranked_routes[1]
+                                    # One named stage has one overall checkpoint;
+                                    # the lower-ranked *branch* gets a separate LTM
+                                    # and companion TXT for future merge/searches.
+                                    old_route, old_other = read_routed_checkpoint(
+                                        other_main, other_meta)
+                                    if (old_route != slower_route or old_other != slower):
+                                        _protect_unreadable_splice_output(other_main)
+                                        _protect_unreadable_splice_output(other_text)
+                                        slower_replay = encode_complex_replay(clean_splice_output(slower))
+                                        if source.ltm_movie is not None and other_text is not None:
+                                            _write_result(source, other_main, None, slower_replay)
+                                            # Reflect the exact replay the LTM stores,
+                                            # including its implicit neutral post-roll.
+                                            loaded = LtmMovie.load(other_main)
+                                            _atomic_write_text(other_text,
+                                                encode_complex_replay(loaded.replay_frames) + '\n')
+                                        else:
+                                            _write_result(source, other_main, other_text, slower_replay)
+                                        _atomic_write_text(other_meta, json.dumps({
+                                            'version': 1, 'route': slower_route,
+                                            'identity': checkpoint_identity,
+                                        }, sort_keys=True) + '\n')
+                                    frontier_additions.append(tuple(editable_frames(slower)))
+                                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] {rejoin_name!r}: "
+                                          f"retained {slower_route} branch at {other_main} "
+                                          '(other route, independently reusable)', flush=True)
+                                persisted = _load_user_splice_frontiers(
+                                    level, (shared_rejoin,), stage_outputs).get(rejoin_name, ())
+                                # Never allow a large primary frontier to evict
+                                # the lower-ranked route when the archive reaches
+                                # its 64-replay cap. Both branch winners are first.
+                                combined_archive = list(dict.fromkeys((
+                                    *(frames for _, frames in ranked_routes),
+                                    *frontier_additions, *persisted)))
+                                if combined_archive:
+                                    save_frontier(rejoin_name, tuple(combined_archive[:64]))
+                                continuation = preferred
+                                if shared_suffix:
+                                    run_route_phase('shared-suffix', shared_suffix, continuation,
+                                                    extra_seeds=tuple(value for _, value in ranked_routes[1:]),
+                                                    repair_at_finish=False)
+                            else:
+                                # No branch reached the reconvergence objective.
+                                # Do not discard both prefixes or invent a saved
+                                # seam checkpoint; try the shared suffix from both.
                                 print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] {rejoin_name!r}: "
-                                      f"retained {slower_route} branch at {other_main} "
-                                      '(other route, independently reusable)', flush=True)
-                            persisted = _load_user_splice_frontiers(
-                                level, (shared_rejoin,), stage_outputs).get(rejoin_name, ())
-                            # Never allow a large primary frontier to evict
-                            # the lower-ranked route when the archive reaches
-                            # its 64-replay cap. Both branch winners are first.
-                            combined_archive = list(dict.fromkeys((
-                                *(frames for _, frames in ranked_routes),
-                                *frontier_additions, *persisted)))
-                            if combined_archive:
-                                save_frontier(rejoin_name, tuple(combined_archive[:64]))
-                            continuation = preferred
-                            if shared_suffix:
-                                run_route_phase('shared-suffix', shared_suffix, continuation,
-                                                extra_seeds=tuple(value for _, value in ranked_routes[1:]),
-                                                repair_at_finish=False)
-                        else:
-                            # No branch reached the reconvergence objective.
-                            # Do not discard both prefixes or invent a saved
-                            # seam checkpoint; try the shared suffix from both.
-                            print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] {rejoin_name!r}: "
-                                  'neither branch reached the seam goal; '
-                                  'preserving both as shared-suffix search seeds', flush=True)
-                            if shared_suffix:
-                                run_route_phase('shared-suffix', shared_suffix, main_seed,
-                                                extra_seeds=(alt_seed,),
-                                                repair_at_finish=False)
+                                      'neither branch reached the seam goal; '
+                                      'preserving both as shared-suffix search seeds', flush=True)
+                                if shared_suffix:
+                                    run_route_phase('shared-suffix', shared_suffix, main_seed,
+                                                    extra_seeds=(alt_seed,),
+                                                    repair_at_finish=False)
+                            # Commit only after every phase in the round has
+                            # finished. An interruption retries the incomplete
+                            # round instead of silently skipping later stages.
+                            persist_outer_round(outer_round + 1)
+                            stagnant_route_rounds = (stagnant_route_rounds + 1
+                                                     if phase_improvements == gains_before_round
+                                                     else 0)
+                            if (splice_config.stagnation_rounds and stagnant_route_rounds >=
+                                    splice_config.stagnation_rounds):
+                                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                                      f"stopping after {stagnant_route_rounds} stagnant "
+                                      "complete route round(s)", flush=True)
+                                break
                         if args.auto_splice_merge_bests or repair_at_end or retime_gains:
                             merge_all_saved_stages('final', repair=repair_at_end)
                         print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice] {phase_attempts} stage searches; "

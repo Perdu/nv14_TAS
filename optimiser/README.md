@@ -2174,6 +2174,15 @@ search the alternative divergent stages; search the reconvergence goal once
 **from each branch**; then continue through the shared suffix, seeding it
 from both branches. The shared suffix is searched just once, rather than
 being exhausted before the alternative branch has even been explored.
+**An outer round (`--auto-runs`, or `runs` in `[auto]`) covers the entire
+route sequence**: shared prefix, primary branch, alternate branch, both
+rejoin searches, and shared suffix through `end`. With `--auto-runs 2`, this
+complete sequence runs twice; the optimiser does **not** run both rounds on
+the shared prefix before proceeding to the branches. Each round reuses saved
+stage checkpoints from the previous round, and a final merge/repair (when
+enabled) occurs after the complete campaign. An interrupted round is retried
+from its beginning, while fully completed rounds are checkpointed and skipped
+on resume.
 Only replay-verified completed runs are promoted to the shared completed best.
 
 At reconvergence, the higher-ranked goal result keeps the usual

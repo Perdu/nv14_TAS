@@ -84,6 +84,78 @@ def test_normal_runs_share_verified_primary_completed_replay(tmp_path, monkeypat
     assert calls[1][2] is not None  # distinct checkpoints; no primary state is reused
 
 
+def test_two_rounds_finish_both_routes_and_suffix_before_repeating(
+        tmp_path, monkeypatch, capsys):
+    """--auto-runs counts full-route passes, not rounds per route segment."""
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages), config.rounds,
+                      kwargs.get('resume_outer_round'), config.seed,
+                      kwargs.get('merge_only', False)))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '2',
+        '--splice-merge-bests'])
+    main()
+    phases = [call for call in calls if not call[-1]]
+    round_stages = [
+        ('230',), ('239',), ('240',), ('250',), ('250',), ('end',)]
+    assert [call[0] for call in phases] == round_stages * 2
+    assert [(call[1], call[2]) for call in phases] == ([(1, 0)] * 6 + [(2, 1)] * 6)
+    # New rounds must not repeat the same RNG sequence on the same seed.
+    assert {call[3] for call in phases[:6]} == {0}
+    assert {call[3] for call in phases[6:]} == {1}
+    # Merge once before the campaign and once after *both* complete passes.
+    assert [call[0] for call in calls if call[-1]] == [
+        ('230', '239', '240', '250', 'end')] * 2
+    assert calls[-1][-1] is True
+    log = capsys.readouterr().out
+    assert 'full route round 1/2' in log
+    assert 'full route round 2/2' in log
+    assert log.index('round 1/2 shared-suffix') < log.index('round 2/2 shared-prefix')
+
+
+def test_interleaved_resume_after_complete_round_retries_only_remaining_round(
+        tmp_path, monkeypatch):
+    """Persist the full-route boundary, not the prefix phase's boundary."""
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    calls = []
+    interrupt = [True]
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages),
+                      kwargs['resume_outer_round']))
+        if interrupt[0] and config.rounds == 2:
+            interrupt[0] = False
+            raise KeyboardInterrupt()
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '2'])
+    with pytest.raises(SystemExit) as interrupted:
+        main()
+    assert interrupted.value.code == 130
+    assert [stage for stage, i in calls if i == 0] == [
+        ('230',), ('240',), ('end',), ('end',)]
+    # Resume with the same campaign. It must not repeat round one.
+    main()
+    assert [stage for stage, i in calls if i == 0] == [
+        ('230',), ('240',), ('end',), ('end',)]
+    assert [stage for stage, i in calls if i == 1] == [
+        ('230',), ('230',), ('240',), ('end',), ('end',)]
+
+
 def test_unlimited_primary_cannot_silently_starve_alt_route(tmp_path, monkeypatch):
     _level, _source, _output, argv = _make_routes(tmp_path)
     monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '0'])
@@ -104,6 +176,20 @@ def test_actual_native_search_checks_both_routes(tmp_path, monkeypatch, capsys):
     assert "primary-rejoin: end" in messages
     assert "alternate-rejoin: end" in messages
     assert "stage 1/1 '240'" in messages
+
+
+def test_native_search_round_two_starts_after_alternate_rejoin(
+        tmp_path, monkeypatch, capsys):
+    """Use the real stage search to check the round index and route order."""
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--auto-runs', '2', '--auto-splice-search', 'local',
+        '--auto-splice-iterations', '4'])
+    main()
+    messages = capsys.readouterr().out
+    assert messages.index('round 1/2 alternate-rejoin: end') < messages.index(
+        'round 2/2 shared-prefix: 230')
+    assert 'round 2/2 stage 1/1' in messages
 
 
 def test_alt_route_runs_only_unique_branch_before_rejoin(tmp_path, monkeypatch):
