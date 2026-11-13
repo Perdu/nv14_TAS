@@ -109,7 +109,7 @@ frontier = 3
 save-frontier = 64
 runs = 3
 # how many rounds of local mode for 1 round of auto mode
-hybrid-local-rounds = 5
+hybrid-local-rounds = 3
 hybrid-cycles = 8
 hybrid-stagnation-cycles = 5
 use-current-run = true
