@@ -1076,7 +1076,7 @@ rerecords: 229
 Branch 9: rcj -> bwj route (probably slower)
 
 # 30-4
-rerecords: 0
+rerecords: 53
 
 
 
@@ -1434,7 +1434,7 @@ rerecords: 833
 
 
 # 42-4
-rerecords: 0
+rerecords: 40
 
 
 
@@ -2330,9 +2330,13 @@ Can't get a corner jump around 160
 Can't get above the mine around 430 directly after the first land. Manage to do it once after a jump (don't remember which) but it was slower and now I can't reproduce it
 
 # 71-2
-rerecords: 0
+rerecords: 278
 
-
+Branch 9: rcj route, doesn't reach the switch
+Branch 8: starting with corner kick
+Branch 7: starting with jump then ck
+Branch 6: attempt at going under the drone with j+ck route
+Branch 5: double jump near the switch
 
 # 71-3
 rerecords: 0
@@ -2593,7 +2597,7 @@ rerecords: 0
 
 
 # 81-1
-rerecords: 1671
+rerecords: 1685
 
 Branch 9: alt route between switches 0 and 2 (lower section from left to right)
 Branch 8: rcj after splice 723
@@ -2658,7 +2662,7 @@ rerecords: 0
 
 
 # 83-2
-rerecords: 0
+rerecords: 37
 
 
 
@@ -2673,16 +2677,19 @@ rerecords: 386
 
 
 # 84-0
-rerecords: 332
+rerecords: 383
 
 Branch 9: attempt at starting with a wj
 Branch 8: launch into orbit
 Branches 4-7: more attempts at starting with a wj to get a direct path back to the door
 
 # 84-1
-rerecords: 0
+rerecords: 433
 
-
+Branch 9: alt route: taking switch 2 before switch 1
+Branch 8: test using the lower route to the switch
+Branch 7: bwj before switch 0 to get detected by upper thwump
+Branch 6: not getting detected by upper thwump after switch 0
 
 # 84-2
 rerecords: 152
@@ -2757,9 +2764,10 @@ rerecords: 0
 
 
 # 87-1
-rerecords: 4
+rerecords: 167
 
-
+Branch 9: RTA route taking the lower path
+Branch 8: different turaround around switch
 
 # 87-2
 rerecords: 0
@@ -2924,7 +2932,7 @@ rerecords: 0
 
 
 # 93-1
-rerecords: 0
+rerecords: 2
 
 
 
@@ -2943,9 +2951,9 @@ Branch 6: optimized RTA route
 Current route and RTA route give almost exact same result. The last jump is what changes everything, and is pretty hard to optimize.
 
 # 93-4
-rerecords: 0
+rerecords: 55
 
-
+Branch 9: start with a wj
 
 # 94-0
 rerecords: 352
@@ -2968,7 +2976,7 @@ rerecords: 0
 
 
 # 94-3
-rerecords: 0
+rerecords: 77
 
 
 
@@ -3133,4 +3141,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 272576
+# Total rerecords: 273779
