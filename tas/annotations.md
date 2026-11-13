@@ -2677,7 +2677,7 @@ rerecords: 386
 
 
 # 84-0
-rerecords: 383
+rerecords: 412
 
 Branch 9: attempt at starting with a wj
 Branch 8: launch into orbit
@@ -2810,7 +2810,7 @@ When falling from the top section jumping was overall slower
 For the third locked door key jumping on the lower slope was slower
 
 # 88-4
-rerecords: 1680
+rerecords: 1769
 
 
 
@@ -3141,4 +3141,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 273779
+# Total rerecords: 273897
