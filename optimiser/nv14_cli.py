@@ -1497,6 +1497,11 @@ def _config_destination_maps(
     # This alias is deliberately mode-section-only.
     if mode == "auto":
         _add_config_alias(mode_specific, "rounds", "auto_splice_rounds", overwrite=True)
+        # Whole-run Auto calls these "runs", whereas Local and named splices
+        # call them "rounds". Accept the familiar TOML spelling in [auto]
+        # without changing [multi-splicer]'s per-stage stagnation setting.
+        _add_config_alias(mode_specific, "stagnation_rounds", "auto_stagnation_runs",
+                          overwrite=True)
 
     return general, mode_specific
 

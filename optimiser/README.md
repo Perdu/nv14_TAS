@@ -1038,7 +1038,10 @@ Rules:
 - A CLI `--range` is scalar and replaces a Local TOML range array.
 - Keys may use underscores or CLI-style hyphens.
 - In a mode table, the mode prefix may be omitted: `objective` under `[auto]`
-  means `auto_objective`, and `runs` means `auto_runs`.
+  means `auto_objective`, and `runs` means `auto_runs`. Auto's early-stop
+  setting is `stagnation-runs` (`--auto-stagnation-runs`); the synonymous
+  `stagnation-rounds` is also accepted **in `[auto]`**. In `[multi-splicer]`,
+  `stagnation-rounds` remains the separate named-splice cycle setting.
 - `[jump_pattern]` is accepted as an alias for `[jump-pattern]`, but do not
   define both.
 - The mode, input and config path cannot themselves be supplied by TOML.

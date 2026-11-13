@@ -75,6 +75,38 @@ deterministic = false
     assert args.retime == [("whole", 1), (120, -1)]
 
 
+@pytest.mark.parametrize("key", ("stagnation-rounds", "stagnation_rounds", "stagnation-runs"))
+def test_auto_toml_accepts_stagnation_rounds_alias(tmp_path, key: str) -> None:
+    config = _write_config(tmp_path, f"[auto]\nruns = 10\n{key} = 4\n")
+    args = opt.parse_arguments(["auto", "input.txt", "--config", str(config)])
+    assert args.auto_runs == 10
+    assert args.auto_stagnation_runs == 4
+
+    # Explicit CLI option remains authoritative regardless of TOML spelling.
+    overridden = opt.parse_arguments([
+        "auto", "input.txt", "--config", str(config),
+        "--auto-stagnation-runs", "2",
+    ])
+    assert overridden.auto_stagnation_runs == 2
+
+
+def test_auto_stagnation_rounds_alias_does_not_change_named_splicer(tmp_path) -> None:
+    import nv14_cli as cli
+
+    config = _write_config(tmp_path, """
+[auto]
+stagnation-rounds = 4
+[multi-splicer]
+stagnation-rounds = 7
+""")
+    parser = cli.build_parser()
+    command = next(action for action in parser._actions if action.dest == "mode")
+    auto_parser = command.choices["auto"]
+    defaults, splice_defaults = cli._load_config_defaults(config, auto_parser, "auto")
+    assert defaults["auto_stagnation_runs"] == 4
+    assert splice_defaults["auto_splice_stagnation_rounds"] == 7
+
+
 def test_v300_auto_toml_parents_append_repeatable_cli_parents(tmp_path) -> None:
     config = _write_config(
         tmp_path,
