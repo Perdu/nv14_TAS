@@ -73,8 +73,8 @@ Defaults (all optional env overrides):
   TAS_CONFIG=examples/config.toml
   TAS_RANDOM_CONFIG=../splices/random-splice.toml
   TAS_WORKERS=15
-  TAS_RUNS_AUTO=10, TAS_RUNS_GOAL=10, TAS_RUNS_MULTI=50
-  TAS_STAGNATION_LOCAL (optional override), TAS_STAGNATION_RANDOM=10
+  TAS_RUNS_AUTO (defaults to [auto] runs=10), TAS_RUNS_GOAL=10, TAS_RUNS_MULTI=50
+  TAS_STAGNATION_LOCAL (defaults to [local] stagnation-rounds=50), TAS_STAGNATION_RANDOM=10
   TAS_JAFFAR=1 enables the mode-specific preset (or use --jaffar).
 
 Commands execute from the optimiser directory (independent of launch cwd).
@@ -104,6 +104,60 @@ def _template(env: Mapping[str, str], key: str, fallback: str,
         return env.get(key, fallback).format(level=level, splice=splice)
     except (KeyError, ValueError) as exc:
         raise ValueError(f"invalid template ${key}: {exc}") from exc
+
+
+def _shortcut_config_number(env: Mapping[str, str], section: str,
+                            name: str, fallback: int) -> str:
+    """Read shortcut defaults from the shared TOML without importing goal options.
+
+    Standalone Local passes its level-specific goal as --config, so it cannot
+    inherit general [local] settings through the optimiser's TOML loader.
+    Read *only* its stagnation default here; the goal and CLI remain stronger.
+    """
+    config_path = ROOT / env.get("TAS_CONFIG", "examples/config.toml")
+    try:
+        with config_path.open("rb") as stream:
+            data = tomllib.load(stream)
+    except FileNotFoundError:
+        # Preserve launcher usability when a project uses only goal files.
+        return str(fallback)
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise ValueError(f"cannot read shortcut settings from {config_path}: {exc}") from exc
+    values = data.get(section, {})
+    if not isinstance(values, Mapping):
+        raise ValueError(f"[{section}] must be a TOML table in {config_path}")
+    alias = name.replace("-", "_")
+    if name in values and alias in values and name != alias:
+        raise ValueError(f"[{section}] specifies both {name} and {alias} in {config_path}")
+    value = values.get(name, values.get(alias, fallback))
+    minimum = 0 if section == "auto" else 1
+    if type(value) is not int or value < minimum:
+        raise ValueError(f"[{section}] {name} must be an integer >= {minimum} in {config_path}")
+    return str(value)
+
+
+def _local_needs_default_stagnation(goal_file: str | None,
+                                    extra: Sequence[str]) -> bool:
+    """Apply shared Local patience only if no goal/CLI stopping rule exists."""
+    if any(token.split("=", 1)[0] in (
+            "--rounds", "--stagnation-rounds", "--config", "--search")
+           for token in extra):
+        return False
+    if goal_file is None or not (ROOT / goal_file).is_file():
+        return True
+    try:
+        with (ROOT / goal_file).open("rb") as stream:
+            data = tomllib.load(stream)
+    except (OSError, tomllib.TOMLDecodeError):
+        # Allow the optimisation backend to report malformed goal files.
+        return False
+    for section in (data, data.get("common"), data.get("goal"), data.get("local")):
+        if isinstance(section, Mapping) and any(
+                str(key).replace("-", "_") in ("rounds", "stagnation_rounds")
+                for key in section):
+            return False
+    local = data.get("local", {})
+    return not isinstance(local, Mapping) or local.get("search", "population") == "population"
 
 
 def build_command(mode: str, level: str, splice: str | None = None,
@@ -186,6 +240,9 @@ def build_command(mode: str, level: str, splice: str | None = None,
                    *common]
         if "TAS_STAGNATION_LOCAL" in env:
             command += ["--stagnation-rounds", env["TAS_STAGNATION_LOCAL"]]
+        elif _local_needs_default_stagnation(goal_file, extra):
+            command += ["--stagnation-rounds", _shortcut_config_number(
+                env, "local", "stagnation-rounds", 50)]
     else:
         command = [mode if mode in ("both", "hybrid") else "auto", input_file]
         if mode == "random":
@@ -195,7 +252,9 @@ def build_command(mode: str, level: str, splice: str | None = None,
         else:
             command += shared
             if mode == "auto":
-                command += ["--auto-runs", env.get("TAS_RUNS_AUTO", "10")]
+                auto_runs = (env["TAS_RUNS_AUTO"] if "TAS_RUNS_AUTO" in env else
+                             _shortcut_config_number(env, "auto", "runs", 10))
+                command += ["--auto-runs", auto_runs]
             if mode in ("auto", "goal", "both", "hybrid") and splice:
                 command += ["--goal-config", goal_file]
             if mode == "goal":

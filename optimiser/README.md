@@ -2055,7 +2055,7 @@ underlying optimiser and its normal CLI remain fully supported.
 
 ```sh
 ./tas.py auto 53-4                   # whole-run Auto, 10 runs
-./tas.py local 55-1 end              # local, 50 stagnation rounds
+./tas.py local 55-1 end              # local, stop after 50 stagnant rounds
 ./tas.py random 55-1                 # random splicer with enemies
 ./tas.py goal 53-4 591               # endpoint Auto with a Local goal file
 ./tas.py multi 97-2                  # named multi-splicer, 50 rounds
@@ -2074,6 +2074,16 @@ Environment settings such as `TAS_WORKERS=15`, `TAS_CONFIG=examples/config.toml`
 `TAS_INPUT_TEMPLATE=../n_levels/{level}.ltm`, and `TAS_MULTI_TEMPLATE`/
 `TAS_GOAL_TEMPLATE` choose paths without rewriting your level configs.
 `TAS_LEVEL` (or `LEVEL`) and `TAS_SPLICE` (or `SPLICE`) supply positional values.
+`examples/config.toml` sets `[auto] runs = 10` and
+`[local] stagnation-rounds = 50`. `tas.py auto` reads the former for its
+`--auto-runs` default; standalone `tas.py local` reads the latter and passes
+it as `--stagnation-rounds` because the Local backend receives its separate
+`../splices/LEVEL/SPLICE.txt` goal as `--config`. An explicit Local goal
+`rounds`/`stagnation-rounds` setting takes priority over the shared default.
+The launcher environment overrides remain available: `TAS_RUNS_AUTO` and
+`TAS_STAGNATION_LOCAL`, with explicit command-line flags taking precedence.
+This does not change `[multi-splicer] runs` or its independent backend
+stagnation settings.
 With `TAS_INPUT_TEMPLATE` pointing at a manually edited replay, use a **different**
 output template; the launcher refuses to overwrite its own input. `./tas.py --help`
 lists all supported defaults. Normal optimiser flags appended afterward always
