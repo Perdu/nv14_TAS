@@ -1,0 +1,14 @@
+[local]
+search = "population"
+target_frame = 130
+range = ":130"
+simulate-enemies = true
+objective = "earliest-arrival"
+target_region = "434:464,355:435"
+secondary_objective = "max-vx"
+# require-interaction = ["testdoor:0"]
+vx-window = "7:"
+vy-window = "-20:3"
+survive-after-goal = 2
+
+
