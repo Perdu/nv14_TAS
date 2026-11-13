@@ -7,7 +7,8 @@ color = true
 
 [auto]
 iterations = 10000
-runs = 0
+stagnation-runs = 10
+runs = 10
 beam = 64
 max-retime = 3
 objective = "speedrun"
@@ -57,6 +58,7 @@ mutations = "high"
 clean-air-jumps = true
 
 [local]
+stagnation-rounds = 50
 local-inputs = "direction"
 target-frame = 121
 range = ["15:121"]
