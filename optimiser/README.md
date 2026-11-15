@@ -1596,6 +1596,16 @@ These merge passes do not perform input-mutation bridge repairs: the
 `--auto-endpoint-repair-steps` setting applies inside the endpoint Auto search,
 not to merging incompatible replay suffixes.
 
+**Completed-run gains also propagate to later named splices during normal
+search.** If a verified completed replay discovered at `394` already reaches
+`end` earlier than the saved `end` checkpoint, the optimiser immediately
+updates the `end` LTM/TXT and its in-memory best *before* searching `end`.
+The log uses `[auto:user-splice:propagated]` for these saves. Propagation
+requires the later goal to be genuinely feasible by the finish tick and to
+beat its existing stage objective; an earlier full completion is not by
+itself a better result for every independent helper goal. Existing `--merge-only`
+no-startup-checkpoint-write behavior is unchanged.
+
 ### Bounded bridge repair for saved splice and manual-input gains
 
 **Patch 52 adds a separate, opt-in Auto/Local repair mode.** Existing

@@ -629,6 +629,8 @@ def optimise_user_splices(
             improvements += 1
             if best_callback:
                 best_callback(best_output)
+            if not merge_only:
+                promote_completed_checkpoints(best_output, origin="verified merge")
             if progress:
                 progress(f"[auto:user-splice:merge] {label}: verified reference "
                          f"suffix propagated; complete at frame {len(best_output)}; saved")
@@ -740,6 +742,55 @@ def optimise_user_splices(
         if selected != archived_frontiers[i]:
             frontier_callback(stages[i].name, tuple(selected))
             archived_frontiers[i] = selected
+
+    def promote_completed_checkpoints(
+        replay: tuple[InputFrame, ...], *, from_index: int = 0,
+        origin: str = "verified completion",
+    ) -> int:
+        """Persist real downstream gains from a verified completed replay.
+
+        The completed-run best and named-stage bests have independent rankings.
+        Previously a new completion at an earlier stage updated only the final
+        output. The following stage then compared against its stale in-memory
+        stage score, potentially saving a *slower* checkpoint over a faster
+        completed run. Promote only goals actually reached no later than the
+        completion tick, and never overwrite a stronger named checkpoint.
+        """
+        checked = evaluate_replay_with_sentinel(level, replay)
+        if not checked.valid or checked.finish_tick != len(replay):
+            return 0
+        workspace = _materialise_splice_tail(
+            replay, max(stage.goal.target_frame for stage in stages))
+        # The replay has an independently verified finish tick, so the
+        # stage file can contain its original, already-trimmed movie.
+        exported = tuple(replay)
+        promoted = 0
+        for i in range(from_index, len(stages)):
+            candidate = original_endpoints[i].evaluate(workspace)
+            # A fixed-frame goal evaluated in the frozen post-finish state is
+            # not a checkpoint the player genuinely visited. First-arrival
+            # goals reached on the completion tick remain eligible.
+            if not candidate.feasible or candidate.frame > checked.finish_tick:
+                continue
+            previous = stage_checkpoint_evals[i]
+            if previous is not None and candidate.objective_key >= previous.objective_key:
+                continue
+            stage_checkpoints[i] = exported
+            stage_checkpoint_evals[i] = candidate
+            stage_checkpoint_origin[i] = origin
+            if stage_best[i] is None or candidate.objective_key < stage_best[i]:
+                stage_best[i] = candidate.objective_key
+                stage_best_evaluation[i] = candidate
+            promoted += 1
+            if stage_best_callback is not None:
+                stage_best_callback(stages[i].name, exported)
+            publish_frontier(i, [workspace])
+            if progress:
+                progress(f"[auto:user-splice:propagated] verified completed "
+                         f"replay -> {stages[i].name!r}: saved downstream "
+                         f"stage best; "
+                         f"{_stage_improvement_text(stages[i].goal, previous, candidate)}")
+        return promoted
 
     # An in-flight backend phase is separate from the saved stage bests.
     # It can resume the last *completed backend round*, even if previous
@@ -874,6 +925,12 @@ def optimise_user_splices(
                          "restored a strictly better historical checkpoint; "
                          f"{_stage_improvement_text(stages[i].goal, None, stage_best_evaluation[i])}"
                          f"{reported_savings(i, stage_best_evaluation[i])}")
+    # A previously saved completed best is also an authoritative source for
+    # downstream stage checkpoints. Do this before the next search starts,
+    # including after a restart from a slower input replay.
+    if not (summary_only or merge_only) and require_complete and best_rank is not None:
+        promote_completed_checkpoints(best_output)
+
     if progress and not (summary_only or merge_only):
         for i, stage in enumerate(stages):
             progress(f"[auto:user-splice:physics] {stage.name!r}: "
@@ -1194,6 +1251,13 @@ def optimise_user_splices(
                     stage_checkpoints[later] = padded
                     stage_checkpoint_evals[later] = score
                     stage_checkpoint_origin[later] = "verified merge"
+                    # The next stage's search compares against stage_best,
+                    # not stage_checkpoint_evals. Keep both in sync or a
+                    # worse search candidate can overwrite this merged best.
+                    if (stage_best[later] is None or
+                            score.objective_key < stage_best[later]):
+                        stage_best[later] = score.objective_key
+                        stage_best_evaluation[later] = score
                     upgraded += 1
                     if stage_best_callback:
                         stage_best_callback(stages[later].name, stage_export(padded))
@@ -1215,6 +1279,8 @@ def optimise_user_splices(
                 completed += 1
                 if best_callback:
                     best_callback(best_output)
+                if not merge_only:
+                    promote_completed_checkpoints(best_output, origin="verified merge")
                 if progress:
                     progress(f"[auto:user-splice:merge] {label}: improved verified "
                              f"completed replay at {len(best_output)} frames; saved")
@@ -2296,6 +2362,11 @@ def optimise_user_splices(
                         improved = True
                         if best_callback:
                             best_callback(best_output)
+                        # A completion found at this stage may already have
+                        # reached the goals of subsequent named splices. Save
+                        # those gains now, before their searches start.
+                        promote_completed_checkpoints(
+                            best_output, from_index=index + 1)
                         if progress:
                             completed_text = (
                                 f"verified completed frames {len(previous_best_output)} "
