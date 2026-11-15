@@ -2239,6 +2239,16 @@ searched during the alternative campaign. Both seam names must exist in
 rejected. The original full-route notation ending in `end` remains supported.
 CLI `--splice-alt-route 403,482,485,527` accepts the shorthand too.
 
+To run **only the primary route** without removing the alternate route from
+its configuration, add `skip-alt-route = true` to `[multi-splicer]` in the
+per-level `multi-splicer.toml`, or pass `--splice-skip-alt-route` (also works
+through `tas.py multi LEVEL --splice-skip-alt-route`). This skips the
+alternate branch entirely, including its goal-file loading and route-specific
+checkpoints; primary-stage search, merge and repair still operate normally.
+The flag also works with `--repair`, `--merge`, and `--ls-splice`. If the TOML
+setting is true, `--no-splice-skip-alt-route` on the CLI restores both routes
+for that invocation. `alt-route` remains unchanged in the configuration.
+
 Alternate routes do not impose helper goals on the primary route or change
 normal stage lookback. Use `--start-at-splice 479` (alias `--splice-start 479`)
 to skip searching the shared prefix through `403` and begin the primary

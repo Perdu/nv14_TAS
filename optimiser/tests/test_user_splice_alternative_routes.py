@@ -35,6 +35,83 @@ def test_alt_route_toml_cli_and_validation(tmp_path):
         parse_arguments(argv[1:] + ['--splice-stop', 'end'])
 
 
+def test_skip_alt_route_cli_uses_primary_only_and_allows_primary_controls(tmp_path):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    args = parse_arguments(argv[1:] + ['--splice-skip-alt-route',
+                                        '--splice-stop', 'end'])
+    assert args.auto_splice_skip_alt_route is True
+    assert args.auto_splice_files == ('230', 'end')
+    assert args.auto_splice_alt_route == ()
+    # The flag is also supported through the original --auto-splice- prefix.
+    prefixed = parse_arguments(argv[1:] + ['--auto-splice-skip-alt-route'])
+    assert prefixed.auto_splice_alt_route == ()
+
+
+def test_skip_alt_route_config_and_cli_override(tmp_path):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text(routes.read_text() + 'skip-alt-route=true\n')
+    disabled = parse_arguments(argv[1:])
+    assert disabled.auto_splice_skip_alt_route is True
+    assert disabled.auto_splice_alt_route == ()
+    # A CLI opt-in restores the declared route without modifying TOML.
+    enabled = parse_arguments(argv[1:] + ['--no-splice-skip-alt-route'])
+    assert enabled.auto_splice_skip_alt_route is False
+    assert enabled.auto_splice_alt_route == ('230', '240', 'end')
+    # A false value in the splice file is also accepted.
+    routes.write_text(routes.read_text().replace('skip-alt-route=true',
+                                                 'skip-alt-route=false'))
+    assert parse_arguments(argv[1:]).auto_splice_alt_route == ('230', '240', 'end')
+    # The command line takes precedence over that explicit false value.
+    assert parse_arguments(argv[1:] + ['--splice-skip-alt-route']).auto_splice_alt_route == ()
+
+
+def test_skip_alt_route_skips_missing_alt_goal_and_search(tmp_path, monkeypatch, capsys):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    (tmp_path / 'goals' / '240.txt').unlink()
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append(tuple(stage.name for stage in stages))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--splice-skip-alt-route',
+                                           '--auto-runs', '1'])
+    main()
+    assert calls == [('230', 'end')]
+    log = capsys.readouterr().out
+    assert 'alternate-branch' not in log
+    assert 'skip-alt-route enabled: using primary route only' in log
+
+
+def test_skip_alt_route_allows_invalid_unused_short_branch(tmp_path):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","end"]\n'
+                      'alt-route=["not-in-primary","240","230"]\n'
+                      'skip-alt-route=true\n')
+    assert parse_arguments(argv[1:]).auto_splice_alt_route == ()
+    with pytest.raises(SystemExit, match='short alt-route'):
+        parse_arguments(argv[1:] + ['--no-splice-skip-alt-route'])
+
+
+def test_skip_alt_route_toml_skips_alternate_branch(tmp_path, monkeypatch):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text(routes.read_text() + 'skip-alt-route=true\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append(tuple(stage.name for stage in stages))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '1'])
+    main()
+    assert calls == [('230', 'end')]
+
+
 def test_cli_searches_both_orders_and_shares_verified_best(tmp_path, monkeypatch, capsys):
     _level, source, output, argv = _make_routes(tmp_path)
     calls = []

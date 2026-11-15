@@ -1742,6 +1742,7 @@ def _load_config_defaults(
     splice_aliases.update({
         "files": "auto_splice_files",
         "alt_route": "auto_splice_alt_route",
+        "skip_alt_route": "auto_splice_skip_alt_route",
         "directory": "auto_splice_directory",
         "start": "auto_splice_start",
         "stop": "auto_splice_stop",
@@ -1898,7 +1899,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_hybrid_local_rounds", "auto_splice_hybrid_auto_iterations",
     "auto_splice_hybrid_cycles", "auto_splice_hybrid_stagnation_cycles",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_waypoint_lookback", "auto_splice_exit_lookback",
-    "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_directory",
+    "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_skip_alt_route", "auto_splice_directory",
     "auto_splice_use_current_run",
     "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
     "auto_splice_single",
@@ -2089,6 +2090,11 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
                 result.auto_splice_mode = "user"
             if "auto_random_splice" not in explicit:
                 result.auto_random_splice = True
+        # Disable the alternate branch before validation, short-route expansion,
+        # goal loading, checkpoint selection, and any search/merge/repair work.
+        # Keep the declaration in the TOML so clearing this option restores it.
+        if mode == "auto" and result.auto_splice_skip_alt_route:
+            result.auto_splice_alt_route = ()
         _validate_local_strategy(result, explicit)
         _validate_auto_goal_strategy(result, explicit)
         result._explicit_options = frozenset(explicit)
@@ -2742,6 +2748,12 @@ def build_parser() -> argparse.ArgumentParser:
                          type=parse_splice_files, metavar="NAMES",
                          help="alternate named splice route, or short branch bounded by two "
                               "primary-route seam names; only divergent stages are searched")
+    command.add_argument("--splice-skip-alt-route", "--auto-splice-skip-alt-route",
+                         dest="auto_splice_skip_alt_route", modes=auto_modes,
+                         action=argparse.BooleanOptionalAction, default=False,
+                         help="ignore any configured alt-route and run only the primary "
+                              "named splice route (also [multi-splicer] skip-alt-route=true); "
+                              "--no-splice-skip-alt-route re-enables it")
     command.add_argument("--auto-splice-files", modes=auto_modes,
                          type=parse_splice_files, metavar="NAMES",
                          help="ordered comma-separated Local splice names; [auto] splice-files accepts a TOML array")
@@ -4819,6 +4831,9 @@ def main() -> None:
             if args.auto_splice_mode == "user":
                 from nv14_user_splice import optimise_user_splices
                 directory = _named_splice_directory(args)
+                if args.auto_splice_skip_alt_route:
+                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                          "skip-alt-route enabled: using primary route only", flush=True)
                 stages = _load_named_splice_stages(level, replay.frames, args,
                                                    directory, args.auto_splice_files)
                 alternate_stages = (_load_named_splice_stages(

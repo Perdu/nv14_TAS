@@ -99,6 +99,9 @@ top-results = 10
 # fixed-jump-frames = [42, 73]
 
 [multi-splicer]
+# Set true to optimise only the primary splice-files route, even when a level's
+# multi-splicer.toml defines alt-route. CLI: --splice-skip-alt-route.
+# skip-alt-route = false
 search = "hybrid"
 iterations = 10000
 auto-stagnation-rounds = 5

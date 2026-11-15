@@ -113,6 +113,17 @@ splice-iterations = 700
     assert args.auto_splice_iterations == 700
 
 
+def test_shared_splice_skip_alt_route_inherited_but_cli_can_enable(tmp_path):
+    base = _write(tmp_path / 'base.toml', '''[multi-splicer]\nskip-alt-route=true\n''')
+    splice = _write(tmp_path / 'splice.toml', '''[multi-splicer]\nfiles=["230","end"]\nalt-route=["230","240","end"]\n''')
+    command = ['auto', 'file.ltm', '--config', str(base), '--splice-config', str(splice)]
+    args = parse_arguments(command)
+    assert args.auto_splice_skip_alt_route is True
+    assert args.auto_splice_alt_route == ()
+    enabled = parse_arguments(command + ['--no-splice-skip-alt-route'])
+    assert enabled.auto_splice_alt_route == ('230', '240', 'end')
+
+
 def test_splicer_table_does_not_change_regular_local(tmp_path):
     file = _write(tmp_path / 'base.toml', '''[local]
 objective = "min-y"
