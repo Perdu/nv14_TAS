@@ -2281,6 +2281,19 @@ there is no silent fallback to `inputs`. This option is ignored when the
 alternate route is disabled. It requires an LTM input, not a combined `.txt`
 replay.
 
+Read-only `tas.py check LEVEL` (or `--check-splices`) follows this setting too:
+primary splice goals are verified against `inputs`, and alternate goals against
+`inputs9` when `branch = 9`. Shared splice names, including the divergence and
+rejoin, are checked **once per input branch**; each printed result identifies
+its source as `[inputs]` or `[inputs9]`. Consequently the summary counts
+route-specific checks, not merely distinct splice names. For example,
+`tas.py check LEVEL 455` checks `455` on `inputs9` if it is alternate-only;
+`tas.py check LEVEL 498` checks both histories if `498` is shared. An absent
+configured branch is an error rather than a fallback to `inputs`. With
+`branch = 0`, checking still uses the original deduplicated `inputs` list.
+`--splice-skip-alt-route` avoids loading or checking the alternate branch.
+Checks remain read-only and never launch a search or write checkpoints.
+
 To run **only the primary route** without removing the alternate route from
 its configuration, add `skip-alt-route = true` to `[multi-splicer]` in the
 per-level `multi-splicer.toml`, or pass `--splice-skip-alt-route` (also works

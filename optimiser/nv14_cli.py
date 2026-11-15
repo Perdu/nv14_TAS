@@ -3078,8 +3078,9 @@ def build_parser() -> argparse.ArgumentParser:
                          type=Path, metavar="DIR",
                          help="directory containing named .txt/.toml goals (default: ../splices/LEVEL relative to input)")
     command.add_argument("--check-splices", modes=auto_modes, action="store_true",
-                         help="read-only: check the positional input against every named splice "
-                              "(including alternate-route goals), without searching or saving")
+                         help="read-only: check primary splices against inputs and alternate "
+                              "splices against configured inputsN (if branch=N); shared "
+                              "junctions on both; no search or saving")
     command.add_argument("--check-splice", modes=auto_modes, metavar="NAME",
                          help="with --check-splices, check only this named splice; "
                               "also works without a multi-splicer route")
@@ -4763,12 +4764,13 @@ def _apply_no_splice_propagation(args: argparse.Namespace) -> None:
 
 
 def _check_input_splices(level: Level, frames: Sequence[InputFrame],
-                         args: argparse.Namespace, *, color: bool) -> bool:
-    """Read-only endpoint feasibility for the *positional input*, not saved bests.
+                         args: argparse.Namespace, *, color: bool,
+                         alternate_frames: Sequence[InputFrame] | None = None) -> bool:
+    """Read-only named-goal checks using each route's actual LTM input branch.
 
-    Use the very same goal loader / per-stage physics and native endpoint
-    evaluation as the named-stage optimiser. No output paths, frontiers,
-    checkpoints or search backends are opened here.
+    When inputsN is configured, shared junctions are checked on *both* routes.
+    A feasible result on inputs must not mask an infeasible inputsN junction.
+    No checkpoint, output, frontier or search backend is opened here.
     """
     from nv14_endpoint import EndpointEvaluator
     from nv14_user_splice import _materialise_splice_tail, _stage_summary_text
@@ -4777,65 +4779,86 @@ def _check_input_splices(level: Level, frames: Sequence[InputFrame],
     primary = tuple(args.auto_splice_files or ())
     alternate = tuple(args.auto_splice_alt_route or ())
     requested = args.check_splice
-    if requested is not None:
-        # A named goal can be checked independently of the configured route.
-        names = (requested,)
+    if requested is None and not primary and not alternate:
+        raise ValueError("check requires a multi-splicer.toml with splice-files "
+                         "or an explicit splice name (tas.py check LEVEL SPLICE)")
+
+    if alternate_frames is None:
+        # No separate branch: retain the original deduplicated check.
+        names = ((requested,) if requested is not None else
+                 tuple(dict.fromkeys((*primary, *alternate))))
+        routes = (("", frames, names),)
     else:
-        names = tuple(dict.fromkeys((*primary, *alternate)))
-        if not names:
-            raise ValueError("check requires a multi-splicer.toml with splice-files "
-                             "or an explicit splice name (tas.py check LEVEL SPLICE)")
-    stages = _load_named_splice_stages(level, frames, args, directory, names)
+        # Alt-only targets use inputsN. A shared junction is independently
+        # checked on both branches. Explicit unlisted goals use inputs.
+        if requested is None:
+            primary_names, alternate_names = primary, alternate
+        else:
+            primary_names = ((requested,) if requested in primary or
+                             requested not in alternate else ())
+            alternate_names = ((requested,) if requested in alternate else ())
+        routes = ((" [inputs]", frames, primary_names),
+                  (f" [inputs{args.auto_splice_alt_branch}]", alternate_frames,
+                   alternate_names))
+
     checked = 0
     feasible = 0
-    for stage in stages:
-        # Each goal may explicitly choose simulate-enemies=false. This matches
-        # the physics used for stage checkpoints, not the global final-run gate.
-        stage_level = (level if level.simulate_enemies == stage.simulate_enemies
-                       else parse_level_string(level.source_level_string,
-                                               simulate_enemies=stage.simulate_enemies))
-        workspace = _materialise_splice_tail(frames, stage.goal.target_frame)
-        evaluation = EndpointEvaluator(stage_level, stage.goal).evaluate(workspace)
-        checked += 1
-        if evaluation.feasible:
-            feasible += 1
-            _print_check_line(
-                f"[check:feasible] {stage.name!r}: "
-                f"{_stage_summary_text(stage.goal, evaluation)}; "
-                f"simulate-enemies={str(stage.simulate_enemies).lower()}",
-                feasible=True, color=color)
-        else:
-            reasons = []
-            if evaluation.dead or evaluation.terminal_dead:
-                reasons.append(f"player died (last simulated frame {evaluation.terminal_frame})")
-            if evaluation.missing_interactions:
-                reasons.append("missing required interactions")
-            if evaluation.violated_interactions:
-                reasons.append("forbidden interactions")
-            if evaluation.missing_jump or evaluation.missing_jump_indices:
-                reasons.append("missing required jump")
-            if evaluation.missing_region:
-                reasons.append("required region not visited")
-            if evaluation.missing_floorguard_indices:
-                reasons.append("required floorguard detection missing")
-            if evaluation.missing_drone_indices:
-                reasons.append("required drone detection missing")
-            if evaluation.violated_drone_indices:
-                reasons.append("forbidden drone detection")
-            if evaluation.pending_no_drone_detection:
-                reasons.append("no-drone-detection interval incomplete")
-            if evaluation.missing_survival:
-                reasons.append("survival requirement not met")
-            if not reasons:
-                reasons.append("objective/goal constraints not met")
-            _print_check_line(
-                f"[check:infeasible] {stage.name!r}: "
-                f"{', '.join(reasons)}; "
-                f"target frame {stage.goal.target_frame}; "
-                f"simulate-enemies={str(stage.simulate_enemies).lower()}",
-                feasible=False, color=color)
+    for label, route_frames, names in routes:
+        if not names:
+            continue
+        stages = _load_named_splice_stages(level, route_frames, args,
+                                           directory, names)
+        for stage in stages:
+            # Each goal may explicitly choose simulate-enemies=false. This matches
+            # the physics used for stage checkpoints, not the global final-run gate.
+            stage_level = (level if level.simulate_enemies == stage.simulate_enemies
+                           else parse_level_string(level.source_level_string,
+                                                   simulate_enemies=stage.simulate_enemies))
+            workspace = _materialise_splice_tail(route_frames, stage.goal.target_frame)
+            evaluation = EndpointEvaluator(stage_level, stage.goal).evaluate(workspace)
+            checked += 1
+            if evaluation.feasible:
+                feasible += 1
+                _print_check_line(
+                    f"[check:feasible] {stage.name!r}{label}: "
+                    f"{_stage_summary_text(stage.goal, evaluation)}; "
+                    f"simulate-enemies={str(stage.simulate_enemies).lower()}",
+                    feasible=True, color=color)
+            else:
+                reasons = []
+                if evaluation.dead or evaluation.terminal_dead:
+                    reasons.append(f"player died (last simulated frame {evaluation.terminal_frame})")
+                if evaluation.missing_interactions:
+                    reasons.append("missing required interactions")
+                if evaluation.violated_interactions:
+                    reasons.append("forbidden interactions")
+                if evaluation.missing_jump or evaluation.missing_jump_indices:
+                    reasons.append("missing required jump")
+                if evaluation.missing_region:
+                    reasons.append("required region not visited")
+                if evaluation.missing_floorguard_indices:
+                    reasons.append("required floorguard detection missing")
+                if evaluation.missing_drone_indices:
+                    reasons.append("required drone detection missing")
+                if evaluation.violated_drone_indices:
+                    reasons.append("forbidden drone detection")
+                if evaluation.pending_no_drone_detection:
+                    reasons.append("no-drone-detection interval incomplete")
+                if evaluation.missing_survival:
+                    reasons.append("survival requirement not met")
+                if not reasons:
+                    reasons.append("objective/goal constraints not met")
+                _print_check_line(
+                    f"[check:infeasible] {stage.name!r}{label}: "
+                    f"{', '.join(reasons)}; "
+                    f"target frame {stage.goal.target_frame}; "
+                    f"simulate-enemies={str(stage.simulate_enemies).lower()}",
+                    feasible=False, color=color)
     _print_check_line(
-        f"[check:summary] input run: {feasible}/{checked} named splices feasible; "
+        f"[check:summary] {'input branches' if alternate_frames is not None else 'input run'}: "
+        f"{feasible}/{checked} "
+        f"{'route-specific splice checks' if alternate_frames is not None else 'named splices'} "
+        "feasible; "
         "no search or files written", feasible=feasible == checked, color=color)
     return feasible == checked
 
@@ -5014,8 +5037,24 @@ def main() -> None:
             except (RuntimeError, ValueError) as exc:
                 raise SystemExit(str(exc)) from exc
         try:
+            alternate_frames = None
+            if (args.auto_splice_alt_branch and args.auto_splice_alt_route and
+                    (args.check_splice is None or
+                     args.check_splice in args.auto_splice_alt_route)):
+                if source.ltm_movie is None:
+                    raise ValueError("[multi-splicer] branch requires an LTM input movie")
+                try:
+                    alternate_movie = LtmMovie.load(
+                        input_path, postroll_frames=common_config.ltm_postroll,
+                        branch=args.auto_splice_alt_branch)
+                except LtmError as exc:
+                    raise ValueError(
+                        f"cannot read alternate route inputs{args.auto_splice_alt_branch}: "
+                        f"{exc}") from exc
+                alternate_frames = tuple(editable_frames(alternate_movie.replay_frames))
             all_feasible = _check_input_splices(
-                level, replay_to_check.frames, args, color=common_config.color)
+                level, replay_to_check.frames, args, color=common_config.color,
+                alternate_frames=alternate_frames)
         except (ValueError, RuntimeError, OSError, tomllib.TOMLDecodeError) as exc:
             _print_check_line(f"[check:error] {exc}", feasible=False,
                               color=common_config.color, error=True)
