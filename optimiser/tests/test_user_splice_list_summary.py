@@ -82,8 +82,8 @@ def test_cli_short_flag_reads_saved_final_and_never_writes(tmp_path, monkeypatch
     main()
     stdout = capsys.readouterr().out
     assert 'checkpoint propagation' in stdout
-    assert "[auto:user-splice:summary:propagated] '230'" in stdout
-    assert "[auto:user-splice:summary:empty] 'end'" in stdout
+    assert "[auto:user-splice:summary:propagated] source: '230':" in stdout
+    assert "[auto:user-splice:summary:empty] source: 'end':" in stdout
     assert 'stage searches' not in stdout
     assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == initial
 

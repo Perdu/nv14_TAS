@@ -553,9 +553,9 @@ def test_alt_summary_displays_all_route_lines_without_writes(tmp_path, monkeypat
     main()
     stdout = capsys.readouterr().out
     assert '[auto:user-splice:summary:route] alternate: 230 -> 240 -> end' in stdout
-    assert "[auto:user-splice:summary:propagated] '240'" in stdout or (
-        "[auto:user-splice:summary:pending] '240'" in stdout)
-    assert "[auto:user-splice:summary:empty] 'end'" in stdout
+    assert "[auto:user-splice:summary:propagated] source: '240':" in stdout or (
+        "[auto:user-splice:summary:pending] source: '240':" in stdout)
+    assert "[auto:user-splice:summary:empty] source: 'end':" in stdout
     assert '[alternate route]' in stdout
     assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == original
     assert not output.exists()

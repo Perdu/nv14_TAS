@@ -78,13 +78,13 @@ def test_cli_ls_splice_uses_original_input_comparison(tmp_path, monkeypatch, cap
     monkeypatch.setattr(sys, 'argv', [*argv, '--ls-splice'])
     main()
     stdout = capsys.readouterr().out
-    line = next(s for s in stdout.splitlines() if '[auto:user-splice:summary:propagated]' in s)
+    assert '[auto:user-splice:summary:propagated]' in stdout
     original = EndpointEvaluator(level, EndpointGoal(10, 'min-x')).evaluate(source)
     revised = EndpointEvaluator(level, EndpointGoal(10, 'min-x')).evaluate(saved)
     gain = original.x-revised.x
     assert gain > 0
-    assert f'{gain:+.6g} px saved (min-x)' in line
-    assert 'vs best run: +0 frames saved, +0 px saved (min-x)' in line
+    assert f'{gain:+.6g} px (min-x)' in stdout
+    assert 'vs best run: +0 frames, +0 px (min-x)' in stdout
 
 
 def test_summary_distinguishes_individual_and_cumulative_gain(monkeypatch):

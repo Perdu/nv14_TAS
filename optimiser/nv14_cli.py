@@ -7,6 +7,7 @@ import json
 import math
 import multiprocessing
 import os
+import re
 import sys
 import tempfile
 import time
@@ -239,17 +240,133 @@ def _local_saved_goal_paths(args, config_path: Path | None,
     return ()
 
 
-def _print_user_splice_progress(message: str, *, color: bool) -> None:
-    """Color verified merge results like ordinary multi-splice bests.
+# Keep the semantic summary text in nv14_user_splice independent of terminal
+# capabilities.  Only the CLI presentation layer inserts line breaks/ANSI.
+_SUMMARY_FIELDS = re.compile(
+    r"; (?=(?:same-replay downstream gain:|downstream gain:|nonconsecutive "
+    r"|next |splice: |full run: |best run has no feasible checkpoint"
+    r"|individual splice gain:|cumulative gain through this splice:"
+    r"|vs input run:|vs best run:))"
+)
+_SUMMARY_ROW = re.compile(
+    r"^(\[auto:user-splice:summary:(?:pending|propagated|dead-end|empty)\]) "
+    r"('[^']+'|\"[^\"]+\"): (.*)$"
+)
+_SAVED_GAIN = re.compile(
+    r"(vs (?:input run|best run|previous best run|previous absolute best): )"
+    r"([+-]\d+)(?= frames\b)"
+)
+_ARCHIVED_SECTION = re.compile(r"fastest archived section (\d+) frames")
+_SECTION_DURATION = re.compile(r"from [^:;]+: (\d+) section frames")
 
-    Yellow is a saved, local/temporary gain not yet propagated to a completed
-    replay. Green is reserved for an independently verified completed
-    improvement; a propagated checkpoint summary is informational, not a
-    new gain, even if the saved prefix appears in the best completed replay.
+
+def _format_user_splice_report(message: str, *, level_identifier: str | None) -> str:
+    """Indent checkpoint summaries and live gains without changing their scores.
+
+    Summary labels are kept stable for log filtering. The status is already in
+    the pending/propagated/dead-end tag; keep the origin detail on other tags.
     """
+    if not level_identifier:
+        return message
+    match = _SUMMARY_ROW.match(message)
+    if match:
+        tag, stage, rest = match.groups()
+        state, sep, details = rest.partition('; ')
+        lines = [f"{tag} {level_identifier}: {stage}:"]
+        if not sep:
+            return '\n'.join((lines[0], f"  {rest}"))
+        if ':summary:pending]' not in tag:
+            lines.append(f"  status: {state};")
+        for item in _SUMMARY_FIELDS.split(details):
+            if item.startswith('individual splice gain:') and lines and lines[-1].startswith('  full run:'):
+                lines[-1] += f" {item};"
+            elif item.startswith(('vs input run:', 'vs best run:')):
+                # The frame and pixel numbers already express the units; the
+                # word 'saved' obscures negative deltas and adds visual noise.
+                item = re.sub(r"(\bframes|\bpx) saved\b", r"\1", item)
+                lines.append(f"  {item}" + ('' if item.startswith('vs best run:') else ';'))
+            else:
+                lines.append(f"  {item};")
+        # The last field is not followed by an extra semicolon.
+        if lines[-1].endswith(';'):
+            lines[-1] = lines[-1][:-1]
+        return '\n'.join(lines)
+
+    # The same hierarchy helps while a stage is actively improving, without
+    # changing which results qualify as absolute bests or saved checkpoints.
+    if message.startswith(("[auto:user-splice:temporary]",
+                           "[auto:user-splice:temporary:dead-end]",
+                           "[auto:hybrid:gain:absolute]",
+                           "[auto:hybrid:gain:input]")):
+        marker = re.search(r"'[^']+':", message)
+        if marker is not None:
+            message = message[:marker.start()] + level_identifier + ': ' + message[marker.start():]
+        for label in ('individual splice gain:', 'cumulative gain through this splice:',
+                      'vs input run:', 'vs best run:', 'vs previous absolute best:'):
+            message = message.replace('; ' + label, '\n  ' + label)
+        message = re.sub(
+            r"(new (?:absolute |stage )?best|first feasible|improves input only); (?=frame )",
+            r"\1;\n  ", message)
+        return message
+    if message.startswith('[auto:user-splice] improved verified final replay'):
+        tag, _, remaining = message.partition('] ')
+        event, _, details = remaining.partition('; ')
+        lines = [f"{tag}] {level_identifier}: {event};"]
+        for item in re.split(
+                r"; (?=(?:verified completed frames|first eligible verified completion"
+                r"|stage-goal comparison|final-goal comparison|vs input run:"
+                r"|vs previous best run:))", details):
+            lines.append(f"  {item};")
+        if lines[-1].endswith(';'):
+            lines[-1] = lines[-1][:-1]
+        return '\n'.join(lines)
+    return message
+
+
+def _highlight_user_splice_report(message: str, *, base_color: int | None) -> str:
+    """Highlight the splice, frame gains, and *strictly faster* archive spans."""
+    # Only the named checkpoint in the first line is bold, not the next goal
+    # or the earlier checkpoint mentioned in its explanatory fields.
+    first, separator, following = message.partition('\n')
+    first = re.sub(r"('[^']+'|\"[^\"]+\")(?=:)",
+                   lambda m: f"\x1b[1m{m.group()}\x1b[22m", first, count=1)
+    message = first + (separator + following if separator else '')
+    message = _SAVED_GAIN.sub(
+        lambda m: f"{m.group(1)}\x1b[1m{m.group(2)}\x1b[22m", message)
+    section = _SECTION_DURATION.search(message)
+    archived = _ARCHIVED_SECTION.search(message)
+    if (section is not None and archived is not None and
+            int(archived.group(1)) < int(section.group(1))):
+        fallback = str(base_color) if base_color is not None else '39'
+        message = (message[:archived.start()] + '\x1b[31m' +
+                   archived.group() + f'\x1b[{fallback}m' +
+                   message[archived.end():])
+    return message
+
+
+def _print_user_splice_progress(message: str, *, color: bool,
+                                level_identifier: str | None = None) -> None:
+    """Print searchable stage tags with readable, terminal-safe detail lines."""
+    formatted = _format_user_splice_report(message, level_identifier=level_identifier)
+    if formatted != message:
+        base = None
+        if (message.startswith(('[auto:user-splice:temporary]',
+                                '[auto:user-splice:summary:pending]',
+                                '[auto:hybrid:gain:input]')) or
+                'new saved stage best' in message):
+            base = 33
+        elif (message.startswith('[auto:hybrid:gain:absolute]') or
+              message.startswith('[auto:user-splice] improved verified final replay')):
+            base = 32
+        formatted = _timestamped_line(formatted)
+        if color and sys.stdout.isatty():
+            styled = _highlight_user_splice_report(formatted, base_color=base)
+            print(f"\x1b[{base}m{styled}\x1b[0m" if base is not None else styled,
+                  flush=True)
+        else:
+            print(formatted, flush=True)
+        return
     if message.endswith(" [dead-end]"):
-        # A dead-end stage is still searched and saved; only its visual
-        # pending/improvement emphasis is suppressed.
         print(_timestamped_line(message), flush=True)
     elif message.startswith(("[auto:user-splice:baseline]", "[auto:baseline]",
                            "[local:population:baseline]")):
@@ -5610,7 +5727,8 @@ def main() -> None:
                                 save_resume_state=save_phase_state,
                                 backend_checkpoint_path=phase_backend,
                                 progress=lambda message: _print_user_splice_progress(
-                                    message, color=common_config.color),
+                                    message, color=common_config.color,
+                                    level_identifier=(source.level_id or common_config.input_path.stem)),
                             )
                             phase_attempts += phase_result.attempts
                             phase_evaluations += phase_result.evaluations
@@ -5667,7 +5785,8 @@ def main() -> None:
                                 stage_best_callback=save_stage_best,
                                 frontier_callback=save_frontier,
                                 progress=lambda message: _print_user_splice_progress(
-                                    message, color=common_config.color),
+                                    message, color=common_config.color,
+                                    level_identifier=(source.level_id or common_config.input_path.stem)),
                             )
                             phase_attempts += merged.attempts
                             phase_evaluations += merged.evaluations
@@ -5925,7 +6044,8 @@ def main() -> None:
                     resume_outer_round=(0 if args.auto_ls_splice else completed_passes),
                     save_outer_round=(None if args.auto_ls_splice or merge_only else persist_outer_round),
                     progress=lambda message: _print_user_splice_progress(
-                        message, color=common_config.color),
+                        message, color=common_config.color,
+                        level_identifier=(source.level_id or common_config.input_path.stem)),
                 )
                 if alternate_stages:
                     primary_names = [stage.name for stage in stages]
@@ -6035,7 +6155,8 @@ def main() -> None:
                             progress=lambda message: _print_user_splice_progress(
                                 message + (" [alternate route]" if args.auto_ls_splice
                                            and ":summary" in message else ""),
-                                color=common_config.color),
+                                color=common_config.color,
+                                level_identifier=(source.level_id or common_config.input_path.stem)),
                         )
                     else:
                         alt_result = type(result)(result.frames, 0, 0, 0)
