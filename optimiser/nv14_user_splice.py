@@ -374,6 +374,7 @@ def optimise_user_splices(
     saved_stage_frontiers: Mapping[str, Sequence[Sequence[InputFrame]]] | None = None,
     saved_final_frames: Sequence[InputFrame] | None = None,
     reporting_input_frames: Sequence[InputFrame] | None = None,
+    registered_comparison_frames: Sequence[InputFrame] | None = None,
     frontier_callback: Callable[[str, tuple[tuple[InputFrame, ...], ...]], None] | None = None,
     summary_only: bool = False,
     resume_state: Mapping[str, object] | None = None,
@@ -456,6 +457,8 @@ def optimise_user_splices(
     # CLI input replay independently so the reporting baseline stays correct.
     reporting_input = (tuple(editable_frames(reporting_input_frames))
                        if reporting_input_frames is not None else source)
+    registered_comparison = (tuple(editable_frames(registered_comparison_frames))
+                             if registered_comparison_frames is not None else None)
     reference = (tuple(editable_frames(reference_frames))
                  if reference_frames is not None else None)
     if reference is not None:
@@ -509,6 +512,16 @@ def optimise_user_splices(
         if stage_feasible(reporting_workspace, i) else None
         for i, endpoint in enumerate(original_endpoints)
     ) if progress is not None else (None,) * len(stages))
+
+    registered_workspace = (
+        _materialise_splice_tail(registered_comparison,
+                                 max(s.goal.target_frame for s in stages))
+        if registered_comparison is not None else None)
+    registered_stage_evals = (tuple(
+        endpoint.evaluate(registered_workspace)
+        if stage_feasible(registered_workspace, i) else None
+        for i, endpoint in enumerate(original_endpoints)
+    ) if registered_workspace is not None else (None,) * len(stages))
 
     def final_rank(frames):
         # The named goals are search hints, NOT finish requirements. Once a
@@ -874,7 +887,10 @@ def optimise_user_splices(
                 '; ' + _stage_savings_text(stages[i].goal, candidate,
                                             baseline, 'input run') +
                 '; ' + _stage_savings_text(stages[i].goal, candidate,
-                                            best_eval, 'best run'))
+                                            best_eval, 'best run') +
+                ('; ' + _stage_savings_text(stages[i].goal, candidate,
+                                             registered_stage_evals[i], 'registered run')
+                 if registered_comparison is not None else ''))
 
     # Preserve the exact CLI input as the first ordinary search seed for every
     # named stage.  A previously saved completed best is a score baseline and

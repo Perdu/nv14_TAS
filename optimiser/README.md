@@ -2307,3 +2307,20 @@ notations. Shared stage names retain the interleaved two-route behavior;
 `--splice-from-best` remain incompatible
 with alternative routes. Each phase has its own backend checkpoint filename,
 so its in-flight state cannot be mistaken for another branch's work.
+
+### Registered splice comparison replay
+
+Register the current libTAS `inputs` member, or a numbered editor branch,
+without searching or changing any existing best run:
+
+```sh
+python3 tas.py auto 01-0 --register inputs
+python3 tas.py auto 01-0 --register 9  # inputs9
+python3 tas.py multi 01-0 -l          # includes `vs registered run`
+```
+
+The snapshot is stored alongside the completed output as
+`wip/01-0.registered.json` and is used for reporting only. A subsequent
+registration replaces the comparison snapshot. It does not become a search
+seed, best checkpoint, or output LTM. The level record is fingerprinted, so
+changing levels requires registering again.

@@ -246,14 +246,14 @@ _SUMMARY_FIELDS = re.compile(
     r"; (?=(?:same-replay downstream gain:|downstream gain:|nonconsecutive "
     r"|next |splice: |full run: |best run has no feasible checkpoint"
     r"|individual splice gain:|cumulative gain through this splice:"
-    r"|vs input run:|vs best run:))"
+    r"|vs input run:|vs best run:|vs registered run:))"
 )
 _SUMMARY_ROW = re.compile(
     r"^(\[auto:user-splice:summary:(?:pending|propagated|dead-end|empty)\]) "
     r"('[^']+'|\"[^\"]+\"): (.*)$"
 )
 _SAVED_GAIN = re.compile(
-    r"(vs (?:input run|best run|previous best run|previous absolute best): )"
+    r"(vs (?:input run|best run|registered run|previous best run|previous absolute best): )"
     r"([+-]\d+)(?= frames\b)"
 )
 _ARCHIVED_SECTION = re.compile(r"fastest archived section (\d+) frames")
@@ -280,11 +280,11 @@ def _format_user_splice_report(message: str, *, level_identifier: str | None) ->
         for item in _SUMMARY_FIELDS.split(details):
             if item.startswith('individual splice gain:') and lines and lines[-1].startswith('  full run:'):
                 lines[-1] += f" {item};"
-            elif item.startswith(('vs input run:', 'vs best run:')):
+            elif item.startswith(('vs input run:', 'vs best run:', 'vs registered run:')):
                 # The frame and pixel numbers already express the units; the
                 # word 'saved' obscures negative deltas and adds visual noise.
                 item = re.sub(r"(\bframes|\bpx) saved\b", r"\1", item)
-                lines.append(f"  {item}" + ('' if item.startswith('vs best run:') else ';'))
+                lines.append(f"  {item};")
             else:
                 lines.append(f"  {item};")
         # The last field is not followed by an extra semicolon.
@@ -302,7 +302,7 @@ def _format_user_splice_report(message: str, *, level_identifier: str | None) ->
         if marker is not None:
             message = message[:marker.start()] + level_identifier + ': ' + message[marker.start():]
         for label in ('individual splice gain:', 'cumulative gain through this splice:',
-                      'vs input run:', 'vs best run:', 'vs previous absolute best:'):
+                      'vs input run:', 'vs best run:', 'vs registered run:', 'vs previous absolute best:'):
             message = message.replace('; ' + label, '\n  ' + label)
         message = re.sub(
             r"(new (?:absolute |stage )?best|first feasible|improves input only); (?=frame )",
@@ -314,7 +314,7 @@ def _format_user_splice_report(message: str, *, level_identifier: str | None) ->
         lines = [f"{tag}] {level_identifier}: {event};"]
         for item in re.split(
                 r"; (?=(?:verified completed frames|first eligible verified completion"
-                r"|stage-goal comparison|final-goal comparison|vs input run:"
+                r"|stage-goal comparison|final-goal comparison|vs input run:|vs registered run:"
                 r"|vs previous best run:))", details):
             lines.append(f"  {item};")
         if lines[-1].endswith(';'):
@@ -3124,6 +3124,9 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-each-best", dest="auto_splice_each_best",
                          modes=auto_modes, action="store_true",
                          help="also start every named splice from its own saved best checkpoint")
+    command.add_argument("--register", modes=auto_modes, type=str, metavar="inputs|N",
+                         help="save a persistent comparison replay from LTM inputs or inputsN; "
+                              "exit without searching (does not change the best run)")
     command.add_argument("-l", "--ls-splice", "--ls-splices", dest="auto_ls_splice",
                          modes=auto_modes, action="store_true",
                          help="show saved named-splice checkpoint propagation summary and exit; "
@@ -4800,6 +4803,8 @@ def main() -> None:
     input_path = common_config.input_path
     output_path = common_config.output_path
     replay_output_path = common_config.replay_output_path
+    if getattr(args, "register", None) is not None and getattr(args, "auto_ls_splice", False):
+        raise SystemExit("--register and -l are separate read/write operations")
     if getattr(args, "auto_ls_splice", False) and not (
         args.mode == "auto" and args.auto_random_splice and args.auto_splice_mode == "user"
     ):
@@ -4871,6 +4876,40 @@ def main() -> None:
     except LtmError as exc:
         raise SystemExit(str(exc)) from exc
     combined = source.combined
+    if getattr(args, "register", None) is not None and output_path is None:
+        raise SystemExit("--register requires --output to locate its persistent comparison file")
+    # Registration is a dedicated command, not an optimisation run.  Snapshot
+    # one editor branch before searching, touching neither best LTM nor splices.
+    if getattr(args, "register", None) is not None:
+        from nv14_registered_baseline import registered_path, write_registered_run
+        requested = args.register.strip().lower()
+        if requested == "inputs" or requested == "0":
+            branch = 0
+        elif requested.isdecimal() and int(requested) > 0:
+            branch = int(requested)
+        else:
+            raise SystemExit("--register expects inputs or a non-negative numeric LTM branch (e.g. 9)")
+        if source.ltm_movie is None:
+            raise SystemExit("--register requires an LTM input")
+        try:
+            movie = (source.ltm_movie if branch == 0 else
+                     LtmMovie.load(input_path, postroll_frames=common_config.ltm_postroll,
+                                   branch=branch))
+            snapshot = tuple(editable_frames(movie.replay_frames))
+            registration = registered_path(output_path)
+            if _paths_alias(registration, input_path) or _paths_alias(registration, output_path):
+                raise ValueError("registered comparison path conflicts with an input/output movie")
+            write_registered_run(registration, level_id=source.level_id,
+                                 level_string=combined.level_string,
+                                 branch=branch, frames=snapshot)
+        except (LtmError, OSError, ValueError) as exc:
+            raise SystemExit(str(exc)) from exc
+        print(f"[auto:user-splice:register] {source.level_id}: "
+              f"registered {'inputs' if branch == 0 else f'inputs{branch}'} "
+              f"({len(snapshot)} frames) as comparison in {registration}; "
+              "no search or checkpoint changes", flush=True)
+        return
+
     if source.ltm_movie is not None and source.ltm_movie.warning is not None:
         print(f"warning: {source.ltm_movie.warning}", file=sys.stderr)
     simulate_enemies = (
@@ -4930,6 +4969,7 @@ def main() -> None:
         raise SystemExit(
             "a combined text input cannot create an .ltm output without an LTM template"
         )
+
 
     auto_parent_sources: list[tuple[Path, _LoadedSource]] = []
     if args.mode == "auto" and not (getattr(args, "auto_ls_splice", False) or merge_only):
@@ -5170,6 +5210,13 @@ def main() -> None:
                 if args.auto_splice_skip_alt_route:
                     print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
                           "skip-alt-route enabled: using primary route only", flush=True)
+                from nv14_registered_baseline import registered_path, load_registered_run
+                try:
+                    registered_frames = load_registered_run(
+                        registered_path(output_path), level_id=source.level_id,
+                        level_string=combined.level_string)
+                except ValueError as exc:
+                    raise ValueError(str(exc)) from exc
                 stages = _load_named_splice_stages(level, replay.frames, args,
                                                    directory, args.auto_splice_files)
                 alternate_stages = (_load_named_splice_stages(
@@ -5696,6 +5743,7 @@ def main() -> None:
                                 level, phase_input, phase_stages, phase_config,
                                 resume_outer_round=outer_round,
                                 completion_policy=args.auto_completion_policy,
+                                registered_comparison_frames=registered_frames,
                                 use_current_run=args.auto_splice_use_current_run,
                                 start_from_stage_bests=(args.auto_splice_each_best
                                                        if from_saved_final else False),
@@ -5763,6 +5811,7 @@ def main() -> None:
                             merged = optimise_user_splices(
                                 level, initial_input, joined_stages, splice_config,
                                 completion_policy=args.auto_completion_policy,
+                                registered_comparison_frames=registered_frames,
                                 merge_stage_bests=True, merge_only=True,
                                 merge_repair_only=repair,
                                 merge_verbose=args.auto_splice_merge_verbose,
@@ -6005,6 +6054,7 @@ def main() -> None:
                 result = optimise_user_splices(
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
+                                registered_comparison_frames=registered_frames,
                     use_current_run=args.auto_splice_use_current_run,
                     single_input_seed=bool(getattr(args, "_single_hybrid_mode", False)),
                     show_backend_progress=bool(args.auto_splice_single or args._both_mode),
@@ -6125,6 +6175,7 @@ def main() -> None:
                             level, (alt_branch_frames if alt_branch_frames is not None
                                     else summary_frames), alt_report_stages, splice_config,
                             completion_policy=args.auto_completion_policy,
+                                registered_comparison_frames=registered_frames,
                             use_current_run=args.auto_splice_use_current_run,
                             start_from_stage_bests=args.auto_splice_each_best,
                             reference_frames=reference_frames,
