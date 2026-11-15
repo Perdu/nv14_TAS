@@ -36,7 +36,10 @@ can be feasible even if the replay dies later. Named goals are independent;
 not reaching an earlier helper does not automatically invalidate a later one.
 
 Output prints `[check:feasible]` or `[check:infeasible]` for each stage followed
-by `[check:summary]` with a feasible/total count. Exit code 0 means all checked
+by `[check:summary]` with a feasible/total count. On an interactive terminal,
+feasible splice lines and an all-feasible summary are green; infeasible lines,
+failed summaries, and check errors are red. `--no-color` disables these colors,
+and redirected output has no ANSI escapes. Exit code 0 means all checked
 goals are feasible; exit code 1 means at least one failed. Missing/invalid goals
 or configuration are command errors. With a single named goal, a
 `multi-splicer.toml` file is not required; its `.txt` or `.toml` goal file is.

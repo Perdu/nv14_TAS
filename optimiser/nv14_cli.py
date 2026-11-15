@@ -128,6 +128,21 @@ def _print_colored_line(message: str, *, color: bool, ansi_color: int) -> None:
         print(message, flush=True)
 
 
+def _print_check_line(message: str, *, feasible: bool, color: bool,
+                      error: bool = False) -> None:
+    """Color check results on TTYs; keep redirected output and --no-color clean.
+
+    Check errors go to stderr, while individual results and the final summary
+    remain on stdout. The same color convention applies to both streams.
+    """
+    stream = sys.stderr if error else sys.stdout
+    if color and stream.isatty():
+        code = 32 if feasible else 31
+        print(f"\x1b[{code}m{message}\x1b[0m", file=stream, flush=True)
+    else:
+        print(message, file=stream, flush=True)
+
+
 class _AutoSavedBestColor:
     """Track the best *saved* comparable result, not just this search's input.
 
@@ -2854,7 +2869,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     command.add_argument(
         "--color", action=argparse.BooleanOptionalAction, default=True,
-        help="show baselines in blue and verified new bests in green (default: enabled; --no-color disables)",
+        help="color bests, and check-mode feasible (green) / infeasible and errors (red) "
+             "(default: enabled; --no-color disables)",
     )
     command.add_argument(
         "--levels-file",
@@ -4747,7 +4763,7 @@ def _apply_no_splice_propagation(args: argparse.Namespace) -> None:
 
 
 def _check_input_splices(level: Level, frames: Sequence[InputFrame],
-                         args: argparse.Namespace) -> bool:
+                         args: argparse.Namespace, *, color: bool) -> bool:
     """Read-only endpoint feasibility for the *positional input*, not saved bests.
 
     Use the very same goal loader / per-stage physics and native endpoint
@@ -4783,9 +4799,11 @@ def _check_input_splices(level: Level, frames: Sequence[InputFrame],
         checked += 1
         if evaluation.feasible:
             feasible += 1
-            print(f"[check:feasible] {stage.name!r}: "
-                  f"{_stage_summary_text(stage.goal, evaluation)}; "
-                  f"simulate-enemies={str(stage.simulate_enemies).lower()}", flush=True)
+            _print_check_line(
+                f"[check:feasible] {stage.name!r}: "
+                f"{_stage_summary_text(stage.goal, evaluation)}; "
+                f"simulate-enemies={str(stage.simulate_enemies).lower()}",
+                feasible=True, color=color)
         else:
             reasons = []
             if evaluation.dead or evaluation.terminal_dead:
@@ -4810,12 +4828,15 @@ def _check_input_splices(level: Level, frames: Sequence[InputFrame],
                 reasons.append("survival requirement not met")
             if not reasons:
                 reasons.append("objective/goal constraints not met")
-            print(f"[check:infeasible] {stage.name!r}: "
-                  f"{', '.join(reasons)}; "
-                  f"target frame {stage.goal.target_frame}; "
-                  f"simulate-enemies={str(stage.simulate_enemies).lower()}", flush=True)
-    print(f"[check:summary] input run: {feasible}/{checked} named splices feasible; "
-          "no search or files written", flush=True)
+            _print_check_line(
+                f"[check:infeasible] {stage.name!r}: "
+                f"{', '.join(reasons)}; "
+                f"target frame {stage.goal.target_frame}; "
+                f"simulate-enemies={str(stage.simulate_enemies).lower()}",
+                feasible=False, color=color)
+    _print_check_line(
+        f"[check:summary] input run: {feasible}/{checked} named splices feasible; "
+        "no search or files written", feasible=feasible == checked, color=color)
     return feasible == checked
 
 
@@ -4848,7 +4869,11 @@ def main() -> None:
         raise SystemExit("--check-splice requires --check-splices")
     if args.mode == "auto" and args.check_splices:
         if not args.auto_splice_files and args.check_splice is None:
-            raise SystemExit("--check-splices needs a named splice route or --check-splice NAME")
+            _print_check_line(
+                "[check:error] --check-splices needs a named splice route or "
+                "--check-splice NAME", feasible=False, color=common_config.color,
+                error=True)
+            raise SystemExit(1)
     _apply_no_splice_propagation(args)
     # Listing saved checkpoints is read-only, and must take precedence over
     # merge/search settings inherited from TOML or supplied on the CLI.
@@ -4909,6 +4934,10 @@ def main() -> None:
             probe_ltm_neutral_tail=args.mode == "auto",
         )
     except LtmError as exc:
+        if args.mode == "auto" and args.check_splices:
+            _print_check_line(f"[check:error] {exc}", feasible=False,
+                              color=common_config.color, error=True)
+            raise SystemExit(1) from exc
         raise SystemExit(str(exc)) from exc
     combined = source.combined
     if getattr(args, "register", None) is not None and output_path is None:
@@ -4985,9 +5014,12 @@ def main() -> None:
             except (RuntimeError, ValueError) as exc:
                 raise SystemExit(str(exc)) from exc
         try:
-            all_feasible = _check_input_splices(level, replay_to_check.frames, args)
+            all_feasible = _check_input_splices(
+                level, replay_to_check.frames, args, color=common_config.color)
         except (ValueError, RuntimeError, OSError, tomllib.TOMLDecodeError) as exc:
-            raise SystemExit(str(exc)) from exc
+            _print_check_line(f"[check:error] {exc}", feasible=False,
+                              color=common_config.color, error=True)
+            raise SystemExit(1) from exc
         if not all_feasible:
             raise SystemExit(1)
         return

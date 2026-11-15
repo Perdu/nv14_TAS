@@ -82,8 +82,9 @@ def test_check_one_without_route(tmp_path, monkeypatch, capsys):
 def test_check_requires_route_or_name(tmp_path, monkeypatch):
     original, route, _, _ = _setup(tmp_path)
     route.unlink()
-    with pytest.raises(SystemExit, match='needs a named splice route'):
+    with pytest.raises(SystemExit) as error:
         _run(monkeypatch, ['auto', str(original), '--check-splices'])
+    assert error.value.code == 1
 
 
 def test_check_shortcut_builds_read_only_command(tmp_path):
