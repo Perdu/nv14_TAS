@@ -2,7 +2,7 @@
 search = "population"
 target_frame = 240
 range = "100:240"
-target_region = "600:625,109:129"
+target_region = "600:625,100:135"
 simulate-enemies = false
 objective = "earliest-arrival"
 secondary_objective = "min-x"
