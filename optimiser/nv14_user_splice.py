@@ -640,6 +640,20 @@ def optimise_user_splices(
         evaluation = endpoint.evaluate(current) if feasible else None
         stage_best.append(evaluation.objective_key if evaluation is not None else None)
         stage_best_evaluation.append(evaluation)
+    # Standalone Hybrid reports the best found in *this invocation* separately
+    # from historical saved checkpoints. A useful improvement over inputs can
+    # be weaker than the existing absolute best and must still be visible.
+    session_stage_evaluations = list(stage_best_evaluation)
+    # The completed-output LTM can have a better score for this named goal
+    # than the stage LTM. Use both records for *color only*: publication of a
+    # stage checkpoint still follows its own, independently verified ranking.
+    completed_stage_evaluations: list[EndpointEvaluation | None] = [None] * len(stages)
+    if single_input_seed and saved_rank is not None and saved_final is not None:
+        saved_workspace = _materialise_splice_tail(saved_final, len(current) - 1)
+        for stage_i, endpoint in enumerate(original_endpoints):
+            candidate = endpoint.evaluate(saved_workspace)
+            if candidate.feasible:
+                completed_stage_evaluations[stage_i] = candidate
     restored_stage_frames: list[tuple[InputFrame, ...] | None] = [None] * len(stages)
     stage_checkpoints: list[tuple[InputFrame, ...] | None] = [None] * len(stages)
     stage_checkpoint_evals: list[EndpointEvaluation | None] = [None] * len(stages)
@@ -2213,6 +2227,28 @@ def optimise_user_splices(
                         # population. Flush them at stage boundaries.
                         old_stage_rank = stage_best[index]
                         old_evaluation = stage_best_evaluation[index]
+                        if single_input_seed:
+                            previous_session = session_stage_evaluations[index]
+                            if (previous_session is None or
+                                    rank < previous_session.objective_key):
+                                session_stage_evaluations[index] = evaluation
+                                if progress:
+                                    previous_absolute = old_evaluation
+                                    saved_completion = completed_stage_evaluations[index]
+                                    if (saved_completion is not None and
+                                            (previous_absolute is None or
+                                             saved_completion.objective_key < previous_absolute.objective_key)):
+                                        previous_absolute = saved_completion
+                                    absolute = (previous_absolute is None or
+                                                rank < previous_absolute.objective_key)
+                                    label = ("new absolute best" if absolute else
+                                             "improves input only")
+                                    progress(
+                                        f"[auto:hybrid:gain:{'absolute' if absolute else 'input'}] "
+                                        f"{stage.name!r}: {label}; "
+                                        f"{_stage_improvement_text(stage.goal, previous_session, evaluation)}; "
+                                        f"{_stage_savings_text(stage.goal, evaluation, input_stage_evals[index], 'input run')}; "
+                                        f"{_stage_savings_text(stage.goal, evaluation, previous_absolute, 'previous absolute best')}")
                         if old_stage_rank is None or rank < old_stage_rank:
                             stage_best[index] = rank
                             stage_best_evaluation[index] = evaluation
@@ -2223,7 +2259,7 @@ def optimise_user_splices(
                             temp_gains += 1
                             if stage_best_callback:
                                 stage_best_callback(stage.name, exported)
-                            if progress and not is_final_gain:
+                            if progress and not is_final_gain and not single_input_seed:
                                 label = ("first feasible" if old_stage_rank is None
                                          else "new stage best")
                                 temporary_tag = ("temporary:dead-end" if stage.dead_end

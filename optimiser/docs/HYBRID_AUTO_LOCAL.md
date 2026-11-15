@@ -541,3 +541,11 @@ proposal slots, before Hybrid phase splitting. Failed preflight attempts and
 early successful grafts may use much less; a large per-seam budget can make
 repair considerably slower. Change `repair-iterations`, `merge-repair-seams`
 or `merge-repair-pairs` if you want a smaller search.
+
+Standalone `tas.py hybrid LEVEL SPLICE` reports each new best within the
+current invocation, including improvements that are still worse than a saved
+stage checkpoint. Such `auto:hybrid:gain:input` messages are yellow on a TTY;
+`auto:hybrid:gain:absolute` messages are green only when the new candidate
+strictly beats the previously saved checkpoint. Both show physical gains
+against the original input and the previous absolute best. Multi-splicer
+continues to use its existing temporary-stage/completed-run color conventions.

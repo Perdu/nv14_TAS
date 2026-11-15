@@ -228,6 +228,10 @@ def _print_user_splice_progress(message: str, *, color: bool) -> None:
     elif message.startswith(("[auto:user-splice:baseline]", "[auto:baseline]",
                            "[local:population:baseline]")):
         _print_baseline_line(_timestamped_line(message), color=color)
+    elif message.startswith("[auto:hybrid:gain:absolute]"):
+        _print_best_line(_timestamped_line(message), color=color)
+    elif message.startswith("[auto:hybrid:gain:input]"):
+        _print_temporary_line(_timestamped_line(message), color=color)
     elif (message.startswith(("[auto:user-splice:temporary]",
                               "[auto:user-splice:summary:pending]"))
           or "new saved stage best" in message
