@@ -23,6 +23,7 @@ from nv14_auto import (
     AUTO_REPAIR_SEARCH_ORDERS,
     GOLD_BONUS_TICKS,
     AutoCandidate,
+    auto_candidate_outcome_key,
     AutoConfig,
     AutoProgress,
     evaluate_replay_with_sentinel,
@@ -124,6 +125,92 @@ def _print_colored_line(message: str, *, color: bool, ansi_color: int) -> None:
         print(f"\x1b[{ansi_color}m{message}\x1b[0m", flush=True)
     else:
         print(message, flush=True)
+
+
+class _AutoSavedBestColor:
+    """Track the best *saved* comparable result, not just this search's input.
+
+    A missing prior file is fine. An unreadable or unverifiable prior file is
+    not: in that case we must not claim an absolute best based on incomplete
+    evidence. Only the display changes; checkpoint writing stays untouched.
+    """
+
+    def __init__(self, best_key: tuple | None, *, comparable: bool = True):
+        self.best_key = best_key
+        self.comparable = comparable
+
+    def new_absolute_best(self, key: tuple) -> bool:
+        if not self.comparable or (self.best_key is not None and key >= self.best_key):
+            return False
+        self.best_key = key
+        return True
+
+
+def _auto_saved_best_color_reference(
+    source, level, output_path: Path, replay_output_path: Path | None,
+    *, objective: str, endpoint_goal=None, goal_paths: Sequence[Path] = (),
+) -> _AutoSavedBestColor:
+    """Snapshot saved Auto/goal records before live checkpoints overwrite output.
+
+    A named ``tas.py auto LEVEL SPLICE`` also checks the permanent named
+    splice checkpoint (including its legacy alias and TXT companion). The
+    same endpoint objective/constraints rank both the stored record and each
+    new candidate; full-run Auto uses its canonical completed-run ordering.
+    """
+    paths = [output_path]
+    if endpoint_goal is not None and len(goal_paths) == 1:
+        name = Path(goal_paths[0]).stem
+        stages = _user_splice_output_paths((name,), output_path, replay_output_path)
+        named_main, named_replay = stages[name]
+        paths.extend((named_main, _user_splice_alias_ltm_path(
+            output_path, replay_output_path, name), named_replay))
+    best_key = None
+    comparable = True
+    seen: set[Path] = set()
+    evaluator = None
+    if endpoint_goal is not None:
+        from nv14_endpoint import EndpointEvaluator
+        evaluator = EndpointEvaluator(level, endpoint_goal)
+    for path in paths:
+        if path is None or not path.is_file() or path.resolve() in seen:
+            continue
+        seen.add(path.resolve())
+        try:
+            if path.suffix.lower() == ".ltm":
+                saved = _load_source(
+                    path, levels_file_path=source.levels_file_path,
+                    explicit_level_id=source.level_id, ltm_postroll=None,
+                    probe_ltm_neutral_tail=False,
+                )
+                if saved.combined.level_string != source.combined.level_string:
+                    raise ValueError("saved replay is for a different level")
+                frames = saved.ltm_movie.replay_frames
+            else:
+                raw = path.read_text(encoding="utf-8").strip()
+                try:
+                    frames = decode_complex_replay(raw).frames
+                except (TypeError, ValueError):
+                    frames = decode_complex_replay(
+                        parse_combined_level_replay(raw).replay_string).frames
+            frames = tuple(editable_frames(frames))
+            if endpoint_goal is not None:
+                from nv14_user_splice import _materialise_splice_tail
+                result = evaluator.evaluate(_materialise_splice_tail(
+                    frames, endpoint_goal.target_frame))
+                if not result.feasible:
+                    continue
+                key = result.objective_key
+            else:
+                result = verify_trimmed_replay(level, frames)
+                key = auto_candidate_outcome_key(
+                    AutoCandidate((*frames, InputFrame()), result, "saved"), objective)
+            if best_key is None or key < best_key:
+                best_key = key
+        except (OSError, ValueError, RuntimeError, LtmError) as exc:
+            comparable = False
+            print(f"[auto:checkpoint] cannot compare saved best {path}: {exc}; "
+                  "new checkpoints will be yellow, not falsely marked absolute", flush=True)
+    return _AutoSavedBestColor(best_key, comparable=comparable)
 
 
 def _print_user_splice_progress(message: str, *, color: bool) -> None:
@@ -2101,6 +2188,7 @@ class _ConfigArgumentParser(argparse.ArgumentParser):
         _validate_auto_goal_strategy(result, explicit)
         result._explicit_options = frozenset(explicit)
         result._cli_explicit_options = frozenset(cli_explicit)
+        result._goal_config_paths = tuple(goal_config_paths)
         return result
 
 
@@ -6020,11 +6108,13 @@ def main() -> None:
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
         def endpoint_status(phase: str, message: str, *, new_best: bool = False,
-                            baseline: bool = False) -> None:
+                            input_only: bool = False, baseline: bool = False) -> None:
             line = (f"[{time.strftime('%H:%M:%S')}] [auto:{phase}] "
                     f"{message}; elapsed {endpoint_elapsed()}")
             if new_best:
                 _print_best_line(line, color=common_config.color)
+            elif input_only:
+                _print_temporary_line(line, color=common_config.color)
             elif baseline:
                 _print_baseline_line(line, color=common_config.color)
             else:
@@ -6043,6 +6133,12 @@ def main() -> None:
             f"Local repair chain {endpoint_config.refinement_chain_steps if endpoint_config.progressive_refinement else 0} slots",
         )
 
+        endpoint_best_color = _auto_saved_best_color_reference(
+            source, level, output_path, replay_output_path,
+            objective=args.auto_objective, endpoint_goal=goal,
+            goal_paths=getattr(args, "_goal_config_paths", ()),
+        )
+
         def save_endpoint_best(candidate):
             nonlocal endpoint_checkpoints
             # The campaign checks the candidate independently and invokes this
@@ -6055,14 +6151,16 @@ def main() -> None:
             gap = endpoint_exit_edge_distance(level, goal, e)
             distance_text = (f" (distance to exit {gap:.2f})"
                              if gap is not None else "")
+            absolute = endpoint_best_color.new_absolute_best(e.objective_key)
             endpoint_status(
                 "checkpoint", f"saved best #{endpoint_checkpoints}: "
                 f"frame {e.frame}{distance_text}; score {e.score:.12g}; "
                 f"position ({e.x:.12g}, {e.y:.12g}); "
                 f"velocity ({e.vx:.12g}, {e.vy:.12g})" +
                 (f"; secondary {goal.secondary_objective}={e.secondary_value:.15g}"
-                 if goal.secondary_objective is not None else ""),
-                new_best=True,
+                 if goal.secondary_objective is not None else "") +
+                ("; new absolute best" if absolute else "; improves input only"),
+                new_best=absolute, input_only=not absolute,
             )
 
         def show_endpoint_progress(message: str) -> None:
@@ -6294,6 +6392,10 @@ def main() -> None:
                     flush=True,
                 )
 
+            full_run_best_color = _auto_saved_best_color_reference(
+                source, level, output_path, replay_output_path,
+                objective=auto_config.objective,
+            )
             checkpoint_count = 0
 
             def save_auto_best(candidate: AutoCandidate) -> None:
@@ -6330,22 +6432,27 @@ def main() -> None:
                     if edge_distance is not None
                     else ""
                 )
+                absolute = full_run_best_color.new_absolute_best(
+                    auto_candidate_outcome_key(candidate, auto_config.objective))
+                report_best = _print_best_line if absolute else _print_temporary_line
+                status_suffix = ("; new absolute best" if absolute
+                                 else "; improves input only")
                 if auto_config.objective == AUTO_OBJECTIVE_HIGHSCORE:
-                    _print_best_line(
+                    report_best(
                         f"[{auto_system_time()}] "
                         f"[auto:checkpoint] saved best #{checkpoint_count}: "
                         f"score {candidate.evaluation.highscore_value}; "
                         f"finish {candidate.finish_tick}{distance}; "
                         f"gold {candidate.evaluation.gold_count}; "
-                        f"elapsed {auto_elapsed()}",
+                        f"elapsed {auto_elapsed()}{status_suffix}",
                         color=common_config.color,
                     )
                 else:
-                    _print_best_line(
+                    report_best(
                         f"[{auto_system_time()}] "
                         f"[auto:checkpoint] saved best #{checkpoint_count}: "
                         f"finish {candidate.finish_tick}{distance}; "
-                        f"elapsed {auto_elapsed()}",
+                        f"elapsed {auto_elapsed()}{status_suffix}",
                         color=common_config.color,
                     )
 

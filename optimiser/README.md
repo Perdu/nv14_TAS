@@ -1134,6 +1134,19 @@ checkpoint is rebuilt atomically from the original movie template, with its
 exact replay/level metadata refreshed; `--replay-output`, when requested, is
 updated to the same packed replay.
 
+Standalone Auto checkpoint progress distinguishes the input-run gain from a
+**new saved absolute best**. `[auto:checkpoint]` is **green** only when the
+candidate strictly beats every comparable previously saved result (the
+unsuffixed output and, for `tas.py auto LEVEL SPLICE` / `--goal-config`, the
+named splice checkpoint). A candidate that improves the current input but
+not the saved best is **yellow**. Comparisons use the actual Auto or Local
+endpoint objective, including secondary tie-breaks, and are snapshotted
+before the live output is overwritten. Unreadable saved candidates prevent a
+false green claim. The logs also label the distinction without requiring
+ANSI color; `--no-color` and non-terminal output remain uncolored. This
+changes **display only**, never search budgets, checkpoint writes or named
+checkpoint publication.
+
 All multiprocessing workers leave Ctrl+C handling to the parent process to
 avoid competing writes or noisy child tracebacks.
 
