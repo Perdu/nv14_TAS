@@ -1,0 +1,12 @@
+[local]
+search = "population"
+target_frame = 484
+range = "386:484"
+simulate-enemies = true
+objective = "earliest-arrival"
+target_region = "560:580,546:586"
+secondary_objective = "min-x"
+require-interaction = ["testdoor:1", "testdoor:2"]
+
+
+
