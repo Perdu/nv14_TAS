@@ -84,6 +84,7 @@ class EndpointGoal:
     survive_after_goal: int = 0  # require N further live ticks after the objective
     require_region: tuple[float, float, float, float] | None = None
     require_region_frames: tuple[int, int] | None = None
+    target_circle: tuple[float, float, float] | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.target_frame, bool) or not isinstance(self.target_frame, int) or self.target_frame < 0:
@@ -120,15 +121,24 @@ class EndpointGoal:
             if any(not math.isfinite(value) for item in self.target.targets for value in (item.x, item.y)):
                 raise ValueError("target coordinates must be finite")
         if self.objective == "earliest-arrival":
-            if self.target_region is None:
-                raise ValueError("earliest-arrival requires target_region=(xmin,xmax,ymin,ymax)")
-            region = tuple(float(value) for value in self.target_region)
-            if (len(region) != 4 or not all(math.isfinite(value) for value in region)
-                    or region[0] > region[1] or region[2] > region[3]):
-                raise ValueError("target_region must contain four finite, ordered rectangle bounds")
-            object.__setattr__(self, "target_region", region)
+            if (self.target_region is None) == (self.target_circle is None):
+                raise ValueError("earliest-arrival requires exactly one of target_region or target_circle")
+            if self.target_region is not None:
+                region = tuple(float(value) for value in self.target_region)
+                if (len(region) != 4 or not all(math.isfinite(value) for value in region)
+                        or region[0] > region[1] or region[2] > region[3]):
+                    raise ValueError("target_region must contain four finite, ordered rectangle bounds")
+                object.__setattr__(self, "target_region", region)
+            else:
+                circle = tuple(float(value) for value in self.target_circle)
+                if (len(circle) != 3 or not all(math.isfinite(value) for value in circle)
+                        or circle[2] <= 0):
+                    raise ValueError("target_circle must contain finite X, Y and positive radius")
+                object.__setattr__(self, "target_circle", circle)
         elif self.target_region is not None:
             raise ValueError("target_region requires earliest-arrival")
+        elif self.target_circle is not None:
+            raise ValueError("target_circle requires earliest-arrival")
         if self.arrival_start and not self.is_earliest:
             raise ValueError("arrival_start requires earliest-arrival or earliest-interaction")
         if self.objective == "earliest-interaction":
@@ -375,8 +385,18 @@ class EndpointEvaluator:
             raise ValueError("enemy-detection conditions need simulate-enemies = true")
         self._prefix = self.level.initial_state()
         native = require_native()
-        if native.backend_info().get("population_endpoint_api", 0) < 2:
-            raise RuntimeError("endpoint search requires the v4.28 native extension; run 'python build_native.py'")
+        endpoint_api = native.backend_info().get("population_endpoint_api", 0)
+        if endpoint_api < 4:
+            # Circular targets extend the C endpoint plan and NativeEndpointPlan
+            # constructor.  A stale compiled module must be rejected before
+            # evaluating even a non-circular goal, because the C ABI changed.
+            raise RuntimeError(
+                "endpoint search needs the native extension rebuilt for circular "
+                f"arrival targets (loaded endpoint API {endpoint_api}, needs 4; "
+                f"module: {getattr(native, '__file__', 'unknown')}). "
+                "From the optimiser directory run "
+                "'python3 build_native.py --force-cython --force'."
+            )
         self._source_key = native.population_input_key(self.source_frames)[0]
         self._descriptors = {int(item["load_index"]): item for item in self.level.object_descriptors()}
         self._has_doors = any(item["object_type"] == 9 for item in self._descriptors.values())
@@ -443,6 +463,7 @@ class EndpointEvaluator:
         return require_native().NativeEndpointPlan(
             target_frame=goal.target_frame, arrival_start=goal.arrival_start,
             earliest=goal.is_earliest, windows=windows, region=goal.target_region,
+            circle=goal.target_circle,
             required=required, avoided=avoided, targets=targets,
             jump_region=goal.require_jump_region, jump_frames=goal.require_jump_frames,
             required_drones=goal.required_drone_detections,
@@ -521,6 +542,9 @@ class EndpointEvaluator:
             if goal.target_region is not None:
                 xmin, xmax, ymin, ymax = goal.target_region
                 region_distance = math.hypot(max(xmin-x, x-xmax, 0.0), max(ymin-y, y-ymax, 0.0))
+            elif goal.target_circle is not None:
+                cx, cy, radius = goal.target_circle
+                region_distance = max(0.0, math.hypot(x - cx, y - cy) - radius)
             if goal.objective == "max-x":
                 score = x
             elif goal.objective == "min-x":

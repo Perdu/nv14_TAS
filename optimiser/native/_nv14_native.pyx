@@ -1332,7 +1332,9 @@ def backend_info():
         "object_visual_queries": True,
         "optional_visual_tracker": True,
         "compact_visual_capture": 1,
-        "population_endpoint_api": 2,
+        # API 4 adds circular arrival geometry to the compiled endpoint plan.
+        # The altered struct and constructor require a native rebuild.
+        "population_endpoint_api": 4,
         "implementation": "cython-unified-native",
         "strict_fp": bool(nv14_wrapper_strict_fp()),
         "complete_step_capability": NV14_CAP_COMPLETE_STEP,
@@ -4199,10 +4201,11 @@ cdef extern from "nv14_endpoint.h":
         double x, y
     ctypedef struct nv14_endpoint_plan:
         size_t target_frame, arrival_start
-        uint8_t earliest, has_region
+        uint8_t earliest, has_region, has_circle
         double lower[4]
         double upper[4]
         double region[4]
+        double circle[3]
         nv14_endpoint_atom *atoms
         nv14_endpoint_group *required
         nv14_endpoint_group *avoided
@@ -4458,7 +4461,7 @@ cdef class NativeEndpointPlan:
         self._construction_started = False
 
     def __init__(self, *, target_frame, arrival_start=0, earliest=False,
-                 windows, region=None, required=(), avoided=(), targets=(),
+                 windows, region=None, circle=None, required=(), avoided=(), targets=(),
                  jump_region=None, jump_frames=None,
                  required_drones=(), drone_frames=None,
                  required_guards=(), guard_frames=None,
@@ -4478,12 +4481,21 @@ cdef class NativeEndpointPlan:
             raise ValueError("endpoint needs four inclusive windows")
         for i in range(4):
             self._plan.lower[i], self._plan.upper[i] = windows[i]
+        if region is not None and circle is not None:
+            raise ValueError("endpoint region and circle are mutually exclusive")
         if region is not None:
             if len(region) != 4:
                 raise ValueError("endpoint region needs four bounds")
             self._plan.has_region = 1
             for i in range(4):
                 self._plan.region[i] = region[i]
+        if circle is not None:
+            if (len(circle) != 3 or not all(math.isfinite(v) for v in circle)
+                    or circle[2] <= 0):
+                raise ValueError("endpoint circle needs finite X,Y and positive radius")
+            self._plan.has_circle = 1
+            for i in range(3):
+                self._plan.circle[i] = circle[i]
         self._plan.prefix_jump.frame = -1
         if jump_frames is not None and jump_region is None:
             raise ValueError("jump frames require a jump region")

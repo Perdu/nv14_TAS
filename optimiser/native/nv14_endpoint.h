@@ -24,9 +24,10 @@ typedef struct nv14_endpoint_jump {
 
 typedef struct nv14_endpoint_plan {
     size_t target_frame, arrival_start;
-    uint8_t earliest, has_region;
+    uint8_t earliest, has_region, has_circle;
     double lower[4], upper[4]; /* x, y, vx, vy; absent windows use infinities */
     double region[4];
+    double circle[3]; /* centre x/y and inclusive radius */
     nv14_endpoint_atom *atoms;
     nv14_endpoint_group *required, *avoided;
     size_t required_count, avoided_count;

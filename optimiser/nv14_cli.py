@@ -505,6 +505,7 @@ class LocalConfig:
     workers: int = 0
     python_resimulate: bool = False
     secondary_objective: str | None = None
+    target_circle: tuple[float, float, float] | None = None
 
     def __post_init__(self) -> None:
         if self.search not in ("windows", "population"):
@@ -522,7 +523,7 @@ class LocalConfig:
             raise ValueError("local hybrid search options require --search windows; "
                              "population uses a separate proposal engine")
         if self.search == "windows" and (
-            self.objective in EARLIEST_OBJECTIVES or self.target_region is not None
+            self.objective in EARLIEST_OBJECTIVES or self.target_region is not None or self.target_circle is not None
             or self.arrival_start is not None or self.top_results != 1
             or self.require_region is not None or self.require_region_frames is not None
             or self.require_jump_region is not None or self.require_jump_frames is not None
@@ -570,10 +571,14 @@ class LocalConfig:
             if self.resume and self.checkpoint_path is None:
                 raise ValueError("--resume requires --checkpoint FILE")
             if self.objective == "earliest-arrival":
-                if self.target_region is None:
-                    raise ValueError("--objective earliest-arrival requires --target-region")
+                if self.target_region is None and self.target_circle is None:
+                    raise ValueError("earliest-arrival requires --target-region or --target-circle")
+                if self.target_region is not None and self.target_circle is not None:
+                    raise ValueError("earliest-arrival accepts only one of --target-region or --target-circle")
             elif self.target_region is not None:
                 raise ValueError("--target-region requires --objective earliest-arrival")
+            elif self.target_circle is not None:
+                raise ValueError("--target-circle requires --objective earliest-arrival")
             if self.objective in EARLIEST_OBJECTIVES:
                 if self.arrival_start is not None and self.target_frame is not None and self.arrival_start > self.target_frame:
                     raise ValueError("--arrival-start must not exceed --target-frame")
@@ -674,6 +679,7 @@ class LocalConfig:
             vx_window=args.vx_window,
             vy_window=args.vy_window,
             target_region=args.target_region,
+            target_circle=args.target_circle,
             arrival_start=args.arrival_start,
             require_region=args.require_region,
             require_region_frames=args.require_region_frames,
@@ -1470,6 +1476,24 @@ def parse_target_region(text: str) -> tuple[float, float, float, float]:
     return values
 
 
+def parse_target_circle(text: str) -> tuple[float, float, float]:
+    """Parse an inclusive arrival circle X,Y[,R], with default radius 10."""
+    parts = text.split(",")
+    if len(parts) not in (2, 3) or not all(part.strip() for part in parts):
+        raise ValueError("target-circle must be X,Y or X,Y,RADIUS")
+    try:
+        circle = tuple(float(part) for part in parts)
+    except ValueError as exc:
+        raise ValueError("target-circle must contain numeric coordinates and radius") from exc
+    if not all(math.isfinite(value) for value in circle):
+        raise ValueError("target-circle values must be finite")
+    x, y = circle[:2]
+    radius = circle[2] if len(circle) == 3 else 10.0
+    if radius <= 0:
+        raise ValueError("target-circle radius must be positive")
+    return (x, y, radius)
+
+
 def parse_required_jump_frames(text: str) -> tuple[int, int]:
     """A bounded, inclusive zero-based input interval; separate from editable ranges."""
     parts = text.split(":")
@@ -1764,6 +1788,10 @@ def _format_config_value_for_type(
     if action_type is parse_auto_mutations:
         from nv14_route_mutations import parse_operators
         return ",".join(parse_operators(value))
+    if action_type is parse_target_circle:
+        if len(value) not in (2, 3):
+            raise ValueError("target-circle arrays need X, Y and optional RADIUS")
+        return ",".join(str(item) for item in value)
     if action_type is parse_target_region:
         if len(value) != 4:
             raise ValueError("target-region arrays must contain XMIN, XMAX, YMIN, YMAX")
@@ -2061,6 +2089,7 @@ _LOCAL_GOAL_TO_AUTO = {
     "target_frame": "auto_target_frame",
     "frame_range": "frame_range",
     "target_region": "auto_target_region",
+    "target_circle": "auto_target_circle",
     "target_object": "auto_target_object",
     "target_point": "auto_target_point",
     "arrival_start": "auto_arrival_start",
@@ -2113,7 +2142,7 @@ _LOCAL_WINDOWS_OPTIONS = frozenset({
 _LOCAL_POPULATION_OPTIONS = frozenset({
     "iterations", "beam", "rounds", "stagnation_rounds", "repair_steps",
     "repair_lookback", "mutation_span", "checkpoint", "resume", "top_results",
-    "target_region", "arrival_start",
+    "target_region", "target_circle", "arrival_start",
     "require_region", "require_region_frames",
     "require_jump_region", "require_jump_frames", "require_jumps",
     "require_drone_detection", "require_drone_detection_frames",
@@ -2161,7 +2190,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
 
 
 _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
-    "auto_target_frame", "auto_target_region", "auto_target_object", "auto_target_point",
+    "auto_target_frame", "auto_target_region", "auto_target_circle", "auto_target_object", "auto_target_point",
     "auto_arrival_start", "auto_secondary_objective", "auto_x_window", "auto_y_window",
     "auto_vx_window", "auto_vy_window", "auto_require_interaction", "auto_avoid_interaction",
     "auto_require_reference_interactions", "auto_require_region", "auto_require_region_frames", "auto_require_jump_region",
@@ -3217,6 +3246,8 @@ def build_parser() -> argparse.ArgumentParser:
                          metavar="FRAME", help="endpoint objective deadline/frame (defaults to replay's last input)")
     command.add_argument("--auto-target-region", "--target-region", modes=auto_modes, type=parse_target_region,
                          metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival goal rectangle")
+    command.add_argument("--auto-target-circle", "--target-circle", modes=auto_modes, type=parse_target_circle,
+                         metavar="X,Y[,R]", help="earliest-arrival goal circle (radius defaults to 10)")
     command.add_argument("--auto-target-object", "--target-object", modes=auto_modes,
                          metavar="SELECTOR", help="min-distance or earliest-interaction object selector")
     command.add_argument("--auto-target-point", "--target-point", modes=auto_modes, type=parse_target_point,
@@ -3666,6 +3697,8 @@ def build_parser() -> argparse.ArgumentParser:
                          metavar="MIN:MAX", help="inclusive endpoint vertical velocity bounds (windows and population)")
     command.add_argument("--target-region", modes=local_modes, type=parse_target_region,
                          metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival population goal: inclusive target rectangle")
+    command.add_argument("--target-circle", modes=local_modes, type=parse_target_circle,
+                         metavar="X,Y[,R]", help="earliest-arrival population goal: circle (default radius 10)")
     command.add_argument("--require-region", modes=local_modes, type=parse_target_region,
                          metavar="XMIN:XMAX,YMIN:YMAX",
                          help="population only: player must visit this rectangle within the required interval")
@@ -4360,6 +4393,7 @@ def _run_local_population(
             x_window=config.x_window, y_window=config.y_window,
             vx_window=config.vx_window, vy_window=config.vy_window,
             target_region=config.target_region,
+            target_circle=config.target_circle,
             arrival_start=(config.arrival_start if config.arrival_start is not None else ranges[0][0])
             if config.objective in EARLIEST_OBJECTIVES else 0,
             required_interactions=required, avoided_interactions=avoided,
@@ -4497,7 +4531,7 @@ def _run_local_population(
     print(f"local population: objective={config.objective}; rounds={result.rounds}; "
           f"evaluations={result.evaluations}; feasible outputs={len(verified)}/{config.top_results}")
     if config.objective == "earliest-arrival":
-        print(f"arrival region: {config.target_region}; eligible frames {goal.arrival_start}:{target_frame}; "
+        print(f"arrival target: {config.target_circle if config.target_circle is not None else config.target_region}; eligible frames {goal.arrival_start}:{target_frame}; "
               "position, velocity and interaction constraints apply at the arrival frame")
     elif config.objective == "earliest-interaction":
         print(f"interaction target: {interaction_target.selector}; eligible frames {goal.arrival_start}:{target_frame}; "
@@ -4633,6 +4667,7 @@ def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
     goal = EndpointGoal(
         target_frame=frame, objective=args.auto_objective, target=target,
         target_region=args.auto_target_region,
+        target_circle=args.auto_target_circle,
         arrival_start=(start if args.auto_arrival_start is None else args.auto_arrival_start)
         if args.auto_objective in EARLIEST_OBJECTIVES else 0,
         secondary_objective=args.auto_secondary_objective,
@@ -6385,6 +6420,7 @@ def main() -> None:
             goal = EndpointGoal(
                 target_frame=frame, objective=args.auto_objective, target=target,
                 target_region=args.auto_target_region,
+                target_circle=args.auto_target_circle,
                 arrival_start=(start if args.auto_arrival_start is None else args.auto_arrival_start)
                 if args.auto_objective in EARLIEST_OBJECTIVES else 0,
                 secondary_objective=args.auto_secondary_objective,

@@ -317,6 +317,12 @@ nv14_status nv14_endpoint_scan(
                 rank.distances[4] = outside(rank.values[0], p->region[0], p->region[1]);
                 rank.distances[5] = outside(rank.values[1], p->region[2], p->region[3]);
                 region = hypot(rank.distances[4], rank.distances[5]);
+            } else if (p->has_circle) {
+                double distance = hypot(rank.values[0] - p->circle[0],
+                                        rank.values[1] - p->circle[1]);
+                region = fmax(0.0, distance - p->circle[2]);
+                rank.distances[4] = region;
+                rank.distances[5] = 0.0;
             }
             rank.penalty = constraint + square(region, &overflow) +
                            square(missing_distance, &overflow) + square(target_distance, &overflow);
