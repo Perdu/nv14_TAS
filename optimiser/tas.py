@@ -11,6 +11,7 @@ Examples from optimiser/:
     ./tas.py random 55-1
     ./tas.py multi 97-2
     ./tas.py check 97-2      # input feasibility for all route splices
+    ./tas.py auto 97-2 -l    # read-only named splice summary (any TAS mode)
     ./tas.py check 97-2 591  # input feasibility for one splice
     ./tas.py merge 88-4
     ./tas.py repair 88-4
@@ -57,6 +58,7 @@ Examples:
   ./tas.py hybrid 53-4 591 --splice-hybrid-local-rounds 5
   ./tas.py multi 97-2 --auto-runs 5
   ./tas.py check 97-2
+  ./tas.py auto 97-2 -l     # same summary as multi 97-2 -l
   ./tas.py check 97-2 591
   ./tas.py merge 88-4
   ./tas.py repair 88-4
@@ -169,7 +171,8 @@ def build_command(mode: str, level: str, splice: str | None = None,
         raise ValueError(f"unsupported TAS mode {mode!r}")
     if not level or level.startswith("-"):
         raise ValueError("a LEVEL is required (argument or TAS_LEVEL/LEVEL)")
-    if mode in ("local", "goal", "both", "hybrid") and not splice:
+    listing = any(value in ("-l", "--ls-splice", "--ls-splices") for value in extra)
+    if mode in ("local", "goal", "both", "hybrid") and not splice and not listing:
         raise ValueError(f"{mode} requires SPLICE (argument or TAS_SPLICE/SPLICE)")
     env = os.environ if env is None else env
     def path(name: str, default: str) -> str:
@@ -188,6 +191,14 @@ def build_command(mode: str, level: str, splice: str | None = None,
     # the same verified per-stage writer also supports a one-goal route.
     # A standalone Auto launch *without* a named SPLICE still behaves as before.
     has_route = (ROOT / named_route).is_file()
+    if listing and mode != "check":
+        # -l always means the existing read-only *named-route* summary,
+        # independent of the shortcut used to invoke it. Never launch a
+        # standalone Auto/Local/Hybrid search or publish a named checkpoint.
+        if not has_route:
+            raise ValueError("-l requires a multi-splicer.toml route for this level")
+        command = ["auto", input_file, *shared, "--splice-config", named_route, *common]
+        return [sys.executable, str(ROOT / "optimize_replay.py"), *command, *extra]
     goal_file = (path("TAS_GOAL_TEMPLATE", "../splices/{level}/{splice}.txt")
                  if splice else None)
     if (goal_file and not (ROOT / goal_file).is_file() and
@@ -321,7 +332,8 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
         print(shlex.join(command), flush=True)
         if dry:
             continue
-        if selected != "check":
+        listing = any(flag in extra for flag in ("-l", "--ls-splice", "--ls-splices"))
+        if selected != "check" and not listing:
             (ROOT / "wip").mkdir(parents=True, exist_ok=True)
 
         def last_option(option: str, default: str | None = None) -> str | None:
@@ -334,7 +346,7 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
             return value
 
         output_name = last_option("--output")
-        if output_name is not None:
+        if output_name is not None and not listing:
             (ROOT / output_name).parent.mkdir(parents=True, exist_ok=True)
         try:
             result = subprocess.run(command, cwd=ROOT, check=False)
@@ -343,6 +355,10 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
             # Direct optimisers save individual verified improvements while
             # running. Publish the most recent file even when stopped early.
             exit_code = 130
+        if listing:
+            if exit_code:
+                return exit_code
+            continue
         if not splice or selected not in ("auto", "local", "goal", "both", "hybrid"):
             if exit_code:
                 return exit_code
