@@ -621,6 +621,7 @@ def optimise_local_population(
                               # Prefix safety checks must not enforce events that can
                               # only occur inside the subsequent editable interval.
                               required_drone_detections=(), require_drone_detection_frames=None,
+                              required_floorguard_detections=(), require_floorguard_detection_frames=None,
                               forbidden_drone_detections=(), no_drone_detection_frames=None)
         prefix = EndpointEvaluator(level, prefix_goal).evaluate(source)
         if prefix.dead:

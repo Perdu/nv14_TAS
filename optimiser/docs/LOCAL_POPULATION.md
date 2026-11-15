@@ -476,3 +476,41 @@ simulate-enemies = true
 no-drone-detection = ["drone:0"]
 no-drone-detection-frames = "650:800"
 ```
+
+
+## Requiring a floorguard detection
+
+A floor guard (serialized object type 4) detects the player when it **begins
+chasing**: its state changes from idle to chasing. A guard already chasing
+when the interval starts does not satisfy the requirement unless it stops and
+starts chasing again within the interval. This follows the event semantics of
+`require-drone-detection`, not the persistent state semantics of
+`no-drone-detection`.
+
+Use `floorguard:N` to select the Nth type-4 object in serialized order (starting
+at zero). Multiple selectors must all acquire the player. Detection frames are
+zero-based, inclusive and default to `0:target-frame` if omitted. Requires
+`simulate-enemies = true`, and works in Local population, endpoint Auto and
+named Hybrid/multi-splicer goal files. The native scanner and independent
+reference replay verifier both check the actual idle-to-chasing transition.
+
+```toml
+[local]
+search = "population"
+simulate-enemies = true
+require-floorguard-detection = ["floorguard:0"]
+require-floorguard-detection-frames = "100:140"
+```
+
+Or from the command line for a Local population search:
+
+```sh
+python3 tas.py local LEVEL SPLICE --require-floorguard-detection floorguard:0 \
+    --require-floorguard-detection-frames 100:140
+```
+
+For Auto endpoint searches the corresponding flags are
+`--auto-require-floorguard-detection` and
+`--auto-require-floorguard-detection-frames` (the unprefixed aliases also work
+in Auto mode). For a named Auto/Hybrid splice, the `[local]` goal keys above
+are imported by the existing `--goal-config` mechanism.

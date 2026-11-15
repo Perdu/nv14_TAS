@@ -40,6 +40,9 @@ typedef struct nv14_endpoint_plan {
        [drone_start,drone_end]. Indices are serialized level load indices. */
     uint32_t *required_drones;
     size_t required_drone_count, drone_start, drone_end;
+    /* Floor guard activation is the idle->chasing transition. */
+    uint32_t *required_guards;
+    size_t required_guard_count, guard_start, guard_end;
     /* Reject if any selected drone is already in prefire or chasing, or
        enters either state, on a tick within the inclusive forbidden interval. */
     uint32_t *forbidden_drones;
@@ -53,6 +56,7 @@ typedef struct nv14_endpoint_result {
     uint8_t terminal_dead, eligible, needs_reference;
     nv14_endpoint_jump jump; /* history at the selected state, not the terminal state */
     int64_t *drone_frames; /* caller allocated required_drone_count items, -1 means missing */
+    int64_t *guard_frames; /* caller allocated required_guard_count items */
     int64_t *forbidden_drone_frames; /* first forbidden tick, -1 if clean */
     /* Position immediately BEFORE the selected tick, exact native double. */
     double pre_x, pre_y;

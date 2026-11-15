@@ -342,6 +342,8 @@ class LocalConfig:
     required_jumps: tuple[RequiredJump, ...] = ()
     require_drone_detection: tuple[str, ...] = ()
     require_drone_detection_frames: tuple[int, int] | None = None
+    require_floorguard_detection: tuple[str, ...] = ()
+    require_floorguard_detection_frames: tuple[int, int] | None = None
     no_drone_detection: tuple[str, ...] = ()
     no_drone_detection_frames: tuple[int, int] | None = None
     survive_after_goal: int = 0
@@ -563,6 +565,8 @@ class LocalConfig:
             required_jumps=tuple(args.require_jumps),
             require_drone_detection=tuple(args.require_drone_detection),
             require_drone_detection_frames=args.require_drone_detection_frames,
+            require_floorguard_detection=tuple(args.require_floorguard_detection),
+            require_floorguard_detection_frames=args.require_floorguard_detection_frames,
             no_drone_detection=tuple(args.no_drone_detection),
             no_drone_detection_frames=args.no_drone_detection_frames,
             survive_after_goal=getattr(args, "survive_after_goal", 0),
@@ -1369,6 +1373,15 @@ def parse_drone_detection_frames(text: str) -> tuple[int, int]:
                          "with ordered non-negative bounds") from exc
 
 
+def parse_floorguard_detection_frames(text: str) -> tuple[int, int]:
+    """Inclusive zero-based floorguard activation window."""
+    try:
+        return parse_required_jump_frames(text)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("require-floorguard-detection-frames must be START:END "
+                         "with ordered non-negative bounds") from exc
+
+
 def parse_required_jump_spec(value: object) -> RequiredJump:
     """Parse CLI REGION@FRAMES or a TOML {region=...,frames=...} table."""
     if isinstance(value, Mapping):
@@ -1504,6 +1517,7 @@ _CONFIG_APPEND_DESTS = frozenset(
      "auto_require_interaction", "auto_avoid_interaction",
      "require_jumps", "auto_require_jumps",
      "require_drone_detection", "auto_require_drone_detection",
+     "require_floorguard_detection", "auto_require_floorguard_detection",
      "no_drone_detection", "auto_no_drone_detection",
      "secondary_replays", "secondary_colors", "secondary_labels"}
 )
@@ -1637,7 +1651,8 @@ def _format_config_value_for_type(
         if len(value) != 4:
             raise ValueError("target-region arrays must contain XMIN, XMAX, YMIN, YMAX")
         return f"{value[0]}:{value[1]},{value[2]}:{value[3]}"
-    if action_type in (parse_required_jump_frames, parse_drone_detection_frames):
+    if action_type in (parse_required_jump_frames, parse_drone_detection_frames,
+                       parse_floorguard_detection_frames):
         if len(value) != 2 or any(type(v) is not int for v in value):
             raise ValueError("require-jump-frames arrays must contain two integer bounds")
         return f"{value[0]}:{value[1]}"
@@ -1947,6 +1962,8 @@ _LOCAL_GOAL_TO_AUTO = {
     "require_jumps": "auto_require_jumps",
     "require_drone_detection": "auto_require_drone_detection",
     "require_drone_detection_frames": "auto_require_drone_detection_frames",
+    "require_floorguard_detection": "auto_require_floorguard_detection",
+    "require_floorguard_detection_frames": "auto_require_floorguard_detection_frames",
     "no_drone_detection": "auto_no_drone_detection",
     "no_drone_detection_frames": "auto_no_drone_detection_frames",
     "survive_after_goal": "auto_survive_after_goal",
@@ -1983,6 +2000,7 @@ _LOCAL_POPULATION_OPTIONS = frozenset({
     "require_region", "require_region_frames",
     "require_jump_region", "require_jump_frames", "require_jumps",
     "require_drone_detection", "require_drone_detection_frames",
+    "require_floorguard_detection", "require_floorguard_detection_frames",
     "no_drone_detection", "no_drone_detection_frames", "survive_after_goal",
     "secondary_objective",
 })
@@ -2032,6 +2050,7 @@ _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
     "auto_require_reference_interactions", "auto_require_region", "auto_require_region_frames", "auto_require_jump_region",
     "auto_require_jump_frames", "auto_require_jumps",
     "auto_require_drone_detection", "auto_require_drone_detection_frames",
+    "auto_require_floorguard_detection", "auto_require_floorguard_detection_frames",
     "auto_no_drone_detection", "auto_no_drone_detection_frames",
     "auto_survive_after_goal", "auto_completion_policy", "auto_mutation_span",
 })
@@ -3116,6 +3135,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-require-drone-detection", "--require-drone-detection", modes=auto_modes,
                          action="append", default=[], metavar="drone:INDEX",
                          help="require the named drone to detect the player (repeatable)")
+    command.add_argument("--auto-require-floorguard-detection", "--require-floorguard-detection", modes=auto_modes,
+                         action="append", default=[], metavar="floorguard:INDEX",
+                         help="require a floor guard to start chasing the player (repeatable)")
+    command.add_argument("--auto-require-floorguard-detection-frames", "--require-floorguard-detection-frames", modes=auto_modes,
+                         type=parse_floorguard_detection_frames, metavar="START:END",
+                         help="inclusive interval for floorguard detection (default 0:target-frame)")
     command.add_argument("--auto-survive-after-goal", "--survive-after-goal", modes=auto_modes,
                          dest="auto_survive_after_goal", type=parse_nonnegative_int, default=0,
                          metavar="N", help="endpoint goal: reject replay if player dies in next N frames after objective")
@@ -3537,6 +3562,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--require-drone-detection", modes=local_modes,
                          action="append", default=[], metavar="drone:INDEX",
                          help="population only: require named drone acquisition (repeatable)")
+    command.add_argument("--require-floorguard-detection", modes=local_modes,
+                         action="append", default=[], metavar="floorguard:INDEX",
+                         help="population only: require floor guard to start chasing (repeatable)")
+    command.add_argument("--require-floorguard-detection-frames", modes=local_modes,
+                         type=parse_floorguard_detection_frames, metavar="START:END",
+                         help="population only: inclusive floorguard detection interval")
     command.add_argument("--survive-after-goal", modes=local_modes,
                          type=parse_nonnegative_int, default=0, metavar="N",
                          help="population only: require survival for N frames after the objective")
@@ -4218,6 +4249,8 @@ def _run_local_population(
             require_region_frames=config.require_region_frames,
             required_drone_detections=_resolve_drone_detection(level, config.require_drone_detection),
             require_drone_detection_frames=config.require_drone_detection_frames,
+            required_floorguard_detections=_resolve_floorguard_detection(level, config.require_floorguard_detection),
+            require_floorguard_detection_frames=config.require_floorguard_detection_frames,
             forbidden_drone_detections=_resolve_drone_detection(level, config.no_drone_detection, option="no-drone-detection"),
             no_drone_detection_frames=config.no_drone_detection_frames,
             survive_after_goal=config.survive_after_goal,
@@ -4408,6 +4441,35 @@ def _resolve_drone_detection(level, selectors: Sequence[str], *, option: str = "
     return tuple(result)
 
 
+def _resolve_floorguard_detection(level, selectors: Sequence[str]) -> tuple[int, ...]:
+    """Resolve floorguard:N using type-4 serialized object order."""
+    if not selectors:
+        return ()
+    if not getattr(level, "simulate_enemies", False):
+        raise ValueError("require-floorguard-detection needs simulate-enemies = true for this stage")
+    descriptors = (level.object_descriptors() if hasattr(level, "object_descriptors") else
+                   ({"object_type": spec.obj_type, "load_index": spec.load_index}
+                    for spec in level.all_specs))
+    guards = [int(item["load_index"]) for item in descriptors if item["object_type"] == 4]
+    result = []
+    for selector in selectors:
+        selector = selector.strip().lower()
+        if selector == "floorguard":
+            if len(guards) != 1:
+                raise ValueError("floorguard is ambiguous: use floorguard:N")
+            index = 0
+        elif selector.startswith("floorguard:") and selector[11:].isdigit():
+            index = int(selector[11:])
+        else:
+            raise ValueError(f"require-floorguard-detection needs a floorguard:N selector, got {selector!r}")
+        if index >= len(guards):
+            raise ValueError(f"floorguard:{index} does not exist (level has {len(guards)} floorguards)")
+        result.append(guards[index])
+    if len(result) != len(set(result)):
+        raise ValueError("require-floorguard-detection contains duplicate floorguards")
+    return tuple(result)
+
+
 def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
                             args: argparse.Namespace) -> tuple[EndpointGoal, int, int | None]:
     """Resolve Auto/--goal-config endpoint options identically for all searches."""
@@ -4462,6 +4524,8 @@ def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
         require_region_frames=args.auto_require_region_frames,
         required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
         require_drone_detection_frames=args.auto_require_drone_detection_frames,
+        required_floorguard_detections=_resolve_floorguard_detection(level, args.auto_require_floorguard_detection),
+        require_floorguard_detection_frames=args.auto_require_floorguard_detection_frames,
         forbidden_drone_detections=_resolve_drone_detection(level, args.auto_no_drone_detection, option="no-drone-detection"),
         no_drone_detection_frames=args.auto_no_drone_detection_frames,
         survive_after_goal=getattr(args, "auto_survive_after_goal", 0),
@@ -4578,6 +4642,8 @@ def _check_input_splices(level: Level, frames: Sequence[InputFrame],
                 reasons.append("missing required jump")
             if evaluation.missing_region:
                 reasons.append("required region not visited")
+            if evaluation.missing_floorguard_indices:
+                reasons.append("required floorguard detection missing")
             if evaluation.missing_drone_indices:
                 reasons.append("required drone detection missing")
             if evaluation.violated_drone_indices:
@@ -6158,6 +6224,8 @@ def main() -> None:
                 require_region_frames=args.auto_require_region_frames,
                 required_drone_detections=_resolve_drone_detection(level, args.auto_require_drone_detection),
                 require_drone_detection_frames=args.auto_require_drone_detection_frames,
+        required_floorguard_detections=_resolve_floorguard_detection(level, args.auto_require_floorguard_detection),
+        require_floorguard_detection_frames=args.auto_require_floorguard_detection_frames,
                 forbidden_drone_detections=_resolve_drone_detection(level, args.auto_no_drone_detection, option="no-drone-detection"),
                 no_drone_detection_frames=args.auto_no_drone_detection_frames,
                 survive_after_goal=getattr(args, "auto_survive_after_goal", 0),

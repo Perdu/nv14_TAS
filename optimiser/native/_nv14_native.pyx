@@ -4215,6 +4215,8 @@ cdef extern from "nv14_endpoint.h":
         nv14_endpoint_jump prefix_jump
         uint32_t *required_drones
         size_t required_drone_count, drone_start, drone_end
+        uint32_t *required_guards
+        size_t required_guard_count, guard_start, guard_end
         uint32_t *forbidden_drones
         size_t forbidden_drone_count, no_drone_start, no_drone_end
     ctypedef struct nv14_endpoint_result:
@@ -4224,6 +4226,7 @@ cdef extern from "nv14_endpoint.h":
         uint8_t terminal_dead, eligible, needs_reference
         nv14_endpoint_jump jump
         int64_t *drone_frames
+        int64_t *guard_frames
         int64_t *forbidden_drone_frames
         double pre_x, pre_y
         uint8_t has_pre_position
@@ -4458,6 +4461,7 @@ cdef class NativeEndpointPlan:
                  windows, region=None, required=(), avoided=(), targets=(),
                  jump_region=None, jump_frames=None,
                  required_drones=(), drone_frames=None,
+                 required_guards=(), guard_frames=None,
                  forbidden_drones=(), no_drone_frames=None):
         cdef Py_ssize_t i
         cdef size_t cursor = 0
@@ -4515,6 +4519,23 @@ cdef class NativeEndpointPlan:
                 if not isinstance(required_drones[i], int) or required_drones[i] < 0 or required_drones[i] > 0xffffffff:
                     raise ValueError("invalid drone load index")
                 self._plan.required_drones[i] = required_drones[i]
+        required_guards = tuple(required_guards)
+        if guard_frames is not None and not required_guards:
+            raise ValueError("floorguard detection frames require a floorguard")
+        if required_guards:
+            if guard_frames is None: guard_frames = (0, target_frame)
+            if len(guard_frames) != 2:
+                raise ValueError("floorguard detection frames need two bounds")
+            _as_size(guard_frames[0], &self._plan.guard_start, "floorguard start")
+            _as_size(guard_frames[1], &self._plan.guard_end, "floorguard end")
+            if self._plan.guard_start > self._plan.guard_end or self._plan.guard_end > self._plan.target_frame:
+                raise ValueError("floorguard detection frames outside endpoint")
+            self._plan.required_guard_count = len(required_guards)
+            self._plan.required_guards = <uint32_t *>_checked_alloc(len(required_guards), sizeof(uint32_t), "floorguard requirements")
+            for i in range(len(required_guards)):
+                if not isinstance(required_guards[i], int) or required_guards[i] < 0 or required_guards[i] > 0xffffffff:
+                    raise ValueError("invalid floorguard load index")
+                self._plan.required_guards[i] = required_guards[i]
         forbidden_drones = tuple(forbidden_drones)
         if no_drone_frames is not None and not forbidden_drones:
             raise ValueError("no-drone frames require a selected drone")
@@ -4565,11 +4586,13 @@ cdef class NativeEndpointPlan:
         PyMem_Free(self._plan.avoided)
         PyMem_Free(self._plan.targets)
         PyMem_Free(self._plan.required_drones)
+        PyMem_Free(self._plan.required_guards)
         PyMem_Free(self._plan.forbidden_drones)
 
     def scan(self, NativeState prefix not None, bytes inputs not None,
              jump_event=None, prefix_frames=None, with_pre_position=False,
-             with_drone_detection=False, with_no_drone_detection=False):
+             with_drone_detection=False, with_floorguard_detection=False,
+             with_no_drone_detection=False):
         cdef nv14_endpoint_plan plan = self._plan
         cdef nv14_endpoint_result result
         cdef nv14_status status
@@ -4602,6 +4625,8 @@ cdef class NativeEndpointPlan:
                 raise ValueError("invalid packed endpoint input")
         if self._plan.required_drone_count:
             result.drone_frames = <int64_t *>_checked_alloc(self._plan.required_drone_count, sizeof(int64_t), "drone events")
+        if self._plan.required_guard_count:
+            result.guard_frames = <int64_t *>_checked_alloc(self._plan.required_guard_count, sizeof(int64_t), "floorguard events")
         if self._plan.forbidden_drone_count:
             result.forbidden_drone_frames = <int64_t *>_checked_alloc(self._plan.forbidden_drone_count, sizeof(int64_t), "forbidden drone events")
         if self._plan.target_count:
@@ -4626,6 +4651,9 @@ cdef class NativeEndpointPlan:
             if with_drone_detection:
                 output += (tuple(None if result.drone_frames[i] < 0 else result.drone_frames[i]
                                  for i in range(self._plan.required_drone_count)),)
+            if with_floorguard_detection:
+                output += (tuple(None if result.guard_frames[i] < 0 else result.guard_frames[i]
+                                 for i in range(self._plan.required_guard_count)),)
             if with_no_drone_detection:
                 output += (tuple(None if result.forbidden_drone_frames[i] < 0 else result.forbidden_drone_frames[i]
                                  for i in range(self._plan.forbidden_drone_count)),)
@@ -4634,4 +4662,5 @@ cdef class NativeEndpointPlan:
             nv14_state_destroy(result.state)
             PyMem_Free(result.events)
             PyMem_Free(result.drone_frames)
+            PyMem_Free(result.guard_frames)
             PyMem_Free(result.forbidden_drone_frames)
