@@ -347,6 +347,7 @@ def optimise_user_splices(
     initial_seeds: Sequence[Sequence[InputFrame]] = (),
     seed_from_saved_final: bool = True,
     use_current_run: bool = True,
+    single_input_seed: bool = False,
     progress: Callable[[str], None] | None = None,
     show_backend_progress: bool = False,
     completion_policy: str = "complete",
@@ -392,6 +393,12 @@ def optimise_user_splices(
         raise ValueError("user splice requires at least one named goal")
     if type(use_current_run) is not bool:
         raise ValueError("use_current_run must be a boolean")
+    if type(single_input_seed) is not bool:
+        raise ValueError("single_input_seed must be a boolean")
+    if single_input_seed and (len(stages) != 1 or from_best is not None or
+                              initial_seeds or not use_current_run):
+        raise ValueError("single-input hybrid requires one stage and the current "
+                         "input replay, without other seed sources")
     if completion_policy not in ("checkpoint", "complete"):
         raise ValueError("invalid user splice completion policy")
     if merge_only and (not merge_stage_bests or summary_only or from_best is not None):
@@ -735,6 +742,7 @@ def optimise_user_splices(
                 "from_best": from_best,
                 "start_from_stage_bests": start_from_stage_bests,
                 "use_current_run": use_current_run,
+                "single_input_seed": single_input_seed,
                 "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
                 "merge_stage_bests": merge_stage_bests,
                 "start_at": start_at, "stop_at": stop_at,
@@ -807,7 +815,7 @@ def optimise_user_splices(
     # useful alternative, but must not silently displace a manually edited run.
     input_seed = _materialise_splice_tail(source, len(current) - 1)
     propagation_seed = current
-    if (seed_from_saved_final and from_best_index is None and
+    if (not single_input_seed and seed_from_saved_final and from_best_index is None and
             saved_final_frames is not None and best_output != source):
         # Use the previously verified best completed replay for normal search,
         # not only as a score threshold. Explicit --splice-from-best still wins.
@@ -2078,6 +2086,17 @@ def optimise_user_splices(
                 resumed_branch = tuple(editable_frames(decode_complex_replay(
                     active_phase["branch"]).frames))
                 branches = [resumed_branch, *(b for b in branches if b != resumed_branch)]
+            if single_input_seed:
+                # Standalone `hybrid` is one Auto/Local search on the movie's
+                # launch-time `inputs`, not a multi-splicer campaign. Saved
+                # completions, stage checkpoints and frontier archives remain
+                # comparison/publication references, never additional seeds.
+                # A resumed backend uses the same launch-time input branch;
+                # the resume identity above rejects older multi-seed states.
+                if active_phase is not None and index == stage_begin and branches[0] != input_seed:
+                    raise ValueError("single-input hybrid resume does not match "
+                                     "the launch-time input replay")
+                branches = [input_seed]
             # A current input, a saved final replay and a frontier candidate
             # can be distinct files but identical searches after stage.start.
             # Keep their first-ranked origin and avoid repeated millions of
@@ -2268,6 +2287,7 @@ def optimise_user_splices(
                                 "config": repr(config), "from_best": from_best,
                                 "start_from_stage_bests": start_from_stage_bests,
                                 "use_current_run": use_current_run,
+                                "single_input_seed": single_input_seed,
                                 "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
                                 "merge_stage_bests": merge_stage_bests,
                                 "start_at": start_at, "stop_at": stop_at,

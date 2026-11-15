@@ -192,3 +192,64 @@ def test_cli_passes_enabled_merge_repair_and_retime_for_single_stage(tmp_path, m
     assert kwargs['merge_repair_at_end'] is True
     assert kwargs['merge_retime_gains'] is True
     assert kwargs['merge_only'] is False
+
+
+def test_standalone_hybrid_forwards_single_input_seed(tmp_path, monkeypatch):
+    import sys
+    import nv14_user_splice as us
+    from nv14_cli import main
+    from nv14_user_splice import UserSpliceResult
+
+    source, goals, _route = _native_level_fixture(tmp_path)
+    captured = []
+
+    def capture(_level, frames, stages, _config, **kwargs):
+        captured.append((tuple(stage.name for stage in stages), kwargs))
+        return UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', capture)
+    monkeypatch.setattr(sys, 'argv', [
+        'optimize_replay.py', 'hybrid', str(source),
+        '--goal-config', str(goals / '159.txt'),
+        '--no-propagation', '--workers', '1',
+        '--output', str(tmp_path / 'best.txt')])
+    main()
+    assert len(captured) == 1
+    assert captured[0][0] == ('159',)
+    assert captured[0][1]['single_input_seed'] is True
+
+    captured.clear()
+    monkeypatch.setattr(sys, 'argv', [
+        'optimize_replay.py', 'auto', str(source),
+        '--auto-splice-directory', str(goals),
+        '--auto-splice-files', '159', '--auto-splice-search', 'hybrid',
+        '--no-propagation', '--workers', '1', '--auto-runs', '1',
+        '--output', str(tmp_path / 'another.txt')])
+    main()
+    assert captured[0][1]['single_input_seed'] is False
+
+
+def test_standalone_hybrid_keeps_loaded_input_if_source_file_changes(tmp_path, monkeypatch):
+    """An in-place edit during hybrid cannot become a later search seed."""
+    import sys
+    import nv14_user_splice as us
+    from nv14_cli import main
+
+    source, goals, _route = _native_level_fixture(tmp_path)
+    searched = []
+
+    def search(_level, branch, _stage, _config, _rng, **_kwargs):
+        searched.append(tuple(branch))
+        if len(searched) == 1:
+            source.write_text('changed on disk after launch; not a valid replay')
+        return (), 0, 1
+
+    monkeypatch.setattr(us, '_search_stage', search)
+    monkeypatch.setattr(sys, 'argv', [
+        'optimize_replay.py', 'hybrid', str(source),
+        '--goal-config', str(goals / '159.txt'),
+        '--auto-runs', '2', '--no-propagation', '--workers', '1',
+        '--output', str(tmp_path / 'best.txt')])
+    main()
+    assert len(searched) == 2
+    assert searched[0] == searched[1]

@@ -169,3 +169,52 @@ def test_explicit_from_best_retains_selected_seed_priority(monkeypatch):
         saved_stage_candidates={'old': [saved]},
     )
     assert calls == [('522', saved)]
+
+
+def test_standalone_hybrid_only_searches_launch_input_even_with_saved_seeds(monkeypatch):
+    """A one-goal hybrid must not silently run a multi-splicer seed campaign."""
+    level, _source, _ = _baseline()
+
+    def completed(initial_left):
+        replay = (InputFrame(left=True),) * initial_left + (InputFrame(right=True),) * 80
+        finish = evaluate_replay_with_sentinel(level, replay).finish_tick
+        assert finish is not None
+        return replay[:finish]
+
+    input_run, saved_best = completed(2), completed(0)
+    calls = _capture(monkeypatch)
+    messages = []
+    optimise_user_splices(
+        level, input_run, [UserSpliceStage('end', EndpointGoal(10, 'max-x'), 0, 10)],
+        RandomSpliceConfig(rounds=1, search_backend='hybrid', iterations=2),
+        single_input_seed=True, completion_policy='complete',
+        saved_final_frames=saved_best,
+        saved_stage_candidates={'end': [saved_best]},
+        saved_stage_frontiers={'end': [saved_best]},
+        start_from_stage_bests=True,
+        progress=messages.append,
+    )
+    assert calls == [('end', input_run)]
+    assert any("'end' seed 1/1 [current input run]" in message for message in messages)
+    assert not any('seed 2/' in message for message in messages)
+
+
+def test_multi_splicer_hybrid_still_uses_saved_completed_seed(monkeypatch):
+    level, _source, _ = _baseline()
+
+    def completed(initial_left):
+        replay = (InputFrame(left=True),) * initial_left + (InputFrame(right=True),) * 80
+        finish = evaluate_replay_with_sentinel(level, replay).finish_tick
+        assert finish is not None
+        return replay[:finish]
+
+    input_run, saved_best = completed(2), completed(0)
+    calls = _capture(monkeypatch)
+    optimise_user_splices(
+        level, input_run, [UserSpliceStage('end', EndpointGoal(10, 'max-x'), 0, 10)],
+        RandomSpliceConfig(rounds=1, search_backend='hybrid', iterations=2),
+        saved_final_frames=saved_best, completion_policy='complete',
+    )
+    assert len(calls) == 2
+    assert calls[0] == ('end', input_run)
+    assert calls[1][1][:len(saved_best)] == saved_best

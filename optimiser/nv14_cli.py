@@ -5725,6 +5725,7 @@ def main() -> None:
                     level, summary_frames, stages, splice_config,
                     completion_policy=args.auto_completion_policy,
                     use_current_run=args.auto_splice_use_current_run,
+                    single_input_seed=bool(getattr(args, "_single_hybrid_mode", False)),
                     show_backend_progress=bool(args.auto_splice_single or args._both_mode),
                     start_at=(None if summary_only else args.auto_splice_start),
                     stop_at=(None if summary_only else args.auto_splice_stop),

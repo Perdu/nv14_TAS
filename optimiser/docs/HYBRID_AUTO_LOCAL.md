@@ -81,6 +81,15 @@ Auto attempt being underfunded and hidden, but it does not guarantee identical
 random candidates, elapsed time, or outcomes versus separate Auto, because
 Hybrid uses different seed streams and a shared candidate population.
 
+**Standalone Hybrid uses one search source:** the `inputs` replay loaded from
+its positional input movie at process start. It does not start additional
+stage searches from a saved completed replay, a previously saved stage best,
+or archived frontiers (`seed 1/1` even when these exist). Auto and Local cycles
+still share their evolving candidate population, and saved checkpoints still
+serve as best-result comparisons. Editing the input LTM *after launch* does
+not change the search seed of an ongoing process. The full named multi-splicer
+(`tas.py multi`) intentionally retains its multiple-search-seed behavior.
+
 With separate budgets one stage seed uses at most
 `workers * cycles * (auto_budget + local_budget * local_rounds)` nominal
 proposal slots, excluding stage-specific repair overhead. Actual *distinct
