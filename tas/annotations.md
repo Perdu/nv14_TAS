@@ -1,5 +1,5 @@
 # 00-0
-rerecords: 189
+rerecords: 219
 
 
 
@@ -9,14 +9,15 @@ rerecords: 256
 
 
 # 00-2
-rerecords: 188
+rerecords: 201
 
 
 
 # 00-3
-rerecords: 150
+rerecords: 180
 
 Branch 9: bbbwj
+Branch 8: earlier cj
 
 # 00-4
 rerecords: 184
@@ -24,7 +25,7 @@ rerecords: 184
 
 
 # 01-0
-rerecords: 1441
+rerecords: 1481
 
 It's possible to do a cj on the bb in the beginning. It's slightly faster, but we don't have a good angle to land and start the rcj
 
@@ -33,20 +34,21 @@ I changed route over the MBD: at the top of the level, I do a stumble instead of
 The angle to land on the slope is extremly tight and we need to jump sufficiently long during the cj to land it. There is some angle for which that works with a stumble instead of a cj up there, but it ends up not being faster as the cj makes us hit the ceiling and fall faster.
 
 Branch 9: 1f earlier to the switch wall jump, but can't make anything out of it
+Branch 8: cj to go down faster and attempt to bump on another corner
 
 # 01-1
-rerecords: 1204
+rerecords: 1212
 
 Didn't work:
 - Using the one-way platforms in the beginning to slow descent down
 
 # 01-2
-rerecords: 337
+rerecords: 356
 
 I copied the inputs of the RTA run for the beginning (up to the doorkey) because I find a better or even tying route
 
 # 01-3
-rerecords: 1419
+rerecords: 1522
 
 I tried:
 - many ways to turn around in the beginning. The RTA jump does not seem faster.
@@ -57,6 +59,8 @@ Not getting stumped on the corner on the way down as fast.
 The RTA path of jumping at the beginning of the slope is slower. Best is to jump where I jump, or afterwards.
 
 Left-jump for the end is equally fast (but not in terms of subpixels)
+
+Branc 9: going up left in the beginning
 
 # 01-4
 rerecords: 1132
@@ -1434,7 +1438,7 @@ rerecords: 833
 
 
 # 42-4
-rerecords: 40
+rerecords: 41
 
 
 
@@ -1520,7 +1524,7 @@ Branch 8: last cj not going to the top
 Branch 7: normal wj for switch 2
 
 # 45-3
-rerecords: 0
+rerecords: 59
 
 
 
@@ -1602,7 +1606,7 @@ Branch 5: passing after the drone
 Branch 4: passing over the drone
 
 # 48-0
-rerecords: 0
+rerecords: 47
 
 
 
@@ -2764,7 +2768,7 @@ rerecords: 0
 
 
 # 87-1
-rerecords: 167
+rerecords: 180
 
 Branch 9: RTA route taking the lower path
 Branch 8: different turaround around switch
@@ -2951,7 +2955,7 @@ Branch 6: optimized RTA route
 Current route and RTA route give almost exact same result. The last jump is what changes everything, and is pretty hard to optimize.
 
 # 93-4
-rerecords: 55
+rerecords: 89
 
 Branch 9: start with a wj
 
@@ -2976,9 +2980,9 @@ rerecords: 0
 
 
 # 94-3
-rerecords: 77
+rerecords: 113
 
-
+Branch 9: full speed at the switch (too high for rcj at full speed)
 
 # 94-4
 rerecords: 168
@@ -3141,4 +3145,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 273897
+# Total rerecords: 274330
