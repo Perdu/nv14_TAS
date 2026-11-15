@@ -3231,9 +3231,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="required persistent interaction at the endpoint")
     command.add_argument("--auto-require-reference-interactions", "--require-reference-interactions", modes=auto_modes,
                          action="store_true", help="require the source's persistent interactions at target-frame")
-    command.add_argument("--auto-avoid-interaction", "--avoid-interaction", modes=auto_modes,
+    command.add_argument("--auto-avoid-interaction", "--avoid-interaction",
+                         "--auto-require-no-interaction", "--require-no-interaction", modes=auto_modes,
                          action="append", default=[], metavar="SELECTOR",
-                         help="forbidden persistent interaction at the endpoint")
+                         help="forbidden persistent interaction at the endpoint (also --require-no-interaction)")
     command.add_argument("--auto-require-region", "--require-region", modes=auto_modes,
                          type=parse_target_region, metavar="XMIN:XMAX,YMIN:YMAX",
                          help="require the player to visit this inclusive rectangle")
@@ -3750,13 +3751,13 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     command.add_argument(
-        "--avoid-interaction",
+        "--avoid-interaction", "--require-no-interaction",
         modes=local_modes,
         action="append",
         default=[],
         metavar="SELECTOR",
         help=(
-            "local mode hard prohibition; repeatable selectors support gold:INDEX, "
+            "local mode hard prohibition (--require-no-interaction alias); repeatable selectors support gold:INDEX, "
             "gold:any, switch:INDEX, switch:any, exit:INDEX.switch, persistent "
             "testdoor:INDEX/testdoor:any, and trapdoor:TESTDOOR_INDEX/"
             "trapdoor:any; :any forbids every matching object"
