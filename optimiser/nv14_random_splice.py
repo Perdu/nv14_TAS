@@ -69,7 +69,7 @@ class RandomSpliceConfig:
     splice_stagnation_rounds: int = 0  # legacy: shared cycle-level stagnation stop
     splice_auto_stagnation_rounds: int = 0  # named stages: consecutive stagnant Auto backend rounds
     splice_local_stagnation_rounds: int = 0  # named stages: consecutive stagnant Local backend rounds
-    splice_speed: str | None = None  # Auto/Local patience or hybrid stagnant-cycle preset
+    splice_speed: str | None = None  # vfast=one cycle; other speeds=1/3/10 stagnant cycles
     splice_round_speeds: tuple[str, ...] = ()  # schedule: current,vfast/very-fast,fast,normal,slow
     repair_rounds: int = 1  # backend search rounds PER continuation repair
     repair_anchors: int = 2

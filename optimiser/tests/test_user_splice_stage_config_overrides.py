@@ -147,7 +147,7 @@ def test_named_hybrid_ignores_old_multi_and_local_round_settings(tmp_path, mode,
     assert args.auto_splice_local_stagnation_rounds == 50
     assert args.auto_splice_stagnation_rounds == 4
     # Named-stage coordination ignores obsolete phase settings, but the
-    # speed preset must now configure hybrid cycle patience (fast = 3).
+    # speed preset must now configure hybrid cycle patience (fast = 1).
     # Neither may activate the old continuous-phase callback path.
     calls = []
     def fake_search(_level, _branch, _stage, cfg, _rng, **kwargs):
@@ -163,7 +163,7 @@ def test_named_hybrid_ignores_old_multi_and_local_round_settings(tmp_path, mode,
     us.optimise_user_splices(level, frames, stages, inherited,
                              completion_policy='checkpoint')
     assert calls
-    assert all(backend == mode and patience == 3
+    assert all(backend == mode and patience == 1
                and 'stage_rank' not in kwargs and 'resume_phase' not in kwargs
                for backend, patience, kwargs in calls)
 

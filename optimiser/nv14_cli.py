@@ -2886,7 +2886,7 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Local phase stops after N consecutive Local backend rounds without an eligible improvement")
     command.add_argument("--splice-speed", "--auto-splice-speed", dest="auto_splice_speed",
                          modes=auto_modes, choices=("very-fast", "vfast", "fast", "normal", "slow"),
-                         help="stagnation patience: very-fast/vfast=1 Auto, Local or hybrid cycle; fast=3/10 Auto/Local and 3 hybrid cycles; normal=5/20 or 5; slow=10/50 or 10")
+                         help="very-fast/vfast=exactly 1 complete cycle; fast=1, normal=3, slow=10 consecutive stagnant complete cycles (hybrid-cycles remains a hard cap)")
     command.add_argument("--splice-round-speeds", "--auto-splice-round-speeds",
                          dest="auto_splice_round_speeds", modes=auto_modes,
                          type=parse_splice_round_speeds, default=(), metavar="MODES",

@@ -2148,27 +2148,40 @@ rewrites the active search population or any failed candidate.
 
 ### Splice search speed presets and round schedules
 
-Named multi-splicer and single-splice `both` searches accept
-`--splice-speed very-fast|vfast|fast|normal|slow`. `very-fast` and `vfast`
-are aliases for **one stagnant round** in each Auto/Local phase; `fast` =
-Auto 3/Local 10 stagnant rounds, `normal` = 5/20, `slow` = 10/50. These
-are stagnation thresholds, not maximum total search rounds: improvements
-reset the counter.
-Use `--splice-round-speeds current,slow` to run outer round 1 with the current
-configured stagnation limits, then outer round 2 (and subsequent rounds) with
-slow patience. The schedule never changes ordinary splice lookback or physics.
-The same options can be set in `[multi-splicer]` as `speed = "fast"` and
-`round-speeds = ["current", "slow"]`. `--auto-runs` determines the number of
-outer rounds; a schedule does not itself increase that number. Presets control
-named splice phases, not standalone Auto endpoint or standalone Local.
+Named multi-splicer and single-splice searches accept
+`--splice-speed very-fast|vfast|fast|normal|slow`. The presets count **complete
+search cycles** rather than backend-specific stagnation rounds:
 
-In `hybrid`, `hybrid-restart`, and `hybrid-local-control`, `--splice-speed`
-sets **stagnant hybrid cycle patience** instead: `very-fast`/`vfast`=1,
-`fast`=3, `normal`=5, `slow`=10. This replaces the configured `hybrid-stagnation-cycles` value;
-leave `--splice-speed` unset to use a manual value. `hybrid-cycles` remains a
-hard cap and is **not increased** by a speed preset: for `slow` to allow 10
-stagnant cycles, set `--splice-hybrid-cycles 10` or higher. Hybrid ignores
-`--splice-round-speeds` and the old Auto/Local phase stagnation limits.
+- `very-fast` / `vfast`: exactly **one cycle** even if it improves the stage.
+- `fast`: stop after **1 consecutive stagnant cycle**.
+- `normal`: stop after **3 consecutive stagnant cycles**.
+- `slow`: stop after **10 consecutive stagnant cycles**.
+
+A cycle in `both` mode is one Auto backend search followed by one Local backend
+search (each backend uses the configured `splice-rounds` except in `vfast`,
+which runs exactly one round per backend). A hybrid cycle is **one Auto backend
+round and `hybrid-local-rounds` Local backend rounds**; `vfast` does not change
+these constituent budgets or the configured Local round count. In the
+`hybrid-local-control` comparison mode, the first Auto round is replaced by
+one Local round as before. Successful eligible stage improvements reset the
+stagnation counter. `vfast` has no stagnation counter and never runs another
+cycle just because its first cycle improved.
+
+`hybrid-cycles` remains the hard maximum number of hybrid cycles for
+`fast`/`normal`/`slow` (but `vfast` overrides it to 1). For example, to actually
+permit 10 consecutive stagnant hybrid cycles with `slow`, set
+`hybrid-cycles = 10` **or higher**. If a successful cycle resets the counter
+near the end, the cycle cap can still end the search before the patience is
+reached. `hybrid-stagnation-cycles` is used only when speed is not set.
+
+For non-hybrid named searches, `--splice-round-speeds current,slow` keeps
+round 1's manually configured backend limits, then applies `slow` in round 2
+(and later rounds). These presets do not change the number of **outer** route
+rounds controlled by `--auto-runs`. The same settings can be written under
+`[multi-splicer]` as `speed = "fast"` and
+`round-speeds = ["current", "slow"]`. Hybrid continues to ignore
+`round-speeds`, and the old per-backend Auto/Local stagnation settings are
+ignored whenever a speed preset is selected.
 
 
 ### Alternative named splice route

@@ -90,23 +90,23 @@ use fewer.
 In Hybrid, Hybrid-Restart and Hybrid-Local-Control, older `splice-rounds`,
 `auto-stagnation-rounds`, `local-stagnation-rounds`, legacy
 `stagnation-rounds` and `round-speeds` settings are **accepted but ignored**.
-`speed` (`--splice-speed`) **does** control hybrid stagnant-cycle patience:
-`very-fast`/`vfast`=1, `fast`=3, `normal`=5, `slow`=10. This preset
-overrides the numerical
-`hybrid-stagnation-cycles` setting; omit `speed` to set that limit manually or
-leave it at 0 (no stagnation early stop). The same legacy compatibility applies
-to `rounds` and `stagnation-rounds` in each named `[local]` goal file. Existing
-TOML configurations can therefore switch to Hybrid without deleting settings
-used by `both` or standalone Local. `hybrid-local-rounds` and `hybrid-cycles`
-continue to control round counts and maximum cycles; `runs` remains the separate
-outer multi-splicer limit. Unused settings must still have valid values.
+`speed` (`--splice-speed`) controls **complete hybrid cycles**, each of
+which comprises one Auto round plus the configured `hybrid-local-rounds` Local
+rounds (`hybrid-local-control` uses a Local first round instead). Its presets
+are: `very-fast`/`vfast` = **exactly one cycle**, even if it improves;
+`fast` = **1 consecutive stagnant cycle**, `normal` = **3**, and `slow` =
+**10**. Improvements reset the patience counter for the latter three.
+The preset overrides `hybrid-stagnation-cycles`; omit `speed` to use that
+setting manually (0 = no stagnation early stop). Hybrid still ignores the
+legacy `splice-rounds`, Auto/Local phase patience, and `round-speeds` settings.
 
-**The speed preset does not raise `hybrid-cycles`.** For example, with default
-`hybrid-cycles=5`, `speed="slow"` sets patience to 10 but a stage still runs at
-most 5 cycles. To allow 10 stagnant cycles, also set `hybrid-cycles` to 10 or
-higher. The same mapping applies to `hybrid-restart` and
-`hybrid-local-control`. Outer `round-speeds` schedules remain ignored in all
-three hybrid variants.
+`vfast` forces the cycle ceiling to **one**, without changing the Auto or Local
+per-cycle budgets. Other speeds keep `hybrid-cycles` as a hard cap. For example,
+`hybrid-cycles=5` and `speed="slow"` cannot reach 10 stagnant cycles; set the
+cycle cap to at least 10 to permit that patience (higher if improvements keep
+resetting it). The same behavior applies to `hybrid-restart` and
+`hybrid-local-control`. Outer `runs` remain a separate route-wide limit.
+
 Other Local goals/constraints and per-stage mutation/beam settings remain available.
 
 ## Matched restart experiment

@@ -169,8 +169,8 @@ def test_hybrid_ignores_unused_stagnation_rounds_and_round_speeds(mode):
 
 
 @pytest.mark.parametrize('mode', ('hybrid', 'hybrid-restart', 'hybrid-local-control'))
-@pytest.mark.parametrize('speed,patience', [('very-fast', 1), ('vfast', 1),
-                                            ('fast', 3), ('normal', 5), ('slow', 10)])
+@pytest.mark.parametrize('speed,patience', [('very-fast', 0), ('vfast', 0),
+                                            ('fast', 1), ('normal', 3), ('slow', 10)])
 def test_hybrid_speed_presets_apply_only_to_cycle_stagnation(mode, speed, patience):
     from nv14_splice_backend import splice_config_for_round
 
@@ -182,7 +182,7 @@ def test_hybrid_speed_presets_apply_only_to_cycle_stagnation(mode, speed, patien
     actual = splice_config_for_round(original, 0)
     assert actual.hybrid_stagnation_cycles == patience
     assert original.hybrid_stagnation_cycles == 2
-    assert actual.hybrid_cycles == original.hybrid_cycles
+    assert actual.hybrid_cycles == (1 if speed in ('very-fast', 'vfast') else original.hybrid_cycles)
     assert actual.hybrid_local_rounds == original.hybrid_local_rounds
     assert actual.splice_auto_stagnation_rounds == original.splice_auto_stagnation_rounds
     # `round-speeds` is deliberately ignored for all hybrid variants.
@@ -191,7 +191,7 @@ def test_hybrid_speed_presets_apply_only_to_cycle_stagnation(mode, speed, patien
 
 @pytest.mark.parametrize('mode', ('hybrid', 'hybrid-restart', 'hybrid-local-control'))
 @pytest.mark.parametrize('speed,cycles', [('very-fast', 1), ('vfast', 1),
-                                          ('fast', 3), ('normal', 5), ('slow', 10)])
+                                          ('fast', 1), ('normal', 3), ('slow', 10)])
 def test_hybrid_speed_stops_after_correct_number_of_stagnant_cycles(mode, speed, cycles):
     from nv14_splice_backend import splice_config_for_round
 
@@ -309,3 +309,57 @@ def test_real_native_hybrid_and_control_preserve_completed_source():
         assert all(evaluator.evaluate(candidate) is not None for candidate, _ in found)
     finished = evaluate_replay_with_sentinel(level, source)
     assert finished.valid and finished.finish_tick == len(source)
+
+
+@pytest.mark.parametrize('mode,first_backend', [
+    ('hybrid', 'endpoint-auto'),
+    ('hybrid-restart', 'endpoint-auto'),
+    ('hybrid-local-control', 'local'),
+])
+@pytest.mark.parametrize('speed', ['very-fast', 'vfast'])
+def test_very_fast_always_runs_exactly_one_complete_hybrid_cycle_on_gain(mode, first_backend, speed):
+    from nv14_splice_backend import splice_config_for_round
+
+    seen = []
+    def search(_level, frames, _goal, *, config, rounds, **kwargs):
+        seen.append((config.search_backend, rounds, frames))
+        # Every phase improves, so old patience=1 would run to the hard cap.
+        return ((((frames[0] - 1,), 9),), 1)
+
+    original = RandomSpliceConfig(
+        search_backend=mode, splice_speed=speed,
+        hybrid_cycles=40, hybrid_local_rounds=3,
+        hybrid_stagnation_cycles=12)
+    effective = splice_config_for_round(original, 0)
+    assert original.hybrid_cycles == 40
+    assert effective.hybrid_cycles == 1
+    assert effective.hybrid_stagnation_cycles == 0
+    _, used, calls = _search_stage(
+        None, (10,), stage(), effective, random.Random(5),
+        evaluator_factory=Evaluator, local_search=search)
+    assert (used, calls) == (2, 2)
+    assert [(backend, rounds) for backend, rounds, _ in seen] == [
+        (first_backend, 1), ('local', 3)]
+    assert seen[0][2] == (10,)
+    assert seen[1][2] == (9,)
+
+
+def test_fast_resets_after_improvement_but_stops_after_first_stagnant_cycle():
+    from nv14_splice_backend import splice_config_for_round
+
+    seen = []
+    def search(_level, frames, _goal, *, config, **kwargs):
+        seen.append((config.search_backend, frames))
+        # Two improvements in the first cycle, then no improvement in cycle 2.
+        if len(seen) < 3:
+            return ((((frames[0] - 1,), 9),), 1)
+        return (), 1
+
+    config = splice_config_for_round(RandomSpliceConfig(
+        search_backend='hybrid', splice_speed='fast', hybrid_cycles=10,
+        hybrid_local_rounds=3), 0)
+    _, _, calls = _search_stage(None, (10,), stage(), config,
+                                random.Random(5), evaluator_factory=Evaluator,
+                                local_search=search)
+    assert calls == 4
+    assert [backend for backend, _ in seen] == ['endpoint-auto', 'local'] * 2

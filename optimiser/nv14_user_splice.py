@@ -868,15 +868,20 @@ def optimise_user_splices(
             allocation = (f"endpoint Auto {config.iterations // 2} -> "
                           f"Local {(config.iterations + 1) // 2} (seeded from Auto best)")
         elif config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
+            # Show the effective preset ceiling, not the raw hybrid-cycles
+            # value (vfast forces one full cycle even when the TOML says 8).
+            effective = splice_config_for_round(config, 0)
             first = ("Auto" if config.search_backend in ("hybrid", "hybrid-restart")
                      else "Local (restart control)")
             auto_iterations = (config.hybrid_auto_iterations
                                if config.hybrid_auto_iterations is not None
                                else config.iterations)
+            stop = (f"stop after {effective.hybrid_stagnation_cycles} stagnant cycle(s)"
+                    if effective.hybrid_stagnation_cycles else "no stagnation early stop")
             allocation = (f"{first} 1 round ({auto_iterations} proposals/worker) -> "
-                          f"Local {config.hybrid_local_rounds} rounds "
+                          f"Local {effective.hybrid_local_rounds} rounds "
                           f"({config.iterations} proposals/worker/round), "
-                          f"{config.hybrid_cycles} cycles per seed")
+                          f"{effective.hybrid_cycles} maximum cycle(s) per seed ({stop})")
         else:
             allocation = f"{config.search_backend} {config.iterations}"
         if config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
@@ -1980,7 +1985,7 @@ def optimise_user_splices(
         if (progress and selected and config.search_backend not in
                 ("hybrid", "hybrid-restart", "hybrid-local-control")):
             progress(f"[auto:user-splice] round {round_no+1}: speed={selected} "
-                     "(independent Auto/Local stagnation limits)")
+                     "(one complete cycle for vfast; otherwise cycle-level stagnation)")
         # A propagation run deliberately retries the archived splice-best
         # path on every outer round, rather than restarting only from the best
         # fully completed run. Completed replay verification remains strict,

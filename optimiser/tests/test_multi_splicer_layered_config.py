@@ -304,5 +304,5 @@ def test_shared_example_config_has_dormant_multi_splicer_defaults():
     example = Path(__file__).resolve().parents[1] / "examples" / "config.toml"
     args = parse_arguments(["auto", "level.ltm", "--config", str(example)])
     assert not args.auto_random_splice
-    assert args.auto_runs == 0  # the ordinary Auto setting, not multi runs=5
+    assert args.auto_runs == 10  # [auto] runs in the shared example (patch 112), not [multi-splicer] runs
     assert args.iterations == 10000

@@ -16,35 +16,44 @@ from nv14_random_splice import RandomSpliceConfig, _local_search as _default_loc
 from nv14_replay import editable_frames, encode_complex_replay, decode_complex_replay
 
 
-SPLICE_SPEEDS = {"very-fast": (1, 1), "vfast": (1, 1),
-                 "fast": (3, 10), "normal": (5, 20), "slow": (10, 50)}
-HYBRID_STAGNATION_SPEEDS = {"very-fast": 1, "vfast": 1,
-                            "fast": 3, "normal": 5, "slow": 10}
+# A speed preset controls one *complete* search cycle (Auto then Local for
+# both/hybrid backends), rather than unrelated backend-specific patience.
+# "vfast" is intentionally a hard ONE-cycle limit, even when it improves.
+SPLICE_STAGNATION_SPEEDS = {"fast": 1, "normal": 3, "slow": 10}
+HYBRID_STAGNATION_SPEEDS = SPLICE_STAGNATION_SPEEDS
+VERY_FAST_SPEEDS = {"very-fast", "vfast"}
 
 
 def splice_config_for_round(config: RandomSpliceConfig, round_no: int) -> RandomSpliceConfig:
-    """Apply a speed preset without changing the selected search backend.
+    """Resolve an optional speed preset for one named-splice outer round.
 
-    Hybrid uses ``splice_speed`` as cycle patience; its legacy ``round-speeds``
-    schedule is ignored. For other modes, scheduled ``current`` preserves
-    explicit patience, and exhausted schedules repeat their last speed.
+    Very-fast always performs exactly one cycle; a hybrid cycle keeps its
+    configured one Auto backend round plus ``hybrid_local_rounds`` Local rounds.
+    Other presets stop after 1/3/10 consecutive stagnant complete cycles,
+    subject to the configured ``hybrid_cycles`` hard ceiling. Hybrid keeps
+    ignoring the legacy per-outer-round ``splice_round_speeds`` schedule.
     """
-    if config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control"):
-        # The speed preset controls cycle-level patience, not the Auto/Local
-        # phase-specific limits. Per-outer-round speed schedules remain legacy
-        # settings and intentionally do not affect hybrid.
-        if config.splice_speed is None:
-            return config
-        return replace(config, hybrid_stagnation_cycles=
-                       HYBRID_STAGNATION_SPEEDS[config.splice_speed])
-    sequence = config.splice_round_speeds
-    speed = sequence[min(round_no, len(sequence) - 1)] if sequence else config.splice_speed
+    hybrid = config.search_backend in ("hybrid", "hybrid-restart", "hybrid-local-control")
+    if hybrid:
+        speed = config.splice_speed
+    else:
+        sequence = config.splice_round_speeds
+        speed = sequence[min(round_no, len(sequence) - 1)] if sequence else config.splice_speed
     if speed is None or speed == "current":
         return config
-    auto, local = SPLICE_SPEEDS[speed]
-    return replace(config, splice_stagnation_rounds=0,
-                   splice_auto_stagnation_rounds=(auto if config.search_backend in ("both", "endpoint-auto") else 0),
-                   splice_local_stagnation_rounds=(local if config.search_backend in ("both", "local") else 0))
+    if hybrid:
+        if speed in VERY_FAST_SPEEDS:
+            return replace(config, hybrid_cycles=1, hybrid_stagnation_cycles=0)
+        return replace(config, hybrid_stagnation_cycles=HYBRID_STAGNATION_SPEEDS[speed])
+    if speed in VERY_FAST_SPEEDS:
+        # The normal fixed-round backend path does exactly one Auto/Local
+        # cycle. No stagnation check can trigger another cycle after a gain.
+        return replace(config, splice_rounds=1, splice_stagnation_rounds=0,
+                       splice_auto_stagnation_rounds=0,
+                       splice_local_stagnation_rounds=0)
+    return replace(config, splice_stagnation_rounds=SPLICE_STAGNATION_SPEEDS[speed],
+                   splice_auto_stagnation_rounds=0,
+                   splice_local_stagnation_rounds=0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -542,6 +551,7 @@ def _search_stage_until_stagnant(
                  ("local", (config.iterations + 1) // 2))
     else:
         turns = ((config.search_backend, config.iterations),)
+    evaluator_factory = EndpointEvaluator if evaluator_factory is None else evaluator_factory
     evaluator = evaluator_factory(level, stage.goal)
 
     def rank(frames: tuple[InputFrame, ...]) -> tuple | None:
@@ -551,7 +561,6 @@ def _search_stage_until_stagnant(
         return evaluation.objective_key if evaluation.feasible else None
 
     local_search = _default_local_search if local_search is None else local_search
-    evaluator_factory = EndpointEvaluator if evaluator_factory is None else evaluator_factory
     merged: dict[tuple[InputFrame, ...], int] = {}
     search_seed = tuple(branch)
     incumbent = search_seed
