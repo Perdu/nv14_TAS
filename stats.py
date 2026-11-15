@@ -406,6 +406,7 @@ if __name__ == "__main__":
     count_highscores_and_speedruns(filename, min_opt_level=4)
     count_highscores_and_speedruns(filename, min_opt_level=5)
     count_highscores_and_speedruns(filename, min_opt_level=6)
+    count_highscores_and_speedruns(filename, min_opt_level=7)
     github = False
     if len(sys.argv) > 1 and sys.argv[1] == "github":
         github = True
@@ -421,6 +422,8 @@ if __name__ == "__main__":
     display_episode_grid(filename, "Speedrun", min_opt_level=5, use_gradient=True, github=github, display_legend=False)
     print()
     display_episode_grid(filename, "Speedrun", min_opt_level=6, use_gradient=True, github=github, display_legend=False)
+    print()
+    display_episode_grid(filename, "Speedrun", min_opt_level=7, use_gradient=True, github=github, display_legend=False)
     print()
     display_time_difference("Speedrun", sort=True, use_color=use_color, display_totals=True, number=20)
     display_time_difference("Speedrun", sort=False, use_color=use_color, display_totals=False)
