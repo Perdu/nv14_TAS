@@ -659,3 +659,122 @@ def test_explicit_start_route_selection_for_primary_and_short_alt(start, expecte
     alternate = _expand_named_splice_alt_route(primary, ('98', '211', '246', '272'))
     assert alternate == ('98', '211', '246', '272', 'end')
     assert _start_selects_alternate_route(primary, alternate, start) is expected
+
+
+def test_alt_branch_toml_cli_and_primary_default(tmp_path):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text(routes.read_text() + 'branch = 9\n')
+    args = parse_arguments(argv[1:])
+    assert args.auto_splice_alt_branch == 9
+    assert args.auto_splice_alt_route == ('230', '240', 'end')
+    assert parse_arguments(argv[1:] + ['--splice-alt-branch', '4']).auto_splice_alt_branch == 4
+    assert parse_arguments(argv[1:] + ['--splice-branch', '5']).auto_splice_alt_branch == 5
+    assert parse_arguments(argv[1:] + ['--auto-splice-alt-branch', '0']).auto_splice_alt_branch == 0
+    for bad in ('-1', 'text'):
+        with pytest.raises(SystemExit):
+            parse_arguments(argv[1:] + ['--splice-alt-branch', bad])
+    routes.write_text(routes.read_text().replace('branch = 9', 'branch = -1'))
+    with pytest.raises(SystemExit, match='invalid value for TOML key'):
+        parse_arguments(argv[1:])
+
+
+def _ltm_alt_branch_route(tmp_path, *, include_branch=True):
+    from nv14_ltm import LEVEL_DATABASE_NAME
+    from tests.test_ltm import _write_ltm, _basic_config
+
+    level, _source, _output, argv = _make_routes(tmp_path)
+    src = tmp_path / '00-0.ltm'
+    def input_log(key):
+        lines = ['|Mboot:0|', '|K20|Mboot:1|']
+        lines.extend(f'|K{key}|' for _ in range(14))
+        lines.extend(['|', '|'])
+        return ('\n'.join(lines) + '\n').encode('utf-8')
+    _write_ltm(src, input_log('ff53'), config=_basic_config(18),
+               extra_members=(('inputs9', input_log('ff51')),)
+               if include_branch else ())
+    (tmp_path / LEVEL_DATABASE_NAME).write_text(
+        f'$00-0 LTM branch test#author##{level.source_level_string}#\n')
+    argv[2] = str(src)
+    argv[argv.index('--output') + 1] = str(tmp_path / 'optim.ltm')
+    return argv
+
+
+def test_configured_ltm_branch_seeds_alternate_only_not_primary(tmp_path, monkeypatch, capsys):
+    from nv14_engine import InputFrame
+    argv = _ltm_alt_branch_route(tmp_path)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text(routes.read_text() + 'branch = 9\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        first = frames[0]
+        calls.append((tuple(stage.name for stage in stages), first.left, first.right,
+                      kwargs.get('initial_seeds')))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '1'])
+    main()
+    assert [item[0] for item in calls] == [('230',), ('240',), ('end',), ('end',)]
+    assert calls[0][1:3] == (False, True)  # inputs, primary
+    assert calls[1][1:3] == (True, False)  # inputs9, alternate
+    assert calls[1][3][0][0] == InputFrame(left=True)
+    assert calls[2][1:3] == (False, True)
+    assert calls[3][1:3] == (True, False)
+    assert 'alternate route input: inputs9' in capsys.readouterr().out
+
+
+def test_missing_alt_branch_errors_unless_alt_route_skipped(tmp_path, monkeypatch):
+    argv = _ltm_alt_branch_route(tmp_path, include_branch=False)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text(routes.read_text() + 'branch = 9\n')
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '1'])
+    with pytest.raises((ValueError, SystemExit), match='inputs9'):
+        main()
+    calls = []
+    monkeypatch.setattr(us, 'optimise_user_splices', lambda _l, frames, stages, _c, **kw:
+                        (calls.append(tuple(s.name for s in stages)) or
+                         us.UserSpliceResult(tuple(frames), 0, 0, 0)))
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '1', '--splice-skip-alt-route'])
+    main()
+    assert calls == [('230', 'end')]
+
+
+def test_alt_branch_on_non_ltm_input_is_rejected(tmp_path, monkeypatch):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text(routes.read_text() + 'branch = 9\n')
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '1'])
+    with pytest.raises((ValueError, SystemExit), match='requires an LTM input movie'):
+        main()
+
+
+def test_start_at_alt_only_uses_configured_ltm_branch(tmp_path, monkeypatch):
+    argv = _ltm_alt_branch_route(tmp_path)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text(routes.read_text() + 'branch = 9\n')
+    seen = []
+
+    def fake_search(_level, frames, stages, _config, **kwargs):
+        seen.append((tuple(stage.name for stage in stages), frames[0].left))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '1',
+                                           '--start-at-splice', '240'])
+    main()
+    assert seen == [(('230', '240', 'end'), True)]
+
+
+def test_merge_does_not_load_an_unused_missing_editor_branch(tmp_path, monkeypatch):
+    argv = _ltm_alt_branch_route(tmp_path, include_branch=False)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text(routes.read_text() + 'branch = 9\n')
+    calls = []
+    monkeypatch.setattr(us, 'optimise_user_splices', lambda _l, frames, stages, _c, **kw:
+                        (calls.append(tuple(s.name for s in stages)) or
+                         us.UserSpliceResult(tuple(frames), 0, 0, 0)))
+    monkeypatch.setattr(sys, 'argv', argv + ['--splice-merge-only'])
+    main()
+    assert calls  # The merge can run from the primary input and saved checkpoints.

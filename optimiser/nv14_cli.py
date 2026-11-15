@@ -1743,6 +1743,8 @@ def _load_config_defaults(
         "files": "auto_splice_files",
         "alt_route": "auto_splice_alt_route",
         "skip_alt_route": "auto_splice_skip_alt_route",
+        "branch": "auto_splice_alt_branch",
+        "alt_branch": "auto_splice_alt_branch",
         "directory": "auto_splice_directory",
         "start": "auto_splice_start",
         "stop": "auto_splice_stop",
@@ -1899,7 +1901,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_hybrid_local_rounds", "auto_splice_hybrid_auto_iterations",
     "auto_splice_hybrid_cycles", "auto_splice_hybrid_stagnation_cycles",
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_waypoint_lookback", "auto_splice_exit_lookback",
-    "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_skip_alt_route", "auto_splice_directory",
+    "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_skip_alt_route", "auto_splice_alt_branch", "auto_splice_directory",
     "auto_splice_use_current_run",
     "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
     "auto_splice_single",
@@ -2109,6 +2111,16 @@ def parse_splice_round_speeds(value: str) -> tuple[str, ...]:
     if not modes or any(mode not in ("current", "very-fast", "vfast", "fast", "normal", "slow") for mode in modes):
         raise argparse.ArgumentTypeError("round-speeds requires current,very-fast/vfast,fast,normal,slow")
     return modes
+
+
+def _parse_non_negative_splice_branch(value: str) -> int:
+    try:
+        branch = int(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("splice branch must be a non-negative integer") from exc
+    if branch < 0:
+        raise argparse.ArgumentTypeError("splice branch must be a non-negative integer")
+    return branch
 
 
 def parse_splice_files(value: str) -> tuple[str, ...]:
@@ -2754,6 +2766,12 @@ def build_parser() -> argparse.ArgumentParser:
                          help="ignore any configured alt-route and run only the primary "
                               "named splice route (also [multi-splicer] skip-alt-route=true); "
                               "--no-splice-skip-alt-route re-enables it")
+    command.add_argument("--splice-alt-branch", "--auto-splice-alt-branch", "--splice-branch",
+                         dest="auto_splice_alt_branch", modes=auto_modes,
+                         type=_parse_non_negative_splice_branch, default=0, metavar="N",
+                         help="use LTM inputsN rather than inputs as the alternate route's "
+                              "input seed (0 keeps the ordinary shared-prefix seed; "
+                              "[multi-splicer] branch=N)")
     command.add_argument("--auto-splice-files", modes=auto_modes,
                          type=parse_splice_files, metavar="NAMES",
                          help="ordered comma-separated Local splice names; [auto] splice-files accepts a TOML array")
@@ -4839,6 +4857,23 @@ def main() -> None:
                 alternate_stages = (_load_named_splice_stages(
                     level, replay.frames, args, directory, args.auto_splice_alt_route)
                     if args.auto_splice_alt_route else ())
+                alt_branch_frames = None
+                if (alternate_stages and args.auto_splice_alt_branch and
+                        not (summary_only or merge_only or args.auto_splice_single)):
+                    if source.ltm_movie is None:
+                        raise ValueError("[multi-splicer] branch requires an LTM input movie")
+                    try:
+                        alt_movie = LtmMovie.load(
+                            input_path, postroll_frames=common_config.ltm_postroll,
+                            branch=args.auto_splice_alt_branch)
+                    except LtmError as exc:
+                        raise ValueError(f"cannot read alternate route inputs"
+                                         f"{args.auto_splice_alt_branch}: {exc}") from exc
+                    alt_branch_frames = tuple(editable_frames(alt_movie.replay_frames))
+                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                          f"alternate route input: inputs{args.auto_splice_alt_branch} "
+                          f"({len(alt_branch_frames)} replay frames); "
+                          "primary route retains inputs", flush=True)
                 # A --start-at-splice name may belong only to the alternate
                 # route. In that case search its suffix (including the shared
                 # rejoin and end) rather than trying to index it in the primary
@@ -4856,6 +4891,9 @@ def main() -> None:
                             tuple(stage.name for stage in stages),
                             tuple(stage.name for stage in alternate_stages), selected)):
                     stages, alternate_stages = alternate_stages, ()
+                    if alt_branch_frames is not None:
+                        # A selected alternate-only route must not seed from inputs.
+                        replay = ComplexReplay(alt_branch_frames)
                     print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
                           f"--start-at-splice {selected!r} selects the alternate route; "
                           "searching from that splice through its shared suffix", flush=True)
@@ -5087,6 +5125,10 @@ def main() -> None:
                         editable_frames(replay.frames))).encode()).hexdigest(),
                     "stages": [repr(stage) for stage in stages],
                     "alternate_stages": [repr(stage) for stage in alternate_stages],
+                    "alternate_input_branch": args.auto_splice_alt_branch,
+                    "alternate_input_sha256": (
+                        hashlib.sha256(encode_complex_replay(alt_branch_frames).encode()).hexdigest()
+                        if alt_branch_frames is not None else None),
                     "config": repr(splice_config),
                     "from_best": args.auto_splice_from_best,
                     "start_from_stage_bests": args.auto_splice_each_best,
@@ -5406,7 +5448,12 @@ def main() -> None:
                                 shared_seed = (saved_stage_seed(stages[prefix_count - 1].name)
                                                or initial_input)
                             main_seed = shared_seed
-                            alt_seed = shared_seed
+                            # A configured libTAS editor branch supplies the
+                            # alternate trajectory independently from the primary
+                            # shared-prefix search; never splice inputs9 onto a
+                            # physically incompatible primary prefix here.
+                            alt_seed = (alt_branch_frames if alt_branch_frames is not None
+                                        else shared_seed)
                             _, main_results = run_route_phase(
                                 'primary-branch', primary_branch, main_seed,
                                 extra_seeds=(initial_input,), from_saved_final=False)
@@ -5416,7 +5463,9 @@ def main() -> None:
                                              or main_seed)
                             _, other_results = run_route_phase(
                                 'alternate-branch', other_branch, alt_seed,
-                                extra_seeds=(initial_input,), from_saved_final=False)
+                                extra_seeds=((alt_seed,) if alt_branch_frames is not None
+                                             else (initial_input,)),
+                                from_saved_final=False)
                             if other_branch:
                                 alt_seed = (other_results.get(other_branch[-1].name)
                                             or saved_stage_seed(other_branch[-1].name)
@@ -5700,7 +5749,8 @@ def main() -> None:
                             f".alt.{backend}.round.json"))
                     if alt_report_stages:
                         alt_result = optimise_user_splices(
-                            level, summary_frames, alt_report_stages, splice_config,
+                            level, (alt_branch_frames if alt_branch_frames is not None
+                                    else summary_frames), alt_report_stages, splice_config,
                             completion_policy=args.auto_completion_policy,
                             use_current_run=args.auto_splice_use_current_run,
                             start_from_stage_bests=args.auto_splice_each_best,

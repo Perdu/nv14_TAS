@@ -2239,6 +2239,21 @@ searched during the alternative campaign. Both seam names must exist in
 rejected. The original full-route notation ending in `end` remains supported.
 CLI `--splice-alt-route 403,482,485,527` accepts the shorthand too.
 
+To initialise the **alternate route from a libTAS editor input branch**, add
+`branch = 9` to the same `[multi-splicer]` table as `alt-route`. The primary
+route reads `inputs` as usual; the alternative begins with the top-level
+`inputs9` member of the **input** `.ltm` file, instead of the primary route's
+optimised shared-prefix replay. The alternate search still participates in
+rejoin selection and saved bests, and generated output movies continue to
+write `inputs` while preserving all `inputsN` members unchanged. Branch 0
+(default) retains the existing shared-prefix seeding based on `inputs`.
+The CLI equivalent is
+`--splice-alt-branch 9` (also `--splice-branch 9`), which overrides the TOML
+value. The requested member must exist and contain a valid libTAS input log;
+there is no silent fallback to `inputs`. This option is ignored when the
+alternate route is disabled. It requires an LTM input, not a combined `.txt`
+replay.
+
 To run **only the primary route** without removing the alternate route from
 its configuration, add `skip-alt-route = true` to `[multi-splicer]` in the
 per-level `multi-splicer.toml`, or pass `--splice-skip-alt-route` (also works

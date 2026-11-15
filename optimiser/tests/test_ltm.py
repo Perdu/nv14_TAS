@@ -1140,3 +1140,38 @@ def test_load_ignores_malformed_and_duplicate_legacy_json(tmp_path: Path, raw: b
     output = tmp_path / "00-0_clean.ltm"
     movie.write(output, movie.replay_frames, level_id="00-0", level_record=_level_record())
     assert {m.name for m, _ in _regular_members(output)} == {"inputs", "config.ini"}
+
+
+def test_load_editor_branch_inputs9_without_changing_primary_or_other_members(tmp_path):
+    primary = _basic_inputs()
+    alternate = primary.replace(b'Kffe1:ff51:61', b'Kffe1:ff53:61')
+    path = _write_ltm(tmp_path / '00-0.ltm', primary, config=_basic_config(),
+                      extra_members=(('inputs9', alternate), ('inputs2', b'editor data')))
+    before = path.read_bytes()
+    primary_movie = LtmMovie.load(path)
+    branch_movie = LtmMovie.load(path, branch=9)
+    assert primary_movie.input_member_name == 'inputs'
+    assert branch_movie.input_member_name == 'inputs9'
+    assert primary_movie.replay_frames[0].left is True
+    assert branch_movie.replay_frames[0].left is False
+    assert branch_movie.replay_frames[0].right is True
+    assert path.read_bytes() == before
+    assert _member_bytes(path, 'inputs') == primary
+    assert _member_bytes(path, 'inputs9') == alternate
+    with pytest.raises(LtmError, match='cannot write an LTM loaded from an alternate'):
+        branch_movie.write(tmp_path / 'out.ltm', branch_movie.replay_frames,
+                           level_id='00-0', level_record=_level_record())
+
+
+def test_missing_or_invalid_ltm_branch_does_not_fall_back_to_inputs(tmp_path):
+    path = _write_ltm(tmp_path / '00-0.ltm', _basic_inputs(), config=_basic_config())
+    with pytest.raises(LtmError, match="top-level 'inputs9' member"):
+        LtmMovie.load(path, branch=9)
+    for branch in (-1, True, '9', None):
+        with pytest.raises(LtmError, match='non-negative integer'):
+            LtmMovie.load(path, branch=branch)
+    duplicate = _write_ltm(
+        tmp_path / 'duplicate.ltm', _basic_inputs(), config=_basic_config(),
+        extra_members=(('inputs9', _basic_inputs()), ('inputs9', _basic_inputs())))
+    with pytest.raises(LtmError, match="more than one top-level 'inputs9'"):
+        LtmMovie.load(duplicate, branch=9)

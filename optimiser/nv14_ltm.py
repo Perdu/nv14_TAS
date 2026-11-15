@@ -1,8 +1,9 @@
 """Import and export libTAS ``.ltm`` movies for the n v1.4 optimiser.
 
 An LTM movie is a gzip-compressed tar archive.  The active input log is the
-top-level ``inputs`` member; alternate editor branches such as ``inputs1`` are
-deliberately left untouched.  N replay frame zero is the libTAS frame
+top-level ``inputs`` member by default. Alternate editor branches such as
+``inputs9`` can also be read explicitly; they are never overwritten by normal
+output movie writes.  N replay frame zero is the libTAS frame
 immediately after the first Space press.
 """
 from __future__ import annotations
@@ -285,14 +286,17 @@ class LtmMovie:
 
     @classmethod
     def load(
-        cls, path: Path, *, postroll_frames: int | None = None
+        cls, path: Path, *, postroll_frames: int | None = None, branch: int = 0
     ) -> "LtmMovie":
+        if type(branch) is not int or branch < 0:
+            raise LtmError("LTM input branch must be a non-negative integer")
+        input_name = "inputs" if branch == 0 else f"inputs{branch}"
         path = Path(path)
         try:
             archive_raw = path.read_bytes()
             with tarfile.open(fileobj=io.BytesIO(archive_raw), mode="r:*") as archive:
                 members = archive.getmembers()
-                input_member = _one_root_member(members, "inputs", required=True)
+                input_member = _one_root_member(members, input_name, required=True)
                 assert input_member is not None
                 input_raw = _read_member(archive, input_member)
                 config_member = _one_root_member(
@@ -308,7 +312,7 @@ class LtmMovie:
         try:
             input_text = input_raw.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise LtmError(f"top-level 'inputs' in {path} is not valid UTF-8") from exc
+            raise LtmError(f"top-level {input_name!r} in {path} is not valid UTF-8") from exc
         (
             lines,
             endings,
@@ -317,7 +321,7 @@ class LtmMovie:
             trailing_input_whitespace,
         ) = _split_input_lines(input_text)
         if not lines:
-            raise LtmError("the top-level LTM 'inputs' member is empty")
+            raise LtmError(f"the top-level LTM {input_name!r} member is empty")
         for index, line in enumerate(lines):
             if not line.startswith("|"):
                 raise LtmError(
@@ -487,6 +491,9 @@ class LtmMovie:
         promote_inferred_neutral_tail: bool = False,
     ) -> None:
         """Atomically write a movie rebuilt from this source LTM template."""
+        if _normalised_root_name(self.input_member_name) != "inputs":
+            raise LtmError("cannot write an LTM loaded from an alternate inputs branch; "
+                           "use the primary inputs movie as the output template")
         if not LEVEL_ID_RE.fullmatch(level_id):
             raise LtmError(f"invalid LTM level identifier {level_id!r}")
         validate_level_record(level_record, level_id)

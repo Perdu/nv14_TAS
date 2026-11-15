@@ -102,6 +102,8 @@ top-results = 10
 # Set true to optimise only the primary splice-files route, even when a level's
 # multi-splicer.toml defines alt-route. CLI: --splice-skip-alt-route.
 # skip-alt-route = false
+# Optional alternate libTAS editor branch: branch = 9 reads inputs9 for alt-route.
+# branch = 9
 search = "hybrid"
 iterations = 10000
 auto-stagnation-rounds = 5
