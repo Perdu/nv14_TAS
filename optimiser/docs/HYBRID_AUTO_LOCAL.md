@@ -549,3 +549,17 @@ stage checkpoint. Such `auto:hybrid:gain:input` messages are yellow on a TTY;
 strictly beats the previously saved checkpoint. Both show physical gains
 against the original input and the previous absolute best. Multi-splicer
 continues to use its existing temporary-stage/completed-run color conventions.
+
+Standalone Hybrid also saves the best *stage-feasible replay in the current
+invocation* as soon as an Auto/Local worker reports it. For the usual
+`tas.py hybrid 88-4 631` LTM layout this is
+`wip/88-4_631.session.ltm` (and `.session.txt`). Session files are cleared
+at the start of each new Hybrid invocation and updated on each strictly better
+session candidate, including yellow input-only gains. The existing
+`wip/88-4_631.ltm` remains the non-regressing absolute stage checkpoint, and
+`wip/88-4.ltm` remains reserved for a verified completed-run improvement.
+Session output can be an incomplete route; do not mistake it for a completed
+run. Standalone Hybrid enables immediate live-best callbacks automatically,
+including under multi-worker search. `--splice-live-save-best` remains optional
+for ordinary multi-splicer campaigns, where it costs additional verification
+work. An interrupt does not erase a session file already written.

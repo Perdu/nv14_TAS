@@ -343,6 +343,7 @@ def optimise_user_splices(
     stages: Sequence[UserSpliceStage], config: RandomSpliceConfig,
     *, best_callback: Callable[[tuple[InputFrame, ...]], None] | None = None,
     stage_best_callback: Callable[[str, tuple[InputFrame, ...]], None] | None = None,
+    session_best_callback: Callable[[str, tuple[InputFrame, ...]], None] | None = None,
     stage_result_callback: Callable[[str, tuple[InputFrame, ...] | None], None] | None = None,
     initial_seeds: Sequence[Sequence[InputFrame]] = (),
     seed_from_saved_final: bool = True,
@@ -2232,6 +2233,11 @@ def optimise_user_splices(
                             if (previous_session is None or
                                     rank < previous_session.objective_key):
                                 session_stage_evaluations[index] = evaluation
+                                if session_best_callback is not None:
+                                    # The named checkpoint remains the absolute
+                                    # best; persist the session leader separately
+                                    # even if a stronger saved checkpoint exists.
+                                    session_best_callback(stage.name, stage_export(normalized))
                                 if progress:
                                     previous_absolute = old_evaluation
                                     saved_completion = completed_stage_evaluations[index]

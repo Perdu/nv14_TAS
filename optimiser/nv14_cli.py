@@ -2997,7 +2997,8 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-live-save-best", dest="auto_splice_live_save_best",
                          modes=auto_modes, action="store_true",
                          help="verify and save each live stage improvement immediately "
-                              "rather than throttle parent callbacks (costs CPU)")
+                              "rather than throttle parent callbacks (costs CPU); "
+                              "enabled by default for standalone Hybrid")
     command.add_argument("--splice-auto-stagnation-rounds", "--auto-splice-auto-stagnation-rounds",
                          dest="auto_splice_auto_stagnation_rounds", modes=auto_modes,
                          type=int, default=0, metavar="N",
@@ -5070,6 +5071,35 @@ def main() -> None:
                                 raise ValueError(f"splice LTM alias {alias} conflicts with {label}")
                         alias_outputs[stage_name] = alias
 
+                # Standalone Hybrid publishes its own live session leader even
+                # when an older, better stage checkpoint already exists. Keep
+                # this scratch output distinct from both the absolute stage
+                # checkpoint and the verified completed-run output.
+                hybrid_session_outputs = {}
+                if getattr(args, "_single_hybrid_mode", False) and not (summary_only or merge_only):
+                    protected = [("input", input_path),
+                                 ("output", output_path),
+                                 ("replay output", replay_output_path),
+                                 ("config", args.config),
+                                 ("splice config", args.splice_config),
+                                 ("levels file", source.levels_file_path)]
+                    protected.extend((f"stage {key}", path)
+                                     for key, pair in stage_outputs.items()
+                                     for path in pair if path is not None)
+                    protected.extend((f"stage {key} alias", path)
+                                     for key, path in alias_outputs.items())
+                    names = tuple(f"{name}.session" for name in all_names)
+                    distinct = _user_splice_output_paths(
+                        names, output_path, replay_output_path, protected_paths=protected)
+                    hybrid_session_outputs = {
+                        name: distinct[f"{name}.session"] for name in all_names}
+                    # A prior session's file must not masquerade as a result of
+                    # this invocation if no new candidate is found.
+                    for paths in hybrid_session_outputs.values():
+                        for path in paths:
+                            if path is not None:
+                                path.unlink(missing_ok=True)
+
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
                     replay_text = encode_complex_replay(clean_splice_output(frames))
@@ -5098,6 +5128,25 @@ def main() -> None:
                           f"{main_path}" + (f" and {packed_path}" if packed_path else "") +
                           " (stage-feasible; full-run completion not required)", flush=True)
 
+                def save_hybrid_session_best(name: str, frames: tuple[InputFrame, ...]) -> None:
+                    main_path, packed_path = hybrid_session_outputs[name]
+                    replay_text = encode_complex_replay(clean_splice_output(frames))
+                    # For LTM, publish a TXT replay that exactly matches what
+                    # the newly written movie loads (implicit post-roll ticks
+                    # can otherwise make the two files disagree).
+                    if source.ltm_movie is not None and packed_path is not None:
+                        _write_result(source, main_path, None, replay_text)
+                        loaded = LtmMovie.load(main_path)
+                        _atomic_write_text(packed_path,
+                                           encode_complex_replay(loaded.replay_frames) + "\n")
+                    else:
+                        _write_result(source, main_path, packed_path, replay_text)
+                    print(f"[{time.strftime('%H:%M:%S')}] [auto:hybrid:session-checkpoint] "
+                          f"{name!r}: saved {main_path}"
+                          + (f" and {packed_path}" if packed_path else "")
+                          + " (best of current Hybrid invocation; stage-feasible)",
+                          flush=True)
+
                 splice_config = RandomSpliceConfig(
                     iterations=args.auto_splice_iterations,
                     splice_rounds=args.auto_splice_rounds,
@@ -5110,7 +5159,8 @@ def main() -> None:
                     hybrid_stagnation_cycles=args.auto_splice_hybrid_stagnation_cycles,
                     splice_speed=args.auto_splice_speed,
                     splice_round_speeds=args.auto_splice_round_speeds,
-                    live_save_best=args.auto_splice_live_save_best,
+                    live_save_best=(args.auto_splice_live_save_best or
+                                    bool(getattr(args, "_single_hybrid_mode", False))),
                     search_backend=args.auto_splice_search,
                     endpoint_max_retime=args.max_retime,
                     endpoint_mutation_span=args.auto_mutation_span,
@@ -5755,6 +5805,8 @@ def main() -> None:
                         source, output_path, replay_output_path,
                         encode_complex_replay(clean_splice_output(frames))),
                     stage_best_callback=save_stage_best,
+                    session_best_callback=(save_hybrid_session_best
+                                           if hybrid_session_outputs else None),
                     saved_stage_candidates=saved_stage_candidates,
                     saved_stage_frontiers=saved_stage_frontiers,
                     saved_final_frames=(None if args.auto_ls_splice else saved_final_frames),
