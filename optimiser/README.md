@@ -1134,18 +1134,22 @@ checkpoint is rebuilt atomically from the original movie template, with its
 exact replay/level metadata refreshed; `--replay-output`, when requested, is
 updated to the same packed replay.
 
-Standalone Auto checkpoint progress distinguishes the input-run gain from a
-**new saved absolute best**. `[auto:checkpoint]` is **green** only when the
-candidate strictly beats every comparable previously saved result (the
-unsuffixed output and, for `tas.py auto LEVEL SPLICE` / `--goal-config`, the
-named splice checkpoint). A candidate that improves the current input but
-not the saved best is **yellow**. Comparisons use the actual Auto or Local
-endpoint objective, including secondary tie-breaks, and are snapshotted
-before the live output is overwritten. Unreadable saved candidates prevent a
-false green claim. The logs also label the distinction without requiring
-ANSI color; `--no-color` and non-terminal output remain uncolored. This
-changes **display only**, never search budgets, checkpoint writes or named
-checkpoint publication.
+Standalone Auto, Local and Hybrid distinguish a gain over the current input
+from a **new saved absolute best**. Verified checkpoints and Hybrid session
+gains are **green** only when they strictly beat the comparable previous saved
+record; otherwise they are **yellow**. The logs label this distinction even
+with `--no-color` or redirected output. Baselines remain blue on terminals.
+
+Auto compares completed runs or the named endpoint objective as appropriate.
+Local population compares its endpoint objective (including secondary tie-breaks),
+and Local windows compares the fixed-frame objective score and constraints.
+Local also checks the named checkpoint for `tas.py local LEVEL SPLICE` goal files
+in the matching level directory. Hybrid compares its stage objective and keeps
+its separate session-best checkpoint. Saved candidates are loaded **before**
+live output is overwritten, including TXT companions; an unreadable record
+prevents a false green claim. Unverified Local population progress notices
+are not colored as absolute bests. This changes **reporting only**, not the
+search algorithms, search budgets, or existing checkpoint publication rules.
 
 All multiprocessing workers leave Ctrl+C handling to the parent process to
 avoid competing writes or noisy child tracebacks.

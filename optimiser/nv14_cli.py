@@ -149,16 +149,20 @@ class _AutoSavedBestColor:
 def _auto_saved_best_color_reference(
     source, level, output_path: Path, replay_output_path: Path | None,
     *, objective: str, endpoint_goal=None, goal_paths: Sequence[Path] = (),
+    fixed_frame_rank: Callable[[tuple[InputFrame, ...]], tuple | None] | None = None,
+    display_context: str = "auto",
 ) -> _AutoSavedBestColor:
-    """Snapshot saved Auto/goal records before live checkpoints overwrite output.
+    """Snapshot comparable saved records before live checkpoints overwrite output.
 
-    A named ``tas.py auto LEVEL SPLICE`` also checks the permanent named
-    splice checkpoint (including its legacy alias and TXT companion). The
-    same endpoint objective/constraints rank both the stored record and each
-    new candidate; full-run Auto uses its canonical completed-run ordering.
+    Named endpoint searches (Auto or Local population) also check their
+    permanent splice checkpoint, legacy alias and TXT companion. A supplied
+    fixed-frame ranker covers Local's window strategy, where higher scores
+    are better; otherwise Auto uses its canonical completed-run ordering.
     """
     paths = [output_path]
-    if endpoint_goal is not None and len(goal_paths) == 1:
+    if replay_output_path is not None:
+        paths.append(replay_output_path)
+    if (endpoint_goal is not None or fixed_frame_rank is not None) and len(goal_paths) == 1:
         name = Path(goal_paths[0]).stem
         stages = _user_splice_output_paths((name,), output_path, replay_output_path)
         named_main, named_replay = stages[name]
@@ -193,7 +197,11 @@ def _auto_saved_best_color_reference(
                     frames = decode_complex_replay(
                         parse_combined_level_replay(raw).replay_string).frames
             frames = tuple(editable_frames(frames))
-            if endpoint_goal is not None:
+            if fixed_frame_rank is not None:
+                key = fixed_frame_rank(frames)
+                if key is None:
+                    continue
+            elif endpoint_goal is not None:
                 from nv14_user_splice import _materialise_splice_tail
                 result = evaluator.evaluate(_materialise_splice_tail(
                     frames, endpoint_goal.target_frame))
@@ -208,9 +216,27 @@ def _auto_saved_best_color_reference(
                 best_key = key
         except (OSError, ValueError, RuntimeError, LtmError) as exc:
             comparable = False
-            print(f"[auto:checkpoint] cannot compare saved best {path}: {exc}; "
+            print(f"[{display_context}:checkpoint] cannot compare saved best {path}: {exc}; "
                   "new checkpoints will be yellow, not falsely marked absolute", flush=True)
     return _AutoSavedBestColor(best_key, comparable=comparable)
+
+
+def _local_saved_goal_paths(args, config_path: Path | None,
+                            input_path: Path) -> tuple[Path, ...]:
+    """Recognise a named Local goal passed by ``tas.py local LEVEL SPLICE``.
+
+    Unlike standalone Auto, the Local launcher passes its goal as --config,
+    not --goal-config. Only infer the stage name for a config located in the
+    level-named splice directory; ordinary shared Local config files must not
+    accidentally introduce an unrelated named best into the comparison.
+    """
+    paths = tuple(getattr(args, "_goal_config_paths", ()))
+    if paths:
+        return paths
+    if (config_path is not None and config_path.parent.name == input_path.stem
+            and config_path.suffix.lower() in (".txt", ".toml")):
+        return (config_path,)
+    return ()
 
 
 def _print_user_splice_progress(message: str, *, color: bool) -> None:
@@ -4142,6 +4168,7 @@ def _run_local_population(
     replay_output_path: Path | None,
     config_path: Path | None = None,
     color: bool = True,
+    goal_paths: Sequence[Path] = (),
 ) -> None:
     """Dispatch bounded population search independently of Local's window loop."""
     from nv14_endpoint import EndpointGoal, RequiredJump, verify_endpoint
@@ -4209,6 +4236,15 @@ def _run_local_population(
     except (RuntimeError, ValueError) as exc:
         raise SystemExit(str(exc)) from exc
 
+    # Compare new verified Local endpoints with the *pre-run* saved record,
+    # including a named splice checkpoint. A backend-local best alone is not
+    # evidence of a new absolute best.
+    saved_best_color = _auto_saved_best_color_reference(
+        source, level, output_path, replay_output_path,
+        objective=config.objective, endpoint_goal=goal,
+        goal_paths=goal_paths, display_context="local",
+    )
+
     original = tuple(frames)
     mutable = {frame for start, end in ranges for frame in range(start, end + 1)}
     checkpoint_written = False
@@ -4249,16 +4285,27 @@ def _run_local_population(
                 summary += f"; required jump at frame {frame}, origin ({x:.12g}, {y:.12g})"
         return summary
 
+    def show_population_progress(message: str) -> None:
+        if message.startswith("[local:population:baseline]"):
+            _print_baseline_line(message, color=color)
+        else:
+            # Backend-local "new best so far" is not an absolute-best claim.
+            # Only the verified [local:best] callback is green/yellow.
+            print(message, flush=True)
+
     def save_best(candidate) -> bool:
         nonlocal checkpoint_written
         replay_string, _packed, evaluation = verified_candidate(candidate)
         _write_result(source, output_path, replay_output_path, replay_string)
         checkpoint_written = True
-        _print_best_line(
+        absolute = saved_best_color.new_absolute_best(evaluation.objective_key)
+        report = _print_best_line if absolute else _print_temporary_line
+        report(
             f"[local:best] frame {evaluation.frame}; score {evaluation.score:.15g}; "
             f"position ({evaluation.x:.12g}, {evaluation.y:.12g}); "
             f"velocity ({evaluation.vx:.12g}, {evaluation.vy:.12g})"
-            f"{secondary_summary(evaluation)}{interaction_summary(evaluation)}",
+            f"{secondary_summary(evaluation)}{interaction_summary(evaluation)}"
+            + ("; new absolute best" if absolute else "; improves input only"),
             color=color,
         )
         return True
@@ -4267,13 +4314,7 @@ def _run_local_population(
         result = optimise_local_population(
             level, frames, goal=goal, frame_ranges=ranges, config=search_config,
             best_callback=save_best,
-            progress=lambda message: (
-                _print_baseline_line(message, color=color)
-                if message.startswith("[local:population:baseline]")
-                else _print_best_line(message, color=color)
-                if message.endswith(" [NEW BEST SO FAR]")
-                else print(message, flush=True)
-            ),
+            progress=show_population_progress,
         )
         if not result.candidates:
             if result.interrupted:
@@ -6700,6 +6741,9 @@ def main() -> None:
             raise SystemExit(130)
         return
 
+    local_goal_paths = (_local_saved_goal_paths(
+        args, common_config.config_path, input_path)
+        if args.mode == "local" else ())
     if local_config is not None and local_config.search == "population":
         _run_local_population(
             source, level, replay.frames, local_config,
@@ -6707,6 +6751,7 @@ def main() -> None:
             replay_output_path=replay_output_path,
             config_path=common_config.config_path,
             color=common_config.color,
+            goal_paths=local_goal_paths,
         )
         return
 
@@ -6929,6 +6974,47 @@ def main() -> None:
 
     jump_results: list[JumpSearchResult] | None = None
     local_checkpoint_written = False
+    local_saved_best_color = None
+    if args.mode == "local":
+        # Local windows maximises Evaluation.score; the shared checkpoint
+        # comparator expects ascending keys. Re-evaluate historical outputs
+        # with this run's fixed-frame goal, not completed-run timing.
+        def fixed_local_rank(saved_frames: tuple[InputFrame, ...]) -> tuple | None:
+            # Local materialises a neutral tail if the input is shorter than
+            # the fixed goal frame; apply the same rule to historical records.
+            saved_frames = saved_frames + (InputFrame(),) * max(
+                0, target_frame + 1 - len(saved_frames))
+            if effective_required_interactions or effective_avoided_interactions:
+                candidate = evaluate(
+                    level, saved_frames, target_frame, objective,
+                    x_window=x_window, y_window=y_window,
+                    vx_window=vx_window, vy_window=vy_window,
+                    required_interactions=effective_required_interactions,
+                    avoided_interactions=effective_avoided_interactions,
+                )
+            else:
+                # Match the independently verified native Local checkpoint
+                # score, especially for strict float comparisons at ties.
+                candidate = evaluate_fixed_replay_native(
+                    level, saved_frames, target_frame, objective,
+                    x_window=x_window, y_window=y_window,
+                    vx_window=vx_window, vy_window=vy_window,
+                )
+            if (not candidate.feasible or candidate.missing_interactions
+                    or candidate.violated_interactions):
+                return None
+            if local_inputs == "direction":
+                if (jump_press_frames(saved_frames, target_frame) -
+                        successful_jump_frames(level, saved_frames, target_frame)):
+                    return None
+            return (-candidate.score,)
+
+        local_saved_best_color = _auto_saved_best_color_reference(
+            source, level, output_path, replay_output_path,
+            objective=objective_name, fixed_frame_rank=fixed_local_rank,
+            goal_paths=local_goal_paths,
+            display_context="local",
+        )
     if args.mode == "jump-pattern":
         assert jump_pattern_config is not None
         jump_min, jump_max = jump_pattern_config.jumps
@@ -7009,10 +7095,13 @@ def main() -> None:
             local_checkpoint_written = True
             e = _packed_evaluation
             p = e.state.player
-            _print_best_line(
+            absolute = local_saved_best_color.new_absolute_best((-e.score,))
+            report = _print_best_line if absolute else _print_temporary_line
+            report(
                 f"[local:best] verified checkpoint at frame {target_frame}; "
                 f"score {e.score:.15g}; "
-                f"position ({p.pos.x:.12g}, {p.pos.y:.12g})",
+                f"position ({p.pos.x:.12g}, {p.pos.y:.12g})"
+                + ("; new absolute best" if absolute else "; improves input only"),
                 color=common_config.color,
             )
             return True
