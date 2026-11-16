@@ -4,9 +4,9 @@ rerecords: 219
 
 
 # 00-1
-rerecords: 256
+rerecords: 325
 
-
+Branch 9: -1f on splice 197
 
 # 00-2
 rerecords: 201
@@ -48,7 +48,7 @@ rerecords: 356
 I copied the inputs of the RTA run for the beginning (up to the doorkey) because I find a better or even tying route
 
 # 01-3
-rerecords: 1522
+rerecords: 1539
 
 I tried:
 - many ways to turn around in the beginning. The RTA jump does not seem faster.
@@ -60,7 +60,8 @@ The RTA path of jumping at the beginning of the slope is slower. Best is to jump
 
 Left-jump for the end is equally fast (but not in terms of subpixels)
 
-Branc 9: going up left in the beginning
+Branch 9: going up left in the beginning
+Branch 8: attempt at doing a ck before the switch
 
 # 01-4
 rerecords: 1132
@@ -1526,7 +1527,7 @@ Branch 7: normal wj for switch 2
 # 45-3
 rerecords: 59
 
-
+Branch 9: false improvement (todo: redo with require-drone-detection)
 
 # 45-4
 rerecords: 175
@@ -1591,9 +1592,10 @@ rerecords: 138
 
 
 # 47-3
-rerecords: 0
+rerecords: 281
 
-
+Branch 9: starting with a bbbwj
+Branch 8: triple bbbwj after switch 7
 
 # 47-4
 rerecords: 828
@@ -1606,9 +1608,9 @@ Branch 5: passing after the drone
 Branch 4: passing over the drone
 
 # 48-0
-rerecords: 47
+rerecords: 48
 
-
+Branch 9: testing alt route
 
 # 48-1
 rerecords: 647
@@ -1630,9 +1632,9 @@ rerecords: 141
 
 
 # 48-4
-rerecords: 0
+rerecords: 47
 
-
+Branch 9: jump on door after switch 0
 
 # 49-0
 rerecords: 87
@@ -1652,9 +1654,10 @@ Branch 7: attempt at going left over the floorguard
 Branch 9: attempt at getting th bwj 2f earlier
 
 # 49-3
-rerecords: 0
+rerecords: 73
 
-
+Branch 9: using a lp+wj to go up to the top
+Branch 8: same but not going through splice 553
 
 # 49-4
 rerecords: 3454
@@ -2601,7 +2604,7 @@ rerecords: 0
 
 
 # 81-1
-rerecords: 1685
+rerecords: 1741
 
 Branch 9: alt route between switches 0 and 2 (lower section from left to right)
 Branch 8: rcj after splice 723
@@ -2768,7 +2771,7 @@ rerecords: 0
 
 
 # 87-1
-rerecords: 180
+rerecords: 181
 
 Branch 9: RTA route taking the lower path
 Branch 8: different turaround around switch
@@ -3145,4 +3148,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 274330
+# Total rerecords: 274875
