@@ -4,7 +4,7 @@ target_frame = 232
 range = "123:232"
 simulate-enemies = true
 objective = "earliest-arrival"
-target_region = "311:331,526:586"
+target_region = "311:331,550:586"
 secondary_objective = "max-x"
 require-interaction = ["testdoor:0", "testdoor:1"]
 
