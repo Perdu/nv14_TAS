@@ -222,6 +222,29 @@ def _materialise_splice_tail(frames: Sequence[InputFrame], target_frame: int
     return body + (InputFrame(),) * max(0, target_frame + 1 - len(body))
 
 
+
+def _replace_section_inputs(
+    base: Sequence[InputFrame], archive: Sequence[InputFrame],
+    base_from: int, base_to: int, archive_from: int, archive_to: int,
+) -> tuple[InputFrame, ...]:
+    """Transplant an archived section between *reached* zero-based frame ticks.
+
+    Endpoint frame N is the input tick that first reached the goal. Preserve
+    that tick, then copy input indices N+1 through the later goal's arrival
+    tick inclusive. Using the numeric splice labels or target deadlines as
+    slice offsets would copy the wrong inputs when arrival is early.
+
+    This is only a proposed search seed; callers must replay-verify the
+    resulting goal(s) before offering it as a feasible transplant.
+    """
+    if not (0 <= base_from <= base_to < len(base) and
+            0 <= archive_from < archive_to < len(archive)):
+        raise ValueError("invalid physical section boundaries for archived splice")
+    return (tuple(base[:base_from + 1]) +
+            tuple(archive[archive_from + 1:archive_to + 1]) +
+            tuple(base[base_to + 1:]))
+
+
 def _stage_improvement_text(goal: EndpointGoal,
                             previous: EndpointEvaluation | None,
                             current: EndpointEvaluation) -> str:
@@ -743,6 +766,74 @@ def optimise_user_splices(
             progress(f"[auto:user-splice:resume] {stage.name!r}: "
                      f"restored {len(archived_frontiers[-1])} validated archive candidate(s); "
                      f"up to {config.frontier} actively searched per source")
+
+    def fastest_archived_section_seed(
+        index: int, bases: Sequence[tuple[InputFrame, ...]],
+    ) -> tuple[tuple[InputFrame, ...], str] | None:
+        """Search one independently archived section at its *own* stage.
+
+        Frontier ranking normally selects the earliest absolute arrival,
+        whereas the fastest previous->current section can be on a later
+        arriving replay. Ordinary n-1/n-2 search seeds and merge/repair do
+        not guarantee this section receives an independent stage search.
+
+        Prefer placing that section on a currently selected source prefix.
+        Arrival ticks for both replays determine the input slices, including
+        any change of section length. Never assume a literal splice filename
+        or a target deadline is the input offset. Verify both bounding goals
+        after transplantation; otherwise search the intact, already verified
+        archived replay instead of claiming a physically valid graft.
+        """
+        if index == 0 or not bases:
+            return None
+        timed = [(span, original_endpoints[index].evaluate(frames).objective_key,
+                  frames)
+                 for frames in archived_frontiers[index]
+                 if (span := section_duration(index, frames)) is not None]
+        if not timed:
+            return None
+        duration, _rank, archive = min(timed, key=lambda item: (item[0], item[1]))
+        prior_endpoint, endpoint = original_endpoints[index - 1:index + 1]
+        archived_start = prior_endpoint.evaluate(archive).frame
+        archived_end = endpoint.evaluate(archive).frame
+        if archived_start == archived_end:
+            # Two independently satisfied goals may occur on the same tick.
+            # There are no intervening input frames to transplant, but the
+            # archived replay is still a valid separate search seed.
+            return archive, ("fastest archived section (0 frames); "
+                             "intact archived replay (zero-length section)")
+        # Only a handful of already scheduled sources are considered for a
+        # transplant. These are the strongest n-1/n-2 seeds, and checking all
+        # saved frontiers here would add considerable replay overhead.
+        for base in bases[:4]:
+            prior = prior_endpoint.evaluate(base)
+            destination = endpoint.evaluate(base)
+            if (not prior.feasible or not destination.feasible or
+                    prior.frame > destination.frame or
+                    destination.frame - prior.frame <= duration):
+                continue
+            candidate = _replace_section_inputs(
+                base, archive, prior.frame, destination.frame,
+                archived_start, archived_end)
+            if candidate == base or candidate == archive or candidate in bases:
+                continue
+            candidate = _materialise_splice_tail(
+                candidate, stages[index].goal.target_frame)
+            # Check both ends on the *resulting* trajectory, not on different
+            # donor replays. Other route-control and completion rules still
+            # apply in the ordinary stage candidate acceptance gate.
+            new_prior = prior_endpoint.evaluate(candidate)
+            new_destination = endpoint.evaluate(candidate)
+            if not new_prior.feasible or not new_destination.feasible:
+                continue
+            return candidate, (f"fastest archived section ({duration} frames); "
+                               f"transplanted inputs "
+                               f"{archived_start + 1}:{archived_end + 1} -> "
+                               f"{prior.frame + 1}:{prior.frame + duration + 1}")
+        # A failed graft must not discard the intact fastest measured section.
+        # Its source replay is independently feasible at this named goal.
+        return archive, (f"fastest archived section ({duration} frames); "
+                         "intact archived replay (no verified transplant)")
 
     def publish_frontier(i: int, candidates: Sequence[tuple[InputFrame, ...]]) -> None:
         if frontier_callback is None or summary_only:
@@ -2177,6 +2268,21 @@ def optimise_user_splices(
                     branches = [input_seed, *(b for b in branches if b != input_seed)]
                 else:
                     branches = [b for b in branches if b != input_seed]
+            archived_seed_details: dict[tuple[InputFrame, ...], str] = {}
+            if not single_input_seed:
+                # In the multi-splicer, reserve one additional search seed for
+                # the fastest measurable archived section, independent of
+                # the active frontier quota and the endpoint's absolute rank.
+                # Standalone Hybrid remains strictly input-only.
+                archived_seed = fastest_archived_section_seed(index, branches)
+                if archived_seed is not None:
+                    candidate, description = archived_seed
+                    if candidate not in branches:
+                        branches.append(candidate)
+                        archived_seed_details[candidate] = description
+                        if progress:
+                            progress(f"[auto:user-splice:archive-seed] "
+                                     f"{stage.name!r}: {description}")
             if active_phase is not None and index == stage_begin:
                 # Never search another route before recovering the interrupted
                 # backend. The other viable routes remain archived separately.
@@ -2234,6 +2340,8 @@ def optimise_user_splices(
                 elif (start_from_stage_bests and stage_checkpoints[index] is not None and
                       branch == _materialise_splice_tail(stage_checkpoints[index], len(current)-1)):
                     source_detail = f"start from splice {stage.name} (saved stage best)"
+                elif branch in archived_seed_details:
+                    source_detail = archived_seed_details[branch]
                 else:
                     origins = [(pool.index(branch), depth, origin)
                                for depth, (pool, origin) in enumerate(

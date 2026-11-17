@@ -1439,7 +1439,7 @@ mutations = "low"
 files = ["203", "408", "switch", "end"]
 # Optional: allow the next splice to reuse seeds from n-1, n-2, n-3, etc.
 lookback = 3
-save-frontier = 64          # persist alternatives; does NOT increase search seeds
+save-frontier = 64          # persist alternatives (fastest sections may add one search seed)
 # Multi-worker splicing coalesces live best updates (up to ~30 s per worker)
 # and saves the diverse frontier at stage boundaries. This avoids serial
 # validation and disk writes stalling active search workers. Backend round
@@ -1499,10 +1499,13 @@ previously verified completed output. `--ls-splices` remains read-only.
 
 Set `save-frontier = 64` in either the shared or per-level `[multi-splicer]`
 configuration (default 64; maximum 256). Unlike `frontier`, which controls
-how many routes are *searched*, `save-frontier` only limits the on-disk
-`.frontier.json` archive. Saved candidates are reverified on restore; a mix
-of strong scores and physically different endpoint position/velocity niches
-is retained. The CLI equivalent is `--splice-save-frontier 64`.
+how many routes are *searched*, `save-frontier` limits the on-disk
+`.frontier.json` archive, not the ordinary n-1/n-2 active search frontier.
+Saved candidates are reverified on restore; a mix of strong scores and
+physically different endpoint position/velocity niches is retained. A fastest
+measurable archived section can now add **one separate search seed** at its own
+stage; this can increase total backend search time. The CLI equivalent is
+`--splice-save-frontier 64`.
 
 For named splices using independent Auto/Local stagnation limits, the current
 backend additionally saves a round-boundary checkpoint after every completed
@@ -1761,6 +1764,22 @@ no timing saving is inferred for them. These archived candidates remain full
 replays, not disconnected input snippets, so physics is never assumed to carry
 across a discontinuous section.
 
+During **normal multi-splicer search**, the fastest measurable archived section
+also gets one additional search opportunity **at its own stage**, even if its
+full-replay checkpoint arrives later than the best stage checkpoint. The
+optimiser first tries transplanting the archived section's actual inputs onto
+one of the strongest scheduled source replays. It uses the *reached frame* of
+each bounding helper on each replay: input ticks after the earlier arrival
+through the later arrival, inclusive, are replaced. The original prefix is
+preserved and the later suffix shifts with the section's length difference.
+The resulting replay must satisfy both checkpoint goals in a fresh evaluation;
+if no candidate passes, the intact archived replay becomes the seed instead.
+The normal best-checkpoint and completed-run verification remain unchanged.
+Logs tagged `[auto:user-splice:archive-seed]` show the selected section and
+input ranges or the intact-replay fallback. This may add one backend search
+per stage and does not affect standalone single-input Hybrid or read-only
+merge/summary modes.
+
 To keep the one-shot behavior in a splice TOML, put `merge-only = true` under
 `[multi-splicer]` (or use `--splice-merge-only` on the command line).
 In contrast, `merge-retime-gains = true` in TOML enables deterministic
@@ -1991,9 +2010,9 @@ stage before that (**n-2**), and any configured older lookback stages, without
 removing existing frontier slots. The best candidate from each source runs
 before lower-ranked candidates from the same source (n-1 rank 1, n-2 rank 1,
 then n-1 rank 2, etc.). Duplicate replays are searched only once.
-The seed log identifies `current input run` and each saved splice origin.
-This may add one backend search per stage when the input differs from the
-selected frontiers. An explicit `--splice-from-best` continues to start from
+The seed log identifies `current input run`, each saved splice origin and
+any fastest archived section seed. This may add an additional backend search
+per stage when the input or archived section differs from the selected frontiers. An explicit `--splice-from-best` continues to start from
 the requested saved splice; an interrupted search resumes its exact in-flight
 backend first. With `--splice-each-best`, the saved best of that same stage
 is also tried, after the input.

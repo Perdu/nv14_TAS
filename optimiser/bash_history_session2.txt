@@ -1,0 +1,184 @@
+    1  export SPLICE=''; export LEVEL='00-0' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config ../splices/${LEVEL}/${SPLICE}.txt --output wip/optim.ltm --replay-output wip/${LEVEL}.txt --workers 15 --rounds 20
+    2  export LEVEL='00-0' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config 'examples/config.toml' --output wip/optim.ltm --replay-output wip/${LEVEL}.txt --simulate-enemies --auto-stagnation-runs 3 --workers 15
+    3  export LEVEL='00-0' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}_rta.ltm --config 'examples/config.toml' --output wip/optim.ltm --replay-output wip/${LEVEL}.txt --simulate-enemies --auto-stagnation-runs 3 --workers 15
+    4  export LEVEL='97-2' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --ls-splice
+    5  export LEVEL='99-3' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --ls-splice
+    6  export LEVEL='99-3' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --ls-splices
+    7  export SPLICE='109'; export LEVEL='97-2' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+    8  export SPLICE='218'; export LEVEL='97-2' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+    9  export SPLICE='218'; export LEVEL='97-2' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 50
+   10  export SPLICE='218'; export LEVEL='97-2' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 50 --rounds 0
+   11  export SPLICE='321'; export LEVEL='97-2' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   12  export SPLICE='324'; export LEVEL='97-2' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   13  export SPLICE='321'; export LEVEL='88-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   14  export SPLICE='733'; export LEVEL='88-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   15  export SPLICE='775'; export LEVEL='88-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   16  export SPLICE='321'; export LEVEL='88-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8 -l
+   17  export LEVEL='88-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --ls-splices
+   18  export SPLICE='331'; export LEVEL='97-2' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   19  export SPLICE='150'; export LEVEL='21-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   20  export SPLICE='216'; export LEVEL='21-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   21  export SPLICE='end'; export LEVEL='21-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   22  export SPLICE='150'; export LEVEL='21-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   23  export SPLICE='216'; export LEVEL='21-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   24  export SPLICE='end'; export LEVEL='21-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   25  export LEVEL='21-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   26  export LEVEL='21-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8 --simulate-enemies
+   27  export SPLICE='795'; export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   28  export SPLICE='1071'; export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   29  export SPLICE='1109'; export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   30  export SPLICE='end'; export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   31  export SPLICE='1067'; export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   32  export SPLICE='1067'; export LEVEL='81-1' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 50 --rounds 0
+   33  export SPLICE='1067'; export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   34  export SPLICE='switch'; export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   35  export SPLICE='795'; export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   36  export SPLICE='1067'; export LEVEL='81-1' ; python3 optimize_replay.py both ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 8
+   37  export SPLICE='1067'; export LEVEL='81-1' ; python3 optimize_replay.py both ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 12
+   38  export SPLICE='1067'; export LEVEL='81-1' ; python3 optimize_replay.py both ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+   39  export SPLICE='1067'; export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+   40  export SPLICE='1067'; export LEVEL='81-1' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 50 --rounds 0
+   41  export SPLICE='1067'; export LEVEL='81-1' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 100 --rounds 0
+   42  export SPLICE='1710'; export LEVEL='86-3' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+   43  export SPLICE='1810'; export LEVEL='86-3' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+   44  export SPLICE='1810'; export LEVEL='86-3' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 100 --rounds 0
+   45  export LEVEL='86-3' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --fast
+   46  export LEVEL='86-3' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --splice-speed fast
+   47  export LEVEL='86-3' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 -l
+   48  export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --splice-merge-repair-only
+   49  export LEVEL='86-3' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 -l
+   50  export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 -l
+   51  export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --splice-merge-only
+   52  export LEVEL='81-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --
+   53  export SPLICE='283'; export LEVEL='91-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+   54  export SPLICE='194'; export LEVEL='91-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+   55  export SPLICE='194'; export LEVEL='91-4' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 100 --rounds 0
+   56  export SPLICE='323'; export LEVEL='91-4' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 100 --rounds 0
+   57  export LEVEL='91-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --splice-config "../splices/$LEVEL/multi-splicer.toml" --auto-runs 50 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --retime-gains
+   58  export SPLICE='266'; export LEVEL='87-1' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 100 --rounds 0
+   59  export SPLICE='end'; export LEVEL='87-1' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 100 --rounds 0
+   60  export SPLICE='169'; export LEVEL='84-0' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 100 --rounds 0
+   61  export SPLICE='169'; export LEVEL='84-0' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+   62  export SPLICE='169'; export LEVEL='84-0' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --goal-config "../splices/$LEVEL/$SPLICE.txt" --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 10
+   63  python tas.py 83-2 check
+   64  python3 tas.py 83-2 check
+   65  python3 tas.py check 83-2
+   66  python3 tas.py check 42-4
+   67  python3 tas.py check 30-4
+   68  python3 tas.py check 96-1
+   69  python3 tas.py auto 94-3 118
+   70  python3 tas.py auto 94-3 125
+   71  python3 tas.py auto 94-3 134
+   72  python3 tas.py auto 94-3 151
+   73  python3 tas.py auto 94-3 319
+   74  python3 tas.py auto 93-4 83
+   75  python3 tas.py multi 93-4 -l
+   76  python3 tas.py auto 93-4 122
+   77  python3 tas.py auto 93-4 154
+   78  python3 tas.py auto 93-4 209
+   79  python3 tas.py auto 93-4 204
+   80  python3 tas.py auto 93-4 306
+   81  python3 tas.py auto 93-4 319
+   82  python3 tas.py auto 93-4 361
+   83  python3 tas.py auto 93-4 end
+   84  python3 tas.py auto 93-1 end
+   85  python3 tas.py local 93-1 end
+   86  python3 tas.py local 93-1 end --rounds 10
+   87  python3 tas.py multi 81-1 --repair
+   88  python3 tas.py auto 93-1 end
+   89  python3 tas.py multi 81-1 --repair
+   90  python3 tas.py hybrid 84-0 117
+   91  python3 tas.py hybrid 84-0 169
+   92  python3 tas.py hybrid 84-0 117
+   93  python3 tas.py hybrid 84-0 169
+   94  python3 tas.py hybrid 84-0 117
+   95  python3 tas.py hybrid 84-0 169
+   96  python3 tas.py hybrid 84-0 117
+   97  python3 tas.py hybrid 84-0 169
+   98  python3 tas.py hybrid 84-0 117
+   99  python3 tas.py hybrid 84-0 250_switch
+  100  python3 tas.py hybrid 84-0 215
+  101  python3 tas.py hybrid 84-0 end
+  102  python3 tas.py hybrid 88-4 571
+  103  python3 tas.py hybrid 88-4 614
+  104  python3 tas.py hybrid 88-4 631
+  105  python3 tas.py hybrid 88-4 711
+  106  python3 tas.py hybrid 88-4 733
+  107  python3 tas.py hybrid 88-4 711
+  108  python3 tas.py multi 88-4 --retime-gains
+  109  python3 tas.py multi 88-4 -l
+  110  python3 tas.py multi 88-4 --merge
+  111  python3 tas.py hybrid 88-4 126
+  112  python3 tas.py hybrid 88-4 194
+  113  python3 tas.py hybrid 88-4 104
+  114  python3 tas.py hybrid 88-4 -l
+  115  python3 tas.py multi 88-4 -l
+  116  python3 tas.py hybrid 88-4 614
+  117  python3 tas.py multi 88-4 -l
+  118  python3 tas.py multi 88-4 --repair
+  119  python3 tas.py hybrid 88-4 733
+  120  python3 tas.py hybrid 94-3 134
+  121  python3 tas.py auto 94-3 134
+  122  python3 tas.py local 94-3 134
+  123  python3 tas.py multi 88-4 --auto-runs 1 --splice-speed slow --splice-each-best
+  124  python3 tas.py multi 42-4 -l
+  125  python3 tas.py multi 93-4 -l
+  126  python3 tas.py hybrid 93-4 297
+  127  python3 tas.py hybrid 93-4 361
+  128  python3 tas.py hybrid 93-4 end
+  129  python3 tas.py multi 94-3 -l
+  130  python3 tas.py hybrid 94-3 end
+  131  python3 tas.py multi 94-3 -l
+  132  python3 tas.py hybrid 94-3 130
+  133  python3 tas.py auto 94-3 130
+  134  python3 tas.py hybrid 94-3 130
+  135  python3 tas.py multi 94-3 315
+  136  python3 tas.py multi 94-3 --splice-speed slow --start-at-splice 315
+  137  python3 tas.py multi 94-3 --splice-speed slow --start-at-splice 315 --auto-runs 1
+  138  python3 tas.py multi 93-4 --auto-runs 2 --splice-speed slow --start-at-splice 297
+  139  python3 tas.py multi 30-4 -l
+  140  python3 tas.py multi 87-1 -l
+  141  python3 tas.py hybrid 87-1 196
+  142  python3 tas.py multi 87-1 -l
+  143  python3 tas.py auto 87-1 196
+  144  python3 tas.py auto 87-1 266
+  145  python3 tas.py auto 48-0 416
+  146  for i in 01-0 01-1 01-2 ; do python3 tas.py multi "$i" --auto-runs 2 --splice-speed slow --splice-each-best ; done
+  147  python3 tas.py multi 01-2 -l
+  148  python3 tas.py auto 01-2 317
+  149  python3 tas.py auto 01-2 356
+  150  python3 tas.py auto 01-2 end
+  151  python3 tas.py multi 01-2 -l
+  152  for i in 01-0 ; do python3 tas.py multi "$i" --auto-runs 2 --splice-speed slow --splice-each-best --start-at-splice 323 ; done
+  153  python3 tas.py auto 01-0 530
+  154  python3 tas.py auto 01-0 478
+  155  python3 tas.py multi 01-0 -l
+  156  python3 tas.py multi 01-3 -l
+  157  python3 tas.py auto 01-0 478
+  158  python3 tas.py local 01-0 478
+  159  python3 tas.py hybrid 01-0 478
+  160  python3 tas.py multi 01-0 -l
+  161  python3 tas.py local 01-0 478
+  162  python3 tas.py hybrid 01-0 478
+  163  python3 tas.py multi 01-0 478
+  164  python3 tas.py auto 01-0 478
+  165  python3 tas.py local 01-0 478
+  166  python3 tas.py hybrid 01-0 478
+  167  python3 tas.py hybrid 01-0 -l
+  168  python3 tas.py multi 01-0 -l
+  169  python3 tas.py multi 00-0 -l
+  170  python3 tas.py multi 01-0 -l
+  171  python3 tas.py auto 01-0 -l
+  172  python3 tas.py multi 00-1 check
+  173  python3 tas.py check 00-1
+  174  python3 tas.py multi 01-3 --auto-runs 1 --splice-speed slow --splice-each-best
+  175  python3 tas.py multi 01-3 -l
+  176  python3 tas.py hybrid 01-3 445
+  177  for i in 48-4 49-3 ; do python3 tas.py multi "$i" --auto-runs 2 --splice-speed slow --splice-each-best ; done
+  178  python3 tas.py hybrid 49-3 -l
+  179  python3 tas.py hybrid 48-4 -l
+  180  python3 tas.py hybrid 48-4 end
+  181  python3 tas.py hybrid 81-1 -l
+  182  python3 tas.py hybrid 48-4 -l
+  183  history | wc -l
+  184  history > bash_history_session2.txt
