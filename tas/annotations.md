@@ -64,7 +64,7 @@ Branch 9: going up left in the beginning
 Branch 8: attempt at doing a ck before the switch
 
 # 01-4
-rerecords: 1132
+rerecords: 1177
 
 Can't start turning right on 177 because the drone kills us
 Jumping one frame earlier in 202 make us stumble on the platform on the right, which only allows for slower later paths
@@ -1632,7 +1632,7 @@ rerecords: 141
 
 
 # 48-4
-rerecords: 47
+rerecords: 53
 
 Branch 9: jump on door after switch 0
 
@@ -2978,7 +2978,7 @@ F5: Hold jump longer to get higher up thwump
 F6: Min hold, max thwump speed. 
 
 # 94-2
-rerecords: 0
+rerecords: 11
 
 
 
@@ -3148,4 +3148,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 274875
+# Total rerecords: 274937
