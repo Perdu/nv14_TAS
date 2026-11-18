@@ -2,7 +2,7 @@
 search = "population"
 target_frame = 572
 range = "432:572"
-simulate-enemies = false
+simulate-enemies = true
 objective = "earliest-arrival"
 target_region = "257:277,546:586"
 secondary_objective = "min-x"
