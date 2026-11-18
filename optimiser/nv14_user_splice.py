@@ -2557,6 +2557,9 @@ def optimise_user_splices(
                            else {})
                 resuming_this_seed = (active_phase is not None and
                                       index == stage_begin and seed_index == 1)
+                seed_started = time.monotonic()
+                seed_updates_before = temp_gains
+                seed_diagnostics: dict[str, int] = {}
                 if (stage_config.search_backend not in
                         ("hybrid", "hybrid-restart", "hybrid-local-control") and
                         (stage_config.splice_stagnation_rounds or
@@ -2570,7 +2573,8 @@ def optimise_user_splices(
                     found, used, calls = _search_stage(
                         stage_levels[index], branch, stage, stage_config, rng,
                         stage_rank=admissible_rank, progress=selected_progress,
-                        candidate_callback=live_candidate, **details,
+                        candidate_callback=live_candidate,
+                        diagnostics=seed_diagnostics, **details,
                         **({"resume_phase": active_phase["phase"] if resuming_this_seed else None,
                             "phase_started": save_phase,
                             "backend_checkpoint_path":
@@ -2582,6 +2586,7 @@ def optimise_user_splices(
                     found, used, calls = _search_stage(
                         stage_levels[index], branch, stage, stage_config, rng,
                         candidate_callback=live_candidate,
+                        diagnostics=seed_diagnostics,
                         **({"progress": selected_progress, **details}
                            if show_backend_progress and progress else {}))
                 if save_resume_state is not None:
@@ -2591,6 +2596,30 @@ def optimise_user_splices(
                 evaluations += used
                 for candidate, _ in (*found, (branch, stage.goal.target_frame)):
                     accept_stage_candidate(candidate)
+                if progress:
+                    hybrid = stage_config.search_backend in (
+                        "hybrid", "hybrid-restart", "hybrid-local-control")
+                    cycles = seed_diagnostics.get("cycles")
+                    cycle_info = (
+                        f"{cycles}/{stage_config.hybrid_cycles}" if hybrid and cycles is not None
+                        else str(cycles) if cycles is not None else "unavailable")
+                    dead = seed_diagnostics.get("prefix_dead", 0)
+                    short = seed_diagnostics.get("short_seed", 0)
+                    unexplained = seed_diagnostics.get("zero_evaluation_calls", 0)
+                    exits = dead + short
+                    reasons = ", ".join(
+                        part for part in (
+                            f"prefix died {dead}" if dead else "",
+                            f"seed too short {short}" if short else "") if part)
+                    progress(
+                        f"[auto:user-splice:seed] round {round_no+1}/{config.rounds or chr(8734)} "
+                        f"stage {index+1}/{len(stages)} {stage.name!r} "
+                        f"seed {seed_index}/{len(branches)} [{source_detail}]: "
+                        f"{time.monotonic()-seed_started:.1f}s; cycles {cycle_info}; "
+                        f"backend calls {calls}; evaluations {used}; "
+                        f"early exits {exits}" + (f" ({reasons})" if reasons else "")
+                        + (f"; other zero-eval calls {unexplained}" if unexplained else "")
+                        + f"; stage-best updates {temp_gains-seed_updates_before}")
             if progress:
                 progress(f"[auto:user-splice:stage] round {round_no+1} "
                          f"{stage.name!r}: {attempts - attempts_before_stage} "

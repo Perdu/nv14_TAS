@@ -64,6 +64,30 @@ class SpliceSearchStage:
     end: int
 
 
+def _record_backend_attempt(diagnostics: dict[str, int] | None,
+                            stage: SpliceSearchStage, seed_length: int,
+                            evaluations: int, *, prefix_died: bool) -> None:
+    """Account for backend calls that did no work without guessing why.
+
+    A short replay is silently rejected by ``_local_search``. A dead
+    immutable prefix instead raises a known ValueError at search setup.
+    Other zero-evaluation calls are recorded separately, not mislabelled
+    as preflight failures.
+    """
+    if diagnostics is None:
+        return
+    if prefix_died:
+        key = "prefix_dead"
+    elif evaluations == 0 and (stage.start > stage.end or
+                               stage.goal.target_frame >= seed_length):
+        key = "short_seed"
+    elif evaluations == 0:
+        key = "zero_evaluation_calls"
+    else:
+        return
+    diagnostics[key] = diagnostics.get(key, 0) + 1
+
+
 def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                   stage: SpliceSearchStage, config: RandomSpliceConfig,
                   rng: random.Random,
@@ -75,6 +99,7 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
                   backend_checkpoint_path: Callable[[str], str] | None = None,
                   local_search: Callable | None = None,
                   evaluator_factory: Callable | None = None,
+                  diagnostics: dict[str, int] | None = None,
                   ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Run the requested backends with one shared per-branch proposal budget.
 
@@ -91,19 +116,22 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
         return _search_stage_hybrid(
             level, branch, stage, config, rng, stage_rank=stage_rank,
             progress=progress, candidate_callback=candidate_callback,
-            local_search=local_search, evaluator_factory=evaluator_factory)
+            local_search=local_search, evaluator_factory=evaluator_factory,
+            diagnostics=diagnostics)
     if (config.splice_auto_stagnation_rounds or config.splice_local_stagnation_rounds):
         return _search_stage_backend_phases(
             level, branch, stage, config, rng, stage_rank=stage_rank,
             progress=progress, candidate_callback=candidate_callback,
             resume_phase=resume_phase, phase_started=phase_started,
             backend_checkpoint_path=backend_checkpoint_path,
-            local_search=local_search, evaluator_factory=evaluator_factory)
+            local_search=local_search, evaluator_factory=evaluator_factory,
+            diagnostics=diagnostics)
     if config.splice_stagnation_rounds:
         return _search_stage_until_stagnant(
             level, branch, stage, config, rng, stage_rank=stage_rank,
             progress=progress, candidate_callback=candidate_callback,
-            local_search=local_search, evaluator_factory=evaluator_factory)
+            local_search=local_search, evaluator_factory=evaluator_factory,
+            diagnostics=diagnostics)
     if config.search_backend == "both":
         if config.iterations < 2:
             raise ValueError("splice-search=both requires splice-iterations >= 2")
@@ -116,6 +144,8 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
     merged: dict[tuple[InputFrame, ...], int] = {}
     evaluations = 0
     searches = 0
+    if diagnostics is not None:
+        diagnostics["cycles"] = 1
     search_seed = branch
     for backend, iterations in modes:
         try:
@@ -132,6 +162,11 @@ def _search_stage(level: Level, branch: tuple[InputFrame, ...],
             if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
                 raise
             found, used = (), 0
+            prefix_died = True
+        else:
+            prefix_died = False
+        _record_backend_attempt(diagnostics, stage, len(search_seed), used,
+                                prefix_died=prefix_died)
         evaluations += used
         searches += 1
         for candidate, frame in found:
@@ -159,6 +194,7 @@ def _search_stage_hybrid(
     candidate_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
     local_search: Callable | None = None,
     evaluator_factory: Callable | None = None,
+    diagnostics: dict[str, int] | None = None,
 ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Alternate Auto(1) and Local(N), sharing a bounded *replay* population.
 
@@ -263,6 +299,8 @@ def _search_stage_hybrid(
     first_backend = ("endpoint-auto" if config.search_backend in ("hybrid", "hybrid-restart")
                      else "local")
     for cycle in range(1, config.hybrid_cycles + 1):
+        if diagnostics is not None:
+            diagnostics["cycles"] = cycle
         cycle_improved = False
         for backend, rounds in ((first_backend, 1), ("local", config.hybrid_local_rounds)):
             # A standalone Auto endpoint budget may differ substantially from
@@ -302,6 +340,11 @@ def _search_stage_hybrid(
                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
                     raise
                 found, used = (), 0
+                prefix_died = True
+            else:
+                prefix_died = False
+            _record_backend_attempt(diagnostics, stage, len(search_seed), used,
+                                    prefix_died=prefix_died)
             calls += 1
             evaluations += used
             best_partial = search_seed
@@ -359,6 +402,7 @@ def _search_stage_backend_phases(
     backend_checkpoint_path: Callable[[str], str] | None = None,
                   local_search: Callable | None = None,
                   evaluator_factory: Callable | None = None,
+    diagnostics: dict[str, int] | None = None,
 ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Run each backend continuously until its own stagnant-round limit.
 
@@ -404,6 +448,8 @@ def _search_stage_backend_phases(
     cycle = int(resume_phase["cycle"]) - 1 if resume_phase is not None else 0
     while True:
         cycle += 1
+        if diagnostics is not None:
+            diagnostics["cycles"] = cycle
         cycle_improved = (bool(resume_phase["cycle_improved"])
                           if resume_phase is not None else False)
         start_backend = str(resume_phase["backend"]) if resume_phase is not None else None
@@ -477,6 +523,11 @@ def _search_stage_backend_phases(
                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
                     raise
                 found, used = (), 0
+                prefix_died = True
+            else:
+                prefix_died = False
+            _record_backend_attempt(diagnostics, stage, len(search_seed), used,
+                                    prefix_died=prefix_died)
             evaluations += used
             calls += 1
             resume_phase = None
@@ -529,6 +580,7 @@ def _search_stage_until_stagnant(
     candidate_callback: Callable[[tuple[InputFrame, ...], int], None] | None = None,
     local_search: Callable | None = None,
                   evaluator_factory: Callable | None = None,
+    diagnostics: dict[str, int] | None = None,
 ) -> tuple[tuple[tuple[tuple[InputFrame, ...], int], ...], int, int]:
     """Alternate backend turns until N full cycles make no stage improvement.
 
@@ -569,6 +621,8 @@ def _search_stage_until_stagnant(
     used = calls = stagnant = cycle = 0
     while stagnant < config.splice_stagnation_rounds:
         cycle += 1
+        if diagnostics is not None:
+            diagnostics["cycles"] = cycle
         improved = False
         for backend, iterations in turns:
             try:
@@ -585,6 +639,11 @@ def _search_stage_until_stagnant(
                 if not str(exc).startswith("the immutable prefix dies before the editable ranges"):
                     raise
                 found, count = (), 0
+                prefix_died = True
+            else:
+                prefix_died = False
+            _record_backend_attempt(diagnostics, stage, len(search_seed), count,
+                                    prefix_died=prefix_died)
             used += count
             calls += 1
             turn_improved = False
