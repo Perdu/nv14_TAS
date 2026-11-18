@@ -7,6 +7,6 @@ objective = "earliest-arrival"
 target_region = "274:294,70:110"
 secondary_objective = "min-x"
 require-interaction = ["switch"]
-
-
-
+require-jump-frames = "167:177"
+require-jump-region = "341:371,105:135"
+lookback = 3
