@@ -737,7 +737,7 @@ class EndpointEvaluator:
             raise ValueError(f"target frame {self.goal.target_frame} is outside a {len(key)}-frame replay")
         if key[:self.prefix_frame] != self._source_key[:self.prefix_frame]:
             raise ValueError("candidate changed the immutable cached prefix")
-        if self._reference_required or self.goal.survive_after_goal or self.goal.require_region is not None:
+        if self._reference_required or self.goal.require_region is not None:
             return self.evaluate_reference(frames)
         state, events, eligible, terminal_frame, terminal_dead, jump_event, ambiguous, pre_position, detections, guards, forbidden = self._native_plan.scan(
             self._prefix, key, jump_event=self._prefix_jump, with_pre_position=True,
@@ -755,6 +755,14 @@ class EndpointEvaluator:
                                       forbidden_drone_detection_frames=forbidden)
         if result.terminal_frame != terminal_frame or result.terminal_dead != terminal_dead:
             result = replace(result, terminal_frame=terminal_frame, terminal_dead=terminal_dead)
+        if self.goal.survive_after_goal and result.feasible:
+            # The native scan does not enforce post-goal survival. Only a
+            # candidate that *already* satisfies the underlying goal can
+            # become feasible with the survival requirement, so rejected
+            # candidates can use the fast native evaluation unchanged. For
+            # otherwise feasible candidates, preserve the reference scan:
+            # a later arrival may survive when an earlier one does not.
+            return self.evaluate_reference(frames)
         return self._exact_exit_proximity(result, frames, pre_position)
 
     def _drone_signals(self, state: Any) -> dict[int, tuple[int, bool]]:

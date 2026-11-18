@@ -514,3 +514,14 @@ For Auto endpoint searches the corresponding flags are
 `--auto-require-floorguard-detection-frames` (the unprefixed aliases also work
 in Auto mode). For a named Auto/Hybrid splice, the `[local]` goal keys above
 are imported by the existing `--goal-config` mechanism.
+
+### Post-goal survival and population throughput
+
+`survive-after-goal = N` requires a candidate to survive `N` recorded input
+frames after satisfying the goal; it does not increase the iteration budget.
+For ordinary endpoint goals, the population evaluator first uses the native
+scanner to reject infeasible candidates, and only runs the exact per-tick
+survival verifier for otherwise feasible arrivals. This preserves the earliest
+surviving arrival, including when an earlier arrival fails survival, without
+replaying every rejected candidate in Python. A large candidate population or
+many independent splice seeds can still make a Hybrid stage expensive.
