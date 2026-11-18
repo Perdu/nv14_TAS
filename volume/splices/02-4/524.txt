@@ -2,8 +2,8 @@
 search = "population"
 target_frame = 524
 range = "426:524"
-target_region = "351:391,474:514"
+target_region = "371:391,474:514"
 simulate-enemies = false
 objective = "earliest-arrival"
 secondary_objective = "min-x"
-# require-interaction = ["testdoor:0"]
+require-interaction = ["testdoor:1"]
