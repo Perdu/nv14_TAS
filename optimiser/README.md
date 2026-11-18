@@ -2265,6 +2265,28 @@ sidecar. It is kept across restarts and receives independent opportunities
 in the shared suffix and the existing 64-replay frontier. For earliest-arrival
 goals, lower-ranked usually means slower at the seam; spatial-only goals
 rank by their configured objective rather than inventing a time saving.
+A separate **stable alternate-route checkpoint** is also written at
+`LEVEL_STAGE_alt_route.ltm` (plus TXT and an `.alt_route.json` identity
+sidecar). Unlike `_other_route`, which refers to whichever branch is slower,
+`_alt_route` **always** refers to the best feasible *alternate* rejoin result
+found so far, even if the primary route or an older overall stage checkpoint
+is better. The normal `LEVEL_STAGE.ltm` stays the best overall stage result.
+For example, at a rejoin named `498` you can open
+`wip/47-3_498_alt_route.ltm` in libTAS to inspect the alternate winner.
+To verify that saved replay against the shared `498` goal without touching
+checkpoints, use the regular `check` command with its input overridden:
+
+```sh
+TAS_INPUT_TEMPLATE='wip/{level}_498_alt_route.ltm' \
+  python3 tas.py check 47-3 498 --splice-skip-alt-route --level-id 47-3
+```
+
+The skip flag here avoids rechecking the original `inputsN` from the embedded
+LTM; the saved alternate result is in its top-level `inputs` history.
+The alternate checkpoint is not written until a search actually verifies
+that the alternate replay reaches the rejoin goal. Its saved copy is reused
+across future multi-splicer rounds.
+
 A branch that cannot meet the rejoin goal does not erase the other branch;
 both prefixes remain possible shared-suffix search seeds. Standalone
 `--splice-merge-only` and `--ls-splice` retain their own non-search behavior.

@@ -6022,6 +6022,16 @@ def main() -> None:
                                 if main_text is not None else None)
                             main_meta = main_path.with_suffix('.route.json')
                             other_meta = other_main.with_suffix('.other_route.json')
+                            # A stable branch-named checkpoint is necessary to
+                            # inspect the alternate route even when it loses
+                            # the overall seam comparison (or an older saved
+                            # checkpoint beats both branches).
+                            alt_main = main_path.with_name(
+                                f"{main_path.stem}_alt_route{main_path.suffix}")
+                            alt_text = (main_text.with_name(
+                                f"{main_text.stem}_alt_route{main_text.suffix}")
+                                if main_text is not None else None)
+                            alt_meta = alt_main.with_suffix('.alt_route.json')
                             checkpoint_identity = _user_splice_frontier_identity(
                                 level, shared_rejoin)
                             protected = (input_path, output_path, replay_output_path,
@@ -6029,7 +6039,8 @@ def main() -> None:
                                          *alias_outputs.values(),
                                          *(path for pair in stage_outputs.values()
                                            for path in pair if path is not None))
-                            for destination in (other_main, other_text, other_meta, main_meta):
+                            for destination in (other_main, other_text, other_meta, main_meta,
+                                                alt_main, alt_text, alt_meta):
                                 if destination is not None and any(
                                         path is not None and _paths_alias(destination, path)
                                         for path in protected):
@@ -6061,12 +6072,47 @@ def main() -> None:
                                     pass
                                 return None, None
 
+                            # Recover both legacy route-labelled files before
+                            # choosing the independently best replay per route.
                             for path, meta in ((main_path, main_meta),
                                                (other_main, other_meta)):
                                 old_route, old_frames = read_routed_checkpoint(path, meta)
                                 if old_route is not None:
                                     rejoin_candidates[old_route] = better_stage(
                                         shared_rejoin, rejoin_candidates.get(old_route), old_frames)
+
+                            old_alt_route, old_alt_frames = read_routed_checkpoint(
+                                alt_main, alt_meta)
+                            if old_alt_route == 'alternate':
+                                rejoin_candidates['alternate'] = better_stage(
+                                    shared_rejoin, rejoin_candidates.get('alternate'),
+                                    old_alt_frames)
+                            alternate_winner = rejoin_candidates.get('alternate')
+                            if (alternate_winner is not None and
+                                    (old_alt_route != 'alternate' or
+                                     old_alt_frames != alternate_winner)):
+                                # Never let the current primary (or global stage
+                                # best) displace this independently ranked alt.
+                                _protect_unreadable_splice_output(alt_main)
+                                _protect_unreadable_splice_output(alt_text)
+                                alt_replay = encode_complex_replay(
+                                    clean_splice_output(alternate_winner))
+                                if source.ltm_movie is not None and alt_text is not None:
+                                    _write_result(source, alt_main, None, alt_replay)
+                                    # A libTAS write can preserve neutral
+                                    # post-roll; its TXT must match the movie.
+                                    loaded_alt = LtmMovie.load(alt_main)
+                                    _atomic_write_text(alt_text,
+                                        encode_complex_replay(loaded_alt.replay_frames) + '\n')
+                                else:
+                                    _write_result(source, alt_main, alt_text, alt_replay)
+                                _atomic_write_text(alt_meta, json.dumps({
+                                    'version': 1, 'route': 'alternate',
+                                    'identity': checkpoint_identity,
+                                }, sort_keys=True) + '\n')
+                                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                                      f"{rejoin_name!r}: saved alternate route's "
+                                      f"independent seam best at {alt_main}", flush=True)
 
                             ranked_routes = sorted(rejoin_candidates.items(),
                                                    key=lambda item: stage_rank(shared_rejoin, item[1]))

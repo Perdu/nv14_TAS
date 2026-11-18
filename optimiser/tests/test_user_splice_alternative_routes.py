@@ -778,3 +778,173 @@ def test_merge_does_not_load_an_unused_missing_editor_branch(tmp_path, monkeypat
     monkeypatch.setattr(sys, 'argv', argv + ['--splice-merge-only'])
     main()
     assert calls  # The merge can run from the primary input and saved checkpoints.
+
+
+def test_alternate_rejoin_has_stable_best_even_when_primary_wins(
+        tmp_path, monkeypatch, capsys):
+    """The alternate's seam checkpoint must not depend on the winning route."""
+    from nv14_engine import InputFrame
+    from nv14_replay import decode_complex_replay, editable_frames
+
+    _level, source, _saved, _output, _packed, argv = _setup(tmp_path)
+    faster = (InputFrame(left=True),) + tuple(source[1:])
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    alternate_candidate = [tuple(source)]
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        names = tuple(stage.name for stage in stages)
+        candidate = (faster if names == ('239',)
+                     else alternate_candidate[0] if names == ('240',)
+                     else tuple(frames))
+        if kwargs.get('stage_result_callback') is not None:
+            kwargs['stage_result_callback'](names[-1], candidate)
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '1',
+        '--start-at-splice', '239'])
+    main()
+
+    stable = tmp_path / '97-1_250_alt_route.txt'
+    meta = tmp_path / 'optim_250_alt_route.alt_route.json'
+    assert stable.is_file() and meta.is_file()
+    assert tuple(editable_frames(decode_complex_replay(stable.read_text()).frames)) == tuple(source)
+    import json
+    assert json.loads(meta.read_text())['route'] == 'alternate'
+    assert (tmp_path / '97-1_250.txt').is_file()  # overall winner remains primary
+    assert 'saved alternate route' in capsys.readouterr().out
+
+    # The next search is worse for the alternate route. Its independent
+    # history must not regress even when the current primary is stronger.
+    alternate_candidate[0] = tuple(source)
+    before = stable.read_bytes()
+    main()
+    assert stable.read_bytes() == before
+
+
+def test_alternate_rejoin_remains_accessible_when_it_wins(
+        tmp_path, monkeypatch):
+    """A stable alt-labelled file exists even if normal stage output is alt."""
+    from nv14_engine import InputFrame
+    from nv14_replay import decode_complex_replay, editable_frames
+
+    _level, source, _saved, _output, _packed, argv = _setup(tmp_path)
+    alt_winner = (InputFrame(left=True),) + tuple(source[1:])
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        names = tuple(stage.name for stage in stages)
+        candidate = alt_winner if names == ('240',) else tuple(frames)
+        callback = kwargs.get('stage_result_callback')
+        if callback is not None:
+            callback(names[-1], candidate)
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '1',
+        '--start-at-splice', '239'])
+    main()
+    stable = tmp_path / '97-1_250_alt_route.txt'
+    assert stable.is_file()
+    assert tuple(editable_frames(decode_complex_replay(stable.read_text()).frames)) == alt_winner
+    assert (tmp_path / '97-1_250_other_route.txt').is_file()
+
+
+def test_alternate_rejoin_writes_stable_ltm_from_inputs9(
+        tmp_path, monkeypatch):
+    """The saved alt-route LTM is openable and has alt replay in its inputs."""
+    from nv14_ltm import LtmMovie
+    from nv14_replay import editable_frames
+
+    argv = _ltm_alt_branch_route(tmp_path)
+    goals = tmp_path / 'goals'
+    for name in ('239', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\nbranch=9\n')
+
+    def fake_search(_level, frames, stages, _config, **kwargs):
+        callback = kwargs.get('stage_result_callback')
+        if callback is not None:
+            callback(stages[-1].name, tuple(frames))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--auto-runs', '1', '--start-at-splice', '239'])
+    main()
+    result = tmp_path / 'optim_250_alt_route.ltm'
+    assert result.is_file()
+    assert (tmp_path / '97-1_250_alt_route.txt').is_file()
+    assert (tmp_path / 'optim_250_alt_route.alt_route.json').is_file()
+    assert editable_frames(LtmMovie.load(result).replay_frames)[0].left
+
+    # The saved LTM is directly checkable against the shared rejoin goal
+    # without the source movie's inputs9 becoming a second check target.
+    before = result.read_bytes()
+    monkeypatch.setattr(sys, 'argv', [
+        'optimize_replay.py', 'auto', str(result),
+        '--config', argv[argv.index('--config') + 1],
+        '--splice-config', str(routes),
+        '--auto-splice-directory', str(goals),
+        '--level-id', '00-0',
+        '--check-splices', '--check-splice', '250',
+        '--splice-skip-alt-route',
+    ])
+    main()
+    assert result.read_bytes() == before
+
+
+def test_alternate_checkpoint_saved_under_stronger_unlabelled_overall_best(
+        tmp_path, monkeypatch):
+    """An older global seam winner must not cause the alt candidate to vanish."""
+    from nv14_engine import InputFrame
+    from nv14_replay import decode_complex_replay, editable_frames, encode_complex_replay
+    from tests.test_user_splice_list_summary import _write_combined
+
+    level, source, _saved, _output, _packed, argv = _setup(tmp_path)
+    stronger = (InputFrame(left=True),) + tuple(source[1:])
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    # Simulate an existing overall-best file from before branch provenance
+    # was recorded. Neither new rejoin candidate beats it.
+    _write_combined(tmp_path / 'optim_250.txt', level, stronger)
+    (tmp_path / '97-1_250.txt').write_text(encode_complex_replay(stronger) + '\n')
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        callback = kwargs.get('stage_result_callback')
+        if callback is not None:
+            callback(stages[-1].name, tuple(source))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '1',
+        '--start-at-splice', '239'])
+    main()
+    saved_alt = tmp_path / '97-1_250_alt_route.txt'
+    assert saved_alt.is_file()
+    assert tuple(editable_frames(decode_complex_replay(saved_alt.read_text()).frames)) == tuple(source)
+    assert tuple(editable_frames(decode_complex_replay(
+        (tmp_path / '97-1_250.txt').read_text()).frames)) == stronger
