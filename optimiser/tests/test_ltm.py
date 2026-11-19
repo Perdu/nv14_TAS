@@ -521,21 +521,90 @@ def test_shorter_and_longer_replays_resize_config_and_pad_new_input_frames(
     assert len(LtmMovie.load(output).replay_frames) == len(frames)
 
 
-def test_shortening_refuses_to_discard_non_n_input_data(tmp_path: Path) -> None:
+def test_shortening_preserves_non_n_events_at_their_original_frames(
+    tmp_path: Path,
+) -> None:
     source = _write_ltm(
         tmp_path / "00-0.ltm",
         b"|K20|\n|Kff51|\n|Kff53|Mclick:1|\n|post|\n",
         config=_basic_config(frame_count=4),
+        extra_members=(("inputs8", b"alternate branch untouched\n"),),
     )
     movie = LtmMovie.load(source)
+    output = tmp_path / "short-checkpoint.ltm"
+    movie.write(
+        output,
+        (InputFrame(left=True),),
+        level_id="00-0",
+        level_record=_level_record(),
+    )
 
-    with pytest.raises(LtmError, match="discarding non-N input data"):
-        movie.write(
-            tmp_path / "unsafe-shortening.ltm",
-            (InputFrame(left=True),),
-            level_id="00-0",
-            level_record=_level_record(),
-        )
+    assert _member_bytes(output, "inputs").decode().splitlines() == [
+        "|K20|", "|Kff51|", "|Mclick:1|", "|post|",
+    ]
+    assert _member_bytes(output, "inputs8") == b"alternate branch untouched\n"
+    assert _member_bytes(output, "config.ini") == _basic_config(frame_count=4)
+    assert tuple(map(_held_bits, LtmMovie.load(output).replay_frames)) == (
+        (True, False, False),
+    )
+
+
+def test_shortening_preserves_very_late_non_n_event_without_resurrecting_n_inputs(
+    tmp_path: Path,
+) -> None:
+    # A checkpoint near the beginning of a long LTM must not abort because a
+    # recorder/editor event occurs thousands of input ticks later (e.g. 2098).
+    source_count = 2101
+    rows = ["|K20|"] + ["|Kff53|" for _ in range(source_count)] + ["|post|"]
+    rows[2099] = "|Kff53:61|Mclick:1|"  # replay frame 2098
+    source = _write_ltm(
+        tmp_path / "00-0.ltm",
+        ("\n".join(rows) + "\n").encode(),
+        config=_basic_config(frame_count=len(rows)),
+    )
+    levels = tmp_path / LEVEL_DATABASE_NAME
+    levels.write_text(_level_record() + "\n", encoding="utf-8")
+    loaded = cli._load_source(
+        source, levels_file_path=levels, explicit_level_id=None,
+        ltm_postroll=None,
+    )
+    new_frames = (InputFrame(right=True),) * 135
+    output = tmp_path / "00-0_135.ltm"
+    packed_output = tmp_path / "00-0_135.txt"
+    # Exercise the exact CLI checkpoint-writing path that previously raised
+    # SystemExit and terminated the multi-splicer campaign.
+    cli._write_result(
+        loaded, output, packed_output, cli.encode_complex_replay(new_frames)
+    )
+
+    output_lines = _member_bytes(output, "inputs").decode().splitlines()
+    assert len(output_lines) == len(rows)
+    assert output_lines[135] == "|Kff53|"
+    assert output_lines[136] == "|"  # discarded N movement now neutral
+    assert output_lines[2099] == "|K61|Mclick:1|"
+    assert output_lines[-1] == "|post|"
+    assert len(LtmMovie.load(output).replay_frames) == len(new_frames)
+    assert tuple(map(_held_bits, decode_complex_replay(
+        packed_output.read_text().strip()).frames)) == tuple(map(_held_bits, new_frames))
+    assert _member_bytes(output, "config.ini") == _basic_config(frame_count=len(rows))
+
+
+def test_shortening_drops_n_only_tail_when_no_other_input_would_be_lost(
+    tmp_path: Path,
+) -> None:
+    source = _write_ltm(
+        tmp_path / "00-0.ltm",
+        b"|K20|\n|Kff51|\n|Kff53|\n|Kffe1|\n|post|\n",
+        config=_basic_config(frame_count=5),
+    )
+    output = tmp_path / "short.ltm"
+    LtmMovie.load(source).write(
+        output, (InputFrame(left=True),),
+        level_id="00-0", level_record=_level_record(),
+    )
+    assert _member_bytes(output, "inputs").decode().splitlines() == [
+        "|K20|", "|Kff51|", "|post|",
+    ]
 
 
 def test_explicit_postroll_round_trip_keeps_deliberate_trailing_neutral_replay_frames(

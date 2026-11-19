@@ -158,10 +158,14 @@ preserved. So are archive members such as alternate input branches,
 annotations and editor data, the pre-Space setup, and the movie's neutral
 post-roll/padding. If an optimised replay becomes longer than the original
 replay body, newly required frame lines contain only the n controls. If it
-becomes shorter, output is refused rather than discarding unrelated input from
-any source replay line that would be removed. The gzip/tar container is rebuilt,
-so whole-file binary equality is not expected even when retained member data
-is unchanged.
+becomes shorter, N-only rows can be removed. If a discarded replay row
+contains unrelated input (for example a mouse event near the end of a long
+source movie), the discarded rows are instead retained at their original libTAS
+frame positions with only the obsolete n movement/jump keys cleared. This
+preserves the timing of unrelated events without lengthening the optimiser's
+saved n replay; a short splice checkpoint can therefore still have a long
+neutral movie tail. The gzip/tar container is rebuilt, so whole-file binary
+equality is not expected even when retained member data is unchanged.
 
 A raw LTM has no n level data, so the optimiser resolves a level identifier and
 looks it up in `N v1.4 + NReality levels.txt`:

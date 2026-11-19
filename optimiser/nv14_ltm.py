@@ -428,14 +428,23 @@ class LtmMovie:
         suffix_endings = list(self.input_endings[source_body_end:])
 
         if len(frames) < source_tick_count:
-            for offset, line in enumerate(
-                source_body_contents[len(frames) :], start=len(frames)
-            ):
-                if not _contains_only_n_controls(line):
-                    raise LtmError(
-                        "cannot shorten this LTM without discarding non-N input "
-                        f"data at replay frame {offset}"
-                    )
+            discarded_body = source_body_contents[len(frames) :]
+            if any(not _contains_only_n_controls(line) for line in discarded_body):
+                # A short stage checkpoint may come from an LTM with much later
+                # mouse, editor, timing, or other non-N events.  Truncating the
+                # discarded input rows would lose those events; moving them to
+                # the immediate post-roll would change their recorded timing.
+                # Keep every discarded row at its original physical frame,
+                # removing only the obsolete N movement/jump controls.  The
+                # saved N replay still ends at len(frames) and can be reloaded
+                # independently of this preserved libTAS-only tail.
+                suffix_contents = [
+                    _replace_n_controls(line, InputFrame())
+                    for line in discarded_body
+                ] + suffix_contents
+                suffix_endings = list(
+                    source_body_endings[len(frames) :]
+                ) + suffix_endings
 
         body_contents: list[str] = []
         body_endings: list[str] = []
