@@ -245,6 +245,55 @@ def _replace_section_inputs(
             tuple(base[base_to + 1:]))
 
 
+def _realign_next_section_seed(
+    improved: Sequence[InputFrame], reference: Sequence[InputFrame],
+    *, improved_arrival: int, reference_arrival: int,
+    next_target: int, next_start: int,
+    source_endpoint: EndpointEvaluator, next_endpoint: EndpointEvaluator,
+    next_level: Level,
+) -> tuple[int, tuple[InputFrame, ...]] | None:
+    """Offer one verified, bounded inter-splice timing-shift seed.
+
+    Preserve the new checkpoint *through its actual arrival tick*. Copy only
+    the old continuation up to the next splice's deadline, never its later
+    sections. Neutral input fills the shortened tail. Offsets are attempted
+    in deterministic order (exact frame gain first, then +/-1 and +/-2).
+    This is a search seed, not a published splice/complete best.
+    """
+    from nv14_replay import simulate_through_frame
+
+    if (reference_arrival <= improved_arrival or
+            improved_arrival >= next_target or reference_arrival >= next_target):
+        return None
+    # Borrow only the next *actual* section, if that checkpoint is reached;
+    # otherwise borrow at most through its deadline. Never shift later stages.
+    old_next = next_endpoint.evaluate(
+        _materialise_splice_tail(reference, next_target))
+    if old_next.feasible and old_next.frame <= reference_arrival:
+        return None  # No physical interval between these two goals.
+    section_end = old_next.frame if old_next.feasible else next_target
+    reference_section = _materialise_splice_tail(reference, section_end)[:section_end + 1]
+    for offset, raw in gain_aware_suffix_retimes(
+            improved, reference_section,
+            prefix_arrival=improved_arrival,
+            reference_arrival=reference_arrival):
+        proposed = _materialise_splice_tail(raw, next_target)
+        if proposed == _materialise_splice_tail(improved, next_target)[:next_target + 1]:
+            continue  # Only trailing neutralization changed, not this section.
+        reached = source_endpoint.evaluate(proposed)
+        if not reached.feasible or reached.frame != improved_arrival:
+            continue
+        # An immutable prefix that dies before the next editable interval
+        # cannot be repaired by mutations confined to that interval.
+        if next_start > 0:
+            state = simulate_through_frame(
+                next_level, proposed, min(next_start - 1, next_target))
+            if state.player.dead or state.level_complete:
+                continue
+        return offset, proposed
+    return None
+
+
 def _stage_improvement_text(goal: EndpointGoal,
                             previous: EndpointEvaluation | None,
                             current: EndpointEvaluation) -> str:
@@ -2227,6 +2276,10 @@ def optimise_user_splices(
             history_origins = history_origins[:max_stage_lookback]
         improved = False
         unfulfilled: list[str] = []
+        # New stage bests are considered at the next stage boundary, not in
+        # every worker callback. Keep only the latest verified faster arrival.
+        next_section_retimes: dict[int, tuple[tuple[InputFrame, ...], int,
+                                             tuple[tuple[InputFrame, ...], ...]]] = {}
         stage_begin = int(active_phase["stage_index"]) if active_phase is not None else first_stage
         for index in range(stage_begin, last_stage + 1):
             stage = stages[index]
@@ -2281,6 +2334,56 @@ def optimise_user_splices(
                 else:
                     branches = [b for b in branches if b != input_seed]
             archived_seed_details: dict[tuple[InputFrame, ...], str] = {}
+            if not single_input_seed and index in next_section_retimes:
+                fast_replay, fast_frame, old_sources = next_section_retimes.pop(index)
+                # Use real prior arrivals on each source; nominal splice
+                # numbers and goal deadlines are not physical seam frames.
+                source_endpoint = original_endpoints[index - 1]
+                # Bound this deterministic preparation step independently of
+                # the size of saved archives and the ordinary seed quota.
+                references = dict.fromkeys((*old_sources, *branches[:3], input_seed))
+                ranked_references = []
+                for reference_replay in tuple(references)[:8]:
+                    reference_replay = _materialise_splice_tail(
+                        reference_replay, stage.goal.target_frame)
+                    source_score = source_endpoint.evaluate(reference_replay)
+                    if not source_score.feasible or source_score.frame <= fast_frame:
+                        continue
+                    next_score = original_endpoints[index].evaluate(reference_replay)
+                    section_end = (next_score.frame if next_score.feasible and
+                                   next_score.frame > source_score.frame else
+                                   stage.goal.target_frame)
+                    activity = sum(int(f.left or f.right or f.jump) for f in
+                                   reference_replay[source_score.frame + 1:section_end + 1])
+                    # Prefer an actual feasible continuation over an archived
+                    # stage-only replay padded with neutral input. Otherwise
+                    # prefer a section containing real control transitions.
+                    ranked_references.append((not next_score.feasible, -activity,
+                                              reference_replay, source_score))
+                ranked_references.sort(key=lambda item: item[:2])
+                for _, _, reference_replay, source_score in ranked_references:
+                    shifted = _realign_next_section_seed(
+                        fast_replay, reference_replay,
+                        improved_arrival=fast_frame,
+                        reference_arrival=source_score.frame,
+                        next_target=stage.goal.target_frame,
+                        next_start=stage.start,
+                        source_endpoint=source_endpoint,
+                        next_endpoint=original_endpoints[index],
+                        next_level=stage_levels[index])
+                    if shifted is None:
+                        continue
+                    offset, candidate = shifted
+                    if candidate not in branches:
+                        branches.append(candidate)
+                        description = (f"realigned {stages[index-1].name} -> "
+                                       f"{stage.name} ({source_score.frame-fast_frame}f lead, "
+                                       f"offset {offset:+d})")
+                        archived_seed_details[candidate] = description
+                        if progress:
+                            progress(f"[auto:user-splice:realign] {description}; "
+                                     "verified source checkpoint; next stage search seed only")
+                    break
             if not single_input_seed:
                 # In the multi-splicer, reserve one additional search seed for
                 # the fastest measurable archived section, independent of
@@ -2458,6 +2561,18 @@ def optimise_user_splices(
                                         f"{_stage_savings_text(stage.goal, evaluation, input_stage_evals[index], 'input run')}; "
                                         f"{_stage_savings_text(stage.goal, evaluation, previous_absolute, 'previous absolute best')}")
                         if old_stage_rank is None or rank < old_stage_rank:
+                            if (not single_input_seed and index < last_stage and
+                                    old_evaluation is not None and
+                                    old_evaluation.frame > evaluation.frame):
+                                # A new *frame* lead, not merely a better
+                                # position or velocity tie-break, is what
+                                # makes downstream inputs late.
+                                preceding = stage_checkpoints[index]
+                                references = tuple(dict.fromkeys(
+                                    r for r in (preceding, branch, current, input_seed)
+                                    if r is not None))
+                                next_section_retimes[index + 1] = (
+                                    normalized, evaluation.frame, references)
                             stage_best[index] = rank
                             stage_best_evaluation[index] = evaluation
                             exported = stage_export(normalized)

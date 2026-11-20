@@ -2015,8 +2015,27 @@ removing existing frontier slots. The best candidate from each source runs
 before lower-ranked candidates from the same source (n-1 rank 1, n-2 rank 1,
 then n-1 rank 2, etc.). Duplicate replays are searched only once.
 The seed log identifies `current input run`, each saved splice origin and
-any fastest archived section seed. This may add an additional backend search
-per stage when the input or archived section differs from the selected frontiers. An explicit `--splice-from-best` continues to start from
+any fastest archived section seed. When a **verified stage best** reaches its
+named goal at least one frame earlier than its previous best, multi-splicer
+also tries a **one-section realignment** at the next stage. It preserves the
+improved replay through its actual goal-arrival tick, borrows the previous
+continuation up to the *next* goal's actual arrival (or deadline if not yet
+reached), and tries offsets 0, -1, +1, -2, +2. At most eight reference
+replays are considered and at most **one extra seed** is searched for the
+next stage. The preceding goal must still be reached on its original tick,
+and the next stage's immutable prefix must survive. A seed need not already
+reach the *next* goal: that is what its subsequent Auto/Local search will
+attempt. Retimed seeds never replace a checkpoint directly and are not
+propagated to all subsequent sections. The log tag is
+`[auto:user-splice:realign]`. Retiming is confined to consecutive stages
+within one scheduled route phase; it does not cross an independently seeded
+alternate-branch boundary. Standalone Hybrid and merge-only/list mode are
+unchanged. This may add an additional backend search when a realignment is
+verified and physically distinct from existing sources.
+
+Independently, the usual current-input and fastest-archived-section seeds
+can add backend searches when they differ from the selected frontiers.
+An explicit `--splice-from-best` continues to start from
 the requested saved splice; an interrupted search resumes its exact in-flight
 backend first. With `--splice-each-best`, the saved best of that same stage
 is also tried, after the input.
