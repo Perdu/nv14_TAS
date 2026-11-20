@@ -1313,6 +1313,34 @@ def _write_result(
             ) from exc
 
 
+class _PostGoalPreservationError(ValueError):
+    """A replay became ineligible when its original suffix was restored."""
+
+
+def _preserve_endpoint_post_goal_inputs(
+    original: Sequence[InputFrame],
+    candidate: Sequence[InputFrame],
+    goal: EndpointGoal,
+    arrival_frame: int,
+) -> tuple[InputFrame, ...]:
+    """Keep the invocation's inputs after the ticks needed to score a goal.
+
+    An earliest arrival can precede the configured endpoint deadline. Search
+    mutations after that arrival have no reason to replace the continuation
+    in a standalone checkpoint. Survival must retain the candidate's witness
+    ticks; a velocity-window maximum needs its entire observation interval.
+    The caller must *reverify* the reconstructed replay: late interaction
+    constraints can still depend on the restored suffix.
+    """
+    if len(candidate) != len(original):
+        raise ValueError("endpoint candidate changed the input replay length")
+    through = arrival_frame + goal.survive_after_goal
+    if goal.velocity_frames is not None:
+        through = max(through, goal.velocity_frames[1])
+    first_original = through + 1
+    return tuple(candidate[:first_original]) + tuple(original[first_original:])
+
+
 def _verify_packed_replay_for_output(
     level: Level,
     frames: Sequence[InputFrame],
@@ -4490,6 +4518,26 @@ def _run_local_population(
         )
         if not evaluation.feasible:
             raise ValueError("population output does not satisfy the endpoint goal")
+        restored = _preserve_endpoint_post_goal_inputs(
+            original, packed, goal, evaluation.frame,
+        )
+        if restored != tuple(packed):
+            # Re-encode first: a jump held across the splice boundary can
+            # change the trigger bit on the first restored tick. Verify the
+            # exact encoded stream, never an uncanonicalised concatenation.
+            replay_string = encode_complex_replay(restored)
+            packed = tuple(editable_frames(decode_complex_replay(replay_string).frames))
+            # Late prohibitions (e.g. no drone detection) can invalidate a
+            # previously feasible search candidate after suffix restoration.
+            try:
+                evaluation = verify_endpoint(
+                    level, packed, goal, expected=evaluation,
+                    python_resimulate=config.python_resimulate,
+                )
+            except ValueError as exc:
+                raise _PostGoalPreservationError(
+                    f"restored post-goal inputs fail endpoint verification: {exc}"
+                ) from exc
         return replay_string, packed, evaluation
 
     def secondary_summary(evaluation) -> str:
@@ -4522,7 +4570,11 @@ def _run_local_population(
 
     def save_best(candidate) -> bool:
         nonlocal checkpoint_written
-        replay_string, _packed, evaluation = verified_candidate(candidate)
+        try:
+            replay_string, _packed, evaluation = verified_candidate(candidate)
+        except _PostGoalPreservationError as exc:
+            print(f"[local:checkpoint] rejected post-goal input changes: {exc}", flush=True)
+            return False
         _write_result(source, output_path, replay_output_path, replay_string)
         checkpoint_written = True
         absolute = saved_best_color.new_absolute_best(evaluation.objective_key)
@@ -4552,7 +4604,19 @@ def _run_local_population(
                 raise SystemExit(130)
             raise ValueError("no feasible endpoint candidate was found")
         # Verify every ranked replay before publishing the final result set.
-        verified = [(candidate, *verified_candidate(candidate)) for candidate in result.candidates[:config.top_results]]
+        verified = []
+        for candidate in result.candidates:
+            try:
+                checked = verified_candidate(candidate)
+            except _PostGoalPreservationError:
+                # Never publish a ranked result with an altered post-goal
+                # suffix; try the next-ranked candidate if one is available.
+                continue
+            verified.append((candidate, *checked))
+            if len(verified) >= config.top_results:
+                break
+        if not verified:
+            raise ValueError("no population candidate remains feasible with preserved post-goal inputs")
     except (RuntimeError, ValueError) as exc:
         status = ("the most recent verified best replay remains on disk" if checkpoint_written
                   else "no output was written")
@@ -6733,15 +6797,37 @@ def main() -> None:
             goal_paths=getattr(args, "_goal_config_paths", ()),
         )
 
+        def endpoint_output(candidate):
+            # A standalone endpoint checkpoint should be an edit of the input
+            # only through its verified goal. Full-run Auto is handled in a
+            # separate path; completion-policy=complete still needs to finish.
+            candidate_frames = tuple(editable_frames(candidate.frames))
+            expected = candidate.evaluation
+            restored = (_preserve_endpoint_post_goal_inputs(
+                replay.frames, candidate_frames, goal, expected.frame)
+                if endpoint_config.completion_policy == "checkpoint"
+                else candidate_frames)
+            replay_text = encode_complex_replay(restored)
+            packed = tuple(editable_frames(decode_complex_replay(replay_text).frames))
+            result = verify_endpoint(level, packed, goal, expected=expected)
+            if endpoint_config.completion_policy == "complete":
+                completed = evaluate_replay_with_sentinel(level, packed)
+                if not completed.valid or completed.finish_tick != len(packed):
+                    raise ValueError("packed endpoint replay does not complete on its neutral sentinel")
+            return replay_text, packed, result
+
         def save_endpoint_best(candidate):
             nonlocal endpoint_checkpoints
-            # The campaign checks the candidate independently and invokes this
-            # only for a strict improvement over the starting objective.
-            replay_text = encode_complex_replay(candidate.frames)
+            # Never export a post-arrival mutation. A constraint that requires
+            # the removed changes makes this a nonpublishable checkpoint.
+            try:
+                replay_text, _, e = endpoint_output(candidate)
+            except ValueError as exc:
+                endpoint_status("checkpoint", f"skipped candidate: {exc}")
+                return
             _write_result(source, output_path, replay_output_path, replay_text)
             endpoint_checkpoints += 1
 
-            e = candidate.evaluation
             gap = endpoint_exit_edge_distance(level, goal, e)
             distance_text = (f" (distance to exit {gap:.2f})"
                              if gap is not None else "")
@@ -6776,16 +6862,10 @@ def main() -> None:
             )
             if winner is None:
                 raise ValueError("no feasible endpoint found; no output was written")
-            packed = tuple(editable_frames(decode_complex_replay(
-                encode_complex_replay(winner.frames)).frames))
-            verified = verify_endpoint(level, packed, goal, expected=winner.evaluation)
+            replay_text, packed, verified = endpoint_output(winner)
             if not verified.feasible:
                 raise ValueError("packed replay does not satisfy endpoint goal")
-            if endpoint_config.completion_policy == "complete":
-                completed = evaluate_replay_with_sentinel(level, packed)
-                if not completed.valid or completed.finish_tick != len(packed):
-                    raise ValueError("packed endpoint replay does not complete on its neutral sentinel")
-            _write_result(source, output_path, replay_output_path, encode_complex_replay(packed))
+            _write_result(source, output_path, replay_output_path, replay_text)
         except (ValueError, RuntimeError) as exc:
             raise SystemExit(str(exc)) from exc
         final_gap = endpoint_exit_edge_distance(level, goal, verified)

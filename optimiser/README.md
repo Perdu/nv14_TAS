@@ -2479,3 +2479,21 @@ Or pass `--splice-adaptive-range-lookback 50` and
 verified checkpoint arrival frames, not splice names. Redirected logs and
 `--no-color` remain ANSI-free. Random-splicer already creates its stages and
 ranges dynamically and does not have the same stale hand-written intervals.
+
+### Standalone Auto/Local post-goal input preservation (patch 145)
+
+Like standalone Hybrid, **endpoint Auto** (`tas.py auto LEVEL SPLICE`)
+with `completion-policy = "checkpoint"` and **Local population** restore the
+invocation's original held inputs after the *verified* goal-arrival tick.
+When `survive-after-goal` is set, its survival-witness ticks remain untouched
+by restoration; primary velocity goals with `velocity-frames` retain the
+whole observation window. Live best checkpoints, final outputs and Local's
+ranked outputs all use the same policy. The restored replay is re-encoded and
+independently verified before publication; candidates that depend on altered
+post-goal inputs to satisfy later constraints are not published.
+
+This does **not** shorten the configured search range or reduce proposal
+budgets. Local fixed-frame/window search is already bounded by its target
+frame, and full-run Auto or endpoint Auto with `completion-policy = "complete"`
+retains its completion-only semantics. Preserving the input tail does not
+mean the old continuation is guaranteed to work after an improved prefix.
