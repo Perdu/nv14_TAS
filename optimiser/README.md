@@ -2447,3 +2447,31 @@ CLI equivalents are `--objective max-vx --velocity-frames 360:390` for Local
 and `--auto-objective max-vx --auto-velocity-frames 360:390` for Auto.
 Local **window** search does not support primary endpoint-velocity objectives;
 use `search = "population"` or Hybrid.
+
+### In-memory range correction for named multi-splicer (patch 143)
+
+A multi-splicer search may arrive at an earlier checkpoint well before the
+hand-written `range` of the next splice. For each named stage, the optimiser
+now **extends (never shrinks)** the editable interval to include the verified
+arrival at the previous stage (or n-2 when n-1 is infeasible) minus 50 frames.
+It also includes an already reached current-stage arrival. No goal TOML files
+are rewritten, and the stage's configured `target-frame` remains its upper
+search deadline. If the configured interval had to be extended, a **red**
+`[auto:user-splice:range-warning]` asks you to edit that goal file.
+
+The warning is also red when the computed editable interval or a verified
+previous-to-current section (both checkpoints on the same replay) exceeds
+300 frames. Independent saved checkpoint times are never treated as one
+physical section. Both thresholds are tunable:
+
+```toml
+[multi-splicer]
+adaptive-range-lookback = 50
+section-warning-frames = 300
+```
+
+Or pass `--splice-adaptive-range-lookback 50` and
+`--splice-section-warning-frames 300` on the CLI. The check uses actual
+verified checkpoint arrival frames, not splice names. Redirected logs and
+`--no-color` remain ANSI-free. Random-splicer already creates its stages and
+ranges dynamically and does not have the same stale hand-written intervals.

@@ -80,6 +80,8 @@ class RandomSpliceConfig:
     max_repair_searches: int = 8
     frontier: int = 0  # additional cross-waypoint partial beam; CLI defaults to 3
     stage_lookback: int = 2  # named splices: use frontiers n-1 through n-N
+    adaptive_range_lookback: int = 50  # named stage: reach n-1 (or n-2) minus this many ticks
+    section_warning_frames: int = 300  # red warning for long section / editable interval
     waypoint_stage_lookback: int = 1  # sampled modes opt in to previous waypoint pools
     save_frontier: int = 64  # persisted per-stage candidates; separate from active frontier
     live_save_best: bool = False  # bypass parent live-best throttling on named stages
@@ -186,6 +188,9 @@ class RandomSpliceConfig:
             raise ValueError("random splice rounds must be nonnegative (0 means continuous)")
         if type(self.stagnation_rounds) is not int or self.stagnation_rounds < 0:
             raise ValueError("random splice stagnation_rounds must be nonnegative")
+        for name in ("adaptive_range_lookback", "section_warning_frames"):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                raise ValueError(f"{name} must be a positive integer")
         if type(self.exit_lookback) is not int or self.exit_lookback < 1:
             raise ValueError("random splice exit_lookback must be positive")
         if type(self.frontier) is not int or self.frontier < 0:

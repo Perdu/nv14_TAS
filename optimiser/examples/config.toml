@@ -109,6 +109,9 @@ iterations = 10000
 auto-stagnation-rounds = 5
 local-stagnation-rounds = 20
 lookback = 2
+# Auto-expand outdated named splice ranges without changing the splice files.
+# adaptive-range-lookback = 50
+# section-warning-frames = 300
 frontier = 3
 # Number of candidates to save per splice on disk
 save-frontier = 64

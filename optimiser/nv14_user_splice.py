@@ -211,6 +211,47 @@ def _diverse_saved_archive(
     return sorted(selected, key=pool.__getitem__)
 
 
+
+
+def _adapt_named_stage_range(
+    stage: UserSpliceStage, earlier: Sequence[EndpointEvaluation | None],
+    current: EndpointEvaluation | None, *, lookback: int, warn_frames: int,
+    measured_section: int | None = None,
+) -> tuple[UserSpliceStage, tuple[str, ...]]:
+    """In-memory extension of a stale named splice range; never edit TOML.
+
+    Only use *verified feasible* checkpoint times. n-1 is preferred; if it
+    hasn't been reached, n-2 is a fallback. Never shrink a configured range:
+    even when arrivals move earlier, the old interval remains searchable.
+    """
+    predecessor = next((item for item in earlier if item is not None and item.feasible), None)
+    start = stage.start
+    if predecessor is not None:
+        start = min(start, max(0, predecessor.frame - lookback))
+    end = stage.end
+    if current is not None and current.feasible:
+        # New gains can move the *current* arrival before the configured
+        # window as well: preserve its timing instead of searching too late.
+        start = min(start, current.frame)
+        end = max(end, min(stage.goal.target_frame, current.frame))
+    warnings: list[str] = []
+    if (start, end) != (stage.start, stage.end):
+        warnings.append(
+            f"{stage.name!r}: configured range {stage.start}:{stage.end} "
+            f"does not cover the live route; using {start}:{end} for this search only; "
+            "edit the splice file when convenient")
+    window_length = end - start + 1
+    if window_length > warn_frames:
+        warnings.append(f"{stage.name!r}: editable section {window_length} frames "
+                        f"exceeds warning threshold {warn_frames}")
+    # Never subtract arrival times from unrelated saved checkpoints and call
+    # the difference a section. Only a two-goal evaluation on *one replay*
+    # establishes a physical traversal length.
+    if measured_section is not None and measured_section > warn_frames:
+        warnings.append(f"{stage.name!r}: measured section {measured_section} frames "
+                        f"exceeds warning threshold {warn_frames}")
+    return replace(stage, start=start, end=end), tuple(warnings)
+
 def _materialise_splice_tail(frames: Sequence[InputFrame], target_frame: int
                              ) -> tuple[InputFrame, ...]:
     """Materialise the neutral inputs implicit past a recorded replay's end.
@@ -2301,6 +2342,33 @@ def optimise_user_splices(
         stage_begin = int(active_phase["stage_index"]) if active_phase is not None else first_stage
         for index in range(stage_begin, last_stage + 1):
             stage = stages[index]
+            if not single_input_seed:
+                # Prefer the actually reached n-1 checkpoint, or n-2 when
+                # n-1 has no feasible replay. A newly gained frame can move
+                # this boundary earlier during later outer rounds.
+                earlier = tuple(stage_best_evaluation[i] for i in
+                                range(index - 1, max(-1, index - 3), -1))
+                # A true section length requires both bounding goals to be
+                # feasible on the same replay; independent checkpoint frames
+                # cannot be subtracted as if they formed a viable route.
+                measured_section = None
+                if index > 0:
+                    for replay_candidate in (stage_checkpoints[index],
+                                             restored_stage_frames[index],
+                                             current, best_output):
+                        if replay_candidate is None:
+                            continue
+                        measured_section = section_duration(index, replay_candidate)
+                        if measured_section is not None:
+                            break
+                stage, range_warnings = _adapt_named_stage_range(
+                    stage, earlier, stage_best_evaluation[index],
+                    lookback=config.adaptive_range_lookback,
+                    warn_frames=config.section_warning_frames,
+                    measured_section=measured_section)
+                if progress:
+                    for warning in range_warnings:
+                        progress(f"[auto:user-splice:range-warning] {warning}")
             # Stage-specific Local TOML is an override for both Auto and Local
             # search backends, not a new choice of search backend.
             stage_config = splice_config_for_round(replace(config, **stage.config_overrides), round_no)

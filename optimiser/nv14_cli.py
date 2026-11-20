@@ -386,6 +386,8 @@ def _print_user_splice_progress(message: str, *, color: bool,
     elif message.startswith(("[auto:user-splice:baseline]", "[auto:baseline]",
                            "[local:population:baseline]")):
         _print_baseline_line(_timestamped_line(message), color=color)
+    elif message.startswith("[auto:user-splice:range-warning]"):
+        _print_colored_line(_timestamped_line(message), color=color, ansi_color=31)
     elif message.startswith("[auto:hybrid:gain:absolute]"):
         _print_best_line(_timestamped_line(message), color=color)
     elif message.startswith("[auto:hybrid:gain:input]"):
@@ -2058,6 +2060,8 @@ def _load_config_defaults(
         "frontier": "auto_splice_frontier",
         "save_frontier": "auto_splice_save_frontier",
         "lookback": "auto_splice_stage_lookback",
+        "adaptive_range_lookback": "auto_splice_adaptive_range_lookback",
+        "section_warning_frames": "auto_splice_section_warning_frames",
         "use_current_run": "auto_splice_use_current_run",
         "live_save_best": "auto_splice_live_save_best",
             "merge_only": "auto_splice_merge_only",
@@ -3250,6 +3254,14 @@ def build_parser() -> argparse.ArgumentParser:
                          help="named multi-splicer: include the input run as a search seed "
                               "(disable with --no-use-current-run; "
                               "the input remains a comparison baseline)")
+    command.add_argument("--splice-adaptive-range-lookback", modes=auto_modes,
+                         dest="auto_splice_adaptive_range_lookback", type=parse_positive_int,
+                         default=50, metavar="FRAMES",
+                         help="named multi-splicer only: extend an outdated editable start to the prior (or n-2) checkpoint minus N frames (default 50)")
+    command.add_argument("--splice-section-warning-frames", modes=auto_modes,
+                         dest="auto_splice_section_warning_frames", type=parse_positive_int,
+                         default=300, metavar="FRAMES",
+                         help="named multi-splicer only: warn red when a section or adapted window exceeds N frames (default 300)")
     command.add_argument("--splice-stage-lookback", "--auto-splice-stage-lookback",
                          dest="auto_splice_stage_lookback", modes=auto_modes,
                          type=parse_positive_int, default=2, metavar="N",
@@ -5621,6 +5633,8 @@ def main() -> None:
                     frontier=max(1, args.auto_splice_frontier),
                     save_frontier=args.auto_splice_save_frontier,
                     stage_lookback=args.auto_splice_stage_lookback,
+                    adaptive_range_lookback=args.auto_splice_adaptive_range_lookback,
+                    section_warning_frames=args.auto_splice_section_warning_frames,
                     seed=(int.from_bytes(os.urandom(8), "big") if args.seed == "random"
                           else 0 if args.seed is None else int(args.seed)),
                 )
