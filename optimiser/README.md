@@ -1794,7 +1794,7 @@ also retain their normal-search behaviour.
 `--ls-splice` is the separate read-only summary command: unlike merge-only,
 it never attempts or saves joins. Standalone merge-only uses all saved
 named splice bests. A stage selection (`--start-at-splice` / `--splice-start`,
-`--splice-stop`, `--splice-from-best`, or `--splice-reference`) instead starts
+`--splice-stop` / `--stop-at-splice`, `--splice-from-best`, or `--splice-reference`) instead starts
 normal splice optimisation for the selected stages, even when standalone
 `merge-only`, `merge-repair-only`, or `merge-retime-gains` is enabled in TOML.
 The same precedence applies if both switches are explicitly passed on the CLI;
@@ -2361,10 +2361,20 @@ route** (e.g. `--start-at-splice 482`), only that alternate route is searched,
 starting at `482` and continuing through `485`, the shared rejoin `527`, and
 then the shared suffix to `end`. This works for both short and full alt-route
 notations. Shared stage names retain the interleaved two-route behavior;
-`--ls-splice` still lists both routes in full. `--splice-stop` and
-`--splice-from-best` remain incompatible
-with alternative routes. Each phase has its own backend checkpoint filename,
-so its in-flight state cannot be mistaken for another branch's work.
+`--ls-splice` still lists both routes in full. `--stop-at-splice NAME`
+(alias `--splice-stop NAME`) limits **searched** splices inclusively in
+**every** outer round; it does not stop the campaign or disable startup/final
+merge and repair. For a stop in the shared prefix or primary branch before
+reconvergence, only that portion of the primary route is searched. A stop at
+the shared rejoin searches both branches and both joins but not the suffix;
+a later shared-suffix stop includes both branches and searches the suffix
+through the requested stage. An alternate-only stop selects the alternate
+route, similarly to an alternate-only start. Saved later-stage checkpoints
+remain available to merge/repair, but those stages receive no standalone
+searches. The short `[multi-splicer] stop = "NAME"` TOML setting is equivalent.
+`--splice-from-best` remains incompatible with alternate routes. Each phase
+has its own backend checkpoint filename, so its in-flight state cannot be
+mistaken for another branch's work.
 
 ### Registered splice comparison replay
 

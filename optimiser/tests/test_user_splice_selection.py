@@ -149,3 +149,12 @@ def test_progress_reports_previous_score_position_and_no_baseline_write(monkeypa
     assert 'min-x' in temporary
     assert 'rank (' not in temporary
     assert 'NOT verified' not in temporary
+
+
+def test_stop_at_splice_alias_matches_splice_stop():
+    from nv14_cli import parse_arguments
+    argv = ['auto', 'source.ltm', '--auto-random-splice', '--auto-splice-mode',
+            'user', '--auto-splice-files', '230,240,end']
+    old = parse_arguments(argv + ['--splice-stop', '240'])
+    new = parse_arguments(argv + ['--stop-at-splice', '240'])
+    assert old.auto_splice_stop == new.auto_splice_stop == '240'

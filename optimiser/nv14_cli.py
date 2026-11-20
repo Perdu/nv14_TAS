@@ -2229,11 +2229,10 @@ def _validate_auto_goal_strategy(args: argparse.Namespace, explicit: set[str]) -
         raise SystemExit("user splice mode requires --auto-splice-files or [auto] splice-files")
     if args.auto_splice_alt_route and (not args.auto_random_splice or args.auto_splice_mode != "user"):
         raise SystemExit("--splice-alt-route requires named multi-splicer mode")
-    # A primary-route start can skip the shared prefix while the alternate
-    # campaign still searches its divergent stages. Stop/from-best remain
-    # ambiguous across independently ordered named routes.
-    if args.auto_splice_alt_route and (args.auto_splice_stop or args.auto_splice_from_best) and not args.auto_splice_single:
-        raise SystemExit("alternate routes cannot be combined with --splice-stop/from-best")
+    # A saved-best starting point remains ambiguous across independently
+    # ordered routes; a stop boundary can be resolved to a particular route.
+    if args.auto_splice_alt_route and args.auto_splice_from_best and not args.auto_splice_single:
+        raise SystemExit("alternate routes cannot be combined with --splice-from-best")
     if args.auto_random_splice and args.auto_splice_files and args.auto_splice_mode != "user":
         raise SystemExit("splice-files requires --auto-splice-mode user")
     if (args.auto_random_splice and
@@ -3092,9 +3091,9 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-start", "--start-at-splice", "--auto-splice-start", dest="auto_splice_start",
                          modes=auto_modes, metavar="NAME",
                          help="first named splice to optimise (inclusive; earlier helper goals are non-binding)")
-    command.add_argument("--splice-stop", "--auto-splice-stop", dest="auto_splice_stop",
+    command.add_argument("--splice-stop", "--stop-at-splice", "--auto-splice-stop", dest="auto_splice_stop",
                          modes=auto_modes, metavar="NAME",
-                         help="last named splice to optimise (inclusive; completed outputs require canonical verification)")
+                         help="last named splice to search (inclusive) in each outer round; later checkpoints remain available for merge, repair and reporting")
     command.add_argument("--splice-from-best", dest="auto_splice_from_best",
                          modes=auto_modes, metavar="NAME",
                          help="seed from the best saved LTM/TXT for NAME and, by default, "
@@ -5357,17 +5356,37 @@ def main() -> None:
                         raise ValueError(
                             f"start splice {selected!r} is not in either named route; "
                             f"available splices: {', '.join(sorted(available))}")
+                # An alternate-only stop, like an alternate-only start, selects
+                # that branch as the active search route. Shared stop names
+                # retain the interleaved primary/alternate route campaign.
+                stop_selected = args.auto_splice_stop
+                primary_route_names = tuple(stage.name for stage in stages)
+                alternate_route_names = tuple(stage.name for stage in alternate_stages)
+                if alternate_stages and not args.auto_ls_splice and stop_selected is not None:
+                    available = set(primary_route_names) | set(alternate_route_names)
+                    if stop_selected not in available:
+                        raise ValueError(
+                            f"stop splice {stop_selected!r} is not in either named route; "
+                            f"available splices: {', '.join(sorted(available))}")
+                stop_selects_alternate = _start_selects_alternate_route(
+                    primary_route_names, alternate_route_names, stop_selected)
+                start_selects_alternate = _start_selects_alternate_route(
+                    primary_route_names, alternate_route_names, selected)
+                if (stop_selects_alternate and selected is not None and
+                        selected not in alternate_route_names):
+                    raise ValueError("--stop-at-splice on the alternate route cannot "
+                                     "be combined with a primary-only start splice")
                 if (alternate_stages and not args.auto_ls_splice and
-                        _start_selects_alternate_route(
-                            tuple(stage.name for stage in stages),
-                            tuple(stage.name for stage in alternate_stages), selected)):
+                        (start_selects_alternate or stop_selects_alternate)):
                     stages, alternate_stages = alternate_stages, ()
                     if alt_branch_frames is not None:
                         # A selected alternate-only route must not seed from inputs.
                         replay = ComplexReplay(alt_branch_frames)
+                    boundary = (f"--start-at-splice {selected!r}" if start_selects_alternate
+                                else f"--stop-at-splice {stop_selected!r}")
                     print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
-                          f"--start-at-splice {selected!r} selects the alternate route; "
-                          "searching from that splice through its shared suffix", flush=True)
+                          f"{boundary} selects the alternate route; "
+                          "searching its selected stages", flush=True)
                 if args.auto_splice_single is not None:
                     # All stages on the selected route are still loaded for
                     # saved candidates, suffix merges and reporting, but there
@@ -5735,6 +5754,10 @@ def main() -> None:
                                     if rejoin_name is not None else None)
                     start_index = (primary_names.index(args.auto_splice_start)
                                    if args.auto_splice_start is not None else 0)
+                    stop_index = (primary_names.index(args.auto_splice_stop)
+                                  if args.auto_splice_stop is not None else len(stages) - 1)
+                    if start_index > stop_index:
+                        raise ValueError("splice start must not be after splice stop")
                     if (rejoin_index is not None and start_index < rejoin_index
                             and prefix_count <= rejoin_index):
                         alt_rejoin_index = alt_names.index(rejoin_name, prefix_count)
@@ -5742,7 +5765,13 @@ def main() -> None:
                         primary_branch = stages[max(start_index, prefix_count):rejoin_index]
                         other_branch = alternate_stages[prefix_count:alt_rejoin_index]
                         shared_rejoin = stages[rejoin_index]
-                        shared_suffix = stages[rejoin_index + 1:]
+                        shared_suffix = stages[rejoin_index + 1:stop_index + 1]
+                        # A stop inside the prefix/primary branch is searched
+                        # without launching a later alternate branch or rejoin.
+                        # The complete stage archive is still available for
+                        # startup/final merges in every configured outer round.
+                        before_rejoin = (tuple(stages[start_index:stop_index + 1])
+                                         if stop_index < rejoin_index else ())
                         # Every segment has its own interrupted-backend state;
                         # one branch must never load another route's checkpoint.
                         input_completion = evaluate_replay_with_sentinel(level, replay.frames)
@@ -5958,9 +5987,26 @@ def main() -> None:
                         for outer_round in range(completed_passes, splice_config.rounds):
                             gains_before_round = phase_improvements
                             print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
-                                  f"full route round {outer_round+1}/{splice_config.rounds}: "
-                                  "shared prefix -> primary branch -> alternate branch -> "
-                                  "both rejoins -> shared suffix", flush=True)
+                                  f"full route round {outer_round+1}/{splice_config.rounds}: " +
+                                  ("primary route through " + repr(before_rejoin[-1].name)
+                                   if before_rejoin else
+                                   "shared prefix -> primary branch -> alternate branch -> "
+                                   "both rejoins -> shared suffix"), flush=True)
+                            if before_rejoin:
+                                run_route_phase('through-stop', before_rejoin, initial_input)
+                                # Even with a truncated stage search, a full
+                                # outer round is completed and committed here.
+                                persist_outer_round(outer_round + 1)
+                                stagnant_route_rounds = (stagnant_route_rounds + 1
+                                                         if phase_improvements == gains_before_round
+                                                         else 0)
+                                if (splice_config.stagnation_rounds and stagnant_route_rounds >=
+                                        splice_config.stagnation_rounds):
+                                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                                          f"stopping after {stagnant_route_rounds} stagnant "
+                                          "complete route round(s)", flush=True)
+                                    break
+                                continue
                             shared_seed = initial_input
                             if shared_prefix:
                                 _, prefix_results = run_route_phase(

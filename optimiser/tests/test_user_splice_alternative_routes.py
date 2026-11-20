@@ -31,8 +31,8 @@ def test_alt_route_toml_cli_and_validation(tmp_path):
     assert args.auto_splice_alt_route == ('230', 'end')
     args = parse_arguments(argv[1:] + ['--start-at-splice', 'end'])
     assert args.auto_splice_start == 'end'
-    with pytest.raises(SystemExit, match='alternate routes cannot be combined'):
-        parse_arguments(argv[1:] + ['--splice-stop', 'end'])
+    args = parse_arguments(argv[1:] + ['--stop-at-splice', 'end'])
+    assert args.auto_splice_stop == 'end'
 
 
 def test_skip_alt_route_cli_uses_primary_only_and_allows_primary_controls(tmp_path):
@@ -948,3 +948,153 @@ def test_alternate_checkpoint_saved_under_stronger_unlabelled_overall_best(
     assert tuple(editable_frames(decode_complex_replay(saved_alt.read_text()).frames)) == tuple(source)
     assert tuple(editable_frames(decode_complex_replay(
         (tmp_path / '97-1_250.txt').read_text()).frames)) == stronger
+
+
+def test_stop_at_splice_before_rejoin_keeps_outer_rounds_and_merge(
+        tmp_path, monkeypatch, capsys):
+    """A bounded search is not a request to end the campaign or merge work."""
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages),
+                      kwargs.get('merge_only', False), kwargs.get('resume_outer_round')))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '2',
+        '--stop-at-splice', '239', '--splice-merge-bests'])
+    main()
+    assert calls == [
+        (('230', '239', '240', '250', 'end'), True, None),
+        (('230', '239'), False, 0),
+        (('230', '239'), False, 1),
+        (('230', '239', '240', '250', 'end'), True, None),
+    ]
+    output = capsys.readouterr().out
+    assert 'full route round 1/2' in output
+    assert 'full route round 2/2' in output
+    assert 'alternate-branch: 240' not in output
+
+
+def test_stop_at_rejoin_searches_both_routes_but_not_suffix(
+        tmp_path, monkeypatch):
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append(tuple(stage.name for stage in stages))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '2',
+        '--stop-at-splice', '250'])
+    main()
+    assert calls == [('230',), ('239',), ('240',), ('250',), ('250',)] * 2
+    assert ('end',) not in calls
+
+
+def test_stop_at_shared_suffix_still_interleaves_both_routes(
+        tmp_path, monkeypatch):
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250', '260'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","260","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append(tuple(stage.name for stage in stages))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '1',
+        '--stop-at-splice', '260'])
+    main()
+    assert calls == [('230',), ('239',), ('240',), ('250',), ('250',), ('260',)]
+
+
+def test_stop_at_alt_only_selects_alt_branch_and_validates_missing_stop(
+        tmp_path, monkeypatch):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages), kwargs.get('stop_at')))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--auto-runs', '2', '--stop-at-splice', '240'])
+    main()
+    assert calls == [(('230', '240', 'end'), '240')]
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--auto-runs', '1', '--stop-at-splice', 'unknown'])
+    with pytest.raises(SystemExit, match="stop splice 'unknown'"):
+        main()
+
+
+def test_stop_at_shared_prefix_still_merges_alternative_archive(
+        tmp_path, monkeypatch):
+    _level, _source, _saved, _output, _packed, argv = _setup(tmp_path)
+    goals = tmp_path / 'goals'
+    for name in ('239', '240', '250'):
+        (goals / f'{name}.txt').write_text(
+            '[local]\nobjective="min-x"\ntarget-frame=10\nrange="0:10"\n')
+    routes = tmp_path / 'routes.toml'
+    routes.write_text('[multi-splicer]\nsplice-files=["230","239","250","end"]\n'
+                      'alt-route=["230","240","250"]\n')
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages), kwargs.get('merge_only', False)))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + [
+        '--splice-config', str(routes), '--auto-runs', '1',
+        '--stop-at-splice', '230', '--splice-merge-bests'])
+    main()
+    assert calls == [
+        (('230', '239', '240', '250', 'end'), True),
+        (('230',), False),
+        (('230', '239', '240', '250', 'end'), True),
+    ]
+
+
+def test_stop_at_alternate_only_uses_configured_ltm_branch(tmp_path, monkeypatch):
+    argv = _ltm_alt_branch_route(tmp_path)
+    routes = tmp_path / 'routes.toml'
+    routes.write_text(routes.read_text() + 'branch = 9\n')
+    seen = []
+
+    def fake_search(_level, frames, stages, _config, **kwargs):
+        seen.append((tuple(stage.name for stage in stages), frames[0].left,
+                     kwargs.get('stop_at')))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '2',
+                                           '--stop-at-splice', '240'])
+    main()
+    assert seen == [(('230', '240', 'end'), True, '240')]
