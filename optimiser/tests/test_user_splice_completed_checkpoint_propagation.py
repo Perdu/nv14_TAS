@@ -109,3 +109,57 @@ def test_completed_run_cannot_promote_post_finish_fixed_frame(monkeypatch):
         completion_policy='complete', saved_final_frames=fast, progress=messages.append,
     )
     assert not any('verified completed replay ->' in msg for msg in messages)
+
+
+def test_final_merge_can_reuse_shorter_promoted_end_checkpoint(monkeypatch):
+    """A trimmed completed best must remain usable as a later merge source.
+
+    Regression: a 904-frame completion can improve an 'end' goal whose target
+    deadline is 929, then a subsequent saved-suffix join evaluates that
+    904-frame checkpoint at frame 929 and aborts the entire merge.
+    """
+    level, fast, slow = _completions()  # Canonical completions: 29 and 34 ticks.
+    stages = _stages()  # The 'end' goal has deadline 40, after both finishes.
+    # This stage route is genuinely better at '394' but cannot reach 'end'
+    # unaided. Only the verified graft below supplies the short completion.
+    partial = fast[:19] + (InputFrame(left=True),) * 35
+    assert EndpointEvaluator(level, stages[0].goal).evaluate(partial).feasible
+    assert not EndpointEvaluator(level, stages[-1].goal).evaluate(partial).feasible
+    seen = []
+    saved = []
+    messages = []
+
+    def graft(_level, prefix, suffix, **kwargs):
+        seen.append((len(prefix), kwargs['seam_frame']))
+        if tuple(prefix) == partial and tuple(suffix) == slow:
+            return (fast,)
+        return ()
+
+    def search(_level, _branch, stage, *_args, **_kwargs):
+        # The faster source is first discovered by stage search, AFTER the
+        # startup merge. The offending propagation must occur at final merge.
+        if stage.name == '394':
+            return (((partial, stage.end),), 1, 1)
+        return ((), 0, 0)
+
+    monkeypatch.setattr(us, 'verified_suffix_grafts', graft)
+    monkeypatch.setattr(us, '_search_stage', search)
+    result = optimise_user_splices(
+        level, slow, stages,
+        RandomSpliceConfig(rounds=1, iterations=2, workers=1),
+        completion_policy='complete', merge_stage_bests=True,
+        saved_final_frames=slow,
+        saved_stage_candidates={'end': [slow]},
+        stage_best_callback=lambda name, replay: saved.append((name, replay)),
+        progress=messages.append,
+    )
+    assert result.frames == fast
+    assert ('end', fast) in saved  # Persist the *trimmed* canonical movie.
+    assert any('verified completed replay -> \'end\'' in msg for msg in messages)
+    assert any('merge:startup] done:' in msg and '0 completed best(s) improved' in msg
+               for msg in messages)
+    assert any('merge:final] done:' in msg and '1 completed best(s) improved' in msg
+               for msg in messages)
+    # The shorter end replay is still used as a physical merge prefix, without
+    # padding the saved checkpoint itself or losing its exact completion tick.
+    assert (len(fast), stages[-1].end) in seen

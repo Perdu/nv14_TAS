@@ -1443,7 +1443,15 @@ def optimise_user_splices(
                                      if label.startswith(stage.name + " ->") or
                                      label.startswith(stage.name + " archived ")), None)
                 if source_index is not None and stages[source_index].goal.is_earliest:
-                    arrival = original_endpoints[source_index].evaluate(prefix)
+                    # A faster verified completion is saved at its true finish
+                    # tick, even when a later named goal has a larger search
+                    # deadline. Evaluating this trimmed source directly would
+                    # raise "target frame ... outside a ...-frame replay" after
+                    # promote_completed_checkpoints() updates that checkpoint.
+                    # Pad only the *scoring view*, not the physical graft source.
+                    arrival = original_endpoints[source_index].evaluate(
+                        _materialise_splice_tail(
+                            prefix, stages[source_index].goal.target_frame))
                     if arrival.feasible and arrival.frame < seam - config.lookback // 2:
                         centres.extend((arrival.frame,
                                         max(2, arrival.frame - config.lookback),
@@ -1917,7 +1925,9 @@ def optimise_user_splices(
             if best_completion is None:
                 return 0
             try:
-                prefix_eval = original_endpoints[index].evaluate(prefix)
+                prefix_eval = original_endpoints[index].evaluate(
+                    _materialise_splice_tail(
+                        prefix, stages[index].goal.target_frame))
                 completed_eval = original_endpoints[index].evaluate(
                     _materialise_splice_tail(best_completion,
                                              stages[index].goal.target_frame))
@@ -1994,7 +2004,9 @@ def optimise_user_splices(
             protected_through = None
             if index is not None:
                 try:
-                    evaluation = original_endpoints[index].evaluate(prefix)
+                    evaluation = original_endpoints[index].evaluate(
+                        _materialise_splice_tail(
+                            prefix, stages[index].goal.target_frame))
                     if evaluation.feasible and stages[index].goal.is_earliest:
                         protected_through = evaluation.frame
                 except (ValueError, IndexError):
