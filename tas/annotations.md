@@ -102,12 +102,12 @@ The frame-perfect chimney jump does not save any frame over rta.
 I just saved one frame by entering the chimney with a slightly better angle
 
 # 02-3
-rerecords: 451
+rerecords: 494
 
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 3447
+rerecords: 3455
 
 Branch 9: earlier jump on the way to switch 2 that crashes on the ceiling
 
@@ -125,16 +125,17 @@ rerecords: 604
 It might be able to crame 1 or 2 additional frames, but it's hell to optimize
 
 # 03-1
-rerecords: 1622
+rerecords: 1670
 
 Beginning is so tight and frame-perfect that I can only copy 0th and not gain any millimeter
 
 The only gain is on the jump over the doorswitch
 
 Branch 9: attempt to pass the door via thwump push (not working)
+Branch 8: same but bruteforced
 
 # 03-2
-rerecords: 975
+rerecords: 1044
 
 Straight jump from the top platform (no corner jump): slower
 
@@ -160,7 +161,7 @@ I also tried some tricks for the hs TAS:
 Perhaps going to the right in the outer section could avoid because slower by drone 4 (todo)
 
 # 03-4
-rerecords: 750
+rerecords: 773
 
 Jumping longer or shorter around 100 is slower (or not faster for longer jumps)
 
@@ -175,13 +176,15 @@ The bottom section is 0.18 px away from being able walljump one frame earlier an
 The top section 0.05 px away from entering the exit an additional frame earlier.
 
 # 04-0
-rerecords: 1515
+rerecords: 1564
 
 In the beginning, there doesn't appear to be a way to get in the ceiling hole with a walljump without using the thwump
 Waiting for the jump out of the ceiling hole is faster than stumbling out
 We wait for a few frames on the thwump to get higher. Waiting for longer gets lower.
 The stumble down is the fastest way
 In the end, being pushed right by the ceiling then doing a regular jump instead of a reverse corner jump is just sliiiightly too slow to get the door on the next frame
+
+Branch 9: attempt at going directly to the pipe
 
 # 04-1
 rerecords: 1850
@@ -1081,7 +1084,7 @@ rerecords: 229
 Branch 9: rcj -> bwj route (probably slower)
 
 # 30-4
-rerecords: 53
+rerecords: 181
 
 
 
@@ -1134,6 +1137,7 @@ Branch 9: best attempt at skipping first drone
 Branch 8: landing faster in the beginning
 Branch 7: earlier at 1100
 Branch 6: first finish
+Branch 5: faster path to the pacelock (slightly slower ending)
 
 # 32-4
 rerecords: 1112
@@ -2669,7 +2673,7 @@ rerecords: 0
 
 
 # 83-2
-rerecords: 37
+rerecords: 184
 
 
 
@@ -2691,7 +2695,7 @@ Branch 8: launch into orbit
 Branches 4-7: more attempts at starting with a wj to get a direct path back to the door
 
 # 84-1
-rerecords: 433
+rerecords: 434
 
 Branch 9: alt route: taking switch 2 before switch 1
 Branch 8: test using the lower route to the switch
@@ -2771,7 +2775,7 @@ rerecords: 0
 
 
 # 87-1
-rerecords: 181
+rerecords: 195
 
 Branch 9: RTA route taking the lower path
 Branch 8: different turaround around switch
@@ -3148,4 +3152,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 275123
+# Total rerecords: 275653
