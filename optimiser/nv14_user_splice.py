@@ -632,6 +632,11 @@ def optimise_user_splices(
         Its neutral tail is not part of the movie and should not appear in
         the companion plain-text replay checkpoint either.
         """
+        if single_input_seed:
+            # Standalone Hybrid is a section editor, not a full-run exporter.
+            # A checkpoint must retain the original replay after its goal,
+            # even if the player happened to finish the level early.
+            return tuple(frames)
         checked = evaluate_replay_with_sentinel(level, frames)
         if checked.valid and checked.finish_tick is not None:
             trimmed = tuple(frames[:checked.finish_tick])
@@ -2504,6 +2509,17 @@ def optimise_user_splices(
                     # The encode/decode round trip only rebuilds trigger bits;
                     # editable_frames drops them again. Check this stage alone.
                     normalized = tuple(editable_frames(candidate))
+                    if single_input_seed:
+                        # Hybrid's editable interval may extend beyond an early
+                        # qualifying goal. Keep all original inputs after that
+                        # arrival, not the backend's post-arrival mutations.
+                        # Preserve the survival witness when requested.
+                        preliminary = original_endpoints[index].evaluate(normalized)
+                        if preliminary.feasible:
+                            through = preliminary.frame + stage.goal.survive_after_goal
+                            if through + 1 < len(normalized):
+                                normalized = (normalized[:through + 1]
+                                              + input_seed[through + 1:])
                     if normalized in eligible:
                         # Duplicate live notifications and returned winners are
                         # common; their verified stage score cannot change.

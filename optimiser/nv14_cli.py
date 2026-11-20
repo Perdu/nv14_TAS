@@ -5497,9 +5497,38 @@ def main() -> None:
                             if path is not None:
                                 path.unlink(missing_ok=True)
 
+                # Stage-specific physics is used to verify preserved post-goal inputs.
+                hybrid_stage_worlds = {level.simulate_enemies: level}
+                def hybrid_stage_context(name: str):
+                    stage = next(item for item in all_stages if item.name == name)
+                    enabled = (level.simulate_enemies if stage.simulate_enemies is None
+                               else stage.simulate_enemies)
+                    if enabled not in hybrid_stage_worlds:
+                        hybrid_stage_worlds[enabled] = parse_level_string(
+                            level.source_level_string, simulate_enemies=enabled)
+                    return stage.goal, hybrid_stage_worlds[enabled]
+
+                def cleaned_stage_checkpoint(name: str, frames):
+                    cleaned = tuple(clean_splice_output(frames))
+                    if not getattr(args, "_single_hybrid_mode", False):
+                        return cleaned
+                    goal, stage_level = hybrid_stage_context(name)
+                    # The search has already verified feasibility; score again
+                    # after cleanup to locate the *actual* earliest goal tick.
+                    original = tuple(editable_frames(replay.frames))
+                    from nv14_endpoint import EndpointEvaluator
+                    from nv14_user_splice import _materialise_splice_tail
+                    assessed = EndpointEvaluator(stage_level, goal).evaluate(
+                        _materialise_splice_tail(cleaned, goal.target_frame))
+                    if not assessed.feasible:
+                        raise ValueError("cleaned Hybrid stage checkpoint no longer meets its goal")
+                    through = assessed.frame + goal.survive_after_goal
+                    return (cleaned[:through + 1] + original[through + 1:]
+                            if through + 1 < len(original) else cleaned)
+
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
-                    replay_text = encode_complex_replay(clean_splice_output(frames))
+                    replay_text = encode_complex_replay(cleaned_stage_checkpoint(name, frames))
                     _protect_unreadable_splice_output(main_path)
                     _protect_unreadable_splice_output(packed_path)
                     if source.ltm_movie is not None and packed_path is not None:
@@ -5527,7 +5556,7 @@ def main() -> None:
 
                 def save_hybrid_session_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = hybrid_session_outputs[name]
-                    replay_text = encode_complex_replay(clean_splice_output(frames))
+                    replay_text = encode_complex_replay(cleaned_stage_checkpoint(name, frames))
                     # For LTM, publish a TXT replay that exactly matches what
                     # the newly written movie loads (implicit post-roll ticks
                     # can otherwise make the two files disagree).

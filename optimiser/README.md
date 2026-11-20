@@ -2411,3 +2411,14 @@ The snapshot is stored alongside the completed output as
 registration replaces the comparison snapshot. It does not become a search
 seed, best checkpoint, or output LTM. The level record is fingerprinted, so
 changing levels requires registering again.
+
+### Standalone Hybrid preserves post-goal inputs (patch 141)
+
+A single-goal `tas.py hybrid LEVEL SPLICE` optimizes only through the verified
+arrival at its goal (plus `survive-after-goal`, if set). The named stage and
+`*.session.ltm`/`.txt` checkpoints restore the **original invocation input
+history after that tick**. This applies even if the candidate finishes early
+or airborne-jump cleanup modifies held inputs. It does not change the
+multi-splicer's intentional use of trimmed, verified completed replays, and
+cannot guarantee that unmodified later inputs remain physically feasible
+with a newly optimized prefix.
