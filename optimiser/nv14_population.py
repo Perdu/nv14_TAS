@@ -614,7 +614,7 @@ def optimise_local_population(
         goal.is_earliest and baseline.feasible
         and baseline.frame < ranges[0][0]
     ):
-        prefix_goal = replace(goal, target_frame=ranges[0][0] - 1, objective="max-x",
+        prefix_goal = replace(goal, target_frame=ranges[0][0] - 1, objective="max-x", velocity_frames=None,
                               target=None, interaction_target=None, exit_distance_tiebreak=False, target_region=None, arrival_start=0, secondary_objective=None,
                               x_window=None, y_window=None, vx_window=None, vy_window=None,
                               required_interactions=(), require_jump_region=None, require_jump_frames=None, required_jumps=(),

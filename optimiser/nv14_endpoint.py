@@ -31,7 +31,9 @@ from nv14_objectives import (
 )
 
 EARLIEST_OBJECTIVES = frozenset(("earliest-arrival", "earliest-interaction"))
-_OBJECTIVES = frozenset(("max-x", "min-x", "max-y", "min-y", "min-distance")) | EARLIEST_OBJECTIVES
+VELOCITY_OBJECTIVES = frozenset(("max-vx", "min-vx", "max-vy", "min-vy"))
+_OBJECTIVES = (frozenset(("max-x", "min-x", "max-y", "min-y", "min-distance"))
+               | EARLIEST_OBJECTIVES | VELOCITY_OBJECTIVES)
 SECONDARY_OBJECTIVES = ("max-x", "max-y", "max-vx", "max-vy",
                         "min-x", "min-y", "min-vx", "min-vy", "min-exit-distance")
 
@@ -85,6 +87,9 @@ class EndpointGoal:
     require_region: tuple[float, float, float, float] | None = None
     require_region_frames: tuple[int, int] | None = None
     target_circle: tuple[float, float, float] | None = None
+    # Optional inclusive frames over which to maximize/minimize a primary
+    # velocity score. Without it, velocity is scored at target_frame only.
+    velocity_frames: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.target_frame, bool) or not isinstance(self.target_frame, int) or self.target_frame < 0:
@@ -93,6 +98,13 @@ class EndpointGoal:
             raise ValueError("survive-after-goal must be a non-negative integer")
         if self.objective not in _OBJECTIVES:
             raise ValueError(f"unknown endpoint objective {self.objective!r}")
+        if self.velocity_frames is not None:
+            bounds = tuple(self.velocity_frames)
+            if (self.objective not in VELOCITY_OBJECTIVES
+                    or len(bounds) != 2 or any(type(v) is not int for v in bounds)
+                    or not 0 <= bounds[0] <= bounds[1] <= self.target_frame):
+                raise ValueError("velocity-frames requires a velocity objective and inclusive bounds within target-frame")
+            object.__setattr__(self, "velocity_frames", bounds)
         if self.secondary_objective is not None:
             if self.secondary_objective not in SECONDARY_OBJECTIVES:
                 raise ValueError(f"unknown secondary objective {self.secondary_objective!r}")
@@ -239,6 +251,10 @@ class EndpointGoal:
     def is_earliest(self) -> bool:
         return self.objective in EARLIEST_OBJECTIVES
 
+    @property
+    def scans_frames(self) -> bool:
+        return self.is_earliest or self.velocity_frames is not None
+
 
 @dataclass(frozen=True, slots=True)
 class EndpointEvaluation:
@@ -376,6 +392,8 @@ class EndpointEvaluator:
             prefix_frame = min(prefix_frame, goal.require_drone_detection_frames[0])
         if goal.is_earliest:
             prefix_frame = min(prefix_frame, goal.arrival_start)
+        if goal.velocity_frames is not None:
+            prefix_frame = min(prefix_frame, goal.velocity_frames[0])
         if prefix_frame > len(self.source_frames):
             raise ValueError("cached prefix lies outside source_frames")
         self.prefix_frame = prefix_frame
@@ -555,6 +573,9 @@ class EndpointEvaluator:
                 score = -y
             elif goal.objective == "min-distance":
                 score = -min((x-item.x)**2 + (y-item.y)**2 for item in goal.target.targets)
+            elif goal.objective in VELOCITY_OBJECTIVES:
+                raw = vx if goal.objective.endswith("vx") else vy
+                score = raw if goal.objective.startswith("max-") else -raw
             else:
                 score = -float(frame)
         else:
@@ -583,7 +604,9 @@ class EndpointEvaluator:
                              if finite else math.inf)
         dead = bool(player["dead"])
         at_endpoint = ((arrival_eligible and goal.arrival_start <= frame <= goal.target_frame)
-                       if goal.is_earliest else frame == goal.target_frame)
+                       if goal.is_earliest else
+                       (arrival_eligible and goal.velocity_frames[0] <= frame <= goal.velocity_frames[1])
+                       if goal.velocity_frames is not None else frame == goal.target_frame)
         feasible = bool(at_endpoint and finite and not dead and not missing and not violated and not missing_jump and not missing_drones and not missing_guards and not violated_drones and not pending_no_drone and not missing_region
                         and error == 0.0 and region_distance == 0.0
                         and (goal.interaction_target is None or events))
@@ -737,7 +760,10 @@ class EndpointEvaluator:
             raise ValueError(f"target frame {self.goal.target_frame} is outside a {len(key)}-frame replay")
         if key[:self.prefix_frame] != self._source_key[:self.prefix_frame]:
             raise ValueError("candidate changed the immutable cached prefix")
-        if self._reference_required or self.goal.require_region is not None:
+        if (self._reference_required or self.goal.require_region is not None
+                or self.goal.velocity_frames is not None):
+            # A variable-frame velocity maximum must inspect each candidate
+            # tick. The native fixed-frame plan cannot choose that tick.
             return self.evaluate_reference(frames)
         state, events, eligible, terminal_frame, terminal_dead, jump_event, ambiguous, pre_position, detections, guards, forbidden = self._native_plan.scan(
             self._prefix, key, jump_event=self._prefix_jump, with_pre_position=True,
@@ -902,9 +928,9 @@ class EndpointEvaluator:
                         if (recorded[index] is None and lo <= frame <= hi
                                 and xmin <= x <= xmax and ymin <= y <= ymax):
                             recorded[index] = (frame, x, y)
-            if not self.goal.is_earliest:
+            if not self.goal.scans_frames:
                 continue
-            if frame < self.goal.arrival_start:
+            if self.goal.is_earliest and frame < self.goal.arrival_start:
                 if previous is not None:
                     previous = self._interaction_snapshot(state)
                 continue
@@ -919,9 +945,14 @@ class EndpointEvaluator:
                 previous = (candidate.interaction_state, candidate.completed_exit_index)
             if candidate.feasible:
                 if self._survives_after_goal(state, frames, frame):
-                    return replace(candidate, state_key=state.state_key(),
-                                   terminal_frame=frame, terminal_dead=dead)
-                candidate = self._failed_survival(candidate)
+                    if self.goal.is_earliest:
+                        return replace(candidate, state_key=state.state_key(),
+                                       terminal_frame=frame, terminal_dead=dead)
+                    # Velocity ranges prefer the strongest qualifying tick,
+                    # not the first one; use the same primary ranking key.
+                    candidate = replace(candidate, state_key=state.state_key())
+                else:
+                    candidate = self._failed_survival(candidate)
             if best is None or candidate.progress_key < best.progress_key:
                 best = replace(candidate, state_key=state.state_key())
         terminal = self._evaluate_state(state, arrival_eligible=False,
@@ -930,7 +961,7 @@ class EndpointEvaluator:
                                         floorguard_detection_frames=tuple(guards),
                                         forbidden_drone_detection_frames=tuple(forbidden),
                                         region_visit_frame=visit_frame)
-        if not self.goal.is_earliest:
+        if not self.goal.scans_frames:
             if terminal.feasible and not self._survives_after_goal(state, frames, terminal.frame):
                 return self._failed_survival(terminal)
             return terminal
@@ -948,7 +979,7 @@ class EndpointEvaluator:
         if self._multiple_jumps:
             return self._exact_exit_proximity(self._evaluate_multiple_jumps(frames), frames)
         state = self._prefix.clone()
-        if (not self.goal.is_earliest and self.goal.require_jump_region is None
+        if (not self.goal.scans_frames and self.goal.require_jump_region is None
                 and not self.goal.required_drone_detections
                 and not self.goal.required_floorguard_detections
                 and not self.goal.forbidden_drone_detections
@@ -989,9 +1020,9 @@ class EndpointEvaluator:
                 visit_frame = frame
             if jump_event is None and self._qualifying_jump(frame, step["jumped"], step["jump_origin"]):
                 jump_event = (frame, *step["jump_origin"])
-            if not self.goal.is_earliest:
+            if not self.goal.scans_frames:
                 continue
-            if frame < self.goal.arrival_start:
+            if self.goal.is_earliest and frame < self.goal.arrival_start:
                 if previous is not None:
                     previous = self._interaction_snapshot(state)
                 continue
@@ -1005,17 +1036,20 @@ class EndpointEvaluator:
                 previous = (candidate.interaction_state, candidate.completed_exit_index)
             if candidate.feasible:
                 if self._survives_after_goal(state, frames, frame):
-                    return self._exact_exit_proximity(
-                        replace(candidate, state_key=state.state_key()), frames)
-                candidate = self._failed_survival(candidate)
+                    if self.goal.is_earliest:
+                        return self._exact_exit_proximity(
+                            replace(candidate, state_key=state.state_key()), frames)
+                    candidate = replace(candidate, state_key=state.state_key())
+                else:
+                    candidate = self._failed_survival(candidate)
             if best is None or candidate.progress_key < best.progress_key:
                 best = replace(candidate, state_key=state.state_key())
-        terminal = self._evaluate_state(state, arrival_eligible=not self.goal.is_earliest,
+        terminal = self._evaluate_state(state, arrival_eligible=not self.goal.scans_frames,
                                         jump_event=jump_event, drone_detection_frames=tuple(detections),
                                         floorguard_detection_frames=tuple(guards),
                                         forbidden_drone_detection_frames=tuple(forbidden),
                                         region_visit_frame=visit_frame)
-        if not self.goal.is_earliest and terminal.feasible:
+        if not self.goal.scans_frames and terminal.feasible:
             if not self._survives_after_goal(state, frames, terminal.frame):
                 terminal = self._failed_survival(terminal)
         if best is None:

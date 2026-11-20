@@ -2422,3 +2422,28 @@ or airborne-jump cleanup modifies held inputs. It does not change the
 multi-splicer's intentional use of trimmed, verified completed replays, and
 cannot guarantee that unmodified later inputs remain physically feasible
 with a newly optimized prefix.
+
+### Primary velocity goals (patch 142)
+
+Population Local, endpoint Auto and named Hybrid splice goals accept
+`objective = "max-vx"`, `"min-vx"`, `"max-vy"`, or `"min-vy"`. With no
+`velocity-frames`, the primary score is taken **at `target-frame`**.
+For a best eligible velocity anywhere in an inclusive frame interval:
+
+```toml
+[local]
+search = "population"
+objective = "max-vx"
+target-frame = 390
+velocity-frames = "360:390"
+range = "322:390"
+vx-window = "3.5:"
+```
+
+The standard region, interaction, survival and axis constraints still apply
+on the tick that is scored. A velocity frame interval uses exact per-tick
+reference scanning and may cost more than the fixed-tick native path.
+CLI equivalents are `--objective max-vx --velocity-frames 360:390` for Local
+and `--auto-objective max-vx --auto-velocity-frames 360:390` for Auto.
+Local **window** search does not support primary endpoint-velocity objectives;
+use `search = "population"` or Hybrid.

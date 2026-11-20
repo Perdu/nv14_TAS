@@ -311,6 +311,10 @@ def _stage_improvement_text(goal: EndpointGoal,
             return value.x
         if goal.objective in ("min-y", "max-y"):
             return value.y
+        if goal.objective in ("min-vx", "max-vx"):
+            return value.vx
+        if goal.objective in ("min-vy", "max-vy"):
+            return value.vy
         if goal.objective == "min-distance":
             return math.sqrt(max(0.0, -value.score))
         return None
@@ -352,8 +356,11 @@ def _stage_summary_text(goal: EndpointGoal, evaluation: EndpointEvaluation) -> s
     per-round propagation summary only needs the objective being compared.
     """
     objective = goal.objective
-    if objective in ("min-x", "max-x", "min-y", "max-y"):
-        coordinate = evaluation.x if objective.endswith("-x") else evaluation.y
+    if objective in ("min-x", "max-x", "min-y", "max-y",
+                     "min-vx", "max-vx", "min-vy", "max-vy"):
+        coordinate = (evaluation.vx if objective.endswith("vx") else
+                      evaluation.vy if objective.endswith("vy") else
+                      evaluation.x if objective.endswith("-x") else evaluation.y)
         result = f"frame {evaluation.frame}; {objective} {coordinate:.9g}"
         if goal.secondary_objective is not None:
             result += f"; {goal.secondary_objective} {evaluation.secondary_value:.9g}"
@@ -391,6 +398,12 @@ def _stage_savings_text(goal: EndpointGoal,
         axis = "x" if objective.endswith("-x") else "y"
         before, after = getattr(reference, axis), getattr(candidate, axis)
         pixel_saving = before - after if objective.startswith("min-") else after - before
+    elif objective in ("min-vx", "max-vx", "min-vy", "max-vy"):
+        component = "vx" if objective.endswith("vx") else "vy"
+        before, after = getattr(reference, component), getattr(candidate, component)
+        delta = before - after if objective.startswith("min-") else after - before
+        return (f"vs {label}: {frames_saved:+d} frames saved, "
+                f"{delta:+.6g} velocity gained ({objective})")
     elif objective == "min-distance":
         # min-distance scores are NEGATIVE SQUARED distances.
         pixel_saving = (math.sqrt(max(0.0, -reference.score)) -

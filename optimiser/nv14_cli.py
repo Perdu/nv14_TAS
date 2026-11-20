@@ -39,7 +39,7 @@ from nv14_auto_endpoint import (
 from nv14_random_splice import RandomSpliceConfig, optimise_random_splices
 from nv14_endpoint import EndpointGoal, RequiredJump, verify_endpoint
 from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
-from nv14_endpoint import EARLIEST_OBJECTIVES, SECONDARY_OBJECTIVES
+from nv14_endpoint import EARLIEST_OBJECTIVES, SECONDARY_OBJECTIVES, VELOCITY_OBJECTIVES
 from nv14_engine import InputFrame, Level, SimulationState, parse_level_string
 from nv14_jump import (
     ImmutableJumpSpec,
@@ -521,6 +521,7 @@ class LocalConfig:
     python_resimulate: bool = False
     secondary_objective: str | None = None
     target_circle: tuple[float, float, float] | None = None
+    velocity_frames: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         if self.search not in ("windows", "population"):
@@ -538,7 +539,8 @@ class LocalConfig:
             raise ValueError("local hybrid search options require --search windows; "
                              "population uses a separate proposal engine")
         if self.search == "windows" and (
-            self.objective in EARLIEST_OBJECTIVES or self.target_region is not None or self.target_circle is not None
+            self.objective in EARLIEST_OBJECTIVES or self.objective in VELOCITY_OBJECTIVES
+            or self.velocity_frames is not None or self.target_region is not None or self.target_circle is not None
             or self.arrival_start is not None or self.top_results != 1
             or self.require_region is not None or self.require_region_frames is not None
             or self.require_jump_region is not None or self.require_jump_frames is not None
@@ -606,11 +608,11 @@ class LocalConfig:
             "min-x",
             "max-y",
             "min-y",
-            "min-distance",
+            "min-distance", "max-vx", "min-vx", "max-vy", "min-vy",
         ):
             raise ValueError(
                 "local objective must be one of: max-x, min-x, max-y, "
-                "min-y, min-distance, earliest-arrival or earliest-interaction (population only)"
+                "min-y, min-distance, max/min-vx, max/min-vy, earliest-arrival or earliest-interaction (population only)"
             )
         if self.objective == "earliest-interaction":
             if self.target_object is None:
@@ -722,6 +724,7 @@ class LocalConfig:
             frame_range=args.frame_range,
             objective=args.objective,
             secondary_objective=args.secondary_objective,
+            velocity_frames=args.velocity_frames,
             target_object=args.target_object,
             target_point=args.target_point,
             x_window=args.x_window,
@@ -2109,6 +2112,7 @@ _LOCAL_GOAL_TO_AUTO = {
     "target_point": "auto_target_point",
     "arrival_start": "auto_arrival_start",
     "secondary_objective": "auto_secondary_objective",
+    "velocity_frames": "auto_velocity_frames",
     "x_window": "auto_x_window",
     "y_window": "auto_y_window",
     "vx_window": "auto_vx_window",
@@ -2163,7 +2167,7 @@ _LOCAL_POPULATION_OPTIONS = frozenset({
     "require_drone_detection", "require_drone_detection_frames",
     "require_floorguard_detection", "require_floorguard_detection_frames",
     "no_drone_detection", "no_drone_detection_frames", "survive_after_goal",
-    "secondary_objective",
+    "secondary_objective", "velocity_frames",
 })
 
 
@@ -2206,7 +2210,7 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
 
 _AUTO_ENDPOINT_ONLY_OPTIONS = frozenset({
     "auto_target_frame", "auto_target_region", "auto_target_circle", "auto_target_object", "auto_target_point",
-    "auto_arrival_start", "auto_secondary_objective", "auto_x_window", "auto_y_window",
+    "auto_arrival_start", "auto_secondary_objective", "auto_velocity_frames", "auto_x_window", "auto_y_window",
     "auto_vx_window", "auto_vy_window", "auto_require_interaction", "auto_avoid_interaction",
     "auto_require_reference_interactions", "auto_require_region", "auto_require_region_frames", "auto_require_jump_region",
     "auto_require_jump_frames", "auto_require_jumps",
@@ -3011,7 +3015,7 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument(
         "--auto-objective", "--objective",
         modes=auto_modes, dest="auto_objective",
-        choices=(*AUTO_OBJECTIVES, "max-x", "min-x", "max-y", "min-y", "min-distance", "earliest-arrival", "earliest-interaction"),
+        choices=(*AUTO_OBJECTIVES, "max-x", "min-x", "max-y", "min-y", "min-distance", "earliest-arrival", "earliest-interaction", *sorted(VELOCITY_OBJECTIVES)),
         default=AUTO_OBJECTIVE_SPEEDRUN,
         help=(
             "auto mode objective: speedrun minimises raw completion tick; "
@@ -3258,6 +3262,9 @@ def build_parser() -> argparse.ArgumentParser:
                          help="maximum Local continuation repair searches per waypoint (default 8; 0 disables)")
     # Endpoint objectives share Local's native EndpointGoal and [goal] TOML.
     # Keep the existing completed-route speedrun/highscore CLI untouched.
+    command.add_argument("--auto-velocity-frames", modes=auto_modes,
+                         type=parse_required_jump_frames, metavar="START:END",
+                         help="endpoint Auto: maximize/minimize velocity within this inclusive frame interval")
     command.add_argument("--auto-target-frame", "--target-frame", modes=auto_modes, type=parse_nonnegative_int,
                          metavar="FRAME", help="endpoint objective deadline/frame (defaults to replay's last input)")
     command.add_argument("--auto-target-region", "--target-region", modes=auto_modes, type=parse_target_region,
@@ -3655,7 +3662,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     command.add_argument(
         "--objective", modes=local_modes,
-        choices=("max-x", "min-x", "max-y", "min-y", "min-distance", "earliest-arrival", "earliest-interaction"),
+        choices=("max-x", "min-x", "max-y", "min-y", "min-distance", "earliest-arrival", "earliest-interaction", *sorted(VELOCITY_OBJECTIVES)),
         default="max-x",
     )
     command.add_argument(
@@ -3707,6 +3714,9 @@ def build_parser() -> argparse.ArgumentParser:
                          help="population only: save campaign state at completed round boundaries")
     command.add_argument("--resume", modes=local_modes, action="store_true",
                          help="population only: resume --checkpoint after validating seed, level and goal")
+    command.add_argument("--velocity-frames", modes=local_modes,
+                         type=parse_required_jump_frames, metavar="START:END",
+                         help="population only: choose best primary velocity within this inclusive interval (default: target frame)")
     command.add_argument("--vx-window", modes=local_modes, type=parse_axis_window,
                          metavar="MIN:MAX", help="inclusive endpoint horizontal velocity bounds (windows and population)")
     command.add_argument("--vy-window", modes=local_modes, type=parse_axis_window,
@@ -4410,6 +4420,7 @@ def _run_local_population(
             vx_window=config.vx_window, vy_window=config.vy_window,
             target_region=config.target_region,
             target_circle=config.target_circle,
+            velocity_frames=config.velocity_frames,
             arrival_start=(config.arrival_start if config.arrival_start is not None else ranges[0][0])
             if config.objective in EARLIEST_OBJECTIVES else 0,
             required_interactions=required, avoided_interactions=avoided,
@@ -4684,6 +4695,7 @@ def _auto_goal_from_options(level: Level, replay_frames: Sequence[InputFrame],
         target_frame=frame, objective=args.auto_objective, target=target,
         target_region=args.auto_target_region,
         target_circle=args.auto_target_circle,
+        velocity_frames=args.auto_velocity_frames,
         arrival_start=(start if args.auto_arrival_start is None else args.auto_arrival_start)
         if args.auto_objective in EARLIEST_OBJECTIVES else 0,
         secondary_objective=args.auto_secondary_objective,
@@ -6613,6 +6625,7 @@ def main() -> None:
                 target_frame=frame, objective=args.auto_objective, target=target,
                 target_region=args.auto_target_region,
                 target_circle=args.auto_target_circle,
+                velocity_frames=args.auto_velocity_frames,
                 arrival_start=(start if args.auto_arrival_start is None else args.auto_arrival_start)
                 if args.auto_objective in EARLIEST_OBJECTIVES else 0,
                 secondary_objective=args.auto_secondary_objective,
