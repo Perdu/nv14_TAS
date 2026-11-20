@@ -138,3 +138,56 @@ def test_dead_immutable_next_prefix_is_not_offered(monkeypatch):
         fast, old, improved_arrival=9, reference_arrival=14,
         next_target=45, next_start=18, source_endpoint=prior,
         next_endpoint=next_goal, next_level=level) is None
+
+
+def test_realign_followed_by_archive_seed_accepts_short_prior_checkpoint(monkeypatch):
+    """Realign after a shortened stage best must not score past its EOF."""
+    level, source, _ = _baseline()
+    faster = list(source)
+    faster[4] = InputFrame(left=True)
+    faster = tuple(faster[:18])  # Stage A ends before B's target tick 25.
+    archived = list(source)
+    archived[13] = InputFrame(left=True)
+    archived = tuple(archived)
+    original_evaluate = EndpointEvaluator.evaluate
+
+    def score(self, frames):
+        frames = tuple(frames)
+        result = original_evaluate(self, frames)
+        if self.goal.target_frame == 15:
+            arrived = 10 if frames[4].left else 11
+        else:
+            arrived = 18 if frames[13].left else 22
+        return replace(result, feasible=True, score=-float(arrived),
+                       frame=arrived, secondary_score=0.0)
+
+    monkeypatch.setattr(EndpointEvaluator, 'evaluate', score)
+    stages = (
+        UserSpliceStage('454', EndpointGoal(15, 'earliest-arrival',
+                        target_region=(-1000, 1000, -1000, 1000)), 0, 15),
+        UserSpliceStage('526', EndpointGoal(25, 'earliest-arrival',
+                        target_region=(-1000, 1000, -1000, 1000)), 11, 25),
+    )
+    searched = []
+    messages = []
+    saved = []
+
+    def fake_search(_level, frames, stage, *_args, **_kwargs):
+        searched.append((stage.name, tuple(frames)))
+        return (((faster, 15),), 0, 1) if stage.name == '454' else ((), 0, 1)
+
+    monkeypatch.setattr(us, '_search_stage', fake_search)
+    optimise_user_splices(level, source, stages,
+                          RandomSpliceConfig(rounds=1, iterations=2, frontier=3),
+                          completion_policy='checkpoint',
+                          saved_stage_frontiers={'526': [archived]},
+                          stage_best_callback=lambda name, frames: saved.append(
+                              (name, tuple(frames))),
+                          progress=messages.append)
+    # Materialising a search-only idle tail must not extend the saved 454 LTM.
+    assert ('454', faster) in saved
+    assert any('[auto:user-splice:realign] realigned 454 -> 526' in msg
+               for msg in messages)
+    assert any('fastest archived section' in msg for msg in messages)
+    assert all(len(frames) >= 26 for name, frames in searched if name == '526')
+    assert any(frames[:18] == faster for name, frames in searched if name == '526')

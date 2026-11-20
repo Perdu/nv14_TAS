@@ -894,10 +894,19 @@ def optimise_user_splices(
         """
         if index == 0 or not bases:
             return None
-        timed = [(span, original_endpoints[index].evaluate(frames).objective_key,
-                  frames)
-                 for frames in archived_frontiers[index]
-                 if (span := section_duration(index, frames)) is not None]
+        # Saved sections may be shorter than their named deadline when a
+        # prior merge completed the replay early. For search-time scoring,
+        # absent trailing inputs are neutral, not an out-of-range error.
+        needed_tick = max(stages[index-1].goal.target_frame,
+                          stages[index].goal.target_frame)
+        timed = []
+        for archived in archived_frontiers[index]:
+            span = section_duration(index, archived)
+            if span is None:
+                continue
+            workspace = _materialise_splice_tail(archived, needed_tick)
+            timed.append((span, original_endpoints[index].evaluate(workspace).objective_key,
+                          workspace))
         if not timed:
             return None
         duration, _rank, archive = min(timed, key=lambda item: (item[0], item[1]))
@@ -913,7 +922,11 @@ def optimise_user_splices(
         # Only a handful of already scheduled sources are considered for a
         # transplant. These are the strongest n-1/n-2 seeds, and checking all
         # saved frontiers here would add considerable replay overhead.
-        for base in bases[:4]:
+        for raw_base in bases[:4]:
+            # Prior-stage checkpoints may be trimmed at their own finish/goal
+            # tick. The later goal's neutral tail is implicit, but the strict
+            # endpoint scorer requires that it be materialised explicitly.
+            base = _materialise_splice_tail(raw_base, needed_tick)
             prior = prior_endpoint.evaluate(base)
             destination = endpoint.evaluate(base)
             if (not prior.feasible or not destination.feasible or
@@ -2590,6 +2603,12 @@ def optimise_user_splices(
                     # The encode/decode round trip only rebuilds trigger bits;
                     # editable_frames drops them again. Check this stage alone.
                     normalized = tuple(editable_frames(candidate))
+                    if not single_input_seed:
+                        # Multi-splicer accepts earlier-stage/early-completion
+                        # replays that can end before this stage's deadline.
+                        # Their neutral tail is a search workspace only.
+                        normalized = _materialise_splice_tail(
+                            normalized, stage.goal.target_frame)
                     if single_input_seed:
                         # Hybrid's editable interval may extend beyond an early
                         # qualifying goal. Keep all original inputs after that
@@ -2781,6 +2800,11 @@ def optimise_user_splices(
                            else {})
                 resuming_this_seed = (active_phase is not None and
                                       index == stage_begin and seed_index == 1)
+                # A source checkpoint can contain only the inputs through a
+                # previous goal. Never send that shorter replay to Auto/Local
+                # with a later target: its implicit idle tail must be present.
+                search_branch = _materialise_splice_tail(
+                    branch, stage.goal.target_frame)
                 seed_started = time.monotonic()
                 seed_updates_before = temp_gains
                 seed_diagnostics: dict[str, int] = {}
@@ -2795,7 +2819,7 @@ def optimise_user_splices(
                         evaluation = original_endpoints[at].evaluate(candidate)
                         return evaluation.objective_key if evaluation.feasible else None
                     found, used, calls = _search_stage(
-                        stage_levels[index], branch, stage, stage_config, rng,
+                        stage_levels[index], search_branch, stage, stage_config, rng,
                         stage_rank=admissible_rank, progress=selected_progress,
                         candidate_callback=live_candidate,
                         diagnostics=seed_diagnostics, **details,
@@ -2808,7 +2832,7 @@ def optimise_user_splices(
                            else {}))
                 else:
                     found, used, calls = _search_stage(
-                        stage_levels[index], branch, stage, stage_config, rng,
+                        stage_levels[index], search_branch, stage, stage_config, rng,
                         candidate_callback=live_candidate,
                         diagnostics=seed_diagnostics,
                         **({"progress": selected_progress, **details}
@@ -2818,7 +2842,7 @@ def optimise_user_splices(
                 active_phase = None
                 attempts += calls
                 evaluations += used
-                for candidate, _ in (*found, (branch, stage.goal.target_frame)):
+                for candidate, _ in (*found, (search_branch, stage.goal.target_frame)):
                     accept_stage_candidate(candidate)
                 if progress:
                     hybrid = stage_config.search_backend in (

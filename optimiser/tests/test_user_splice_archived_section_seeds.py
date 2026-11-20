@@ -150,3 +150,28 @@ def test_zero_duration_archive_is_a_seed_without_an_empty_transplant(monkeypatch
         saved_stage_frontiers={'462': [archive]}, progress=messages.append)
     assert ('462', archive) in searched
     assert any('zero-length section' in m for m in messages)
+
+
+def test_short_previous_checkpoint_does_not_crash_archived_section_graft(monkeypatch):
+    """A previous splice can save 15 frames while the next target is 25."""
+    level, source, archive, _stitched, stages = _setup(monkeypatch)
+    shortened = source[:15]
+    searched = []
+
+    def fake_search(_level, frames, stage, *_args, **_kwargs):
+        searched.append((stage.name, tuple(frames)))
+        # Stage B may also receive a truncated backend candidate. It should
+        # not be evaluated at its deadline without materialising neutral tail.
+        return ((((shortened, 10),), 0, 1)
+                if stage.name == '388' else (((shortened, 25),), 0, 1))
+
+    monkeypatch.setattr(us, '_search_stage', fake_search)
+    optimise_user_splices(
+        level, source, stages, RandomSpliceConfig(rounds=1, iterations=2,
+                                                  frontier=2),
+        completion_policy='checkpoint',
+        saved_stage_frontiers={'462': [archive]})
+    next_searches = [frames for name, frames in searched if name == '462']
+    assert next_searches
+    assert all(len(frames) >= 26 for frames in next_searches)
+    assert any(frames[:15] == shortened for frames in next_searches)

@@ -2022,7 +2022,11 @@ improved replay through its actual goal-arrival tick, borrows the previous
 continuation up to the *next* goal's actual arrival (or deadline if not yet
 reached), and tries offsets 0, -1, +1, -2, +2. At most eight reference
 replays are considered and at most **one extra seed** is searched for the
-next stage. The preceding goal must still be reached on its original tick,
+next stage. When an earlier checkpoint or archived section has been
+shortened, only the **search workspace** is extended with implicit neutral
+inputs through the next goal's deadline. This is not an edit to the saved LTM
+or a claim that the shortened replay already reaches the next goal. The
+preceding goal must still be reached on its original tick,
 and the next stage's immutable prefix must survive. A seed need not already
 reach the *next* goal: that is what its subsequent Auto/Local search will
 attempt. Retimed seeds never replace a checkpoint directly and are not
