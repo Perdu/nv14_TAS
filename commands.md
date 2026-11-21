@@ -72,13 +72,24 @@ python3 tas.py multi 00-0 --repair
 # Other commands
 
 ## Re-dumping all ghosts of former TAS
+```
 python3 dump_all_ghosts.py --force --fields frame,x,y,jump_held,input_left,input_right,vx,vy
+``
 
 ## Checking that no ltm file contains better demos than level_data.yml
+```
 for episode in $(seq 0 9) ; do for level in $(seq 0 4) ; do python3 compare_ltm_demos.py volume/n_levels/0$episode-$level.ltm --level 0$episode-$level --mode sr --all ; done ; done > gains.txt ; for episode in $(seq 10 99) ; do for level in $(seq 0 4) ; do python3 compare_ltm_demos.py volume/n_levels/$episode-$level.ltm --level $episode-$level --mode sr --all ; done ; done >> gains.txt
+```
+```
 grep -F '[ERROR' gains.txt
+```
+```
 cat gains.txt | grep -v 'Checked 1' | grep -v 'NO GAIN'
-or: cat gains.txt | grep 'gain +' | grep -v 'NO GAIN'
+```
+or:
+```
+cat gains.txt | grep 'gain +' | grep -v 'NO GAIN'
+```
 
 # Currently unused
 
@@ -89,8 +100,9 @@ or: cat gains.txt | grep 'gain +' | grep -v 'NO GAIN'
 ```
 
 ## random-splicer
+```
 export LEVEL='55-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config '../splices/random-splice.toml' --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --simulate-enemies --auto-stagnation-runs 10 --workers 15
-
+```
 
 # Old methods
 ## auto
@@ -101,11 +113,6 @@ export LEVEL='53-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm -
 ## local
 ```
 export SPLICE='end'; export LEVEL='55-1' ; python3 optimize_replay.py local ../n_levels/${LEVEL}.ltm --config "../splices/$LEVEL/$SPLICE.txt" --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15 --stagnation-rounds 50
-```
-
-## random-splicer
-```
-export LEVEL='55-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config '../splices/random-splice.toml' --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --simulate-enemies --auto-stagnation-runs 10 --workers 15
 ```
 
 ## auto local
