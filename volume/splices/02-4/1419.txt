@@ -6,4 +6,4 @@ target_region = "497:537,403:423"
 simulate-enemies = false
 objective = "earliest-arrival"
 secondary_objective = "max-y"
-# require-interaction = ["testdoor:0"]
+require-interaction = ["testdoor:3"]
