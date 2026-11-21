@@ -74,7 +74,7 @@ python3 tas.py multi 00-0 --repair
 ## Re-dumping all ghosts of former TAS
 ```
 python3 dump_all_ghosts.py --force --fields frame,x,y,jump_held,input_left,input_right,vx,vy
-``
+```
 
 ## Checking that no ltm file contains better demos than level_data.yml
 ```
