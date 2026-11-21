@@ -107,7 +107,7 @@ rerecords: 494
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 3458
+rerecords: 3463
 
 Branch 9: earlier jump on the way to switch 2 that crashes on the ceiling
 
@@ -161,7 +161,7 @@ I also tried some tricks for the hs TAS:
 Perhaps going to the right in the outer section could avoid because slower by drone 4 (todo)
 
 # 03-4
-rerecords: 773
+rerecords: 778
 
 Jumping longer or shorter around 100 is slower (or not faster for longer jumps)
 
@@ -202,7 +202,7 @@ rerecords: 710
 With the right angle, you can jump on the top thwump. This is absolutely completely useless as it speeds you downwards
 
 # 04-3
-rerecords: 1982
+rerecords: 1983
 
 I initially had a slightly better way past the drone after the switch (2 pixels), which I had to redo because of earlier drone detection. But it doesn't actually lose a frame on the way to the pipe up, and we're actually faster there. We avoid jumping in the corridor as the better positioning gives us too much speed in the pipe and kills us.
 
@@ -2587,7 +2587,7 @@ rerecords: 18
 
 
 # 80-2
-rerecords: 174
+rerecords: 175
 
 Branch 9: a faster beginning that needs everything redone. I need better bruteforcers for this @todo
 Branch 8: getting so much speed we just crash on the tile
@@ -3153,4 +3153,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 275750
+# Total rerecords: 275762
