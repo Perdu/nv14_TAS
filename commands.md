@@ -95,7 +95,8 @@ export LEVEL='55-1' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm -
 # Old methods
 ## auto
 ```
-```export LEVEL='53-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+export LEVEL='53-4' ; python3 optimize_replay.py auto ../n_levels/${LEVEL}.ltm --config examples/config.toml --auto-runs 10 --output wip/${LEVEL}.ltm --replay-output wip/${LEVEL}.txt --workers 15
+```
 
 ## local
 ```
