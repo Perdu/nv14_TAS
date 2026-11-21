@@ -20,7 +20,7 @@ Branch 9: bbbwj
 Branch 8: earlier cj
 
 # 00-4
-rerecords: 184
+rerecords: 196
 
 
 
@@ -107,7 +107,7 @@ rerecords: 494
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 3457
+rerecords: 3458
 
 Branch 9: earlier jump on the way to switch 2 that crashes on the ceiling
 
@@ -2587,7 +2587,7 @@ rerecords: 18
 
 
 # 80-2
-rerecords: 165
+rerecords: 174
 
 Branch 9: a faster beginning that needs everything redone. I need better bruteforcers for this @todo
 Branch 8: getting so much speed we just crash on the tile
@@ -3153,4 +3153,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 275728
+# Total rerecords: 275750
