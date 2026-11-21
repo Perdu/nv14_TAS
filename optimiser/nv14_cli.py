@@ -5585,7 +5585,20 @@ def main() -> None:
                             if path is not None:
                                 path.unlink(missing_ok=True)
 
-                # Stage-specific physics is used to verify preserved post-goal inputs.
+                # Named stage outputs are section checkpoints, not shortened
+                # completed movies. Keep the invocation's downstream N controls
+                # even when a merge/search supplies a short replay for this stage.
+                # The active history changes to inputsN during alternate phases.
+                # Auto's completion probe may already have trimmed replay.frames
+                # to the first finish tick. Use the raw LTM input history when
+                # available: it is the only reliable source of post-goal N keys.
+                original_checkpoint_inputs = tuple(editable_frames(
+                    alt_branch_frames
+                    if alt_branch_frames is not None and
+                    (start_selects_alternate or stop_selects_alternate)
+                    else (source.ltm_movie.replay_frames if source.ltm_movie is not None
+                          else replay.frames)))
+                checkpoint_suffix_source = [original_checkpoint_inputs]
                 hybrid_stage_worlds = {level.simulate_enemies: level}
                 def hybrid_stage_context(name: str):
                     stage = next(item for item in all_stages if item.name == name)
@@ -5598,21 +5611,32 @@ def main() -> None:
 
                 def cleaned_stage_checkpoint(name: str, frames):
                     cleaned = tuple(clean_splice_output(frames))
-                    if not getattr(args, "_single_hybrid_mode", False):
-                        return cleaned
                     goal, stage_level = hybrid_stage_context(name)
-                    # The search has already verified feasibility; score again
-                    # after cleanup to locate the *actual* earliest goal tick.
-                    original = tuple(editable_frames(replay.frames))
                     from nv14_endpoint import EndpointEvaluator
                     from nv14_user_splice import _materialise_splice_tail
-                    assessed = EndpointEvaluator(stage_level, goal).evaluate(
+                    evaluator = EndpointEvaluator(stage_level, goal)
+                    # The incoming stage replay may have been trimmed at an
+                    # early finish. Neutral ticks after completion are only an
+                    # evaluation workspace; the saved LTM needs the original
+                    # continuation after the actual goal tick.
+                    scored = evaluator.evaluate(
                         _materialise_splice_tail(cleaned, goal.target_frame))
-                    if not assessed.feasible:
-                        raise ValueError("cleaned Hybrid stage checkpoint no longer meets its goal")
-                    through = assessed.frame + goal.survive_after_goal
-                    return (cleaned[:through + 1] + original[through + 1:]
-                            if through + 1 < len(original) else cleaned)
+                    if not scored.feasible:
+                        raise ValueError(f"cleaned stage {name!r} no longer meets its goal")
+                    through = scored.frame + goal.survive_after_goal
+                    if goal.velocity_frames is not None:
+                        through = max(through, goal.velocity_frames[1])
+                    original = checkpoint_suffix_source[0]
+                    protected = _materialise_splice_tail(cleaned, through)
+                    restored = (protected[:through + 1] + original[through + 1:])
+                    checked = evaluator.evaluate(
+                        _materialise_splice_tail(restored, goal.target_frame))
+                    if (not checked.feasible or checked.frame != scored.frame or
+                            checked.objective_key != scored.objective_key):
+                        raise ValueError(
+                            f"cannot preserve original post-goal inputs for stage {name!r} "
+                            "without changing the verified goal result")
+                    return restored
 
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
@@ -5948,6 +5972,10 @@ def main() -> None:
                             if not phase_stages:
                                 return tuple(editable_frames(phase_input)), {}
                             phase_results = {}
+                            checkpoint_suffix_source[0] = (
+                                tuple(editable_frames(alt_branch_frames))
+                                if label.startswith('alternate') and alt_branch_frames is not None
+                                else original_checkpoint_inputs)
                             def save_result(name, frames):
                                 if frames is not None:
                                     previous = phase_results.get(name)
@@ -6052,6 +6080,7 @@ def main() -> None:
 
                         def merge_all_saved_stages(phase, *, repair=False):
                             nonlocal phase_attempts, phase_evaluations, phase_improvements
+                            checkpoint_suffix_source[0] = original_checkpoint_inputs
                             # The merge pass needs *both* branch populations,
                             # not just the current suffix's stage subset.
                             joined_branches = sorted(
