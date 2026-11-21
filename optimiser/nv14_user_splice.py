@@ -2374,14 +2374,21 @@ def optimise_user_splices(
                         measured_section = section_duration(index, replay_candidate)
                         if measured_section is not None:
                             break
+                configured_range = (stage.start, stage.end)
                 stage, range_warnings = _adapt_named_stage_range(
                     stage, earlier, stage_best_evaluation[index],
                     lookback=config.adaptive_range_lookback,
                     warn_frames=config.section_warning_frames,
                     measured_section=measured_section)
                 if progress:
-                    for warning in range_warnings:
-                        progress(f"[auto:user-splice:range-warning] {warning}")
+                    range_adapted = (stage.start, stage.end) != configured_range
+                    for warning_index, warning in enumerate(range_warnings):
+                        # The first warning describes the adjusted range when
+                        # one was necessary. Keep length warnings separate so
+                        # only those remain red in the terminal.
+                        tag = ("range-adapted" if range_adapted and warning_index == 0
+                               else "range-warning")
+                        progress(f"[auto:user-splice:{tag}] {warning}")
             # Stage-specific Local TOML is an override for both Auto and Local
             # search backends, not a new choice of search backend.
             stage_config = splice_config_for_round(replace(config, **stage.config_overrides), round_no)

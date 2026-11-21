@@ -59,23 +59,38 @@ def test_cli_and_multi_splicer_config(tmp_path):
         RandomSpliceConfig(adaptive_range_lookback=0)
 
 
-def test_range_warning_is_red_only_on_terminals(monkeypatch):
+def test_range_adaptation_is_yellow_and_length_warning_red_only_on_terminals(monkeypatch):
     import sys
 
     class TTY(io.StringIO):
         def isatty(self):
             return True
 
-    line = "[auto:user-splice:range-warning] '399': edit the splice file"
+    adapted = ("[auto:user-splice:range-adapted] '399': configured range "
+               "350:399 does not cover the live route; using 270:399 for "
+               "this search only; edit the splice file when convenient")
+    long_section = ("[auto:user-splice:range-warning] '399': editable section "
+                    "301 frames exceeds warning threshold 300")
     tty = TTY()
     monkeypatch.setattr(sys, 'stdout', tty)
-    _print_user_splice_progress(line, color=True)
-    assert '\x1b[31m' in tty.getvalue()
+    _print_user_splice_progress(adapted, color=True)
+    assert '\x1b[33m' in tty.getvalue()
+    assert '\x1b[31m' not in tty.getvalue()
     assert 'edit the splice file' in tty.getvalue()
+    tty.seek(0)
+    tty.truncate()
+    _print_user_splice_progress(long_section, color=True)
+    assert '\x1b[31m' in tty.getvalue()
+    assert '\x1b[33m' not in tty.getvalue()
     plain = TTY()
     monkeypatch.setattr(sys, 'stdout', plain)
-    _print_user_splice_progress(line, color=False)
+    _print_user_splice_progress(adapted, color=False)
+    _print_user_splice_progress(long_section, color=False)
     assert '\x1b[' not in plain.getvalue()
+    redirected = io.StringIO()
+    monkeypatch.setattr(sys, 'stdout', redirected)
+    _print_user_splice_progress(adapted, color=True)
+    assert '\x1b[' not in redirected.getvalue()
 
 
 def test_independent_checkpoint_times_are_not_mislabeled_as_measured_section():

@@ -386,6 +386,8 @@ def _print_user_splice_progress(message: str, *, color: bool,
     elif message.startswith(("[auto:user-splice:baseline]", "[auto:baseline]",
                            "[local:population:baseline]")):
         _print_baseline_line(_timestamped_line(message), color=color)
+    elif message.startswith("[auto:user-splice:range-adapted]"):
+        _print_colored_line(_timestamped_line(message), color=color, ansi_color=33)
     elif message.startswith("[auto:user-splice:range-warning]"):
         _print_colored_line(_timestamped_line(message), color=color, ansi_color=31)
     elif message.startswith("[auto:hybrid:gain:absolute]"):
