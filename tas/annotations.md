@@ -107,7 +107,7 @@ rerecords: 494
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 3455
+rerecords: 3457
 
 Branch 9: earlier jump on the way to switch 2 that crashes on the ceiling
 
@@ -125,7 +125,7 @@ rerecords: 604
 It might be able to crame 1 or 2 additional frames, but it's hell to optimize
 
 # 03-1
-rerecords: 1670
+rerecords: 1673
 
 Beginning is so tight and frame-perfect that I can only copy 0th and not gain any millimeter
 
@@ -187,13 +187,14 @@ In the end, being pushed right by the ceiling then doing a regular jump instead 
 Branch 9: attempt at going directly to the pipe
 
 # 04-1
-rerecords: 1850
+rerecords: 1884
 
 Corner jump on the bounceblock on the way down: useless, you have to slow down a lot for it
 In the end, we're going *too fast* and need to slow down or we meet the thwump (if going right directly)
 
-Branch 8: thwump cj at the top
 Branch 9: alt route
+Branch 8: thwump cj at the top
+Branch 7: arriving 2f earlier at splice 526, but we're pacelocked by the drone
 
 # 04-2
 rerecords: 710
@@ -3027,9 +3028,9 @@ rerecords: 73
 Branch 9: slightly better beginning that does not lead to a faster ending
 
 # 96-1
-rerecords: 0
+rerecords: 36
 
-
+Branch 9: alt route test
 
 # 96-2
 rerecords: 34
@@ -3152,4 +3153,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 275653
+# Total rerecords: 275728
