@@ -144,7 +144,10 @@ if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[2] == 'demo':
         demo_str = input("Enter demo: ")
         print(f"Current authors: {authors}")
-        authors = input("New authors? (leave empty to keep as-is): ")
+        try:
+            authors = input("New authors? (leave empty to keep as-is): ")
+        except EOFError:
+            authors = ""
         if authors.strip() == '':
             preserve_default_authors = True
         else:
