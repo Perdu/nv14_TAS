@@ -161,7 +161,7 @@ I also tried some tricks for the hs TAS:
 Perhaps going to the right in the outer section could avoid because slower by drone 4 (todo)
 
 # 03-4
-rerecords: 778
+rerecords: 823
 
 Jumping longer or shorter around 100 is slower (or not faster for longer jumps)
 
@@ -234,9 +234,11 @@ It does not seem possible to go between the last drone and the slope in the very
 Potential tile bwj to do in the lower section. Not sure it would actually save time as we wait for a drone later on
 
 # 05-1
-rerecords: 2155
+rerecords: 2272
 
 Branch 9: skip the second thwump (slower)
+Branch 8: going down before second thwump to try to gain speed
+Branch 7: going left the wj to true to get speed to pass second thwump
 
 In the beginning, we can get a bit of advance over 0th by corner jumping on the 3rd bit, but then we cannot reproduce the second corner jump with gain much more time
 I had to copy the exact path of the 0th
@@ -358,7 +360,7 @@ The second jump we make on the way up makes us land later, but more to the right
 The last jump to go down is extremlely tight. RTA seems to get a better angle for the stumble, which I can't reproduce (i'm not starting with the same speed)
 
 # 08-1
-rerecords: 2830
+rerecords: 2833
 
 In the beginning, landing the fall with a cj on the bb is slower
 It's extremely annoying to find a turnaround strategy around the switch that doesn't get us killed. This solution works. There may be better ones.
@@ -3153,10 +3155,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# 99-5
-
-
-# 99-9
-
-
-# Total rerecords: 275910
+# Total rerecords: 276075
