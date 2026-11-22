@@ -366,20 +366,37 @@ def valid_retime_mutations(
 
 
 def clean_ineffective_air_jumps(
-    level: Level, frames: Sequence[InputFrame],
+    level: Level, frames: Sequence[InputFrame], *,
+    editable_ranges: Sequence[tuple[int, int]] | None = None,
 ) -> tuple[InputFrame, ...]:
-    """Erase airborne jump holds only if the *entire* replay is unchanged.
+    """Canonicalise provably ineffective airborne pulses before Local search.
 
-    'Shift' is N's jump key. This is a conservative, optional presentation
-    cleanup: remove whole jump pulses which start in free air, never cause a
-    successful jump, and whose removal preserves the full per-tick physical
-    trace, route-control events, completion and score. Keep the original if
-    any of those checks differ. The active optimizer population is untouched.
+    Remove a whole free-air pulse only when its absence preserves the entire
+    physical/event trace. In Local mode, only pulses fully contained in an
+    editable range may be changed; frames outside the search range (including
+    a pulse crossing its boundary) must remain untouched.
     """
     from dataclasses import replace
     from nv14_auto import evaluate_replay_with_sentinel
 
     current = tuple(editable_frames(frames))
+    if editable_ranges is not None:
+        # Local usually visits short windows with no jump press at all. Avoid
+        # an expensive complete replay trace when no whole pulse can be edited.
+        candidates = []
+        start = None
+        for index, frame in enumerate((*current, InputFrame())):
+            if frame.jump and start is None:
+                start = index
+            elif not frame.jump and start is not None:
+                candidates.append((start, index - 1))
+                start = None
+        if not any(
+            pulse_start > 0 and range_start <= pulse_start and pulse_end <= range_end
+            for pulse_start, pulse_end in candidates
+            for range_start, range_end in editable_ranges
+        ):
+            return current
     baseline = evaluate_replay_with_sentinel(level, current)
     # A saved *stage checkpoint* is usually incomplete (and may die later).
     # Requiring a canonical completed movie disabled cleanup for precisely the
@@ -417,7 +434,11 @@ def clean_ineffective_air_jumps(
         while end < len(current) and current[end].jump:
             end += 1
         before = baseline.point(i - 1) if i else None
-        if (before is not None and before.in_air and not before.near_wall and
+        mutable = (editable_ranges is None or any(
+            start <= i and end - 1 <= stop
+            for start, stop in editable_ranges
+        ))
+        if (mutable and before is not None and before.in_air and not before.near_wall and
                 all(not (i <= tick < end) for tick in baseline.successful_jumps)):
             trial = list(current)
             for tick in range(i, end):

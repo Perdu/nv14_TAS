@@ -37,7 +37,7 @@ from nv14_objectives import (
     objective_function,
     reference_interaction_requirements,
 )
-from nv14_replay import editable_frames, input_symbol
+from nv14_replay import clean_ineffective_air_jumps, editable_frames, input_symbol
 from nv14_search import (
     ALL_INPUT_CHOICES,
     NativeTerminalState,
@@ -1948,6 +1948,15 @@ def optimise_local_windows(
 
     objective = objective_function(objective_name, objective_target)
     original = editable_frames(original_frames)
+    if local_inputs == "all" and any(frame.jump for frame in original):
+        # Don't make Auto repair a physics-noop pulse inherited by a Local
+        # trajectory. Clean it before the baseline and native window search,
+        # not while serialising a finished Auto/splice checkpoint. The exact
+        # replay verifier protects jump-height holds, wall jumps, and future
+        # jump edges; pulses touching non-editable frames are never changed.
+        original = list(clean_ineffective_air_jumps(
+            level, original, editable_ranges=normalized_ranges,
+        ))
     required_jump_frames = (
         jump_press_frames(original, target_frame)
         if local_inputs == "direction"

@@ -3061,10 +3061,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--auto-random-splice", modes=auto_modes, action="store_true",
         help="switch-safe stochastic route waypoint splicing; requires completed speedrun",
     )
-    command.add_argument("--auto-clean-air-jumps", modes=auto_modes,
-                         action="store_true",
-                         help="remove provably ineffective airborne Shift/jump pulses "
-                              "from saved splice results; full replay trace is reverified")
     command.add_argument("--auto-splice-search", modes=auto_modes,
                          choices=("local", "endpoint-auto", "both", "hybrid", "hybrid-restart", "hybrid-local-control"),
                          default="local",
@@ -5371,19 +5367,6 @@ def main() -> None:
         auto_parent_frames.append(tuple(parent_retimed_frames))
 
     if args.mode == "auto" and args.auto_random_splice:
-        if args.auto_clean_air_jumps:
-            print("[auto:splice:clean] enabled: clean saved checkpoints and "
-                  "completed outputs after replay-trace verification", flush=True)
-        def clean_splice_output(frames):
-            if not args.auto_clean_air_jumps:
-                return frames
-            from nv14_replay import clean_ineffective_air_jumps
-            cleaned = clean_ineffective_air_jumps(level, frames)
-            if cleaned != tuple(editable_frames(frames)):
-                print("[auto:splice:clean] removed ineffective airborne jump "
-                      "holds; verified identical full trace", flush=True)
-            return cleaned
-
         if (args.auto_splice_mode == "user" and not getattr(args, "_both_mode", False)
                 and _find_option_paths(sys.argv[1:], "--goal-config")):
             raise SystemExit("user splice mode uses its own named goal files; omit --goal-config")
@@ -5611,8 +5594,8 @@ def main() -> None:
                             level.source_level_string, simulate_enemies=enabled)
                     return stage.goal, hybrid_stage_worlds[enabled]
 
-                def cleaned_stage_checkpoint(name: str, frames):
-                    cleaned = tuple(clean_splice_output(frames))
+                def stage_checkpoint(name: str, frames):
+                    cleaned = tuple(frames)
                     goal, stage_level = hybrid_stage_context(name)
                     from nv14_endpoint import EndpointEvaluator
                     from nv14_user_splice import _materialise_splice_tail
@@ -5624,7 +5607,7 @@ def main() -> None:
                     scored = evaluator.evaluate(
                         _materialise_splice_tail(cleaned, goal.target_frame))
                     if not scored.feasible:
-                        raise ValueError(f"cleaned stage {name!r} no longer meets its goal")
+                        raise ValueError(f"stage {name!r} no longer meets its goal")
                     through = scored.frame + goal.survive_after_goal
                     if goal.velocity_frames is not None:
                         through = max(through, goal.velocity_frames[1])
@@ -5642,7 +5625,7 @@ def main() -> None:
 
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
-                    replay_text = encode_complex_replay(cleaned_stage_checkpoint(name, frames))
+                    replay_text = encode_complex_replay(stage_checkpoint(name, frames))
                     _protect_unreadable_splice_output(main_path)
                     _protect_unreadable_splice_output(packed_path)
                     if source.ltm_movie is not None and packed_path is not None:
@@ -5670,7 +5653,7 @@ def main() -> None:
 
                 def save_hybrid_session_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = hybrid_session_outputs[name]
-                    replay_text = encode_complex_replay(cleaned_stage_checkpoint(name, frames))
+                    replay_text = encode_complex_replay(stage_checkpoint(name, frames))
                     # For LTM, publish a TXT replay that exactly matches what
                     # the newly written movie loads (implicit post-roll ticks
                     # can otherwise make the two files disagree).
@@ -5963,7 +5946,7 @@ def main() -> None:
                             verify_trimmed_replay(level, canonical)
                             completed_best[0] = canonical
                             _write_result(source, output_path, replay_output_path,
-                                          encode_complex_replay(clean_splice_output(canonical)))
+                                          encode_complex_replay(canonical))
 
                         def run_route_phase(label, phase_stages, phase_input, *,
                                             checkpoints=None, frontiers=None,
@@ -6292,7 +6275,7 @@ def main() -> None:
                                 _protect_unreadable_splice_output(alt_main)
                                 _protect_unreadable_splice_output(alt_text)
                                 alt_replay = encode_complex_replay(
-                                    clean_splice_output(alternate_winner))
+                                    alternate_winner)
                                 if source.ltm_movie is not None and alt_text is not None:
                                     _write_result(source, alt_main, None, alt_replay)
                                     # A libTAS write can preserve neutral
@@ -6335,7 +6318,7 @@ def main() -> None:
                                     if (old_route != slower_route or old_other != slower):
                                         _protect_unreadable_splice_output(other_main)
                                         _protect_unreadable_splice_output(other_text)
-                                        slower_replay = encode_complex_replay(clean_splice_output(slower))
+                                        slower_replay = encode_complex_replay(slower)
                                         if source.ltm_movie is not None and other_text is not None:
                                             _write_result(source, other_main, None, slower_replay)
                                             # Reflect the exact replay the LTM stores,
@@ -6428,7 +6411,7 @@ def main() -> None:
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path,
-                        encode_complex_replay(clean_splice_output(frames))),
+                        encode_complex_replay(frames)),
                     stage_best_callback=save_stage_best,
                     session_best_callback=(save_hybrid_session_best
                                            if hybrid_session_outputs else None),
@@ -6544,7 +6527,7 @@ def main() -> None:
                             summary_only=args.auto_ls_splice,
                             best_callback=lambda frames: _write_result(
                                 source, output_path, replay_output_path,
-                                encode_complex_replay(clean_splice_output(frames))),
+                                encode_complex_replay(frames)),
                             stage_best_callback=save_stage_best,
                             saved_stage_candidates=alt_candidates,
                             saved_stage_frontiers=alt_frontiers,
@@ -6635,7 +6618,7 @@ def main() -> None:
                 level, replay.frames, splice_config,
                 best_callback=lambda frames: _write_result(
                     source, output_path, replay_output_path,
-                    encode_complex_replay(clean_splice_output(frames))),
+                    encode_complex_replay(frames)),
                 progress=lambda message: (
                     _print_baseline_line(message, color=common_config.color)
                     if message.startswith((
