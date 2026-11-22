@@ -1,5 +1,5 @@
 # 00-0
-rerecords: 219
+rerecords: 313
 
 
 
@@ -107,7 +107,7 @@ rerecords: 494
 We have to lose one frame (not jumping around 560) to get a better angle for the jump over the last drone
 
 # 02-4
-rerecords: 3463
+rerecords: 3465
 
 Branch 9: earlier jump on the way to switch 2 that crashes on the ceiling
 
@@ -294,7 +294,7 @@ To get out of the central place, jumping directly right is not faster, neither i
 Can't make a corner jump for the last big jump
 
 # 06-2
-rerecords: 2345
+rerecords: 2397
 
 If we land directly after the first switch, we die. We need to stumble.
 
@@ -3153,4 +3153,10 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 275762
+# 99-5
+
+
+# 99-9
+
+
+# Total rerecords: 275910

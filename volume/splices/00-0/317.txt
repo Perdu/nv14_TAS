@@ -1,0 +1,10 @@
+[local]
+search = "population"
+target_frame = 317
+range = "227:317"
+simulate-enemies = false
+objective = "min-distance"
+target_object = "exit"
+x-window = "0:560"
+y-window = "390:999"
+# require-interaction = ["testdoor:0"]
