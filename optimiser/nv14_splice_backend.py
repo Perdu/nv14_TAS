@@ -208,15 +208,34 @@ def _search_stage_hybrid(
     evaluator_factory = EndpointEvaluator if evaluator_factory is None else evaluator_factory
     evaluator = evaluator_factory(level, stage.goal)
     local_search = _default_local_search if local_search is None else local_search
+    stage_reference = tuple(branch)
+
+    def search_workspace(frames: tuple[InputFrame, ...]) -> tuple[InputFrame, ...]:
+        """Restore a trimmed completed donor before any Hybrid scoring/search.
+
+        Backend callbacks may hand the scheduler a canonical movie ending on
+        its finish tick. Search, however, requires the full input workspace
+        and the immutable source suffix. Neutralise missing editable inputs;
+        restore source inputs beyond the editable stage end. The saved movie
+        is not lengthened by this temporary workspace representation.
+        """
+        frames = tuple(frames)
+        if len(frames) >= len(stage_reference):
+            return frames
+        through = min(stage.end + 1, len(stage_reference))
+        if len(frames) < through:
+            frames += (InputFrame(),) * (through - len(frames))
+        return frames + stage_reference[len(frames):]
 
     def rank(frames: tuple[InputFrame, ...]) -> tuple | None:
+        frames = search_workspace(frames)
         if stage_rank is not None:
             return stage_rank(frames)
         state = evaluator.evaluate(frames)
         return state.objective_key if state.feasible else None
 
     merged: dict[tuple[InputFrame, ...], int] = {}
-    incumbent = search_seed = tuple(branch)
+    incumbent = search_seed = stage_reference
     best_rank = rank(incumbent)
     best_progress = evaluator.evaluate(incumbent).progress_key
     # The cross-backend pool is intentionally distinct from the stage frontier
@@ -225,11 +244,10 @@ def _search_stage_hybrid(
     # re-evaluates/re-packs its donors. Bound by beam and keep progress niches.
     persistent = config.search_backend == "hybrid"
     shared: dict[tuple[InputFrame, ...], object] = {}
-    stage_reference = tuple(branch)
     end = min(stage.end, len(stage_reference) - 1)
 
     def admit(frames: tuple[InputFrame, ...]) -> None:
-        frames = tuple(frames)
+        frames = search_workspace(frames)
         if (frames in shared or len(frames) != len(stage_reference)
                 or frames[:stage.start] != stage_reference[:stage.start]
                 or frames[end + 1:] != stage_reference[end + 1:]):
@@ -351,7 +369,7 @@ def _search_stage_hybrid(
             best_partial_progress = best_progress
             phase_improved = False
             for candidate, frame in found:
-                candidate = tuple(candidate)
+                candidate = search_workspace(candidate)
                 merged.setdefault(candidate, frame)
                 candidate_rank = rank(candidate)
                 if candidate_rank is not None and (best_rank is None or candidate_rank < best_rank):

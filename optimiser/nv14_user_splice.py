@@ -263,6 +263,28 @@ def _materialise_splice_tail(frames: Sequence[InputFrame], target_frame: int
     return body + (InputFrame(),) * max(0, target_frame + 1 - len(body))
 
 
+class _SpliceScoringEndpoint:
+    """Score short saved checkpoints using their implicit neutral input tail.
+
+    A named goal's target frame is an *inclusive input index*: target 776
+    needs 777 input slots, even when a verified completion was trimmed to
+    exactly 776 frames. Keep EndpointEvaluator's strict length validation for
+    all non-splice callers; only the named-splice coordinator understands this
+    search-workspace convention. Do not change the checkpoint/movie itself.
+    """
+
+    def __init__(self, evaluator: EndpointEvaluator, target_frame: int):
+        self._evaluator = evaluator
+        self._target_frame = target_frame
+
+    def evaluate(self, frames: Sequence[InputFrame]) -> EndpointEvaluation:
+        if len(frames) <= self._target_frame:
+            frames = _materialise_splice_tail(frames, self._target_frame)
+        return self._evaluator.evaluate(frames)
+
+    def __getattr__(self, name: str):
+        return getattr(self._evaluator, name)
+
 
 def _replace_section_inputs(
     base: Sequence[InputFrame], archive: Sequence[InputFrame],
@@ -622,8 +644,10 @@ def optimise_user_splices(
                 level.source_level_string, simulate_enemies=enabled)
     stage_levels = tuple(worlds[level.simulate_enemies if s.simulate_enemies is None
                                 else s.simulate_enemies] for s in stages)
-    original_endpoints = tuple(EndpointEvaluator(stage_level, stage.goal)
-                               for stage_level, stage in zip(stage_levels, stages))
+    original_endpoints = tuple(
+        _SpliceScoringEndpoint(EndpointEvaluator(stage_level, stage.goal),
+                               stage.goal.target_frame)
+        for stage_level, stage in zip(stage_levels, stages))
     reporting_workspace = _materialise_splice_tail(
         reporting_input, max(s.goal.target_frame for s in stages))
     # Feasibility is local to each named stage. A later route can bypass a
