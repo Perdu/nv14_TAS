@@ -197,7 +197,7 @@ Branch 8: thwump cj at the top
 Branch 7: arriving 2f earlier at splice 526, but we're pacelocked by the drone
 
 # 04-2
-rerecords: 710
+rerecords: 713
 
 With the right angle, you can jump on the top thwump. This is absolutely completely useless as it speeds you downwards
 
@@ -210,7 +210,7 @@ Branch 9: attempt at using a ceiling push to pass the central drone a bit faster
 Branch 8: attempt at doing a bwj on the way up in the third ring
 
 # 04-4
-rerecords: 1579
+rerecords: 1582
 
 Reused the beginning from Raif et al
 Not getting the stumble around 210 is not faster
@@ -1662,7 +1662,7 @@ Branch 7: attempt at going left over the floorguard
 Branch 9: attempt at getting th bwj 2f earlier
 
 # 49-3
-rerecords: 200
+rerecords: 233
 
 Branch 9: using a lp+wj to go up to the top
 Branch 8: same but not going through splice 553
@@ -3158,4 +3158,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 276263
+# Total rerecords: 276302
