@@ -7,6 +7,5 @@ objective = "earliest-arrival"
 target_region = "688:768,369:389"
 secondary_objective = "min-y"
 require-interaction = ["testdoor:2"]
-
-
-
+require-floorguard-detection = ["floorguard:3"]
+require-floorguard-detection-frames = "200:270"

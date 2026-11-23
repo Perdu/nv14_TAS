@@ -6,7 +6,7 @@ simulate-enemies = false
 objective = "earliest-arrival"
 target_region = "731:771,452:472"
 secondary_objective = "min-y"
-# require-interaction = ["testdoor:0"]
+require-interaction = ["switch"]
 
 
 
