@@ -2668,6 +2668,20 @@ def optimise_user_splices(
                     is_final_gain = (candidate_final is not None
                                      and (best_rank is None
                                           or candidate_final[0] < best_rank))
+                    # A newly saved completed replay can improve the full-run
+                    # ranking without beating the saved *stage* absolute best.
+                    # Snapshot that comparison before the candidate can update
+                    # stage_best_evaluation below; use it for both gain logs.
+                    previous_absolute = stage_best_evaluation[index]
+                    if single_input_seed:
+                        saved_completion = completed_stage_evaluations[index]
+                        if (saved_completion is not None and
+                                (previous_absolute is None or
+                                 saved_completion.objective_key < previous_absolute.objective_key)):
+                            previous_absolute = saved_completion
+                    absolute_stage_gain = (evaluation.feasible and
+                                           (previous_absolute is None or
+                                            evaluation.objective_key < previous_absolute.objective_key))
                     if not evaluation.feasible:
                         if not is_final_gain:
                             return
@@ -2691,18 +2705,10 @@ def optimise_user_splices(
                                     # even if a stronger saved checkpoint exists.
                                     session_best_callback(stage.name, stage_export(normalized))
                                 if progress:
-                                    previous_absolute = old_evaluation
-                                    saved_completion = completed_stage_evaluations[index]
-                                    if (saved_completion is not None and
-                                            (previous_absolute is None or
-                                             saved_completion.objective_key < previous_absolute.objective_key)):
-                                        previous_absolute = saved_completion
-                                    absolute = (previous_absolute is None or
-                                                rank < previous_absolute.objective_key)
-                                    label = ("new absolute best" if absolute else
+                                    label = ("new absolute best" if absolute_stage_gain else
                                              "improves input only")
                                     progress(
-                                        f"[auto:hybrid:gain:{'absolute' if absolute else 'input'}] "
+                                        f"[auto:hybrid:gain:{'absolute' if absolute_stage_gain else 'input'}] "
                                         f"{stage.name!r}: {label}; "
                                         f"{_stage_improvement_text(stage.goal, previous_session, evaluation)}; "
                                         f"{_stage_savings_text(stage.goal, evaluation, input_stage_evals[index], 'input run')}; "
@@ -2771,12 +2777,21 @@ def optimise_user_splices(
                                 f"-> {len(best_output)}"
                                 if previous_best_rank is not None else
                                 f"first eligible verified completion at frame {len(best_output)}")
+                            # Standalone Hybrid may save a better *completed*
+                            # replay while a stronger stage checkpoint is
+                            # still the absolute best. Mark this line itself,
+                            # so the CLI need not infer color from earlier
+                            # events that may not have been printed.
+                            stage_status = (
+                                "; new absolute stage best" if absolute_stage_gain else
+                                "; absolute stage best unchanged"
+                            ) if single_input_seed else ""
                             progress(f"[auto:user-splice] improved verified final replay "
                                      f"({stage.name}); {completed_text}; "
                                      f"{'final-goal' if index == len(stages)-1 else 'stage-goal'} comparison (informational): "
                                      f"{_stage_improvement_text(stage.goal, previous_final, evaluation)}; "
                                      f"{_stage_savings_text(stage.goal, evaluation, input_stage_evals[index], 'input run')}; "
-                                     f"{previous_savings}; saved")
+                                     f"{previous_savings}{stage_status}; saved")
 
                 last_live_accept = float("-inf")
                 def live_candidate(candidate: tuple[InputFrame, ...], frame: int) -> None:

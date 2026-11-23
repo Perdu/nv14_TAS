@@ -330,7 +330,7 @@ def _format_user_splice_report(message: str, *, level_identifier: str | None) ->
         for item in re.split(
                 r"; (?=(?:verified completed frames|first eligible verified completion"
                 r"|stage-goal comparison|final-goal comparison|vs input run:|vs registered run:"
-                r"|vs previous best run:))", details):
+                r"|vs previous best run:|new absolute stage best|absolute stage best unchanged))", details):
             lines.append(f"  {item};")
         if lines[-1].endswith(';'):
             lines[-1] = lines[-1][:-1]
@@ -370,8 +370,9 @@ def _print_user_splice_progress(message: str, *, color: bool,
                                 '[auto:hybrid:gain:input]')) or
                 'new saved stage best' in message):
             base = 33
-        elif (message.startswith('[auto:hybrid:gain:absolute]') or
-              message.startswith('[auto:user-splice] improved verified final replay')):
+        elif message.startswith('[auto:user-splice] improved verified final replay'):
+            base = 33 if '; absolute stage best unchanged;' in message else 32
+        elif message.startswith('[auto:hybrid:gain:absolute]'):
             base = 32
         formatted = _timestamped_line(formatted)
         if color and sys.stdout.isatty():
@@ -402,7 +403,11 @@ def _print_user_splice_progress(message: str, *, color: bool,
     elif (message.startswith("[auto:user-splice] improved ")
           or "improved verified completed replay" in message
           or "verified completed join" in message):
-        _print_best_line(_timestamped_line(message), color=color)
+        printer = (_print_temporary_line
+                   if (message.startswith('[auto:user-splice] improved verified final replay')
+                       and '; absolute stage best unchanged;' in message)
+                   else _print_best_line)
+        printer(_timestamped_line(message), color=color)
     else:
         print(_timestamped_line(message), flush=True)
 
