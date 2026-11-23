@@ -202,7 +202,7 @@ rerecords: 710
 With the right angle, you can jump on the top thwump. This is absolutely completely useless as it speeds you downwards
 
 # 04-3
-rerecords: 1983
+rerecords: 1986
 
 I initially had a slightly better way past the drone after the switch (2 pixels), which I had to redo because of earlier drone detection. But it doesn't actually lose a frame on the way to the pipe up, and we're actually faster there. We avoid jumping in the corridor as the better positioning gives us too much speed in the pipe and kills us.
 
@@ -674,7 +674,7 @@ rerecords: 209
 0th is maxed, I could barely get a few subpixel (0.something)
 
 # 16-4
-rerecords: 1319
+rerecords: 1332
 
 Branch 9: jumping earlier, then jumping to get the switch and fall directly. Slower.
 Branch 8: attempt at doing a bwj on the next bb
@@ -715,12 +715,13 @@ rerecords: 460
 
 
 # 18-0
-rerecords: 881
+rerecords: 926
 
 Walljump after the switch is faster than turnaround
 
 Can't seem to do a bwj on the trapdoor, which would be faster is possible
 
+Branch 9: going left on the way to the exit
 Branch 7: on the way down, use two stumbles instead of catching the wall
 
 I have to jump that high to the exit switch, otherwise I don't land right enough to slow down on the wall
@@ -1661,10 +1662,12 @@ Branch 7: attempt at going left over the floorguard
 Branch 9: attempt at getting th bwj 2f earlier
 
 # 49-3
-rerecords: 73
+rerecords: 200
 
 Branch 9: using a lp+wj to go up to the top
 Branch 8: same but not going through splice 553
+Branch 7: insane wj+thwump bwj
+Branch 6: some weird way to the exit using the thwump
 
 # 49-4
 rerecords: 3454
@@ -3155,4 +3158,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 276075
+# Total rerecords: 276263
