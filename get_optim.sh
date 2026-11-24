@@ -12,7 +12,11 @@ if [ $# -lt 1 ]; then
     OPTIM_FILE="optimiser/wip/optim.ltm"
 else
     if [ $# -ge 2 ]; then
-        OPTIM_FILE="optimiser/wip/$1_$2.ltm"
+        if [ $# -ge 3 ]; then
+            OPTIM_FILE="optimiser/wip/$1_$2.$3.ltm"
+        else
+            OPTIM_FILE="optimiser/wip/$1_$2.ltm"
+        fi
     else
         OPTIM_FILE="optimiser/wip/$1.ltm"
     fi
