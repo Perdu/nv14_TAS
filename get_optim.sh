@@ -13,7 +13,12 @@ if [ $# -lt 1 ]; then
 else
     if [ $# -ge 2 ]; then
         if [ $# -ge 3 ]; then
-            OPTIM_FILE="optimiser/wip/$1_$2.$3.ltm"
+            if [ "$3" == "sess" -o "$3" == "s" ]; then
+                param="session"
+            else
+                param="$3"
+            fi
+            OPTIM_FILE="optimiser/wip/$1_$2.$param.ltm"
         else
             OPTIM_FILE="optimiser/wip/$1_$2.ltm"
         fi
