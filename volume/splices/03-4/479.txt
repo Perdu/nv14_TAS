@@ -2,11 +2,11 @@
 search = "population"
 target_frame = 479
 range = "317:479"
-simulate-enemies = false
+simulate-enemies = true
 objective = "earliest-arrival"
 target_region = "198:218,186:226"
 secondary_objective = "max-x"
-# require-interaction = ["testdoor:0"]
+require-interaction = ["switch"]
 
 
 
