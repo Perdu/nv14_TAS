@@ -2079,6 +2079,7 @@ def _load_config_defaults(
         "alt_branch": "auto_splice_alt_branch",
         "directory": "auto_splice_directory",
         "start": "auto_splice_start",
+        "start_first_round_only": "auto_splice_start_first_round_only",
         "stop": "auto_splice_stop",
         "search": "auto_splice_search",
         "iterations": "auto_splice_iterations",
@@ -2242,7 +2243,8 @@ _AUTO_RANDOM_SPLICE_OPTIONS = frozenset({
     "auto_splice_repair_rounds", "auto_splice_frontier", "auto_splice_save_frontier", "auto_splice_stage_lookback", "auto_splice_waypoint_lookback", "auto_splice_exit_lookback",
     "auto_splice_search", "auto_splice_files", "auto_splice_alt_route", "auto_splice_skip_alt_route", "auto_splice_alt_branch", "auto_splice_directory",
     "auto_splice_use_current_run",
-    "auto_splice_start", "auto_splice_stop", "auto_splice_from_best",
+    "auto_splice_start", "auto_splice_start_first_round_only",
+    "auto_splice_stop", "auto_splice_from_best",
     "auto_splice_single",
 })
 
@@ -2791,6 +2793,13 @@ def parse_arguments(
     # propagation. Only this one stage is searched; in particular Hybrid must
     # never fall through to the following splice.
     single = getattr(namespace, "auto_splice_single", None)
+    if getattr(namespace, "auto_splice_start_first_round_only", False):
+        if single is not None:
+            raise SystemExit("--start-at-splice-first-round-only cannot be used with --single-splice")
+        if namespace.auto_splice_start is None:
+            raise SystemExit("--start-at-splice-first-round-only requires --start-at-splice")
+        if namespace.auto_splice_from_best is not None:
+            raise SystemExit("--start-at-splice-first-round-only cannot be used with --splice-from-best")
     if single is not None:
         if not (namespace.mode == "auto" and namespace.auto_splice_files):
             raise SystemExit("--single-splice requires a named multi-splicer route")
@@ -3130,6 +3139,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-start", "--start-at-splice", "--auto-splice-start", dest="auto_splice_start",
                          modes=auto_modes, metavar="NAME",
                          help="first named splice to optimise (inclusive; earlier helper goals are non-binding)")
+    command.add_argument("--start-at-splice-first-round-only", "--splice-start-first-round-only",
+                         dest="auto_splice_start_first_round_only", modes=auto_modes,
+                         action=argparse.BooleanOptionalAction, default=False,
+                         help="use --start-at-splice only in outer round 1; all later rounds "
+                              "start from the first configured splice (also "
+                              "[multi-splicer] start-first-round-only=true)")
     command.add_argument("--splice-stop", "--stop-at-splice", "--auto-splice-stop", dest="auto_splice_stop",
                          modes=auto_modes, metavar="NAME",
                          help="last named splice to search (inclusive) in each outer round; later checkpoints remain available for merge, repair and reporting")
@@ -5844,6 +5859,8 @@ def main() -> None:
                     "merge_repair_at_frame": args.auto_splice_merge_repair_at_frame,
                     "merge_retime_gains": retime_gains,
                     "start_at": args.auto_splice_start,
+                    **({"start_first_round_only": True}
+                       if args.auto_splice_start_first_round_only else {}),
                     "stop_at": args.auto_splice_stop,
                     # A route round now covers every branch and the shared
                     # suffix; old phase-by-phase campaigns cannot resume as
@@ -5917,7 +5934,8 @@ def main() -> None:
                                   if args.auto_splice_stop is not None else len(stages) - 1)
                     if start_index > stop_index:
                         raise ValueError("splice start must not be after splice stop")
-                    if (rejoin_index is not None and start_index < rejoin_index
+                    if (rejoin_index is not None and
+                            (start_index < rejoin_index or args.auto_splice_start_first_round_only)
                             and prefix_count <= rejoin_index):
                         alt_rejoin_index = alt_names.index(rejoin_name, prefix_count)
                         shared_prefix = stages[start_index:prefix_count]
@@ -6149,6 +6167,20 @@ def main() -> None:
                         # phase so the next outer round inherits earlier gains.
                         stagnant_route_rounds = 0
                         for outer_round in range(completed_passes, splice_config.rounds):
+                            # A resumed campaign uses the absolute outer-round index:
+                            # only round zero obeys the manual restart boundary.
+                            round_start = (0 if args.auto_splice_start_first_round_only and outer_round > 0
+                                           else start_index)
+                            before_rejoin = (tuple(stages[round_start:stop_index + 1])
+                                             if stop_index < rejoin_index or round_start >= rejoin_index
+                                             else ())
+                            shared_prefix = stages[round_start:prefix_count]
+                            primary_branch = stages[max(round_start, prefix_count):rejoin_index]
+                            shared_suffix = stages[rejoin_index + 1:stop_index + 1]
+                            if round_start != start_index:
+                                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:round-start] "
+                                      f"round {outer_round+1}: starting again from "
+                                      f"{stages[round_start].name!r}", flush=True)
                             gains_before_round = phase_improvements
                             print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
                                   f"full route round {outer_round+1}/{splice_config.rounds}: " +
@@ -6421,6 +6453,7 @@ def main() -> None:
                     single_input_seed=bool(getattr(args, "_single_hybrid_mode", False)),
                     show_backend_progress=bool(args.auto_splice_single or args._both_mode),
                     start_at=(None if summary_only else args.auto_splice_start),
+                    start_first_round_only=(not summary_only and args.auto_splice_start_first_round_only),
                     stop_at=(None if summary_only else args.auto_splice_stop),
                     from_best=(None if summary_only else args.auto_splice_from_best),
                     start_from_stage_bests=args.auto_splice_each_best,

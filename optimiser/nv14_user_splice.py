@@ -501,6 +501,7 @@ def optimise_user_splices(
     show_backend_progress: bool = False,
     completion_policy: str = "complete",
     start_at: str | None = None, stop_at: str | None = None,
+    start_first_round_only: bool = False,
     from_best: str | None = None,
     start_from_stage_bests: bool = False,
     reference_frames: Sequence[InputFrame] | None = None,
@@ -545,6 +546,10 @@ def optimise_user_splices(
         raise ValueError("use_current_run must be a boolean")
     if type(single_input_seed) is not bool:
         raise ValueError("single_input_seed must be a boolean")
+    if type(start_first_round_only) is not bool:
+        raise ValueError("start_first_round_only must be a boolean")
+    if start_first_round_only and (start_at is None or from_best is not None or single_input_seed):
+        raise ValueError("start_first_round_only requires start_at without from_best or single-input hybrid")
     if single_input_seed and (len(stages) != 1 or from_best is not None or
                               initial_seeds or not use_current_run):
         raise ValueError("single-input hybrid requires one stage and the current "
@@ -1081,6 +1086,7 @@ def optimise_user_splices(
                 "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
                 "merge_stage_bests": merge_stage_bests,
                 "start_at": start_at, "stop_at": stop_at,
+                **({"start_first_round_only": True} if start_first_round_only else {}),
             }
             if any(resume_state.get(k) != value for k, value in wanted.items()):
                 if progress:
@@ -2352,6 +2358,13 @@ def optimise_user_splices(
          for stage in stages), default=config.stage_lookback)
     for round_no in (itertools.count(first_round) if config.rounds == 0
                      else range(first_round, config.rounds)):
+        # --start-at-splice is a restart point for round 1 only when opted in.
+        # Use absolute round numbers so interrupted searches resume correctly.
+        round_first_stage = (0 if start_first_round_only and round_no > 0
+                             else first_stage)
+        if progress and round_first_stage != first_stage:
+            progress(f"[auto:user-splice:round-start] round {round_no+1}: "
+                     f"starting again from {stages[round_first_stage].name!r}")
         begun = time.monotonic()
         selected = (config.splice_round_speeds[min(round_no, len(config.splice_round_speeds)-1)]
                     if config.splice_round_speeds else config.splice_speed)
@@ -2368,7 +2381,7 @@ def optimise_user_splices(
         history: list[list[tuple[InputFrame, ...]]] = [[propagation_seed]
             if (use_current_run or propagation_seed != input_seed) else []]
         history_origins: list[int | None] = [from_best_index]
-        if first_stage == 0 and archived_frontiers[0]:
+        if round_first_stage == 0 and archived_frontiers[0]:
             # A normal restart can search from saved alternatives immediately,
             # rather than merely comparing their scores after the search.
             history[0] = list(dict.fromkeys((*history[0],
@@ -2376,7 +2389,7 @@ def optimise_user_splices(
         # Reconstruct lookback at the interrupted stage, not only at the
         # originally requested start. Other routes remain on disk while the
         # interrupted backend's own seed is resumed first.
-        restore_index = int(active_phase["stage_index"]) if active_phase is not None else first_stage
+        restore_index = int(active_phase["stage_index"]) if active_phase is not None else round_first_stage
         if restore_index > 0:
             if from_best_index is None and archived_frontiers[restore_index - 1]:
                 history[0] = list(dict.fromkeys(
@@ -2396,7 +2409,7 @@ def optimise_user_splices(
         # every worker callback. Keep only the latest verified faster arrival.
         next_section_retimes: dict[int, tuple[tuple[InputFrame, ...], int,
                                              tuple[tuple[InputFrame, ...], ...]]] = {}
-        stage_begin = int(active_phase["stage_index"]) if active_phase is not None else first_stage
+        stage_begin = int(active_phase["stage_index"]) if active_phase is not None else round_first_stage
         for index in range(stage_begin, last_stage + 1):
             stage = stages[index]
             if not single_input_seed:
@@ -2837,6 +2850,7 @@ def optimise_user_splices(
                                 "reference_sha256": hashlib.sha256(encode_complex_replay(reference).encode()).hexdigest() if reference is not None else None,
                                 "merge_stage_bests": merge_stage_bests,
                                 "start_at": start_at, "stop_at": stop_at,
+                **({"start_first_round_only": True} if start_first_round_only else {}),
                                 "round_no": round_no, "stage_index": index,
                                 "stage": stage.name,
                                 "branch": encode_complex_replay(branch),

@@ -1098,3 +1098,48 @@ def test_stop_at_alternate_only_uses_configured_ltm_branch(tmp_path, monkeypatch
                                            '--stop-at-splice', '240'])
     main()
     assert seen == [(('230', '240', 'end'), True, '240')]
+
+
+def test_start_first_round_only_after_rejoin_restores_full_alternate_route(
+        tmp_path, monkeypatch, capsys):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    calls = []
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages),
+                      kwargs.get('resume_outer_round')))
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '2',
+        '--start-at-splice', 'end', '--start-at-splice-first-round-only'])
+    main()
+    assert calls == [(('end',), 0), (('230',), 1), (('240',), 1),
+                     (('end',), 1), (('end',), 1)]
+    assert "round 2: starting again from '230'" in capsys.readouterr().out
+
+
+def test_start_first_round_only_alternate_resume_restores_full_route(
+        tmp_path, monkeypatch):
+    _level, _source, _output, argv = _make_routes(tmp_path)
+    calls = []
+    interrupt = [True]
+
+    def fake_search(_level, frames, stages, config, **kwargs):
+        calls.append((tuple(stage.name for stage in stages),
+                      kwargs.get('resume_outer_round')))
+        if interrupt[0] and config.rounds == 2:
+            interrupt[0] = False
+            raise KeyboardInterrupt()
+        return us.UserSpliceResult(tuple(frames), 0, 0, 0)
+
+    monkeypatch.setattr(us, 'optimise_user_splices', fake_search)
+    monkeypatch.setattr(sys, 'argv', argv + ['--auto-runs', '2',
+        '--start-at-splice', 'end', '--start-at-splice-first-round-only'])
+    with pytest.raises(SystemExit) as stopped:
+        main()
+    assert stopped.value.code == 130
+    assert calls == [(('end',), 0), (('230',), 1)]
+    main()
+    assert calls[2:] == [(('230',), 1), (('240',), 1),
+                         (('end',), 1), (('end',), 1)]
