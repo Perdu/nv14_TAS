@@ -703,6 +703,20 @@ def optimise_user_splices(
             return (_completed_rank(completed, length),), tuple(frames[:length])
         return (original_endpoints[-1].evaluate(frames).objective_key,), tuple(frames)
 
+    def canonical_stage_input(frames: tuple[InputFrame, ...]) -> tuple[InputFrame, ...]:
+        """Remove fully verified Shift no-ops before reusing stage search seeds."""
+        if not any(frame.jump for frame in frames):
+            return frames
+        from nv14_replay import (clean_ineffective_air_jumps,
+                                 identical_replay_physics)
+        canonical = clean_ineffective_air_jumps(level, frames)
+        if canonical != frames and all(
+            world is level or identical_replay_physics(world, frames, canonical)
+            for world in stage_levels
+        ):
+            return canonical
+        return frames
+
     def stage_export(frames: tuple[InputFrame, ...]) -> tuple[InputFrame, ...]:
         """Keep trial replays playable and trim only verified early finishes.
 
@@ -710,6 +724,9 @@ def optimise_user_splices(
         Its neutral tail is not part of the movie and should not appear in
         the companion plain-text replay checkpoint either.
         """
+        # A stage checkpoint is also the next search's seed. The exact-trace
+        # gate prevents output-only cleanup from being reintroduced later.
+        frames = canonical_stage_input(frames)
         if single_input_seed:
             # Standalone Hybrid is a section editor, not a full-run exporter.
             # A checkpoint must retain the original replay after its goal,
@@ -988,6 +1005,9 @@ def optimise_user_splices(
             if stage_feasible(candidate, i):
                 pool[candidate] = original_endpoints[i].evaluate(candidate).objective_key
         selected = select_archive(i, pool)
+        # Keep the in-memory frontier canonical too: the next stage can reuse
+        # it without generating another population of ineffective Shift holds.
+        selected = list(dict.fromkeys(canonical_stage_input(x) for x in selected))
         if selected != archived_frontiers[i]:
             frontier_callback(stages[i].name, tuple(selected))
             archived_frontiers[i] = selected
@@ -2950,7 +2970,10 @@ def optimise_user_splices(
             ordered = sorted(eligible.items(), key=lambda item: item[1])
             # Keep distinct earlier-stage frontiers independent of whether a
             # more recent stage wins its own intermediate ranking.
-            selected = [candidate for candidate, _ in ordered[:max(1, config.frontier)]]
+            selected = list(dict.fromkeys(
+                canonical_stage_input(candidate)
+                for candidate, _ in ordered[:max(1, config.frontier)]
+            ))
             elites[index] = selected
             if stage_result_callback is not None:
                 stage_result_callback(stage.name, stage_export(selected[0]))

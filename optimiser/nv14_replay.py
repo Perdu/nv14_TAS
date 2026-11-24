@@ -365,86 +365,145 @@ def valid_retime_mutations(
     return tuple(result)
 
 
+def _same_physics_trace(baseline, checked, *, body_length: int) -> bool:
+    """Compare physics and the live jump-edge state at the replay boundary.
+
+    The evaluator appends an implicit neutral sentinel. Its final trace point
+    has ``previous_jump_held=False`` even if the *last serialized input* still
+    holds Shift. A checkpoint can be extended by another splice, so the state
+    immediately BEFORE that sentinel must agree too. Intermediate input-key
+    history can differ when it is proved irrelevant to the existing run.
+    """
+    from dataclasses import replace
+
+    if (checked.unsupported or
+            checked.finish_tick != baseline.finish_tick or
+            checked.dead_tick != baseline.dead_tick or
+            checked.last_tick != baseline.last_tick or
+            checked.route_control_events != baseline.route_control_events or
+            checked.successful_jumps != baseline.successful_jumps or
+            checked.final_gold_mask != baseline.final_gold_mask or
+            checked.gold_bonus_ticks != baseline.gold_bonus_ticks or
+            checked.completed_exit_index != baseline.completed_exit_index or
+            checked.pre_finish_exit_distance != baseline.pre_finish_exit_distance or
+            len(checked.trace) != len(baseline.trace)):
+        return False
+    if body_length:
+        # Do not mistake the implicit neutral sentinel for the continuation
+        # state of the serialized checkpoint. This is an exact native trace
+        # tick, not an inferred value from the last input byte.
+        original_end = baseline.point(body_length - 1)
+        candidate_end = checked.point(body_length - 1)
+        if (original_end is None) != (candidate_end is None):
+            return False
+        if (original_end is not None and
+                original_end.previous_jump_held != candidate_end.previous_jump_held):
+            return False
+    return all(replace(a, previous_jump_held=False) ==
+               replace(b, previous_jump_held=False)
+               for a, b in zip(baseline.trace, checked.trace))
+
+
+def identical_replay_physics(
+    level: Level, original: Sequence[InputFrame], candidate: Sequence[InputFrame],
+) -> bool:
+    """Check full native-world equivalence, including incomplete checkpoints.
+
+    Used when a named stage runs under a different enemy-simulation setting
+    from the physically authoritative level. Input-key history can differ;
+    physics, events, completion and each observable trace point may not.
+    """
+    from nv14_auto import evaluate_replay_with_sentinel
+
+    first, second = tuple(editable_frames(original)), tuple(editable_frames(candidate))
+    if first == second:
+        return True
+    baseline = evaluate_replay_with_sentinel(level, first)
+    if baseline.unsupported or not baseline.trace:
+        return False
+    return _same_physics_trace(
+        baseline, evaluate_replay_with_sentinel(level, second),
+        body_length=len(first),
+    )
+
+
 def clean_ineffective_air_jumps(
     level: Level, frames: Sequence[InputFrame], *,
     editable_ranges: Sequence[tuple[int, int]] | None = None,
 ) -> tuple[InputFrame, ...]:
-    """Canonicalise provably ineffective airborne pulses before Local search.
+    """Remove verified no-op Shift holds without altering continuation state.
 
-    Remove a whole free-air pulse only when its absence preserves the entire
-    physical/event trace. In Local mode, only pulses fully contained in an
-    editable range may be changed; frames outside the search range (including
-    a pulse crossing its boundary) must remain untouched.
+    Failed air presses and redundant tails of useful holds can be removed if
+    the full physics trace agrees. For a checkpoint which may be extended, the
+    last serialized frame's native ``previous_jump_held`` must also agree:
+    the implicit neutral sentinel does NOT protect that jump-edge state.
+    Consequently a Shift hold ending at the replay boundary is left intact
+    unless a verified equivalent edit can preserve that boundary state.
+    Never change a pulse crossing a Local immutable boundary.
     """
-    from dataclasses import replace
     from nv14_auto import evaluate_replay_with_sentinel
 
     current = tuple(editable_frames(frames))
-    if editable_ranges is not None:
-        # Local usually visits short windows with no jump press at all. Avoid
-        # an expensive complete replay trace when no whole pulse can be edited.
-        candidates = []
-        start = None
-        for index, frame in enumerate((*current, InputFrame())):
-            if frame.jump and start is None:
-                start = index
-            elif not frame.jump and start is not None:
-                candidates.append((start, index - 1))
-                start = None
-        if not any(
-            pulse_start > 0 and range_start <= pulse_start and pulse_end <= range_end
-            for pulse_start, pulse_end in candidates
-            for range_start, range_end in editable_ranges
-        ):
-            return current
+    if not any(frame.jump for frame in current):
+        return current
+    pulses: list[tuple[int, int]] = []
+    start = None
+    for index, frame in enumerate((*current, InputFrame())):
+        if frame.jump and start is None:
+            start = index
+        elif not frame.jump and start is not None:
+            end = index
+            if editable_ranges is None or any(
+                left <= start and end - 1 <= right
+                for left, right in editable_ranges
+            ):
+                pulses.append((start, end))
+            start = None
+    if not pulses:
+        return current
+
     baseline = evaluate_replay_with_sentinel(level, current)
-    # A saved *stage checkpoint* is usually incomplete (and may die later).
-    # Requiring a canonical completed movie disabled cleanup for precisely the
-    # outputs most likely to contain ineffective airborne button presses.
-    # Physics/event equivalence below also works for incomplete traces.
     if baseline.unsupported or not baseline.trace:
         return current
 
-    def same_run(candidate):
-        checked = evaluate_replay_with_sentinel(level, candidate)
-        if (checked.finish_tick != baseline.finish_tick or
-                checked.dead_tick != baseline.dead_tick or
-                checked.last_tick != baseline.last_tick or
-                checked.route_control_events != baseline.route_control_events or
-                checked.successful_jumps != baseline.successful_jumps or
-                checked.final_gold_mask != baseline.final_gold_mask or
-                checked.gold_bonus_ticks != baseline.gold_bonus_ticks or
-                checked.completed_exit_index != baseline.completed_exit_index or
-                checked.pre_finish_exit_distance != baseline.pre_finish_exit_distance or
-                len(checked.trace) != len(baseline.trace)):
-            return False
-        # previous_jump_held is input history, not a physical game outcome.
-        # Everything else, including collision modes, state and object masks,
-        # must match bit-for-bit at *every* replay step.
-        return all(replace(a, previous_jump_held=False) ==
-                   replace(b, previous_jump_held=False)
-                   for a, b in zip(baseline.trace, checked.trace))
+    def same_run(candidate: Sequence[InputFrame]) -> bool:
+        return _same_physics_trace(
+            baseline, evaluate_replay_with_sentinel(level, candidate),
+            body_length=len(current),
+        )
 
-    i = 0
-    while i < len(current):
-        if not current[i].jump or (i and current[i-1].jump):
-            i += 1
-            continue
-        end = i + 1
-        while end < len(current) and current[end].jump:
-            end += 1
-        before = baseline.point(i - 1) if i else None
-        mutable = (editable_ranges is None or any(
-            start <= i and end - 1 <= stop
-            for start, stop in editable_ranges
-        ))
-        if (mutable and before is not None and before.in_air and not before.near_wall and
-                all(not (i <= tick < end) for tick in baseline.successful_jumps)):
+    for start, end in pulses:
+        def without_suffix(first: int) -> tuple[InputFrame, ...]:
             trial = list(current)
-            for tick in range(i, end):
+            for tick in range(first, end):
                 old = trial[tick]
                 trial[tick] = InputFrame(old.left, old.right, False, None)
-            if same_run(trial):
-                current = tuple(trial)
-        i = end
+            return tuple(trial)
+
+        # A failed press (possibly against a wall or on the floor) may be a
+        # complete no-op even when it was not classified as free-air. Let the
+        # exact trace verification, not a position heuristic, decide.
+        whole = without_suffix(start)
+        if same_run(whole):
+            current = whole
+            continue
+        if end - start == 1:
+            continue
+        # Preserve the useful leading part of a real jump while removing any
+        # trailing held frames that no longer affect physics. Test one frame
+        # first: if it matters, no longer suffix can be an exact trace match.
+        tail = without_suffix(end - 1)
+        if not same_run(tail):
+            continue
+        best = tail
+        lo, hi = start + 1, end - 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            candidate = without_suffix(mid)
+            if same_run(candidate):
+                best = candidate
+                hi = mid
+            else:
+                lo = mid + 1
+        current = best
     return current

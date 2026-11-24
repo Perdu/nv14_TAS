@@ -2510,4 +2510,12 @@ def optimise_local_windows(
             "window, wider optimisation range, more passes, or additional random "
             "restarts."
         )
+    # Native proposals can reintroduce a no-op hold after the seed cleanup.
+    # The exact-trace gate preserves the score, and immutable ranges stay fixed.
+    if local_inputs == "all" and any(frame.jump for frame in best_run.frames):
+        cleaned = clean_ineffective_air_jumps(
+            level, best_run.frames, editable_ranges=normalized_ranges,
+        )
+        if tuple(best_run.frames) != cleaned:
+            return list(cleaned), best_run.evaluation
     return best_run.frames, best_run.evaluation

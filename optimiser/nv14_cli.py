@@ -5372,6 +5372,14 @@ def main() -> None:
         auto_parent_frames.append(tuple(parent_retimed_frames))
 
     if args.mode == "auto" and args.auto_random_splice:
+        from nv14_replay import clean_ineffective_air_jumps, identical_replay_physics
+
+        def encode_splice_replay(frames):
+            # This is a final defensive gate, not the former opt-in repair
+            # phase. Native backends can add holds after Local's seed pass.
+            # Never publish such holds if an exactly equivalent trace exists.
+            return encode_complex_replay(clean_ineffective_air_jumps(level, frames))
+
         if (args.auto_splice_mode == "user" and not getattr(args, "_both_mode", False)
                 and _find_option_paths(sys.argv[1:], "--goal-config")):
             raise SystemExit("user splice mode uses its own named goal files; omit --goal-config")
@@ -5521,7 +5529,15 @@ def main() -> None:
                     path = _user_splice_frontier_path(stage_outputs[name][0])
                     stage = next(item for item in all_stages if item.name == name)
                     document = _user_splice_frontier_identity(level, stage)
-                    document["replays"] = [encode_complex_replay(item) for item in frames]
+                    _, stage_level = hybrid_stage_context(name)
+                    published = []
+                    for item in frames:
+                        canonical = clean_ineffective_air_jumps(level, item)
+                        if (canonical != tuple(item) and stage_level is not level and
+                                not identical_replay_physics(stage_level, item, canonical)):
+                            canonical = item
+                        published.append(encode_complex_replay(canonical))
+                    document["replays"] = published
                     _atomic_write_text(path, json.dumps(document, separators=(",", ":")) + "\n")
                 if not args.auto_ls_splice:
                     for stage_name, candidates in saved_stage_candidates.items():
@@ -5626,7 +5642,17 @@ def main() -> None:
                         raise ValueError(
                             f"cannot preserve original post-goal inputs for stage {name!r} "
                             "without changing the verified goal result")
-                    return restored
+                    canonical = clean_ineffective_air_jumps(level, restored)
+                    if canonical != restored:
+                        if (stage_level is not level and not identical_replay_physics(
+                                stage_level, restored, canonical)):
+                            return restored
+                        rechecked = evaluator.evaluate(
+                            _materialise_splice_tail(canonical, goal.target_frame))
+                        if (not rechecked.feasible or rechecked.frame != scored.frame or
+                                rechecked.objective_key != scored.objective_key):
+                            return restored
+                    return canonical
 
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
@@ -5951,7 +5977,7 @@ def main() -> None:
                             verify_trimmed_replay(level, canonical)
                             completed_best[0] = canonical
                             _write_result(source, output_path, replay_output_path,
-                                          encode_complex_replay(canonical))
+                                          encode_splice_replay(canonical))
 
                         def run_route_phase(label, phase_stages, phase_input, *,
                                             checkpoints=None, frontiers=None,
@@ -6279,7 +6305,7 @@ def main() -> None:
                                 # best) displace this independently ranked alt.
                                 _protect_unreadable_splice_output(alt_main)
                                 _protect_unreadable_splice_output(alt_text)
-                                alt_replay = encode_complex_replay(
+                                alt_replay = encode_splice_replay(
                                     alternate_winner)
                                 if source.ltm_movie is not None and alt_text is not None:
                                     _write_result(source, alt_main, None, alt_replay)
@@ -6323,7 +6349,7 @@ def main() -> None:
                                     if (old_route != slower_route or old_other != slower):
                                         _protect_unreadable_splice_output(other_main)
                                         _protect_unreadable_splice_output(other_text)
-                                        slower_replay = encode_complex_replay(slower)
+                                        slower_replay = encode_splice_replay(slower)
                                         if source.ltm_movie is not None and other_text is not None:
                                             _write_result(source, other_main, None, slower_replay)
                                             # Reflect the exact replay the LTM stores,
@@ -6416,7 +6442,7 @@ def main() -> None:
                     summary_only=args.auto_ls_splice,
                     best_callback=lambda frames: _write_result(
                         source, output_path, replay_output_path,
-                        encode_complex_replay(frames)),
+                        encode_splice_replay(frames)),
                     stage_best_callback=save_stage_best,
                     session_best_callback=(save_hybrid_session_best
                                            if hybrid_session_outputs else None),
@@ -6532,7 +6558,7 @@ def main() -> None:
                             summary_only=args.auto_ls_splice,
                             best_callback=lambda frames: _write_result(
                                 source, output_path, replay_output_path,
-                                encode_complex_replay(frames)),
+                                encode_splice_replay(frames)),
                             stage_best_callback=save_stage_best,
                             saved_stage_candidates=alt_candidates,
                             saved_stage_frontiers=alt_frontiers,
@@ -6623,7 +6649,7 @@ def main() -> None:
                 level, replay.frames, splice_config,
                 best_callback=lambda frames: _write_result(
                     source, output_path, replay_output_path,
-                    encode_complex_replay(frames)),
+                    encode_splice_replay(frames)),
                 progress=lambda message: (
                     _print_baseline_line(message, color=common_config.color)
                     if message.startswith((
@@ -6649,7 +6675,7 @@ def main() -> None:
                     print("[auto:random-splice:goal] no verified target improvement found; no output written")
             else:
                 _write_result(source, output_path, replay_output_path,
-                              encode_complex_replay(result.frames))
+                              encode_splice_replay(result.frames))
             print(f"[auto:random-splice] {result.attempts} searches tried; "
                   f"{result.improvements} improvements; {len(result.frames)} frames"
                   + (f"; target {target_goal.objective} at frame {target_goal.target_frame}"
