@@ -160,7 +160,7 @@ in_section && /^\[/ {
 
 i="$1"
 
-if [[ "${2:-}" == "--force" ]] || ! tar xOzf "$i" editor.ini | grep -F '36\name=y' >/dev/null; then
+if [[ "${2:-}" == "--force" ]] || ! tar xOzf "$i" editor.ini | grep -F '44\name=y' >/dev/null; then
     echo "Fixing $i"
     rm -f extract/*
     tar xzf "$i" -C extract/
