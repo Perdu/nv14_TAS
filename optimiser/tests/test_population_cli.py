@@ -112,7 +112,6 @@ def test_toml_strategy_conflicts_are_not_silently_ignored(tmp_path):
 @pytest.mark.parametrize("options,message", [
     (["--resume"], "--resume requires --checkpoint"),
     (["--objective", "earliest-arrival"], "requires --target-region"),
-    (["--target-region", "0:1,0:1"], "requires --objective earliest-arrival"),
     (["--arrival-start", "1"], "requires --objective earliest-arrival or earliest-interaction"),
     (["--iterations", "0"], "iterations must be at least 1"),
     (["--beam", "0"], "beam must be at least 1"),
@@ -247,3 +246,12 @@ def test_rounds_toml_defaults_and_cli_precedence(tmp_path):
     assert (local.rounds, local.stagnation_rounds) == (500, 4)
     local = parse("--config", str(config), "--rounds", "0")._mode_configs.local
     assert (local.rounds, local.stagnation_rounds) == (0, 7)
+
+
+def test_population_target_region_is_optional_for_fixed_and_velocity_goals():
+    for objective in ('max-x', 'max-vx'):
+        options = (['--velocity-frames', '4:9'] if objective == 'max-vx' else [])
+        config = parse('--search', 'population', '--objective', objective,
+                       '--target-frame', '10', '--target-region', '0:800,0:600',
+                       *options)._mode_configs.local
+        assert config.target_region == (0, 800, 0, 600)

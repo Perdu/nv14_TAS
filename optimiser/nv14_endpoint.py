@@ -135,22 +135,23 @@ class EndpointGoal:
         if self.objective == "earliest-arrival":
             if (self.target_region is None) == (self.target_circle is None):
                 raise ValueError("earliest-arrival requires exactly one of target_region or target_circle")
-            if self.target_region is not None:
-                region = tuple(float(value) for value in self.target_region)
-                if (len(region) != 4 or not all(math.isfinite(value) for value in region)
-                        or region[0] > region[1] or region[2] > region[3]):
-                    raise ValueError("target_region must contain four finite, ordered rectangle bounds")
-                object.__setattr__(self, "target_region", region)
-            else:
-                circle = tuple(float(value) for value in self.target_circle)
-                if (len(circle) != 3 or not all(math.isfinite(value) for value in circle)
-                        or circle[2] <= 0):
-                    raise ValueError("target_circle must contain finite X, Y and positive radius")
-                object.__setattr__(self, "target_circle", circle)
-        elif self.target_region is not None:
-            raise ValueError("target_region requires earliest-arrival")
-        elif self.target_circle is not None:
-            raise ValueError("target_circle requires earliest-arrival")
+        # A rectangle is an endpoint constraint for every objective. For a
+        # velocity_frames objective, it must hold on the very tick whose
+        # velocity is scored (not merely at some earlier visit).
+        if self.target_region is not None:
+            region = tuple(float(value) for value in self.target_region)
+            if (len(region) != 4 or not all(math.isfinite(value) for value in region)
+                    or region[0] > region[1] or region[2] > region[3]):
+                raise ValueError("target_region must contain four finite, ordered rectangle bounds")
+            object.__setattr__(self, "target_region", region)
+        if self.target_circle is not None:
+            if self.objective != "earliest-arrival":
+                raise ValueError("target_circle requires earliest-arrival")
+            circle = tuple(float(value) for value in self.target_circle)
+            if (len(circle) != 3 or not all(math.isfinite(value) for value in circle)
+                    or circle[2] <= 0):
+                raise ValueError("target_circle must contain finite X, Y and positive radius")
+            object.__setattr__(self, "target_circle", circle)
         if self.arrival_start and not self.is_earliest:
             raise ValueError("arrival_start requires earliest-arrival or earliest-interaction")
         if self.objective == "earliest-interaction":

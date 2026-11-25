@@ -229,8 +229,9 @@ def test_goal_validation_and_verification_include_event_identity():
         EndpointGoal(4, "earliest-interaction")
     with pytest.raises(ValueError, match="interaction_target requires"):
         replace(target, objective="max-x")
-    with pytest.raises(ValueError, match="target_region requires"):
-        replace(target, target_region=(0, 200, 0, 200))
+    # A target rectangle gates the same tick as the interaction, rather
+    # than requiring a visit at an unrelated earlier frame.
+    assert replace(target, target_region=(0, 200, 0, 200)).target_region == (0., 200., 0., 200.)
     with pytest.raises(ValueError, match="at least one"):
         InteractionTarget("empty", ())
     frames = (InputFrame(),) * 5
@@ -332,12 +333,18 @@ def test_checkpoint_resume_matches_uninterrupted_and_verifies_event_metadata(tmp
 @pytest.mark.parametrize("options,message", [
     (["--objective", "earliest-interaction"], "requires --target-object"),
     (["--objective", "earliest-interaction", "--target-object", "gold:0", "--target-point", "1,2"], "target-point"),
-    (["--objective", "earliest-interaction", "--target-object", "gold:0", "--target-region", "0:1,0:1"], "target-region"),
     (["--objective", "earliest-interaction", "--target-object", "gold:0", "--arrival-start", "6", "--target-frame", "5"], "must not exceed"),
 ])
 def test_cli_rejects_invalid_interaction_configuration_before_loading(options, message):
     with pytest.raises(SystemExit, match=message):
         cli.parse_arguments(["local", "missing.txt", "--search", "population", *options])
+
+
+def test_cli_accepts_target_region_with_earliest_interaction():
+    parsed = cli.parse_arguments(["local", "missing.txt", "--search", "population",
+                                  "--objective", "earliest-interaction",
+                                  "--target-object", "gold:0", "--target-region", "0:1,0:1"])
+    assert parsed.target_region == (0.0, 1.0, 0.0, 1.0)
 
 
 def test_objective_is_population_only_and_toml_target_alias_is_reused(tmp_path):

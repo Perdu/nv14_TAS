@@ -74,9 +74,15 @@ very close. Distance to the region and constraint progress guide the internal
 search while it has no qualifying arrival. Earlier feasible arrival always
 outranks later feasible arrival.
 
-`target-region` is required only for `earliest-arrival`. It is independent of
-`--target-point`/`--target-object` positional anchors used by `min-distance`.
-`earliest-interaction` also uses `--target-object` for an exact event target.
+`target-region` is required for rectangular `earliest-arrival` goals, but is
+also an optional **same-tick position constraint** for other objectives. With
+`max-vx` and `velocity-frames`, the velocity is eligible only on frames where
+the player's centre is inside the rectangle; simply visiting it earlier does
+not suffice. For a fixed-frame objective the player must be inside at
+`target-frame`. This differs from `require-region`, which permits a visit at
+any frame in its allowed interval. `--target-point`/`--target-object` remain
+positional anchors for `min-distance`; `earliest-interaction` uses
+`--target-object` to name the event that must occur.
 
 ## Earliest interaction (v4.21)
 
@@ -92,7 +98,8 @@ python3 optimize_replay.py local run.txt \
 The target is the actual engine interaction, checked after each input tick.
 Frame 500 is an inclusive deadline. `--arrival-start` is the first eligible
 interaction frame and defaults to the first editable frame. A target object is
-required; `--target-region` and `--target-point` are not accepted for this goal.
+required; `--target-point` is not accepted for this goal, while `--target-region`
+can optionally constrain the position when the interaction occurs.
 
 | Selector | Qualifying event |
 |---|---|
@@ -313,7 +320,7 @@ the file in the usual way. The input filename remains positional.
 | `--y-window MIN:MAX` | `y_window` | none | Inclusive endpoint y constraint. |
 | `--vx-window MIN:MAX` | `vx_window` | none | Inclusive endpoint horizontal velocity constraint. |
 | `--vy-window MIN:MAX` | `vy_window` | none | Inclusive endpoint vertical velocity constraint. |
-| `--target-region XMIN:XMAX,YMIN:YMAX` | `target_region` | none | Finite inclusive arrival rectangle. |
+| `--target-region XMIN:XMAX,YMIN:YMAX` | `target_region` | none | Finite inclusive player-centre rectangle at the scored tick. |
 | `--require-jump-region XMIN:XMAX,YMIN:YMAX` | `require_jump_region` | none | Require a real jump whose pre-impulse centre is inside the rectangle. |
 | `--require-jump-frames START:END` | `require_jump_frames` | first mutable frame:target | Inclusive qualifying jump interval; requires a jump region. |
 | `--arrival-start N` | `arrival_start` | first mutable frame | First frame eligible for arrival or a fresh interaction. |

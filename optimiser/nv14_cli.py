@@ -602,8 +602,6 @@ class LocalConfig:
                     raise ValueError("earliest-arrival requires --target-region or --target-circle")
                 if self.target_region is not None and self.target_circle is not None:
                     raise ValueError("earliest-arrival accepts only one of --target-region or --target-circle")
-            elif self.target_region is not None:
-                raise ValueError("--target-region requires --objective earliest-arrival")
             elif self.target_circle is not None:
                 raise ValueError("--target-circle requires --objective earliest-arrival")
             if self.objective in EARLIEST_OBJECTIVES:
@@ -3327,7 +3325,7 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--auto-target-frame", "--target-frame", modes=auto_modes, type=parse_nonnegative_int,
                          metavar="FRAME", help="endpoint objective deadline/frame (defaults to replay's last input)")
     command.add_argument("--auto-target-region", "--target-region", modes=auto_modes, type=parse_target_region,
-                         metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival goal rectangle")
+                         metavar="XMIN:XMAX,YMIN:YMAX", help="inclusive player-position constraint at the scored endpoint tick")
     command.add_argument("--auto-target-circle", "--target-circle", modes=auto_modes, type=parse_target_circle,
                          metavar="X,Y[,R]", help="earliest-arrival goal circle (radius defaults to 10)")
     command.add_argument("--auto-target-object", "--target-object", modes=auto_modes,
@@ -3781,7 +3779,7 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--vy-window", modes=local_modes, type=parse_axis_window,
                          metavar="MIN:MAX", help="inclusive endpoint vertical velocity bounds (windows and population)")
     command.add_argument("--target-region", modes=local_modes, type=parse_target_region,
-                         metavar="XMIN:XMAX,YMIN:YMAX", help="earliest-arrival population goal: inclusive target rectangle")
+                         metavar="XMIN:XMAX,YMIN:YMAX", help="population: inclusive player-position constraint at the scored endpoint tick")
     command.add_argument("--target-circle", modes=local_modes, type=parse_target_circle,
                          metavar="X,Y[,R]", help="earliest-arrival population goal: circle (default radius 10)")
     command.add_argument("--require-region", modes=local_modes, type=parse_target_region,
