@@ -5390,10 +5390,29 @@ def main() -> None:
         from nv14_replay import clean_ineffective_air_jumps, identical_replay_physics
 
         def encode_splice_replay(frames):
-            # This is a final defensive gate, not the former opt-in repair
-            # phase. Native backends can add holds after Local's seed pass.
-            # Never publish such holds if an exactly equivalent trace exists.
-            return encode_complex_replay(clean_ineffective_air_jumps(level, frames))
+            # Named splice continuations are cleaned against their own *scored*
+            # stage goals by stage_export/stage_checkpoint/save_frontier. Do not
+            # run a second, unbounded cleanup when publishing their final or
+            # provisional output: post-goal Shift is user input, even if idle.
+            if args.auto_splice_mode == "user":
+                return encode_complex_replay(frames)
+            if target_goal is not None:
+                from nv14_endpoint import EndpointEvaluator
+                from nv14_user_splice import _materialise_splice_tail
+                scored = EndpointEvaluator(level, target_goal).evaluate(
+                    _materialise_splice_tail(frames, target_goal.target_frame))
+                if not scored.feasible:
+                    return encode_complex_replay(frames)
+                last_editable = scored.frame
+            else:
+                # Speedrun outputs are canonically completed. Protect any
+                # serialized continuation after the actual finish as well.
+                checked = evaluate_replay_with_sentinel(level, frames)
+                if not checked.valid or checked.finish_tick is None:
+                    return encode_complex_replay(frames)
+                last_editable = checked.finish_tick - 1
+            return encode_complex_replay(clean_ineffective_air_jumps(
+                level, frames, editable_ranges=((0, last_editable),)))
 
         if (args.auto_splice_mode == "user" and not getattr(args, "_both_mode", False)
                 and _find_option_paths(sys.argv[1:], "--goal-config")):
@@ -5544,10 +5563,19 @@ def main() -> None:
                     path = _user_splice_frontier_path(stage_outputs[name][0])
                     stage = next(item for item in all_stages if item.name == name)
                     document = _user_splice_frontier_identity(level, stage)
-                    _, stage_level = hybrid_stage_context(name)
+                    goal, stage_level = hybrid_stage_context(name)
+                    from nv14_endpoint import EndpointEvaluator
+                    from nv14_user_splice import _materialise_splice_tail
+                    evaluator = EndpointEvaluator(stage_level, goal)
                     published = []
                     for item in frames:
-                        canonical = clean_ineffective_air_jumps(level, item)
+                        # Frontiers are replay continuations, not just stage
+                        # scores: never rewrite their original post-goal keys.
+                        scored = evaluator.evaluate(
+                            _materialise_splice_tail(item, goal.target_frame))
+                        canonical = (clean_ineffective_air_jumps(
+                            level, item, editable_ranges=((0, scored.frame),))
+                            if scored.feasible else tuple(item))
                         if (canonical != tuple(item) and stage_level is not level and
                                 not identical_replay_physics(stage_level, item, canonical)):
                             canonical = item
@@ -5657,7 +5685,11 @@ def main() -> None:
                         raise ValueError(
                             f"cannot preserve original post-goal inputs for stage {name!r} "
                             "without changing the verified goal result")
-                    canonical = clean_ineffective_air_jumps(level, restored)
+                    # Cleanup must not cross the actual goal arrival. The
+                    # restored suffix is deliberate user input, even when an
+                    # equivalent physics trace makes its Shift holds look idle.
+                    canonical = clean_ineffective_air_jumps(
+                        level, restored, editable_ranges=((0, scored.frame),))
                     if canonical != restored:
                         if (stage_level is not level and not identical_replay_physics(
                                 stage_level, restored, canonical)):

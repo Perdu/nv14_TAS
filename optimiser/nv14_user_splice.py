@@ -708,13 +708,26 @@ def optimise_user_splices(
             return (_completed_rank(completed, length),), tuple(frames[:length])
         return (original_endpoints[-1].evaluate(frames).objective_key,), tuple(frames)
 
-    def canonical_stage_input(frames: tuple[InputFrame, ...]) -> tuple[InputFrame, ...]:
-        """Remove fully verified Shift no-ops before reusing stage search seeds."""
+    def canonical_stage_input(
+        frames: tuple[InputFrame, ...], index: int,
+    ) -> tuple[InputFrame, ...]:
+        """Clean only inputs at/before this stage's *reached* goal tick.
+
+        Saved stage movies and frontiers carry a continuation for subsequent
+        splices. Physics-equivalent Shift presses AFTER the goal are still the
+        user's inputs, not disposable search noise. This applies to the
+        in-memory seeds as well as the output writer.
+        """
         if not any(frame.jump for frame in frames):
+            return frames
+        scored = original_endpoints[index].evaluate(frames)
+        if not scored.feasible:
             return frames
         from nv14_replay import (clean_ineffective_air_jumps,
                                  identical_replay_physics)
-        canonical = clean_ineffective_air_jumps(level, frames)
+        canonical = clean_ineffective_air_jumps(
+            level, frames, editable_ranges=((0, scored.frame),),
+        )
         if canonical != frames and all(
             world is level or identical_replay_physics(world, frames, canonical)
             for world in stage_levels
@@ -722,7 +735,7 @@ def optimise_user_splices(
             return canonical
         return frames
 
-    def stage_export(frames: tuple[InputFrame, ...]) -> tuple[InputFrame, ...]:
+    def stage_export(frames: tuple[InputFrame, ...], index: int) -> tuple[InputFrame, ...]:
         """Keep trial replays playable and trim only verified early finishes.
 
         The search workspace may extend past a completed replay's sentinel.
@@ -731,7 +744,7 @@ def optimise_user_splices(
         """
         # A stage checkpoint is also the next search's seed. The exact-trace
         # gate prevents output-only cleanup from being reintroduced later.
-        frames = canonical_stage_input(frames)
+        frames = canonical_stage_input(frames, index)
         if single_input_seed:
             # Standalone Hybrid is a section editor, not a full-run exporter.
             # A checkpoint must retain the original replay after its goal,
@@ -1012,7 +1025,7 @@ def optimise_user_splices(
         selected = select_archive(i, pool)
         # Keep the in-memory frontier canonical too: the next stage can reuse
         # it without generating another population of ineffective Shift holds.
-        selected = list(dict.fromkeys(canonical_stage_input(x) for x in selected))
+        selected = list(dict.fromkeys(canonical_stage_input(x, i) for x in selected))
         if selected != archived_frontiers[i]:
             frontier_callback(stages[i].name, tuple(selected))
             archived_frontiers[i] = selected
@@ -1185,7 +1198,7 @@ def optimise_user_splices(
             if (baseline_evaluation is not None and
                     (archived_evaluation is None or
                      baseline_evaluation.objective_key < archived_evaluation.objective_key)):
-                exported = stage_export(current)
+                exported = stage_export(current, i)
                 stage_checkpoints[i] = exported
                 stage_checkpoint_evals[i] = baseline_evaluation
                 stage_checkpoint_origin[i] = "baseline"
@@ -1538,7 +1551,7 @@ def optimise_user_splices(
                         stage_best_evaluation[later] = score
                     upgraded += 1
                     if stage_best_callback:
-                        stage_best_callback(stages[later].name, stage_export(padded))
+                        stage_best_callback(stages[later].name, stage_export(padded, later))
                     if merge_only and progress:
                         annotation = " [dead-end]" if stages[later].dead_end else ""
                         progress(f"{report} {label}: new saved stage best; "
@@ -2736,7 +2749,7 @@ def optimise_user_splices(
                                     # The named checkpoint remains the absolute
                                     # best; persist the session leader separately
                                     # even if a stronger saved checkpoint exists.
-                                    session_best_callback(stage.name, stage_export(normalized))
+                                    session_best_callback(stage.name, stage_export(normalized, index))
                                 if progress:
                                     label = ("new absolute best" if absolute_stage_gain else
                                              "improves input only")
@@ -2761,7 +2774,7 @@ def optimise_user_splices(
                                     normalized, evaluation.frame, references)
                             stage_best[index] = rank
                             stage_best_evaluation[index] = evaluation
-                            exported = stage_export(normalized)
+                            exported = stage_export(normalized, index)
                             stage_checkpoints[index] = exported
                             stage_checkpoint_evals[index] = evaluation
                             stage_checkpoint_origin[index] = "this run"
@@ -2985,12 +2998,12 @@ def optimise_user_splices(
             # Keep distinct earlier-stage frontiers independent of whether a
             # more recent stage wins its own intermediate ranking.
             selected = list(dict.fromkeys(
-                canonical_stage_input(candidate)
+                canonical_stage_input(candidate, index)
                 for candidate, _ in ordered[:max(1, config.frontier)]
             ))
             elites[index] = selected
             if stage_result_callback is not None:
-                stage_result_callback(stage.name, stage_export(selected[0]))
+                stage_result_callback(stage.name, stage_export(selected[0], index))
             publish_frontier(index, [candidate for candidate, _ in ordered])
             history = [selected, *history][:max_stage_lookback]
             history_origins = [index, *history_origins][:max_stage_lookback]
