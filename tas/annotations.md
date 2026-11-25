@@ -161,7 +161,11 @@ I also tried some tricks for the hs TAS:
 Perhaps going to the right in the outer section could avoid because slower by drone 4 (todo)
 
 # 03-4
-rerecords: 823
+rerecords: 960
+
+Branch 9: shortest RTA route
+Branch 8: alt route
+Branch 7: quad bb
 
 Jumping longer or shorter around 100 is slower (or not faster for longer jumps)
 
@@ -197,7 +201,7 @@ Branch 8: thwump cj at the top
 Branch 7: arriving 2f earlier at splice 526, but we're pacelocked by the drone
 
 # 04-2
-rerecords: 713
+rerecords: 716
 
 With the right angle, you can jump on the top thwump. This is absolutely completely useless as it speeds you downwards
 
@@ -210,7 +214,9 @@ Branch 9: attempt at using a ceiling push to pass the central drone a bit faster
 Branch 8: attempt at doing a bwj on the way up in the third ring
 
 # 04-4
-rerecords: 1582
+rerecords: 1652
+
+Branch 9: +3f that I'm trying to propagate
 
 Reused the beginning from Raif et al
 Not getting the stumble around 210 is not faster
@@ -255,9 +261,9 @@ Further optimisation:
 2f saved from cks across the top section
 
 # 05-2
-rerecords: 160
+rerecords: 179
 
-
+Branch 9: dying at low speed
 
 # 05-3
 rerecords: 1621
@@ -270,7 +276,7 @@ Turning around at the first doorswitch then activating the thwump and getting th
 Entering the key section after going all the way to the left wall and then waiting for the thwump is also a few frames slower
 
 # 05-4
-rerecords: 961
+rerecords: 994
 
 The turnaround to reach the switch is painful to optimize.
 0th does a jump that's slower but does not stumble on landing. Current solution is slightly better.
@@ -284,7 +290,7 @@ I tried many strategies in the end:
 - getting less height on the right wall to be able to go directly up
 
 # 06-0
-rerecords: 958
+rerecords: 1000
 
 For the walljumps on the way to the exit, I get some subpixels but they get cancelled. Last jump still gets subpixels
 
@@ -360,7 +366,7 @@ The second jump we make on the way up makes us land later, but more to the right
 The last jump to go down is extremlely tight. RTA seems to get a better angle for the stumble, which I can't reproduce (i'm not starting with the same speed)
 
 # 08-1
-rerecords: 2833
+rerecords: 2850
 
 In the beginning, landing the fall with a cj on the bb is slower
 It's extremely annoying to find a turnaround strategy around the switch that doesn't get us killed. This solution works. There may be better ones.
@@ -674,7 +680,7 @@ rerecords: 209
 0th is maxed, I could barely get a few subpixel (0.something)
 
 # 16-4
-rerecords: 1332
+rerecords: 1336
 
 Branch 9: jumping earlier, then jumping to get the switch and fall directly. Slower.
 Branch 8: attempt at doing a bwj on the next bb
@@ -715,7 +721,7 @@ rerecords: 460
 
 
 # 18-0
-rerecords: 926
+rerecords: 939
 
 Walljump after the switch is faster than turnaround
 
@@ -833,7 +839,7 @@ rerecords: 988
 
 
 # 21-2
-rerecords: 314
+rerecords: 315
 
 Branch 9: double thwump bwj
 
@@ -985,7 +991,7 @@ rerecords: 1476
 F8: Alternate route, slower, incomplete
 
 # 27-0
-rerecords: 923
+rerecords: 927
 
 Branch 9: going down directly in the 3rd pipe. Barely slower.
 Branch 8: same but without the last two jumps
@@ -1415,11 +1421,12 @@ rerecords: 5
 
 
 # 41-3
-rerecords: 46
+rerecords: 64
 
 Branch 9: inverting directions
 Branch 8: going right, then taking a longer fall
 Branch 7: some save lost right before the end
+Branch 6: faster to the bb, but still 1f slower
 
 # 41-4
 rerecords: 21
@@ -3158,4 +3165,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 276302
+# Total rerecords: 276663
