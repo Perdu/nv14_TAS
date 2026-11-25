@@ -167,12 +167,17 @@ def test_start_first_round_only_parser_requires_explicit_start():
     enabled = parse_arguments(argv + ['--start-at-splice', '408',
                                       '--start-at-splice-first-round-only'])
     assert enabled.auto_splice_start_first_round_only is True
+    short = parse_arguments(argv + ['--start-at-splice', '408', '-u'])
+    assert short.auto_splice_start_first_round_only is True
+    assert short.auto_splice_start == enabled.auto_splice_start == '408'
     assert parse_arguments(argv + ['--start-at-splice', '408',
         '--splice-start-first-round-only']).auto_splice_start_first_round_only is True
     assert parse_arguments(argv + ['--start-at-splice', '408',
         '--no-start-at-splice-first-round-only']).auto_splice_start_first_round_only is False
     with pytest.raises(SystemExit, match='requires --start-at-splice'):
         parse_arguments(argv + ['--start-at-splice-first-round-only'])
+    with pytest.raises(SystemExit, match='requires --start-at-splice'):
+        parse_arguments(argv + ['-u'])
     with pytest.raises(SystemExit, match='--single-splice'):
         parse_arguments(argv + ['--single-splice', '408', '--start-at-splice-first-round-only'])
     with pytest.raises(SystemExit, match='--splice-from-best'):

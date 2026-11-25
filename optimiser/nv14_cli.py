@@ -3140,7 +3140,7 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--splice-start", "--start-at-splice", "--auto-splice-start", dest="auto_splice_start",
                          modes=auto_modes, metavar="NAME",
                          help="first named splice to optimise (inclusive; earlier helper goals are non-binding)")
-    command.add_argument("--start-at-splice-first-round-only", "--splice-start-first-round-only",
+    command.add_argument("-u", "--start-at-splice-first-round-only", "--splice-start-first-round-only",
                          dest="auto_splice_start_first_round_only", modes=auto_modes,
                          action=argparse.BooleanOptionalAction, default=False,
                          help="use --start-at-splice only in outer round 1; all later rounds "
