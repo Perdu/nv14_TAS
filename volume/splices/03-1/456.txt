@@ -3,10 +3,8 @@ search = "population"
 target_frame = 456
 range = "336:456"
 simulate-enemies = false
-objective = "earliest-arrival"
-target_region = "243:273,546:586"
-secondary_objective = "max-vx"
+objective = "max-vx"
+# target_region = "247:273,546:586"
+# secondary_objective = "max-vx"
 # require-interaction = ["testdoor:0"]
-
-
-
+velocity-frames = "426:435"
