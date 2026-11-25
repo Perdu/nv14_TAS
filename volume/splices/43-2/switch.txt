@@ -5,5 +5,5 @@ range = ":200"
 simulate-enemies = true
 objective = "earliest-interaction"
 target-object = "switch"
-secondary_objective = "min-y"
+secondary_objective = "max-vy"
 # require-interaction = ["testdoor:3"]
