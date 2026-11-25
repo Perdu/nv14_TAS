@@ -4,6 +4,6 @@ target_frame = 190
 range = "90:190"
 simulate-enemies = false
 objective = "earliest-interaction"
-target-object = "exit:0"
+target-object = "exit:1"
 secondary_objective = "min-exit-distance"
 # require-interaction = ["testdoor:0"]
