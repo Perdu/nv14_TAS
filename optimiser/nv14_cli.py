@@ -42,6 +42,7 @@ from nv14_checkpoint import AutoCheckpointError, read_auto_checkpoint
 from nv14_endpoint import EARLIEST_OBJECTIVES, SECONDARY_OBJECTIVES, VELOCITY_OBJECTIVES
 from nv14_engine import InputFrame, Level, SimulationState, parse_level_string
 from nv14_jump import (
+    _automatic_jump_worker_count,
     ImmutableJumpSpec,
     JumpSearchResult,
     apply_jump_pattern,
@@ -4081,9 +4082,10 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N|auto",
         help=(
             "mode-aware parallelism: auto and local use worker processes for "
-            "independent searches or trajectories; jump-pattern uses native C "
-            "shards in worker threads; auto selects up to 8 available CPUs "
-            "and 1 always forces serial (default: auto)"
+            "independent searches or trajectories; multi-splicer direct grafts "
+            "also use CPU processes without increasing search proposal budgets; "
+            "jump-pattern uses native C shards in worker threads; auto selects "
+            "up to 8 available CPUs for merges, and 1 forces serial (default: auto)"
         ),
     )
     command.add_argument(
@@ -6089,6 +6091,7 @@ def main() -> None:
                                 seed=splice_config.seed + outer_round)
                             phase_result = optimise_user_splices(
                                 level, phase_input, phase_stages, phase_config,
+                                merge_workers=(args.workers or _automatic_jump_worker_count()),
                                 resume_outer_round=outer_round,
                                 completion_policy=args.auto_completion_policy,
                                 registered_comparison_frames=registered_frames,
@@ -6159,6 +6162,7 @@ def main() -> None:
                                   "merge across both branch archives", flush=True)
                             merged = optimise_user_splices(
                                 level, initial_input, joined_stages, splice_config,
+                                merge_workers=(args.workers or _automatic_jump_worker_count()),
                                 completion_policy=args.auto_completion_policy,
                                 registered_comparison_frames=registered_frames,
                                 merge_stage_bests=True, merge_only=True,
@@ -6479,6 +6483,7 @@ def main() -> None:
 
                 result = optimise_user_splices(
                     level, summary_frames, stages, splice_config,
+                    merge_workers=(args.workers or _automatic_jump_worker_count()),
                     completion_policy=args.auto_completion_policy,
                                 registered_comparison_frames=registered_frames,
                     use_current_run=args.auto_splice_use_current_run,
@@ -6601,6 +6606,7 @@ def main() -> None:
                         alt_result = optimise_user_splices(
                             level, (alt_branch_frames if alt_branch_frames is not None
                                     else summary_frames), alt_report_stages, splice_config,
+                            merge_workers=(args.workers or _automatic_jump_worker_count()),
                             completion_policy=args.auto_completion_policy,
                                 registered_comparison_frames=registered_frames,
                             use_current_run=args.auto_splice_use_current_run,

@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from collections.abc import Callable, Mapping, Sequence
 import itertools
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, TimeoutError as FutureTimeout
 import hashlib
 import json
 import math
@@ -26,6 +28,48 @@ from nv14_replay import editable_frames, decode_complex_replay, encode_complex_r
 from nv14_splice_merge import (verified_suffix_grafts, repair_suffix_grafts,
                                gain_aware_suffix_retimes)
 from nv14_splice_backend import (_search_stage as search_splice_stage, splice_config_for_round)
+from nv14_local import _LocalExecutorScope
+
+
+# A merge has hundreds of independent physics verifications, but mutations to
+# checkpoint/frontier ranking belong to the coordinator.  Install the (large)
+# level once per worker rather than serialising it for every seam attempt.
+_MERGE_WORKER_LEVEL: Level | None = None
+
+
+def _init_merge_worker(level: Level) -> None:
+    global _MERGE_WORKER_LEVEL
+    _MERGE_WORKER_LEVEL = level
+
+
+def _verified_merge_join(
+    level: Level, prefix: tuple[InputFrame, ...], suffix: tuple[InputFrame, ...],
+    centres: tuple[int, ...], lookback: int, completion_required: bool,
+    min_prefix_frame: int,
+) -> tuple[tuple[InputFrame, ...], ...]:
+    """Verify a join's seam centres without touching shared campaign state."""
+    seen: set[tuple[InputFrame, ...]] = set()
+    result: list[tuple[InputFrame, ...]] = []
+    for centre in centres:
+        for graft in verified_suffix_grafts(
+                level, prefix, suffix, seam_frame=centre,
+                lookback=lookback, completion_required=completion_required,
+                min_prefix_frame=min_prefix_frame):
+            if graft not in seen:
+                seen.add(graft)
+                result.append(graft)
+    return tuple(result)
+
+
+def _verified_merge_join_worker(
+    prefix: tuple[InputFrame, ...], suffix: tuple[InputFrame, ...],
+    centres: tuple[int, ...], lookback: int, completion_required: bool,
+    min_prefix_frame: int,
+) -> tuple[tuple[InputFrame, ...], ...]:
+    if _MERGE_WORKER_LEVEL is None:
+        raise RuntimeError("merge worker has not been initialised")
+    return _verified_merge_join(_MERGE_WORKER_LEVEL, prefix, suffix, centres,
+                                lookback, completion_required, min_prefix_frame)
 
 
 @dataclass(frozen=True)
@@ -506,6 +550,7 @@ def optimise_user_splices(
     start_from_stage_bests: bool = False,
     reference_frames: Sequence[InputFrame] | None = None,
     merge_stage_bests: bool = False,
+    merge_workers: int | None = None,
     merge_only: bool = False,
     merge_verbose: bool = False,
     merge_repair_only: bool = False,
@@ -542,6 +587,9 @@ def optimise_user_splices(
     """
     if not stages:
         raise ValueError("user splice requires at least one named goal")
+    if merge_workers is not None and (type(merge_workers) is not int or merge_workers < 1):
+        raise ValueError("merge_workers must be a positive integer")
+    merge_worker_count = config.workers if merge_workers is None else merge_workers
     if type(use_current_run) is not bool:
         raise ValueError("use_current_run must be a boolean")
     if type(single_input_seed) is not bool:
@@ -1430,6 +1478,22 @@ def optimise_user_splices(
     # helper objectives do not veto a different route at a later stage.
     elites: list[list[tuple[InputFrame, ...]]] = [list(pool[:config.frontier]) for pool in archived_frontiers]
     def run_saved_merge_pass(phase: str, *, repair: bool = False) -> None:
+        # Unlike the normal Auto/Local searches, direct merge has no backend
+        # worker scheduler.  Use the configured CPU count for independent
+        # pair verification, then commit candidates in original pair order.
+        if merge_worker_count <= 1:
+            return run_saved_merge_pass_impl(phase, repair=repair)
+        context = multiprocessing.get_context("spawn")
+        pool = ProcessPoolExecutor(max_workers=min(merge_worker_count, 8),
+                                   mp_context=context,
+                                   initializer=_init_merge_worker,
+                                   initargs=(level,))
+        with _LocalExecutorScope(pool) as executor:
+            return run_saved_merge_pass_impl(phase, repair=repair,
+                                             executor=executor)
+
+    def run_saved_merge_pass_impl(phase: str, *, repair: bool = False,
+                                  executor: ProcessPoolExecutor | None = None) -> None:
         """Try saved-stage joins *and* current-input-to-saved-route joins.
 
         A manual edit need not satisfy any named helper goal. The unchanged
@@ -1440,6 +1504,7 @@ def optimise_user_splices(
         """
         nonlocal best_rank, best_output, current, improvements
         pairs = attempted = joined = upgraded = completed = input_attempted = section_attempted = 0
+        last_merge_progress = time.monotonic()
         report = ("[auto:user-splice:repair-only]" if merge_repair_only else
                   "[auto:user-splice:merge-only]" if merge_only else
                   f"[auto:user-splice:merge:{phase}]")
@@ -1449,6 +1514,9 @@ def optimise_user_splices(
                      f"remains {config.stage_lookback}); seam lookback "
                      f"{config.lookback} frame(s); "
                      "direct-graft subpass only; bridge mutation search follows when enabled")
+            progress(f"{report} direct-graft verification: "
+                     f"{min(merge_worker_count, 8) if executor is not None else 1} "
+                     "CPU worker(s); pair results accepted in original order")
 
         # The CLI input is not automatically included in saved stage checkpoints
         # (especially in merge-only mode), so offer it separately as a prefix.
@@ -1577,20 +1645,21 @@ def optimise_user_splices(
                              f"completed replay at {len(best_output)} frames; saved")
             return stage_ok, completion_ok
 
-        def try_join(prefix: tuple[InputFrame, ...],
-                     suffix: tuple[InputFrame, ...], seam: int,
-                     later: int | None, label: str,
-                     *, require_suffix_completion: bool = False) -> None:
-            nonlocal pairs, attempted, joined, input_attempted, section_attempted
+        def prepare_join(prefix: tuple[InputFrame, ...],
+                         suffix: tuple[InputFrame, ...], seam: int,
+                         later: int | None, label: str,
+                         *, require_suffix_completion: bool = False):
+            """Freeze one request before scheduling its expensive physics."""
+            nonlocal pairs, attempted, input_attempted, section_attempted
             pairs += 1
             # Identity joins do not propagate the input or change the route.
             if prefix == suffix:
                 if merge_only and progress and merge_verbose:
                     progress(f"{report} {label}: skipped (identical replays)")
-                return
+                return None
             key = (prefix, suffix, seam, later)
             if key in seen_requests:
-                return
+                return None
             seen_requests.add(key)
             attempted += 1
             manual_input = label.startswith("current input ->")
@@ -1612,10 +1681,6 @@ def optimise_user_splices(
                 if saved_difference is not None:
                     changed_at = max(saved_difference, changed_at or 0)
             min_prefix_frame = 1 if changed_at is None else max(1, changed_at)
-            physically_verified = 0
-            accepted = False
-            completed_join = False
-            stage_join = False
             centres = [seam]
             # A splice's configured deadline is often much later than its
             # *actual* first arrival. For a 442 checkpoint reached at 375,
@@ -1640,24 +1705,21 @@ def optimise_user_splices(
                         centres.extend((arrival.frame,
                                         max(2, arrival.frame - config.lookback),
                                         max(2, arrival.frame - 2 * config.lookback)))
-            seen_grafts: set[tuple[InputFrame, ...]] = set()
-            for centre in dict.fromkeys(centres):
-                for graft in verified_suffix_grafts(
-                        level, prefix, suffix, seam_frame=centre,
-                        lookback=config.lookback,
-                        completion_required=require_suffix_completion,
-                        min_prefix_frame=min_prefix_frame):
-                    if graft in seen_grafts:
-                        continue
-                    seen_grafts.add(graft)
-                    physically_verified += 1
-                    stage_ok, completion_ok = offer_candidate(graft, later, label)
-                    if stage_ok or completion_ok:
-                        accepted = True
-                        completed_join = completed_join or completion_ok
-                        stage_join = stage_join or stage_ok
-                        # A verified partial stage route remains useful even
-                        # when it has no valid completion yet.
+            return (prefix, suffix, later, label, require_suffix_completion,
+                    min_prefix_frame, tuple(dict.fromkeys(centres)))
+
+        def accept_join(plan, grafts: tuple[tuple[InputFrame, ...], ...]) -> None:
+            """Apply worker results in the original deterministic pair order."""
+            nonlocal joined
+            _prefix, _suffix, later, label, _required, _min_frame, _centres = plan
+            physically_verified = len(grafts)
+            accepted = completed_join = stage_join = False
+            for graft in grafts:
+                stage_ok, completion_ok = offer_candidate(graft, later, label)
+                if stage_ok or completion_ok:
+                    accepted = True
+                    completed_join = completed_join or completion_ok
+                    stage_join = stage_join or stage_ok
             if accepted:
                 joined += 1
                 if merge_only and progress and merge_verbose:
@@ -1672,6 +1734,48 @@ def optimise_user_splices(
                 reason = ("no physically compatible seam" if not physically_verified
                           else "no join satisfies its destination objective or completion")
                 progress(f"{report} {label}: rejected ({reason})")
+
+        def report_merge_progress(*, pending: int = 0) -> None:
+            nonlocal last_merge_progress
+            now = time.monotonic()
+            if progress is not None and now - last_merge_progress >= 20.0:
+                progress(f"{report} direct-graft progress: {attempted} pair(s) "
+                         f"attempted, {joined} joined, {upgraded} stage and "
+                         f"{completed} completed best(s) improved; "
+                         f"{pending} pair verification(s) pending")
+                last_merge_progress = now
+
+        def run_join_batch(jobs) -> None:
+            """Parallelise only a frozen independent batch of pair requests.
+
+            Each batch is confined to a single source/destination stage group.
+            Stage-frontier changes from accepted grafts therefore become
+            visible before the next group is planned, just as in serial mode.
+            """
+            plans = [plan for prefix, suffix, seam, later, label, required in jobs
+                     if (plan := prepare_join(prefix, suffix, seam, later, label,
+                                              require_suffix_completion=required)) is not None]
+            if executor is not None and len(plans) > 1:
+                futures = [executor.submit(
+                    _verified_merge_join_worker, prefix, suffix, centres,
+                    config.lookback, required, min_frame)
+                    for prefix, suffix, _later, _label, required, min_frame, centres in plans]
+                for plan, future in zip(plans, futures):
+                    while True:
+                        try:
+                            grafts = future.result(timeout=10.0)
+                            break
+                        except FutureTimeout:
+                            report_merge_progress(pending=sum(not f.done() for f in futures))
+                    accept_join(plan, grafts)
+                    report_merge_progress(pending=sum(not f.done() for f in futures))
+            else:
+                for plan in plans:
+                    prefix, suffix, _later, _label, required, min_frame, centres = plan
+                    accept_join(plan, _verified_merge_join(
+                        level, prefix, suffix, centres, config.lookback,
+                        required, min_frame))
+                    report_merge_progress()
 
         # Promote later checkpoints already achieved by a saved stage replay,
         # WITHOUT requiring a completed run or a new suffix graft. A saved 442
@@ -1731,24 +1835,28 @@ def optimise_user_splices(
                      f"{promoted_checks} later checkpoint(s) checked, "
                      f"{promoted_stages} stage best(s) improved; "
                      "a later death does not invalidate an earlier checkpoint")
+            progress(f"{report} direct-graft pair search starting: "
+                     "current input, saved completed suffix and all "
+                     "earlier-to-later stage routes; pair progress reported periodically")
 
         # A manually edited positional replay is the first source, not a
         # fallback after all saved-splice pairings. First try to reconnect it
         # to the previous verified completion, independently of helper goals.
         if saved_final is not None and saved_rank is not None:
-            for earlier, stage in enumerate(stages):
-                try_join(input_prefix, saved_final,
-                         min(last_live, stage.end), None,
-                         f"current input -> saved completed run (seam {min(last_live, stage.end)})",
-                         require_suffix_completion=True)
-            try_join(input_prefix, saved_final, last_live, None,
-                     f"current input -> saved completed run (last live seam {last_live})",
-                     require_suffix_completion=True)
+            jobs = [(input_prefix, saved_final, min(last_live, stage.end), None,
+                     f"current input -> saved completed run (seam {min(last_live, stage.end)})", True)
+                    for stage in stages]
+            jobs.append((input_prefix, saved_final, last_live, None,
+                         f"current input -> saved completed run (last live seam {last_live})", True))
+            run_join_batch(jobs)
 
         # Give the positional input a chance against BOTH the endpoint winner
         # and the independently archived section candidate at every stage.
         # All pairs are independent; an unmergeable stage cannot block others.
         for later, stage in enumerate(stages):
+            jobs = []
+            # Keep the suffix snapshot taken once per destination stage, even
+            # if accepting an earlier graft later updates its best frontier.
             for suffix_name, suffix in merge_routes(later):
                 tried_seams: set[int] = set()
                 for earlier in range(later + 1):
@@ -1756,11 +1864,12 @@ def optimise_user_splices(
                     if seam in tried_seams:
                         continue
                     tried_seams.add(seam)
-                    try_join(input_prefix, suffix, seam, later,
-                             f"current input -> {suffix_name} (seam {seam})")
+                    jobs.append((input_prefix, suffix, seam, later,
+                                 f"current input -> {suffix_name} (seam {seam})", False))
                 if last_live not in tried_seams:
-                    try_join(input_prefix, suffix, last_live, later,
-                             f"current input -> {suffix_name} (last live seam {last_live})")
+                    jobs.append((input_prefix, suffix, last_live, later,
+                                 f"current input -> {suffix_name} (last live seam {last_live})", False))
+            run_join_batch(jobs)
 
         # Saved stage checkpoints and one independent archived candidate per
         # stage are also viable prefixes. Try the saved completed suffix before
@@ -1768,10 +1877,11 @@ def optimise_user_splices(
         # joins and do not become mandatory constraints.
         if saved_final is not None and saved_rank is not None:
             for earlier, stage in enumerate(stages):
-                for source_name, prefix in merge_routes(earlier):
-                    try_join(prefix, saved_final, stage.end, None,
-                             f"{source_name} -> saved completed run (seam {stage.end})",
-                             require_suffix_completion=True)
+                run_join_batch([
+                    (prefix, saved_final, stage.end, None,
+                     f"{source_name} -> saved completed run (seam {stage.end})", True)
+                    for source_name, prefix in merge_routes(earlier)])
+
         elif progress and merge_only:
             progress(f"{report} no verified saved completed replay for suffix grafting; "
                      "only saved stage suffixes were available")
@@ -1793,10 +1903,11 @@ def optimise_user_splices(
                         progress(f"{report} {stages[earlier].name} -> {stages[later].name}: "
                                  f"skipped (missing {missing})")
                     continue
-                for source_name, prefix in prefixes:
-                    for suffix_name, suffix in suffixes:
-                        try_join(prefix, suffix, stages[earlier].end, later,
-                                 f"{source_name} -> {suffix_name}")
+                run_join_batch([
+                    (prefix, suffix, stages[earlier].end, later,
+                     f"{source_name} -> {suffix_name}", False)
+                    for source_name, prefix in prefixes
+                    for suffix_name, suffix in suffixes])
 
         if merge_retime_gains:
             run_gain_retime_pass(report, offer_candidate)
