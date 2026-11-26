@@ -1,0 +1,2 @@
+[multi-splicer]
+splice-files = ["110", "switch", "237", "end"]
