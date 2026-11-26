@@ -1,0 +1,14 @@
+[local]
+search = "population"
+target_frame = 311
+range = "155:311"
+simulate-enemies = true
+objective = "earliest-interaction"
+target-object = "switch"
+# secondary_objective = "max-vx"
+# require-interaction = ["testdoor:0"]
+no-drone-detection = ["drone:1"]
+no-drone-detection-frames = "240:245"
+
+
+
