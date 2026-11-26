@@ -7,4 +7,4 @@ objective = "earliest-arrival"
 target_region = "422:442,546:586"
 secondary_objective = "min-x"
 require-interaction = ["testdoor:0", "testdoor:1", "testdoor:2"]
-
+vy-window = ":4"

@@ -7,4 +7,5 @@ objective = "earliest-arrival"
 target_region = "320:340,546:586"
 secondary_objective = "max-x"
 require-interaction = ["switch"]
+vy-window = ":4"
 
