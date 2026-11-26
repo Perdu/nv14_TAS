@@ -7,4 +7,4 @@ simulate-enemies = true
 objective = "earliest-arrival"
 secondary_objective = "max-y"
 require-interaction = ["switch"]
-
+lookback = 4
