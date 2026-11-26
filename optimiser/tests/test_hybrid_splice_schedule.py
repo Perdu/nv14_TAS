@@ -259,6 +259,37 @@ def test_hybrid_shortcut_and_toml_configuration(tmp_path):
     assert (parsed.auto_splice_hybrid_local_rounds, parsed.auto_splice_hybrid_cycles) == (4, 2)
 
 
+@pytest.mark.parametrize('flag', (
+    '--splice-hybrid-cycles', '--auto-splice-hybrid-cycles',
+    '--hybrid-cycles', '--cycles',
+))
+@pytest.mark.parametrize('mode', ('auto', 'hybrid'))
+def test_hybrid_cycle_cli_aliases_set_the_same_budget(flag, mode):
+    if mode == 'auto':
+        prefix = ['auto', 'level.ltm', '--auto-splice-mode', 'user',
+                  '--auto-splice-files', '522', '--auto-splice-search', 'hybrid']
+    else:
+        prefix = ['hybrid', 'level.ltm', '--goal-config', 'some/522.txt']
+    args = parse_arguments([*prefix, flag, '20'])
+    assert args.auto_splice_hybrid_cycles == 20
+
+
+def test_hybrid_cycle_aliases_keep_validation_and_last_override():
+    args = parse_arguments([
+        'hybrid', 'level.ltm', '--goal-config', 'some/522.txt',
+        '--splice-hybrid-cycles', '7', '--cycles', '20',
+    ])
+    assert args.auto_splice_hybrid_cycles == 20
+    for flag in ('--hybrid-cycles', '--cycles'):
+        with pytest.raises(SystemExit):
+            parse_arguments([
+                'hybrid', 'level.ltm', '--goal-config', 'some/522.txt',
+                flag, '0',
+            ])
+        with pytest.raises(SystemExit):
+            parse_arguments(['local', 'level.ltm', flag, '20'])
+
+
 def test_hybrid_does_not_resume_a_incompatible_legacy_backend_phase():
     with pytest.raises(ValueError, match='does not support resuming'):
         _search_stage(None, (10,), stage(), RandomSpliceConfig(search_backend='hybrid'),

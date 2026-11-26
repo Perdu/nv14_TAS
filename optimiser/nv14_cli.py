@@ -3097,6 +3097,7 @@ def build_parser() -> argparse.ArgumentParser:
                          type=parse_positive_int, default=5, metavar="N",
                          help="hybrid: uninterrupted Local rounds per 1 Auto round (default 5)")
     command.add_argument("--splice-hybrid-cycles", "--auto-splice-hybrid-cycles",
+                         "--hybrid-cycles", "--cycles",
                          dest="auto_splice_hybrid_cycles", modes=auto_modes,
                          type=parse_positive_int, default=5, metavar="K",
                          help="hybrid: maximum 1+N round cycles per stage seed (default 5)")
