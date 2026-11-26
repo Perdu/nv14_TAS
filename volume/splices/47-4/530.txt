@@ -7,4 +7,4 @@ objective = "earliest-arrival"
 target_region = "113:153,390:410"
 secondary_objective = "max-y"
 # require-interaction = ["testdoor:0"]
-
+lookback = 3
