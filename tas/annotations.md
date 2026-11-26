@@ -125,7 +125,7 @@ rerecords: 604
 It might be able to crame 1 or 2 additional frames, but it's hell to optimize
 
 # 03-1
-rerecords: 1673
+rerecords: 1685
 
 Beginning is so tight and frame-perfect that I can only copy 0th and not gain any millimeter
 
@@ -214,7 +214,7 @@ Branch 9: attempt at using a ceiling push to pass the central drone a bit faster
 Branch 8: attempt at doing a bwj on the way up in the third ring
 
 # 04-4
-rerecords: 1652
+rerecords: 1682
 
 Branch 9: +3f that I'm trying to propagate
 
@@ -1099,9 +1099,9 @@ rerecords: 181
 
 
 # 31-0
-rerecords: 701
+rerecords: 730
 
-
+Branch 9: some early gain that doesn't propagate. Direct jump to the switch
 
 # 31-1
 rerecords: 809
@@ -1364,7 +1364,7 @@ Interesting version:
 $39-4 tower of long mistakes int.#metanet##00000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000111100000000000000000031111031111111111111111111111111111111111111111111111111111111111001001001111111110010010000000021111100100000000000000000000000000000000000000000000000000000000000000000000000000000000000300001001001001001001001000000000000000000000020000000000000000000000000000000000000000000000111110010000000000000001111111100100100000000311111111111111001001001111111111111111111111110211111111111111111111100000000000000000021111000000000000000000011110000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003|5^324,564!8^540,516,2!8^252,540,0!8^540,468,2!8^252,444,0!8^252,396,0!8^540,372,2!8^516,324,2!8^276,300,0!8^276,252,0!8^516,228,2!8^492,180,2!8^300,156,0!11^468,564,396,96!0^456,204!0^444,204!0^432,204!0^360,204!0^348,204!0^336,204!0^348,276!0^336,276!0^324,276!0^444,276!0^456,276!0^468,276!0^468,348!0^456,348!0^444,348!0^348,348!0^336,348!0^324,348!0^312,420!0^324,420!0^336,420!0^312,492!0^324,492!0^336,492!0^480,420!0^468,420!0^456,420!0^456,492!0^468,492!0^480,492#265:4369|35791394|35791394|35791394|107405858|107401318|107374182|107405926|107374182|107374182|107374182|237397606|107374182|89548390|89478485|89478485|89478485|219501909|17913173|36071138|19014178|107304401|107374182|35791462|35791394|35791394|35791394|546|0|0|0|17825792|4369|0|17895697|35791394|35791394|2236962#
 
 # 40-0
-rerecords: 81
+rerecords: 90
 
 
 
@@ -1382,13 +1382,14 @@ rerecords: 758
 
 
 # 40-3
-rerecords: 486
+rerecords: 588
 
 Branch 9: left bb path
 Branch 8: using right wall to the way up to the switch
 Branch 7: descent using a jump around the switch, then supercharged bump at the right side of the thwump
 Branch 6: descent using a jump around the switch, then push from the left of the left thwump
 Branch 5: cj below the thwump
+Branch 4: some unpropagated gain at the bbs
 
 # 40-4
 rerecords: 293
@@ -1403,14 +1404,14 @@ rerecords: 291
 
 
 # 41-1
-rerecords: 370
+rerecords: 507
 
-Branch 9: jumping as soon as possible on the right wall in the descent
+Branch 9: Ending with double bbbwj (4f slower)
 Branch 8: attempt at doing a bb bwj on the second bb instead of the third
 Branch 7: bbbwj on the third upper bb
 Branch 6: bbcd on first bb
 Branch 5: bbcd on 4th bb
-Branch 4: closest to drone 4 skip
+Branch 4: Walking on the spikes on the way back
 Branch 3: slower branch getting detected one drone cycle latercxcv
 
 What's unclear is whether losing a bit of time to avoid being detected by the top drone (drone 1) would save more time in the end. But that would prevent us from being detected by left drone (drone 4) a cycle earlier, which would probably be worst
@@ -1434,9 +1435,12 @@ rerecords: 21
 Branch 9: slightly faster arrival at last section, lost to a poorer push
 
 # 42-0
-rerecords: 323
+rerecords: 366
 
+Branch 9: different path down, much slower
 Branch 8: setup to get an earlier bwj
+Branch 7: 1f earlier to 286
+Branch: another way down with earlier 286
 
 # 42-1
 rerecords: 184
@@ -1459,7 +1463,7 @@ rerecords: 41
 
 
 # 43-0
-rerecords: 98
+rerecords: 99
 
 
 
@@ -1514,7 +1518,7 @@ Branch 9: attempt at getting switch1 and switch in one jump
 Branch 8: attempt at bbcd on first bb
 
 # 44-4
-rerecords: 159
+rerecords: 183
 
 A bit hell to optimize because of the successions weird angles, steering and going back. A better bruteforcer may find better solutions
 
@@ -2686,7 +2690,7 @@ rerecords: 0
 
 
 # 83-2
-rerecords: 184
+rerecords: 189
 
 
 
@@ -3165,4 +3169,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 276663
+# Total rerecords: 277055
