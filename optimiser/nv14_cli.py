@@ -113,13 +113,22 @@ def _print_baseline_line(message: str, *, color: bool) -> None:
     _print_colored_line(message, color=color, ansi_color=34)
 
 
-def _timestamped_line(message: str) -> str:
-    """Prefix one log line with local HH:MM:SS without double-stamping it."""
-    if (len(message) >= 11 and message[0] == "[" and message[3] == ":" and
-            message[6] == ":" and message[9:11] == "] " and
-            all(message[k].isdigit() for k in (1, 2, 4, 5, 7, 8))):
-        return message
-    return f"[{time.strftime('%H:%M:%S')}] {message}"
+def _timestamped_line(message: str, *, level_identifier: str | None = None) -> str:
+    """Place the level after the timestamp and before the searchable event tag.
+
+    Callers may supply an already timestamped message (e.g. a backend status).
+    Neither its timestamp nor an already present level prefix is duplicated.
+    """
+    stamped = (len(message) >= 11 and message[0] == "[" and message[3] == ":" and
+               message[6] == ":" and message[9:11] == "] " and
+               all(message[k].isdigit() for k in (1, 2, 4, 5, 7, 8)))
+    if stamped:
+        prefix, body = message[:11], message[11:]
+    else:
+        prefix, body = f"[{time.strftime('%H:%M:%S')}] ", message
+    if level_identifier and not body.startswith(f"{level_identifier} "):
+        body = f"{level_identifier} {body}"
+    return prefix + body
 
 
 def _print_colored_line(message: str, *, color: bool, ansi_color: int) -> None:
@@ -279,8 +288,9 @@ _SECTION_DURATION = re.compile(r"from [^:;]+: (\d+) section frames")
 def _format_user_splice_report(message: str, *, level_identifier: str | None) -> str:
     """Indent checkpoint summaries and live gains without changing their scores.
 
-    Summary labels are kept stable for log filtering. The status is already in
-    the pending/propagated/dead-end tag; keep the origin detail on other tags.
+    Summary labels are kept stable for log filtering. The timestamp printer
+    places the level ID before the tag, so this formatter must not repeat it.
+    The status is already in the pending/propagated/dead-end tag.
     """
     if not level_identifier:
         return message
@@ -288,7 +298,7 @@ def _format_user_splice_report(message: str, *, level_identifier: str | None) ->
     if match:
         tag, stage, rest = match.groups()
         state, sep, details = rest.partition('; ')
-        lines = [f"{tag} {level_identifier}: {stage}:"]
+        lines = [f"{tag} {stage}:"]
         if not sep:
             return '\n'.join((lines[0], f"  {rest}"))
         if ':summary:pending]' not in tag:
@@ -314,9 +324,6 @@ def _format_user_splice_report(message: str, *, level_identifier: str | None) ->
                            "[auto:user-splice:temporary:dead-end]",
                            "[auto:hybrid:gain:absolute]",
                            "[auto:hybrid:gain:input]")):
-        marker = re.search(r"'[^']+':", message)
-        if marker is not None:
-            message = message[:marker.start()] + level_identifier + ': ' + message[marker.start():]
         for label in ('individual splice gain:', 'cumulative gain through this splice:',
                       'vs input run:', 'vs best run:', 'vs registered run:', 'vs previous absolute best:'):
             message = message.replace('; ' + label, '\n  ' + label)
@@ -327,7 +334,7 @@ def _format_user_splice_report(message: str, *, level_identifier: str | None) ->
     if message.startswith('[auto:user-splice] improved verified final replay'):
         tag, _, remaining = message.partition('] ')
         event, _, details = remaining.partition('; ')
-        lines = [f"{tag}] {level_identifier}: {event};"]
+        lines = [f"{tag}] {event};"]
         for item in re.split(
                 r"; (?=(?:verified completed frames|first eligible verified completion"
                 r"|stage-goal comparison|final-goal comparison|vs input run:|vs registered run:"
@@ -375,7 +382,7 @@ def _print_user_splice_progress(message: str, *, color: bool,
             base = 33 if '; absolute stage best unchanged;' in message else 32
         elif message.startswith('[auto:hybrid:gain:absolute]'):
             base = 32
-        formatted = _timestamped_line(formatted)
+        formatted = _timestamped_line(formatted, level_identifier=level_identifier)
         if color and sys.stdout.isatty():
             styled = _highlight_user_splice_report(formatted, base_color=base)
             print(f"\x1b[{base}m{styled}\x1b[0m" if base is not None else styled,
@@ -384,23 +391,23 @@ def _print_user_splice_progress(message: str, *, color: bool,
             print(formatted, flush=True)
         return
     if message.endswith(" [dead-end]"):
-        print(_timestamped_line(message), flush=True)
+        print(_timestamped_line(message, level_identifier=level_identifier), flush=True)
     elif message.startswith(("[auto:user-splice:baseline]", "[auto:baseline]",
                            "[local:population:baseline]")):
-        _print_baseline_line(_timestamped_line(message), color=color)
+        _print_baseline_line(_timestamped_line(message, level_identifier=level_identifier), color=color)
     elif message.startswith("[auto:user-splice:range-adapted]"):
-        _print_colored_line(_timestamped_line(message), color=color, ansi_color=33)
+        _print_colored_line(_timestamped_line(message, level_identifier=level_identifier), color=color, ansi_color=33)
     elif message.startswith("[auto:user-splice:range-warning]"):
-        _print_colored_line(_timestamped_line(message), color=color, ansi_color=31)
+        _print_colored_line(_timestamped_line(message, level_identifier=level_identifier), color=color, ansi_color=31)
     elif message.startswith("[auto:hybrid:gain:absolute]"):
-        _print_best_line(_timestamped_line(message), color=color)
+        _print_best_line(_timestamped_line(message, level_identifier=level_identifier), color=color)
     elif message.startswith("[auto:hybrid:gain:input]"):
-        _print_temporary_line(_timestamped_line(message), color=color)
+        _print_temporary_line(_timestamped_line(message, level_identifier=level_identifier), color=color)
     elif (message.startswith(("[auto:user-splice:temporary]",
                               "[auto:user-splice:summary:pending]"))
           or "new saved stage best" in message
           or "verified stage join" in message):
-        _print_temporary_line(_timestamped_line(message), color=color)
+        _print_temporary_line(_timestamped_line(message, level_identifier=level_identifier), color=color)
     elif (message.startswith("[auto:user-splice] improved ")
           or "improved verified completed replay" in message
           or "verified completed join" in message):
@@ -408,9 +415,9 @@ def _print_user_splice_progress(message: str, *, color: bool,
                    if (message.startswith('[auto:user-splice] improved verified final replay')
                        and '; absolute stage best unchanged;' in message)
                    else _print_best_line)
-        printer(_timestamped_line(message), color=color)
+        printer(_timestamped_line(message, level_identifier=level_identifier), color=color)
     else:
-        print(_timestamped_line(message), flush=True)
+        print(_timestamped_line(message, level_identifier=level_identifier), flush=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -4297,8 +4304,10 @@ def _user_splice_frontier_identity(level: Level, stage) -> dict[str, object]:
 
 def _load_user_splice_frontiers(
     level: Level, stages, stage_outputs: Mapping[str, tuple[Path, Path | None]],
+    *, level_identifier: str | None = None,
 ) -> dict[str, tuple[tuple[InputFrame, ...], ...]]:
     """Restore only matching stage/level populations, never trust raw scores."""
+    prefix = f"{level_identifier} " if level_identifier else ""
     restored = {}
     for stage in stages:
         path = _user_splice_frontier_path(stage_outputs[stage.name][0])
@@ -4312,7 +4321,7 @@ def _load_user_splice_frontiers(
                 raise ValueError("unknown frontier checkpoint format")
             expected = _user_splice_frontier_identity(level, stage)
             if any(document.get(key) != value for key, value in expected.items()):
-                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] {stage.name!r}: "
+                print(f"[{time.strftime('%H:%M:%S')}] {prefix}[auto:user-splice:resume] {stage.name!r}: "
                       "skipped frontier for changed level or splice settings", flush=True)
                 continue
             replay_strings = document.get("replays")
@@ -4326,13 +4335,16 @@ def _load_user_splice_frontiers(
                     entries.append(frames)
             restored[stage.name] = tuple(entries)
         except (OSError, UnicodeError, ValueError, TypeError) as exc:
-            print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] skipping unreadable frontier "
+            print(f"[{time.strftime('%H:%M:%S')}] {prefix}[auto:user-splice:resume] skipping unreadable frontier "
                   f"{path}: {exc}", flush=True)
     return restored
 
 
-def _protect_unreadable_splice_output(path: Path | None) -> None:
+def _protect_unreadable_splice_output(
+    path: Path | None, *, level_identifier: str | None = None,
+) -> None:
     """Back up unreadable old checkpoints *when* replacing them, not on load."""
+    prefix = f"{level_identifier} " if level_identifier else ""
     if path is None or not path.is_file():
         return
     try:
@@ -4348,7 +4360,7 @@ def _protect_unreadable_splice_output(path: Path | None) -> None:
         backup = path.with_name(path.name + ".unverified.bak")
         if not backup.exists():
             _atomic_write_binary(backup, path.read_bytes())
-        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] preserved unreadable old checkpoint "
+        print(f"[{time.strftime('%H:%M:%S')}] {prefix}[auto:user-splice:resume] preserved unreadable old checkpoint "
               f"at {backup}", flush=True)
 
 
@@ -4356,12 +4368,14 @@ def _load_user_splice_checkpoints(
     stage_outputs: dict[str, tuple[Path, Path | None]],
     output_path: Path,
     replay_output_path: Path | None,
+    *, level_identifier: str | None = None,
 ) -> dict[str, tuple[tuple[InputFrame, ...], ...]]:
     """Read all existing stage files, allowing older and newer output names.
 
     An unreadable existing checkpoint is an error: overwriting an unknown
     previous score would violate the never-regress checkpoint guarantee.
     """
+    prefix = f"{level_identifier} " if level_identifier else ""
     checkpoints: dict[str, tuple[tuple[InputFrame, ...], ...]] = {}
     for name, (main, replay) in stage_outputs.items():
         alias = _user_splice_alias_ltm_path(output_path, replay_output_path, name)
@@ -4382,7 +4396,7 @@ def _load_user_splice_checkpoints(
                         frames = decode_complex_replay(
                             parse_combined_level_replay(text).replay_string).frames
             except (OSError, UnicodeError, ValueError, LtmError) as exc:
-                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] skipping unreadable stage "
+                print(f"[{time.strftime('%H:%M:%S')}] {prefix}[auto:user-splice:resume] skipping unreadable stage "
                       f"checkpoint {path}: {exc}", flush=True)
                 continue
             canonical = tuple(editable_frames(frames))
@@ -5034,12 +5048,9 @@ def main() -> None:
     merge_only = (standalone_mode and (
         getattr(args, "auto_splice_merge_only", False) or repair_only or
         (retime_gains and retime_only_requested)))
-    if stage_selection and not summary_only and (
-            args.auto_splice_merge_only or args.auto_splice_merge_repair_only or
-            args.auto_splice_merge_retime_gains):
-        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:mode] "
-              "stage selection overrides standalone merge/repair/retiming mode; "
-              "running selected splice search", flush=True)
+    announce_stage_selection = bool(stage_selection and not summary_only and (
+        args.auto_splice_merge_only or args.auto_splice_merge_repair_only or
+        args.auto_splice_merge_retime_gains))
     if (repair_only or repair_at_end) and not (args.mode == "auto" and
             args.auto_random_splice and args.auto_splice_mode == "user" and
             args.auto_splice_files):
@@ -5068,6 +5079,11 @@ def main() -> None:
             raise SystemExit(1) from exc
         raise SystemExit(str(exc)) from exc
     combined = source.combined
+    run_level_label = source.level_id or common_config.input_path.stem
+    if announce_stage_selection:
+        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:mode] "
+              "stage selection overrides standalone merge/repair/retiming mode; "
+              "running selected splice search", flush=True)
     if getattr(args, "register", None) is not None and output_path is None:
         raise SystemExit("--register requires --output to locate its persistent comparison file")
     # Registration is a dedicated command, not an optimisation run.  Snapshot
@@ -5096,7 +5112,7 @@ def main() -> None:
                                  branch=branch, frames=snapshot)
         except (LtmError, OSError, ValueError) as exc:
             raise SystemExit(str(exc)) from exc
-        print(f"[auto:user-splice:register] {source.level_id}: "
+        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:register] "
               f"registered {'inputs' if branch == 0 else f'inputs{branch}'} "
               f"({len(snapshot)} frames) as comparison in {registration}; "
               "no search or checkpoint changes", flush=True)
@@ -5123,7 +5139,7 @@ def main() -> None:
     if (args.mode == "auto" and
             getattr(args, "auto_splice_mode", None) == "user" and
             not getattr(args, "auto_ls_splice", False)):
-        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:physics] final-run simulate-enemies="
+        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:physics] final-run simulate-enemies="
               f"{str(simulate_enemies).lower()} (individual stages may differ)",
               flush=True)
 
@@ -5433,7 +5449,7 @@ def main() -> None:
                 from nv14_user_splice import optimise_user_splices
                 directory = _named_splice_directory(args)
                 if args.auto_splice_skip_alt_route:
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] "
                           "skip-alt-route enabled: using primary route only", flush=True)
                 from nv14_registered_baseline import registered_path, load_registered_run
                 try:
@@ -5460,7 +5476,7 @@ def main() -> None:
                         raise ValueError(f"cannot read alternate route inputs"
                                          f"{args.auto_splice_alt_branch}: {exc}") from exc
                     alt_branch_frames = tuple(editable_frames(alt_movie.replay_frames))
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] "
                           f"alternate route input: inputs{args.auto_splice_alt_branch} "
                           f"({len(alt_branch_frames)} replay frames); "
                           "primary route retains inputs", flush=True)
@@ -5504,7 +5520,7 @@ def main() -> None:
                         replay = ComplexReplay(alt_branch_frames)
                     boundary = (f"--start-at-splice {selected!r}" if start_selects_alternate
                                 else f"--stop-at-splice {stop_selected!r}")
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] "
                           f"{boundary} selects the alternate route; "
                           "searching its selected stages", flush=True)
                 if args.auto_splice_single is not None:
@@ -5516,7 +5532,7 @@ def main() -> None:
                         raise ValueError(f"single splice {args.auto_splice_single!r} not in named route; "
                                          f"available: {', '.join(sorted(available))}")
                     alternate_stages = ()
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:mode] "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:mode] "
                           f"single splice {args.auto_splice_single!r}: search only this stage; "
                           "other stages are checkpoint/propagation sources", flush=True)
                 all_stages = tuple({stage.name: stage for stage in
@@ -5541,10 +5557,10 @@ def main() -> None:
                 # sidecars before searching. Every stored replay is reverified
                 # under the current stage goals in optimise_user_splices.
                 saved_stage_candidates = _load_user_splice_checkpoints(
-                    stage_outputs, output_path, replay_output_path)
+                    stage_outputs, output_path, replay_output_path, level_identifier=run_level_label)
                 saved_stage_frontiers = ({} if args.auto_ls_splice else
                                          _load_user_splice_frontiers(
-                                             level, all_stages, stage_outputs))
+                                             level, all_stages, stage_outputs, level_identifier=run_level_label))
                 for stage_name, main_pair in stage_outputs.items():
                     archive_path = _user_splice_frontier_path(main_pair[0])
                     for title, protected in (("input", input_path),
@@ -5584,7 +5600,7 @@ def main() -> None:
                     _atomic_write_text(path, json.dumps(document, separators=(",", ":")) + "\n")
                 if not args.auto_ls_splice:
                     for stage_name, candidates in saved_stage_candidates.items():
-                        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] {stage_name!r}: "
+                        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:resume] {stage_name!r}: "
                               f"read {len(candidates)} distinct saved replay(s)", flush=True)
                 # The alternate LTM name shares the replay output basename.
                 # Collision checks cover it before the first checkpoint write.
@@ -5704,8 +5720,8 @@ def main() -> None:
                 def save_stage_best(name: str, frames: tuple[InputFrame, ...]) -> None:
                     main_path, packed_path = stage_outputs[name]
                     replay_text = encode_complex_replay(stage_checkpoint(name, frames))
-                    _protect_unreadable_splice_output(main_path)
-                    _protect_unreadable_splice_output(packed_path)
+                    _protect_unreadable_splice_output(main_path, level_identifier=run_level_label)
+                    _protect_unreadable_splice_output(packed_path, level_identifier=run_level_label)
                     if source.ltm_movie is not None and packed_path is not None:
                         # An LTM may regard trailing neutral ticks as implicit
                         # post-roll. Save the plain replay as it will actually
@@ -5725,7 +5741,7 @@ def main() -> None:
                         # than reserializing frames and risking LTM differences.
                         alias.parent.mkdir(parents=True, exist_ok=True)
                         _atomic_write_binary(alias, main_path.read_bytes())
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:stage-checkpoint] {name!r}: saved "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:stage-checkpoint] {name!r}: saved "
                           f"{main_path}" + (f" and {packed_path}" if packed_path else "") +
                           " (stage-feasible; full-run completion not required)", flush=True)
 
@@ -5742,7 +5758,7 @@ def main() -> None:
                                            encode_complex_replay(loaded.replay_frames) + "\n")
                     else:
                         _write_result(source, main_path, packed_path, replay_text)
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:hybrid:session-checkpoint] "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:hybrid:session-checkpoint] "
                           f"{name!r}: saved {main_path}"
                           + (f" and {packed_path}" if packed_path else "")
                           + " (best of current Hybrid invocation; stage-feasible)",
@@ -5800,7 +5816,7 @@ def main() -> None:
                             explicit_level_id=common_config.level_id,
                             ltm_postroll=common_config.ltm_postroll)
                     except (LtmError, OSError, ValueError) as exc:
-                        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] ignoring unreadable saved output "
+                        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:resume] ignoring unreadable saved output "
                               f"{output_path}: {exc}", flush=True)
                     else:
                         if saved_final.combined.level_string != combined.level_string:
@@ -5831,7 +5847,7 @@ def main() -> None:
                             raise ValueError(f"cannot load splice reference {ref_path}: {exc}") from exc
                         reference_frames = tuple(editable_frames(
                             decode_complex_replay(ref_path.read_text(encoding='utf-8')).frames))
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:reference] loaded {ref_path}; "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:reference] loaded {ref_path}; "
                           f"{len(reference_frames)} frames; full replay will be verified", flush=True)
                 resume_state_path = output_path.with_suffix(".splice-search.json")
                 resume_state = None
@@ -5841,7 +5857,7 @@ def main() -> None:
                             raise ValueError("named splice resume state exceeds 128 KiB")
                         resume_state = json.loads(resume_state_path.read_text(encoding="utf-8"))
                     except (OSError, ValueError, UnicodeError) as exc:
-                        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] ignoring unreadable active "
+                        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:resume] ignoring unreadable active "
                               f"search state {resume_state_path}: {exc}", flush=True)
                 def persist_resume_state(state):
                     if state is None:
@@ -5910,14 +5926,14 @@ def main() -> None:
                             raise ValueError("incompatible completed-pass checkpoint")
                         completed_passes = record["next_round"]
                     except (OSError, ValueError, KeyError, TypeError) as exc:
-                        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] ignoring stale completed-pass "
+                        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:resume] ignoring stale completed-pass "
                               f"state {progress_file}: {exc}", flush=True)
                 # A completed run is not an instruction to skip a new manual
                 # invocation with the same source and --auto-runs budget. Keep
                 # genuine *in-flight* resumes, but restart a finished campaign.
                 if (resume_state is None and splice_config.rounds and
                         completed_passes >= splice_config.rounds):
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] previous outer campaign "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:resume] previous outer campaign "
                           "finished; starting a fresh pass from the current "
                           "input (saved stage bests retained)", flush=True)
                     completed_passes = 0
@@ -5935,7 +5951,7 @@ def main() -> None:
 
                 if merge_only:
                     report = "repair-only" if repair_only else "merge-only"
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:{report}] current input: "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:{report}] current input: "
                           f"{input_path.resolve()}; saved completed run: "
                           f"{output_path.resolve()} (if verified); "
                           "only the positional input is treated as manual edits",
@@ -6053,10 +6069,10 @@ def main() -> None:
                             # phase, but never by a different branch's join
                             # search. That is what preserves route identity.
                             loaded = (_load_user_splice_checkpoints(
-                                stage_outputs, output_path, replay_output_path)
+                                stage_outputs, output_path, replay_output_path, level_identifier=run_level_label)
                                 if checkpoints is None else checkpoints)
                             archive = (_load_user_splice_frontiers(
-                                level, phase_stages, stage_outputs)
+                                level, phase_stages, stage_outputs, level_identifier=run_level_label)
                                 if frontiers is None else frontiers)
                             checkpoint_path = output_path.with_suffix(
                                 f".{label}.splice-search.json")
@@ -6065,7 +6081,7 @@ def main() -> None:
                                 try:
                                     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
                                 except (OSError, UnicodeError, ValueError):
-                                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:resume] ignoring unreadable "
+                                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:resume] ignoring unreadable "
                                           f"{checkpoint_path}", flush=True)
                             def save_phase_state(state):
                                 if state is None:
@@ -6076,7 +6092,7 @@ def main() -> None:
                             def phase_backend(name, backend):
                                 return str(stage_outputs[name][0].with_suffix(
                                     f".{label}.{backend}.round.json"))
-                            print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                            print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] "
                                   f"round {outer_round+1}/{splice_config.rounds} {label}: " +
                                   ' -> '.join(item.name for item in phase_stages), flush=True)
                             # Run exactly this outer round in the current phase.
@@ -6135,7 +6151,7 @@ def main() -> None:
 
                         def saved_stage_seed(name):
                             candidates = _load_user_splice_checkpoints(
-                                stage_outputs, output_path, replay_output_path).get(name, ())
+                                stage_outputs, output_path, replay_output_path, level_identifier=run_level_label).get(name, ())
                             stage = next(item for item in all_stages if item.name == name)
                             feasible = [(stage_rank(stage, candidate), candidate)
                                         for candidate in candidates]
@@ -6156,7 +6172,7 @@ def main() -> None:
                             joined_stages = tuple((
                                 *stages[:prefix_count], *joined_branches,
                                 *stages[rejoin_index:]))
-                            print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] {phase}: "
+                            print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] {phase}: "
                                   "merge across both branch archives", flush=True)
                             merged = optimise_user_splices(
                                 level, initial_input, joined_stages, splice_config,
@@ -6177,9 +6193,9 @@ def main() -> None:
                                 merge_retime_gains=retime_gains,
                                 saved_final_frames=completed_best[0],
                                 saved_stage_candidates=_load_user_splice_checkpoints(
-                                    stage_outputs, output_path, replay_output_path),
+                                    stage_outputs, output_path, replay_output_path, level_identifier=run_level_label),
                                 saved_stage_frontiers=_load_user_splice_frontiers(
-                                    level, joined_stages, stage_outputs),
+                                    level, joined_stages, stage_outputs, level_identifier=run_level_label),
                                 reference_frames=reference_frames,
                                 reporting_input_frames=replay.frames,
                                 best_callback=phase_best_callback,
@@ -6212,11 +6228,11 @@ def main() -> None:
                             primary_branch = stages[max(round_start, prefix_count):rejoin_index]
                             shared_suffix = stages[rejoin_index + 1:stop_index + 1]
                             if round_start != start_index:
-                                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:round-start] "
+                                print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:round-start] "
                                       f"round {outer_round+1}: starting again from "
                                       f"{stages[round_start].name!r}", flush=True)
                             gains_before_round = phase_improvements
-                            print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                            print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] "
                                   f"full route round {outer_round+1}/{splice_config.rounds}: " +
                                   ("primary route through " + repr(before_rejoin[-1].name)
                                    if before_rejoin else
@@ -6232,7 +6248,7 @@ def main() -> None:
                                                          else 0)
                                 if (splice_config.stagnation_rounds and stagnant_route_rounds >=
                                         splice_config.stagnation_rounds):
-                                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] "
                                           f"stopping after {stagnant_route_rounds} stagnant "
                                           "complete route round(s)", flush=True)
                                     break
@@ -6369,8 +6385,8 @@ def main() -> None:
                                      old_alt_frames != alternate_winner)):
                                 # Never let the current primary (or global stage
                                 # best) displace this independently ranked alt.
-                                _protect_unreadable_splice_output(alt_main)
-                                _protect_unreadable_splice_output(alt_text)
+                                _protect_unreadable_splice_output(alt_main, level_identifier=run_level_label)
+                                _protect_unreadable_splice_output(alt_text, level_identifier=run_level_label)
                                 alt_replay = encode_splice_replay(
                                     alternate_winner)
                                 if source.ltm_movie is not None and alt_text is not None:
@@ -6386,7 +6402,7 @@ def main() -> None:
                                     'version': 1, 'route': 'alternate',
                                     'identity': checkpoint_identity,
                                 }, sort_keys=True) + '\n')
-                                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                                print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] "
                                       f"{rejoin_name!r}: saved alternate route's "
                                       f"independent seam best at {alt_main}", flush=True)
 
@@ -6413,8 +6429,8 @@ def main() -> None:
                                     old_route, old_other = read_routed_checkpoint(
                                         other_main, other_meta)
                                     if (old_route != slower_route or old_other != slower):
-                                        _protect_unreadable_splice_output(other_main)
-                                        _protect_unreadable_splice_output(other_text)
+                                        _protect_unreadable_splice_output(other_main, level_identifier=run_level_label)
+                                        _protect_unreadable_splice_output(other_text, level_identifier=run_level_label)
                                         slower_replay = encode_splice_replay(slower)
                                         if source.ltm_movie is not None and other_text is not None:
                                             _write_result(source, other_main, None, slower_replay)
@@ -6430,11 +6446,11 @@ def main() -> None:
                                             'identity': checkpoint_identity,
                                         }, sort_keys=True) + '\n')
                                     frontier_additions.append(tuple(editable_frames(slower)))
-                                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] {rejoin_name!r}: "
+                                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] {rejoin_name!r}: "
                                           f"retained {slower_route} branch at {other_main} "
                                           '(other route, independently reusable)', flush=True)
                                 persisted = _load_user_splice_frontiers(
-                                    level, (shared_rejoin,), stage_outputs).get(rejoin_name, ())
+                                    level, (shared_rejoin,), stage_outputs, level_identifier=run_level_label).get(rejoin_name, ())
                                 # Never allow a large primary frontier to evict
                                 # the lower-ranked route when the archive reaches
                                 # its 64-replay cap. Both branch winners are first.
@@ -6452,7 +6468,7 @@ def main() -> None:
                                 # No branch reached the reconvergence objective.
                                 # Do not discard both prefixes or invent a saved
                                 # seam checkpoint; try the shared suffix from both.
-                                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] {rejoin_name!r}: "
+                                print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] {rejoin_name!r}: "
                                       'neither branch reached the seam goal; '
                                       'preserving both as shared-suffix search seeds', flush=True)
                                 if shared_suffix:
@@ -6468,13 +6484,13 @@ def main() -> None:
                                                      else 0)
                             if (splice_config.stagnation_rounds and stagnant_route_rounds >=
                                     splice_config.stagnation_rounds):
-                                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] "
+                                print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] "
                                       f"stopping after {stagnant_route_rounds} stagnant "
                                       "complete route round(s)", flush=True)
                                 break
                         if args.auto_splice_merge_bests or repair_at_end or retime_gains:
                             merge_all_saved_stages('final', repair=repair_at_end)
-                        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice] {phase_attempts} stage searches; "
+                        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice] {phase_attempts} stage searches; "
                               f"{phase_evaluations} evaluations; "
                               f"{phase_improvements} verified improvements")
                         return
@@ -6555,7 +6571,7 @@ def main() -> None:
                         alternate_branch = ()
                         skipped_before_start = True
                     if alternate_branch:
-                        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] alternate branch: " +
+                        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] alternate branch: " +
                               " -> ".join(stage.name for stage in alternate_branch) +
                               (f" (shared prefix through {alternate_names[shared_prefix - 1]!r}; "
                                f"rejoin at {rejoin_name!r})"
@@ -6565,11 +6581,11 @@ def main() -> None:
                                if shared_prefix else ""),
                               flush=True)
                     elif skipped_before_start:
-                        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] alternate branch skipped: "
+                        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] alternate branch skipped: "
                               f"--start-at-splice {args.auto_splice_start!r} is at/after "
                               f"rejoin {rejoin_name!r}", flush=True)
                     else:
-                        print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice:route] alternate branch has no unique stages; "
+                        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice:route] alternate branch has no unique stages; "
                               "shared prefix and rejoin are already covered by the primary route",
                               flush=True)
                     # The primary route may have saved fresh checkpoints.
@@ -6582,15 +6598,15 @@ def main() -> None:
                     alt_report_stages = (alternate_stages if args.auto_ls_splice
                                          else alternate_branch)
                     if args.auto_ls_splice:
-                        print(f"[{time.strftime('%H:%M:%S')}] "
+                        print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} "
                               "[auto:user-splice:summary:route] alternate: " +
                               " -> ".join(stage.name for stage in alt_report_stages),
                               flush=True)
                     alt_candidates = _load_user_splice_checkpoints(
-                        stage_outputs, output_path, replay_output_path)
+                        stage_outputs, output_path, replay_output_path, level_identifier=run_level_label)
                     alt_frontiers = ({} if args.auto_ls_splice else
                                      _load_user_splice_frontiers(
-                                         level, alternate_branch, stage_outputs))
+                                         level, alternate_branch, stage_outputs, level_identifier=run_level_label))
                     primary_eval = evaluate_replay_with_sentinel(level, result.frames)
                     alt_best = (result.frames if primary_eval.valid and
                                 primary_eval.finish_tick == len(result.frames)
@@ -6660,8 +6676,8 @@ def main() -> None:
                 if args.auto_ls_splice or merge_only:
                     return
                 if not result.improvements:
-                    print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice] no verified improvement; existing output retained")
-                print(f"[{time.strftime('%H:%M:%S')}] [auto:user-splice] {result.attempts} stage searches; "
+                    print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice] no verified improvement; existing output retained")
+                print(f"[{time.strftime('%H:%M:%S')}] {run_level_label} [auto:user-splice] {result.attempts} stage searches; "
                       f"{result.evaluations} evaluations; {result.improvements} improvements")
                 return
             splice_config = RandomSpliceConfig(

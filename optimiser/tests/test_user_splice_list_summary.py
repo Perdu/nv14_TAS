@@ -82,8 +82,8 @@ def test_cli_short_flag_reads_saved_final_and_never_writes(tmp_path, monkeypatch
     main()
     stdout = capsys.readouterr().out
     assert 'checkpoint propagation' in stdout
-    assert "[auto:user-splice:summary:propagated] source: '230':" in stdout
-    assert "[auto:user-splice:summary:empty] source: 'end':" in stdout
+    assert "source [auto:user-splice:summary:propagated] '230':" in stdout
+    assert "source [auto:user-splice:summary:empty] 'end':" in stdout
     assert 'stage searches' not in stdout
     assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == initial
 
@@ -149,7 +149,9 @@ def test_ltm_splice_summary_is_read_only(tmp_path, monkeypatch, capsys):
         '--levels-file', str(database), '--auto-splice-directory', str(goals),
         '--output', str(output), '--replay-output', str(replay), '-l'])
     main()
-    assert 'checkpoint propagation (1/1 saved)' in capsys.readouterr().out
+    output_text = capsys.readouterr().out
+    assert 'checkpoint propagation (1/1 saved)' in output_text
+    assert '00-0 [auto:user-splice:summary]' in output_text
     after = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
     assert after == before
     assert not output.exists()
