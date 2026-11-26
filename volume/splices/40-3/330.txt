@@ -7,4 +7,4 @@ objective = "earliest-arrival"
 target_region = "514:554,210:230"
 secondary_objective = "max-y"
 require-interaction = ["switch"]
-
+lookback = 5
