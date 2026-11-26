@@ -7,6 +7,6 @@ objective = "earliest-arrival"
 target_region = "263:363,403:423"
 secondary_objective = "min-vy"
 # require-interaction = ["testdoor:0"]
-require-jump-frames = "35:45"
-require-jump-region = "318:338,536:556"
+#require-jump-frames = "35:45"
+#require-jump-region = "318:338,536:556"
 
