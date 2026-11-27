@@ -7,3 +7,4 @@ simulate-enemies = false
 objective = "earliest-arrival"
 secondary_objective = "min-y"
 # require-interaction = ["testdoor:0"]
+vx-window = ":0"
