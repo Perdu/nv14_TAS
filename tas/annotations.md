@@ -366,7 +366,7 @@ The second jump we make on the way up makes us land later, but more to the right
 The last jump to go down is extremlely tight. RTA seems to get a better angle for the stumble, which I can't reproduce (i'm not starting with the same speed)
 
 # 08-1
-rerecords: 2850
+rerecords: 2852
 
 In the beginning, landing the fall with a cj on the bb is slower
 It's extremely annoying to find a turnaround strategy around the switch that doesn't get us killed. This solution works. There may be better ones.
@@ -1485,7 +1485,7 @@ rerecords: 82
 Branch 9: bbct (useless)
 
 # 43-4
-rerecords: 95
+rerecords: 104
 
 Branch 8: going dump using supercharged bumps
 
@@ -1518,7 +1518,7 @@ Branch 9: attempt at getting switch1 and switch in one jump
 Branch 8: attempt at bbcd on first bb
 
 # 44-4
-rerecords: 183
+rerecords: 208
 
 A bit hell to optimize because of the successions weird angles, steering and going back. A better bruteforcer may find better solutions
 
@@ -1537,7 +1537,7 @@ Branch 5: cj on lower stair on the right
 Branch 4: attempt at going left and a bit higher, to fall directly
 
 # 45-2
-rerecords: 181
+rerecords: 197
 
 Branch 9: simple wj around switch
 Branch 8: last cj not going to the top
@@ -1549,12 +1549,11 @@ rerecords: 59
 Branch 9: false improvement (todo: redo with require-drone-detection)
 
 # 45-4
-rerecords: 175
+rerecords: 184
 
 Branch 9: Route with a rcj
 Branch 8: rcj + cj
 Branch 7: rcj on first corner
-Branch 6: route on the left
 Branch 5: original auto route (without initial jump)
 
 # 46-0
@@ -1606,7 +1605,7 @@ Branch 3: going directly up to the switch
 Branch 2: going directly up to the switch using a quad bb
 
 # 47-2
-rerecords: 138
+rerecords: 155
 
 
 
@@ -3169,4 +3168,4 @@ Branch 4: slower ascent with push down by the top thwump
 
 It's possible to fall slightly faster by removing a jump frame after the switch, but I can't get a faster thwump bwj after that.
 
-# Total rerecords: 277055
+# Total rerecords: 277133
