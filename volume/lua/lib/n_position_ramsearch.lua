@@ -130,7 +130,11 @@ if not ramsearch_done then
             end
             ramsearch_done = true
             runtime.loadState(SAVE_SLOT)
-            advance_one_step_after_ramsearch = 0
+            if do_advance_one_step_after_ramsearch then
+               advance_one_step_after_ramsearch = 0
+            else
+               runtime.playPause()
+            end
          end
       end
    else
@@ -158,7 +162,11 @@ if not ramsearch_done then
          end
          ramsearch_done = true
          runtime.loadState(SAVE_SLOT)
-         advance_one_step_after_ramsearch = 0
+         if do_advance_one_step_after_ramsearch then
+            advance_one_step_after_ramsearch = 0
+         else
+            runtime.playPause()
+         end
       end
    end
 end

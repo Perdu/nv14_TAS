@@ -32,6 +32,7 @@ splice_region_size_small = 10
 splice_prev_range_prior_frames = 50
 display_switches_numbers = true
 clean_splices_region_markers = false
+do_advance_one_step_after_ramsearch = false
 
 ---- Constants
 SAVE_SLOT = 1             -- Save slot number (1–10)
@@ -403,6 +404,7 @@ function onFrame()
       if advance_one_step_after_ramsearch == 2 then
          advance_one_step_after_ramsearch = advance_one_step_after_ramsearch + 1
          runtime.playPause()
+         -- runtime.loadState(SAVE_SLOT)
       end
    end
 
